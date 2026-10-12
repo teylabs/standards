@@ -1,0 +1,32 @@
+{
+    "name": "tey/standards",
+    "description": "Configured, rule-tagged architecture checks for Laravel applications.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4.1",
+        "nikic/php-parser": "^5.0",
+        "pestphp/pest": "^4.7",
+        "pestphp/pest-plugin-arch": "^4.0",
+        "symfony/finder": "^7.0 || ^8.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Tey\\Standards\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "FixtureGood\\": "fixtures/Good/src/",
+            "FixtureBad\\": "fixtures/Bad/src/"
+        }
+    },
+    "scripts": {
+        "test": "pest"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}
