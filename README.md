@@ -216,11 +216,21 @@ new Configuration(
 
 ### Packages
 
-Packages without `artisan` use the Laravel-free CLI in `tey/standards` 0.6. Install it once as a dev dependency with `composer require --dev tey/standards:^0.6`. After the workflow's existing `composer install`, add one step:
+Packages without `artisan` use the Laravel-free CLI in `tey/standards` 0.6. Run it as **its own global-tool job**, not as a dev dependency: tey/standards needs PHP ^8.4.1 and Laravel 13 components, so in a package's `require-dev` it breaks matrix legs on older PHP or Laravel. The job installs it globally on PHP 8.4 and checks the repository it runs in:
 
 ```yaml
-- run: vendor/bin/standards ci --strict
+  standards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: '8.4', tools: 'composer:v2', coverage: none }
+      - run: composer global require tey/standards:^0.6 --no-interaction --no-progress
+      - run: "$(composer global config bin-dir --absolute)/standards ci --strict"
 ```
+
+The job is cheap and needs no draft guard. Apps, which already require tey/standards, use `standards:preflight --ci --only=ci` instead.
 
 Packages normally keep their settings in their root `composer.json` under `extra`, rather than Laravel config:
 
@@ -239,7 +249,7 @@ Packages normally keep their settings in their root `composer.json` under `extra
 }
 ```
 
-Run once without enforcement, fix the findings, then opt in. The CLI calls the same `CiTriggers` parser as app preflight; it does not boot Laravel, read `.env` files or require Pest/PHP-Parser. On Windows, use `php vendor/bin/standards ci --strict`.
+Run once without enforcement, fix the findings, then opt in. The CLI calls the same `CiTriggers` parser as app preflight; it does not boot Laravel, read `.env` files or require Pest/PHP-Parser. Where the CLI is installed in a project's own `vendor` instead, run `vendor/bin/standards ci --strict`, or `php vendor/bin/standards ci --strict` on Windows.
 
 The example opts a public package into full draft tests; omit `drafts` or set `lint` to keep the default draft policy.
 
