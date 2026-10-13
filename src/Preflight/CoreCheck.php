@@ -301,12 +301,17 @@ final readonly class CoreCheck implements Check
             return Result::pass('Worker backlog check is not applicable to a synchronous queue.');
         }
 
+        $connection = $this->config->get('queue.connections.'.$this->config->get('queue.default'), []);
+        $driver = $connection['driver'] ?? '';
+
+        if ($driver === 'cloud') {
+            return Result::pass('Managed by the platform (Laravel Cloud managed queue); no worker to check.');
+        }
+
         if ($this->config->get('preflight.queue.expect_worker') === false) {
             return $this->queueConnection();
         }
 
-        $connection = $this->config->get('queue.connections.'.$this->config->get('queue.default'), []);
-        $driver = $connection['driver'] ?? '';
         $queue = $connection['queue'] ?? 'default';
         $now = Carbon::now()->getTimestamp();
 

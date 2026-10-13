@@ -28,6 +28,10 @@ use Tey\Standards\Preflight\PreflightCommand;
 use Tey\Standards\Preflight\Result;
 use Tey\Standards\StandardsServiceProvider;
 
+if (! function_exists('pcntl_alarm')) {
+    require __DIR__.'/Support/pcntl.php';
+}
+
 function preflightPng(int $width, int $height): string
 {
     $chunk = fn (string $type, string $bytes): string => pack('N', strlen($bytes)).$type.$bytes.pack('N', crc32($type.$bytes));
@@ -95,10 +99,6 @@ function preflightWorld(): Container
 
 function preflightCommand(Container $app, array $options = []): CommandTester
 {
-    if (! function_exists('pcntl_alarm')) {
-        test()->markTestSkipped('2026-10-13: deployment preflight requires PCNTL alarms, unavailable on Windows.');
-    }
-
     $command = new PreflightCommand;
     $command->setLaravel($app);
     $tester = new CommandTester($command);
@@ -148,6 +148,10 @@ beforeEach(function () {
 });
 
 afterEach(function () {
+    foreach ($this->preflight['log']->getChannels() as $logger) {
+        $logger->getLogger()->close();
+    }
+
     (new Filesystem)->deleteDirectory($this->preflight->directory);
     Container::setInstance($this->previousContainer);
     $this->skipEnvironment === false ? putenv('PREFLIGHT_SKIP') : putenv('PREFLIGHT_SKIP='.$this->skipEnvironment);
@@ -176,6 +180,15 @@ test('the provider boots and registers a working command without autoloadable ar
     expect($process->getExitCode())->toBe(0, $process->getErrorOutput());
     expect($process->getOutput())->toContain('PASS: provider boot and preflight without Pest or PHP-Parser');
 })->skip(PHP_OS_FAMILY === 'Windows', '2026-10-13: the deployment smoke test requires PCNTL alarms, unavailable on Windows.');
+
+test('the real command refuses unbounded execution without PCNTL', function () {
+    $autoload = array_key_first(ClassLoader::getRegisteredLoaders()).'/autoload.php';
+    $process = new Process([PHP_BINARY, '-d', 'disable_functions=pcntl_alarm,pcntl_async_signals', __DIR__.'/no-dev-smoke.php', $autoload, '--hide-arch', '--expect-no-pcntl']);
+    $process->run();
+
+    expect($process->getExitCode())->toBe(0, $process->getErrorOutput());
+    expect($process->getOutput())->toContain('missing PCNTL refuses unbounded checks.');
+});
 
 test('each failure has the specified level and exit code', function (string $check, array $changes, string $level, int $exit) {
     $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test']]);
@@ -355,6 +368,10 @@ test('unknown skips fail before any record is written', function (bool $environm
 })->with([[true, 'mail.typo'], [false, 'mail.typo'], [true, '0'], [false, '0']]);
 
 test('apps can register tagged checks with timeouts and secret-safe exception output', function (string $mode, Level $level, int $exit) {
+    if ($mode === 'timeout' && ! function_exists('pcntl_alarm')) {
+        $this->markTestSkipped('2026-10-13: interrupting a busy custom check requires real PCNTL alarms, unavailable on Windows.');
+    }
+
     $check = new class($mode, $level) implements Check
     {
         public function __construct(private string $mode, private Level $severity) {}
@@ -585,9 +602,9 @@ test('logging and stderr leave JSON stdout byte-identical', function (bool $stde
 }
 JSON;
 
-    expect($tester->getDisplay())->toBe($expected."\n");
+    expect($tester->getDisplay())->toBe($expected.PHP_EOL);
     expect(file_get_contents($this->preflight->directory.'/default.log'))->toContain('PREFLIGHT CHECK PASSED: mail.transport', 'PREFLIGHT SUMMARY');
-    expect($tester->getErrorOutput())->toBe($stderr ? 'PREFLIGHT SUMMARY {"exit_code":0,"counts":{"pass":3,"fail":0,"warn":0,"skipped":0,"skipped-in-ci":0,"skipped-by-request":0},"skips":[],"ci":false,"strict":false,"only":"mail"}'."\n" : '');
+    expect($tester->getErrorOutput())->toBe($stderr ? 'PREFLIGHT SUMMARY {"exit_code":0,"counts":{"pass":3,"fail":0,"warn":0,"skipped":0,"skipped-in-ci":0,"skipped-by-request":0},"skips":[],"ci":false,"strict":false,"only":"mail"}'.PHP_EOL : '');
 })->with([false, true]);
 
 test('summary logs current CI and emergency skips with their distinct counts', function () {
@@ -614,15 +631,22 @@ test('usage errors log an exit-two summary without changing JSON stdout', functi
     $entry = json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
 
     expect($tester->getStatusCode())->toBe(2);
-    expect($tester->getDisplay())->toBe('{"schema":1,"results":[],"exit_code":2,"error":"Unknown check group: unknown"}'."\n");
+    expect($tester->getDisplay())->toBe('{"schema":1,"results":[],"exit_code":2,"error":"Unknown check group: unknown"}'.PHP_EOL);
     expect($entry['message'])->toBe('PREFLIGHT SUMMARY');
     expect($entry['context'])->toBe(['exit_code' => 2, 'counts' => ['pass' => 0, 'fail' => 0, 'warn' => 0, 'skipped' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 'skips' => [], 'ci' => false, 'strict' => false, 'only' => 'unknown', 'error' => 'Unknown check group: unknown']);
     expect($tester->getErrorOutput())->toContain('PREFLIGHT SUMMARY ', '"exit_code":2');
 });
 
 test('queue checks agree with sync until needed for every worker policy', function (string $connection, ?bool $expectedWorker, string $connectionStatus, string $workerStatus) {
-    if ($connection !== 'sync') {
+    if ($connection === 'async') {
         preflightDatabase($this->preflight);
+    } elseif ($connection === 'managed') {
+        $this->preflight['config']->set('queue.connections.managed.driver', 'cloud');
+        foreach (['db', 'redis', 'queue'] as $service) {
+            $this->preflight->bind($service, function () use ($service) {
+                throw new RuntimeException('Managed queues must not resolve '.$service.'.');
+            });
+        }
     }
     $this->preflight['config']->set('queue.default', $connection);
     if ($expectedWorker !== null) {
@@ -641,6 +665,9 @@ test('queue checks agree with sync until needed for every worker policy', functi
     if ($workerStatus === 'warn') {
         expect($results['queue.worker']['message'])->toBe($results['queue.connection']['message']);
     }
+    if ($connection === 'managed') {
+        expect($results['queue.worker']['message'])->toBe('Managed by the platform (Laravel Cloud managed queue); no worker to check.');
+    }
 })->with([
     'sync unset' => ['sync', null, 'pass', 'pass'],
     'sync false' => ['sync', false, 'pass', 'pass'],
@@ -648,7 +675,30 @@ test('queue checks agree with sync until needed for every worker policy', functi
     'async unset' => ['async', null, 'pass', 'pass'],
     'async false' => ['async', false, 'warn', 'warn'],
     'async true' => ['async', true, 'pass', 'pass'],
+    'cloud unset' => ['managed', null, 'pass', 'pass'],
+    'cloud false' => ['managed', false, 'warn', 'pass'],
+    'cloud true' => ['managed', true, 'pass', 'pass'],
 ]);
+
+test('Cloud markers and connection names do not override the resolved queue driver', function (string $driver) {
+    $previous = getenv('LARAVEL_CLOUD');
+    putenv('LARAVEL_CLOUD=1');
+    $this->preflight['config']->set(['queue.default' => 'cloud', 'queue.connections.cloud.driver' => $driver]);
+    if ($driver === 'database') {
+        $database = preflightDatabase($this->preflight)->connection('backlog');
+        $database->table('worker_jobs')->insert(['queue' => 'notifications', 'available_at' => time() - 3600, 'reserved_at' => null]);
+        $this->preflight['config']->set(['queue.default' => 'cloud', 'queue.connections.cloud' => $this->preflight['config']->get('queue.connections.async')]);
+    }
+
+    try {
+        $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--json' => true]);
+        expect(preflightResults($tester)['queue.connection']['status'])->toBe('pass');
+        expect(preflightResults($tester)['queue.worker']['status'])->toBe($driver === 'sync' ? 'pass' : 'warn');
+        expect(preflightResults($tester)['queue.worker']['message'])->not->toContain('Managed by the platform');
+    } finally {
+        $previous === false ? putenv('LARAVEL_CLOUD') : putenv('LARAVEL_CLOUD='.$previous);
+    }
+})->with(['sync', 'database', 'redis', 'sqs', 'unknown']);
 
 test('database backlog checks only the configured available queue with one read', function (?int $age, int $threshold, string $status) {
     Carbon::setTestNow('2026-10-13 12:00:00');
@@ -735,7 +785,7 @@ test('worker timeout remains advisory even in strict mode', function () {
     expect(preflightResults($tester)['queue.worker'])->toMatchArray(['level' => 'warning', 'status' => 'warn']);
     expect(preflightResults($tester)['queue.worker']['message'])->toContain('Unknown', 'timed out after 1s', 'Laravel Cloud managed queues', 'QUEUE_CONNECTION=sync');
     expect(microtime(true) - $started)->toBeLessThan(3);
-});
+})->skip(! function_exists('pcntl_alarm'), '2026-10-13: interrupting a busy backlog read requires real PCNTL alarms, unavailable on Windows.');
 
 test('Redis backlog uses one atomic read and reports indeterminate ages as unknown', function (int $length, mixed $createdAt, string $status, bool $unknown) {
     $client = new class($length, $createdAt)

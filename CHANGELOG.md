@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 - Unreleased
+## 0.4.0 - 2026-10-13
 
 ### Added
 
@@ -17,6 +17,9 @@
 
 ### Fixed
 
+- Pass `queue.worker` for the resolved `cloud` driver without backlog or network reads. `queue.connection` treats the platform-provided worker as expected, while `expect_worker=false` still warns about the contradiction. Sync, database, Redis and unknown-driver behaviour is unchanged. (#145)
+- Load PDO SQLite on Windows and replace the shared command helper's blanket skip with test-only signal doubles. Only real alarm interruption and deployment/no-dev smoke tests skip, with dated reasons; a separate-process test retains the production command's missing-PCNTL guard. (#145)
+- Assert native console line endings and close test log handles before deleting temporary directories, fixing Windows newline failures and locked-file cleanup warnings. (#145)
 - Normalize source targets and native preset filesystem keys across path separators. Windows skips only PCNTL-dependent deployment-command/no-dev smoke tests, with a dated reason; parser, architecture and direct checks remain exercised. (#134)
 
 ## 0.3.0 - 2026-10-13

@@ -198,21 +198,21 @@ new Configuration(
 
 **Limits.** The checker does not run GitHub's expression engine. Ready-PR coverage resolves literal runners and matrices, include/exclude rows, `fromJSON` lists and simple event/draft boolean conditions and `condition && value || fallback` selectors. Unknown expressions do not prove Windows coverage; use a detectable leg or review and ratchet an inapplicable finding. App OS checks inspect all literal alternatives, including event-selected legs. PHP expressions choosing on `github.event_name` retain the existing exemption and need review. Reusable workflows, composite actions and wrapper scripts are not followed. The test scan recognises `php artisan test`, Pest, PHPUnit, `npm test`, `composer test`, Playwright and Vitest. Cache detection reads steps, not performance.
 
-**This package's CI.** The standalone workflow runs PHP 8.4/8.5 on Ubuntu and Windows for ready PRs and main, and retains Pest 5 coexistence. Architecture/parser tests run on Windows. Deployment-command and no-dev preflight smoke tests require PCNTL alarms, which PHP does not provide on Windows; their skips carry a 2026-10-13 reason. The preflight command still requires PCNTL rather than silently losing its timeout guard. Cookbook CI runs Linux only; Windows execution is proven by the mirror's CI after publication, not by the cookbook's PR checks.
+**This package's CI.** The standalone workflow runs PHP 8.4/8.5 on Ubuntu and Windows for ready PRs and main, and retains Pest 5 coexistence. Windows loads PDO SQLite and runs architecture, parser, backlog and command-contract tests. Test-only signal doubles exercise non-alarm command behaviour without changing production code. Only the busy custom-check timeout, busy backlog timeout and real deployment/no-dev smoke test skip without PCNTL; each has a 2026-10-13 reason. A separate process verifies that the real preflight command still exits 2 without PCNTL rather than silently losing its timeout guard. Cookbook CI normally runs Linux only; issue #145 proves the package on GitHub's Windows runner with a temporary cookbook job removed before review.
 
 ## Queue: sync until needed
 
 **Sync until needed; when async work is genuinely needed, use a scale-to-zero managed queue, not an always-on worker.** An app without async work runs `QUEUE_CONNECTION=sync`. Use the hosting platform's managed queue ([Laravel Cloud managed queues](https://cloud.laravel.com/docs/queues#managed-queues)) when async work is needed. `queue.connection` now passes for sync in production when `preflight.queue.expect_worker` is unset or false, instead of warning by default.
 
-The names `queue.worker`, `expect_worker` and `PREFLIGHT_QUEUE_EXPECT_WORKER` stay unchanged. “A worker” here means whatever drains the queue, normally the managed queue. The checks remain driver-based; they do not inspect hosting configuration or require a Cloud-specific driver.
+The names `queue.worker`, `expect_worker` and `PREFLIGHT_QUEUE_EXPECT_WORKER` stay unchanged. “A worker” here means whatever drains the queue, normally the managed queue. **Sync until needed, then Laravel Cloud managed queues, is the blessed path and passes.** Cloud sets `QUEUE_CONNECTION=cloud` and configures that connection with `driver=cloud`. When the default connection's resolved driver is `cloud`, `queue.worker` passes with “Managed by the platform (Laravel Cloud managed queue); no worker to check.” It reads no backlog and makes no network call. A custom connection name with that driver also passes; a Cloud environment marker or connection name alone never establishes platform management.
 
 Publish `config/preflight.php` with `php artisan vendor:publish --tag=standards-preflight-config`. Both queue checks read `preflight.queue.expect_worker`, parsed from `PREFLIGHT_QUEUE_EXPECT_WORKER` as a nullable boolean:
 
-| Setting | Sync queue | Async queue |
-|---|---|---|
-| Unset (`null`, default) | Pass; no worker needed. | Connection passes; inspect backlog. |
-| `false` | Pass; deliberately synchronous. | Both checks warn that a queue is configured but no worker is expected. |
-| `true` | Connection warns that a worker is expected but work runs synchronously; backlog check is not applicable. | Connection passes; inspect backlog. |
+| Setting | Sync queue | Cloud managed queue (`driver=cloud`) | Other async queue |
+|---|---|---|---|
+| Unset (`null`, default) | Pass; no worker needed. | Both pass; the platform provides the worker. | Connection passes; inspect backlog. |
+| `false` | Pass; deliberately synchronous. | Connection warns about the contradictory expectation; worker passes as platform-managed. | Both checks warn that a queue is configured but no worker is expected. |
+| `true` | Connection warns that a worker is expected but work runs synchronously; backlog check is not applicable. | Both pass; the platform provides the worker. | Connection passes; inspect backlog. |
 
 `queue.worker` is advisory, never blocking even under `--strict`, and skipped with `--ci`. For database queues it reads the oldest unreserved job whose `available_at` is due, in the configured connection, table and queue. Age means time waiting since availability, so deliberately delayed jobs do not warn early. For Redis it reads the ready-list length and first payload atomically in one Lua call, using the configured connection and queue; the payload's Unix-seconds `createdAt` gives age when present. Delayed and reserved Redis sets are not inspected or migrated. Empty and fresh backlogs pass, but neither proves a worker exists.
 
@@ -232,3 +232,4 @@ The package ships a Laravel Boost guideline. Select `tey/standards` during `php 
 *Changelog: 2026-10-13 — prepared 0.3.0 with offline warning-level brand.favicon, documented current and historical defaults, layout overrides, extra hashes, CI coverage and strict failure promotion. (#130)*
 *Changelog: 2026-10-13 — audited full upstream histories, published all nineteen defaults with reference-only SHA-1 values, and added warning-level ICO header/directory, PNG type/180×180 and SVG-root checks without GD. (#130)*
 *Changelog: 2026-10-13 — prepared 0.4.0 with the shared rule-51 parser and architecture/preflight checks, distribution detection, Linux-only apps, ready-PR Windows package coverage, advisory cache/macOS/Unknown suggestions and measured job-size guidance; Windows package CI and dated PCNTL limits. (#134)*
+*Changelog: 2026-10-13 — Cloud managed queues pass without backlog or network inspection; Windows command contracts use test-only signal doubles, leaving only real PCNTL-dependent tests skipped and retaining the production guard. (#145)*

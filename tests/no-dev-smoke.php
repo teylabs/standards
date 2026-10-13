@@ -117,6 +117,17 @@ try {
     $exit = $artisan->call('standards:preflight', ['--json' => true, '--no-stderr' => true]);
     $stdout = $artisan->output();
     $json = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);
+
+    if (in_array('--expect-no-pcntl', $argv, true)) {
+        if ($exit !== 2 || $json['exit_code'] !== 2 || $json['results'] !== [] || ! str_contains($json['error'], 'Enable PHP CLI PCNTL')) {
+            throw new RuntimeException('Preflight must refuse to run without real PCNTL: '.$stdout);
+        }
+
+        echo "PASS: provider boot without architecture dependencies; missing PCNTL refuses unbounded checks.\n";
+
+        return;
+    }
+
     $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers'];
 
     if ($exit !== 0 || $json['exit_code'] !== 0 || array_column($json['results'], 'check') !== $expected
@@ -217,5 +228,9 @@ try {
 
     echo "PASS: provider boot and preflight without Pest or PHP-Parser; all core checks, blocking failure, CI, skip recovery, logging and stderr.\n";
 } finally {
+    foreach ($app['log']->getChannels() as $logger) {
+        $logger->getLogger()->close();
+    }
+
     (new Filesystem)->deleteDirectory($app->directory);
 }
