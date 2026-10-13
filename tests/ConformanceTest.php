@@ -157,3 +157,17 @@ test('architecture checks explain missing optional dependencies', function (stri
     expect($process->getExitCode())->toBe(0, $process->getErrorOutput());
     expect($process->getOutput())->toContain('Architecture checks require', 'pestphp/pest ^4.7', 'pestphp/pest-plugin-arch ^4.0', 'nikic/php-parser ^5.0', 'require-dev');
 })->with(['Pest\\', 'Pest\\Arch\\', 'PhpParser\\']);
+
+test('architecture checks accept Pest 4 and refuse other majors with a clear message', function (?string $version, bool $supported) {
+    $assert = fn () => Conformance::assertSupportedPest($version);
+
+    $supported
+        ? expect($assert)->not->toThrow(LogicException::class)
+        : expect($assert)->toThrow(LogicException::class, 'support Pest 4 (4.7+); Pest '.$version.' is installed. The deploy preflight is unaffected.');
+})->with([
+    'Pest 4' => ['4.7.2', true],
+    'Pest 4 tag' => ['v4.8.0', true],
+    'not installed' => [null, true],
+    'Pest 5' => ['5.3.1', false],
+    'Pest 3' => ['3.8.0', false],
+]);

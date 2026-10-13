@@ -36,7 +36,7 @@ if (in_array('--hide-arch', $argv, true)) {
             $loader($class);
         }
     });
-} else {
+} elseif (! in_array('--with-dev', $argv, true)) {
     foreach (['pestphp/pest', 'pestphp/pest-plugin-arch', 'nikic/php-parser'] as $package) {
         if (InstalledVersions::isInstalled($package)) {
             throw new RuntimeException('Production install includes '.$package);
@@ -44,7 +44,7 @@ if (in_array('--hide-arch', $argv, true)) {
     }
 }
 
-foreach (['Pest\\TestSuite', 'Pest\\Arch\\SingleArchExpectation', 'PhpParser\\ParserFactory'] as $class) {
+foreach (in_array('--with-dev', $argv, true) ? [] : ['Pest\\TestSuite', 'Pest\\Arch\\SingleArchExpectation', 'PhpParser\\ParserFactory'] as $class) {
     if (class_exists($class)) {
         throw new RuntimeException('Architecture class is autoloadable: '.$class);
     }
@@ -137,7 +137,7 @@ try {
         throw new RuntimeException('Passing preflight did not clear the emergency skip.');
     }
 
-    echo "PASS: provider boot and preflight without Pest or PHP-Parser; all nine checks, blocking failure, CI and skip recovery.\n";
+    echo "PASS: provider boot and preflight without Pest or PHP-Parser; all core checks, blocking failure, CI and skip recovery.\n";
 } finally {
     (new Filesystem)->deleteDirectory($app->directory);
 }

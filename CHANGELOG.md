@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 - 2026-10-13
+
+### Fixed
+
+- Installing next to Pest 5 no longer fails. The package dropped its `conflict` on `pestphp/pest` and `pestphp/pest-plugin-arch`, so apps on any Pest major can install it for the deploy preflight. The architecture checks still support Pest 4 (4.7+); with another Pest major they stop with a clear message, and the preflight is unaffected. CI installs the package beside Pest 5 and runs the preflight smoke test.
+
 ## 0.1.0 - 2026-10-13
 
 ### Added

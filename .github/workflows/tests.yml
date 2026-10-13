@@ -38,3 +38,34 @@ jobs:
           tar --exclude=vendor --exclude=.git --exclude=composer.lock -cf - . | tar -xf - -C "$production"
           composer install --working-dir="$production" --no-dev --no-interaction --prefer-dist --optimize-autoloader
           php "$production/tests/no-dev-smoke.php"
+
+  pest-5-coexistence:
+    name: install beside Pest 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.5'
+          extensions: pcntl
+          tools: composer:v2
+          coverage: none
+      - name: Install with Pest 5 in an app
+        run: |
+          app=$(mktemp -d)
+          cat > "$app/composer.json" <<JSON
+          {
+              "repositories": [{ "type": "path", "url": "$GITHUB_WORKSPACE", "options": { "symlink": false } }],
+              "require": { "tey/standards": "*@dev" },
+              "require-dev": { "pestphp/pest": "^5.0" },
+              "minimum-stability": "dev",
+              "prefer-stable": true,
+              "config": { "allow-plugins": { "pestphp/pest-plugin": true } }
+          }
+          JSON
+          composer install --working-dir="$app" --no-interaction --prefer-dist
+          composer show --working-dir="$app" pestphp/pest | grep -E '^versions'
+          php tests/no-dev-smoke.php "$app/vendor/autoload.php" --with-dev
+          php -r 'require $argv[1]; try { Tey\Standards\Conformance::assertSupportedPest(Composer\InstalledVersions::getPrettyVersion("pestphp/pest")); exit(1); } catch (LogicException $e) { echo $e->getMessage(), PHP_EOL; }' "$app/vendor/autoload.php"
