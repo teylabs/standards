@@ -19,9 +19,10 @@ final readonly class CiTriggers
         }
 
         $composer = $this->base.'/composer.json';
-        $type = is_file($composer) ? (json_decode((string) file_get_contents($composer), true)['type'] ?? null) : null;
 
-        if (is_string($type) && $type !== '') {
+        if (is_file($composer)) {
+            $type = json_decode((string) file_get_contents($composer), true)['type'] ?? 'library';
+
             return $type === 'project' ? 'app' : 'package';
         }
 
@@ -55,6 +56,7 @@ final readonly class CiTriggers
         $findings = [];
         $advisories = [];
         $readyRunners = [];
+        $hasCiWorkflow = false;
         $distribution = $this->distribution();
 
         foreach ($this->workflows() as $path) {
@@ -73,6 +75,9 @@ final readonly class CiTriggers
 
                 continue;
             }
+
+            $events = $this->events($workflow);
+            $hasCiWorkflow = $hasCiWorkflow || array_key_exists('push', $events) || array_key_exists('pull_request', $events);
 
             foreach ($this->inspect($workflow) as $finding) {
                 $findings[] = ['workflow' => $file, ...$finding];
@@ -97,7 +102,7 @@ final readonly class CiTriggers
             $advisories[] = ['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'distribution: Unknown; set preflight.ci.distribution (PREFLIGHT_CI_DISTRIBUTION) to app or package. Matrix policy was not checked.'];
         }
 
-        if ($distribution === 'package' && $this->workflows() !== []) {
+        if ($distribution === 'package' && $hasCiWorkflow) {
             if (preg_match('/windows/i', implode(' ', $readyRunners)) !== 1) {
                 $findings[] = ['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'windows-gap: test Windows on ready pull_request before merge; others run distributed packages there. Drafts may skip it.'];
             }
@@ -128,6 +133,7 @@ final readonly class CiTriggers
     private function inspect(array $workflow): array
     {
         $events = $this->events($workflow);
+        $ciWorkflow = array_key_exists('push', $events) || array_key_exists('pull_request', $events);
         $jobs = $workflow['jobs'] ?? [];
         $findings = [];
         $hasDraftGuard = false;
@@ -160,13 +166,13 @@ final readonly class CiTriggers
 
             $concurrency = $job['concurrency'] ?? $workflow['concurrency'] ?? null;
 
-            if ($concurrency === null || $concurrency === [] || $concurrency === '') {
+            if ($ciWorkflow && ($concurrency === null || $concurrency === [] || $concurrency === '')) {
                 $findings[] = ['job' => $name, 'reason' => 'concurrency: set workflow concurrency or concurrency on every job.'];
             }
 
             $matrix = $job['strategy']['matrix'] ?? [];
 
-            if ($this->distribution() === 'app' && $this->nonLinux($job['runs-on'] ?? '', $matrix)) {
+            if ($ciWorkflow && $this->distribution() === 'app' && $this->nonLinux($job['runs-on'] ?? '', $matrix)) {
                 $findings[] = ['job' => $name, 'reason' => 'os-matrix: remove non-Linux legs on every event; our apps deploy on Linux only.'];
             }
 
@@ -183,6 +189,10 @@ final readonly class CiTriggers
             if (! isset($job['timeout-minutes'])) {
                 $findings[] = ['job' => $name, 'reason' => 'timeout: set timeout-minutes on every job.'];
             }
+        }
+
+        if (! $ciWorkflow) {
+            return $findings;
         }
 
         foreach (['workflow' => $workflow['concurrency'] ?? null, ...array_map(fn (mixed $job): mixed => is_array($job) ? ($job['concurrency'] ?? null) : null, $jobs)] as $name => $concurrency) {

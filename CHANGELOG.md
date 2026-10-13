@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2 - 2026-10-13
+
+### Fixed
+
+- Detect a missing Composer `type` as `library` (package), with configuration taking precedence and the `artisan` fallback used only without `composer.json`. (#158)
+- Scope trigger, concurrency, draft-guard and matrix requirements to workflows including `push` or `pull_request`; other-event-only workflows are exempt, while mixed workflows retain their checks and every job still requires `timeout-minutes`. Document release-branch globs such as `*.x` for `ciDefaultBranches` and `preflight.ci.default_branches`. (#158)
+
 ## 0.5.1 - 2026-10-13
 
 ### Fixed

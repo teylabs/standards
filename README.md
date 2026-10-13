@@ -163,6 +163,8 @@ A push followed by `gh pr ready` sends a draft-snapshot `synchronize` and a `rea
 
 Include the draft state in the workflow group whenever any job has a draft guard, and in each guarded job's own group. Unguarded workflows and unguarded jobs' own groups are exempt.
 
+CI-specific requirements apply only to workflows whose `on` includes `push` or `pull_request`, in string, list or map form. Workflows triggered only by `pull_request_target`, `issue_comment`, `pull_request_review_comment`, `release`, `schedule`, `workflow_dispatch`, `workflow_run` or `merge_group` are exempt from trigger, concurrency, draft-guard and matrix findings. Mixed workflows keep these checks on every job, even jobs selected for another event. **Every job in every workflow still needs `timeout-minutes`: a hung bot job can burn up to 360 minutes.**
+
 `Tey\Standards\CiTriggers` parses `.github/workflows` offline. Construct it with the base path, default branches (`['main']`) and optional `distribution: 'app'|'package'`; `findings()` returns failures as `workflow`, `job` and `reason` entries. `advisories()` returns suggestions separately in the same shape. A workflow-level entry has `job: workflow`; repository-wide coverage targets `.github/workflows`. Each reason starts with its category and says what to change:
 
 | Category | Finding |
@@ -180,7 +182,7 @@ Include the draft state in the workflow group whenever any job has a draft guard
 
 Lint and static jobs may run on drafts. Package Windows jobs may use the draft guard: ready PRs still run them. Missing macOS and docs-only skipping are advisory.
 
-Detection, in order: `preflight.ci.distribution` (`app` or `package`, env `PREFLIGHT_CI_DISTRIBUTION`); Composer type `project` → app, `library`, `laravel-package`, `composer-plugin` or another non-project type → package; `artisan` at the base path → app; otherwise advisory Unknown with config instructions. Generated output or sold apps use `package` explicitly if their Composer type says `project`. Repository access plays no part.
+Detection, in order: `preflight.ci.distribution` (`app` or `package`, env `PREFLIGHT_CI_DISTRIBUTION`); Composer type `project` → app, `library`, `laravel-package`, `composer-plugin` or another non-project type → package, with a missing type defaulting to `library`; only without `composer.json`, `artisan` at the base path → app; otherwise advisory Unknown with config instructions. Generated output or sold apps use `package` explicitly if their Composer type says `project`. Repository access plays no part.
 
 **Consolidate small jobs first.** GitHub rounds each job up to whole minutes; tiny split jobs pay that tax and repeat setup. 2m43s → 2m12s still bills three minutes: savings begin below 2:00. Cache only above ~45 s cold installs or just over a minute boundary. A measured warm Setup of 31 s → 26 s plus ~5 s restore saved about zero, against ±20 s runner noise. The advisory recognises lockfile-keyed `actions/cache`, `setup-node` with `cache: npm`, setup-php plus an `actions/cache` step on the Composer cache dir, or `ramsey/composer-install`. Composer `install`/`update` and npm `ci`/`install`/`i` without these get a suggestion, never a failure.
 
@@ -200,8 +202,10 @@ new Configuration(
 | Configuration | Default | Meaning |
 |---|---|---|
 | `preflight.ci.enforce` | `false` | Boolean via `PREFLIGHT_CI_ENFORCE`; opt in to strict preflight failures and architecture rule 51 enforcement. |
-| `preflight.ci.default_branches` | `['main']` | Branches a `push` trigger may list. |
+| `preflight.ci.default_branches` | `['main']` | Branches or globs a `push` trigger may list, such as `['main', '*.x']` for release branches. |
 | `preflight.ci.distribution` | `null` | `app` or `package` via `PREFLIGHT_CI_DISTRIBUTION`; otherwise Composer type, then `artisan`, then Unknown. |
+
+`Configuration::ciDefaultBranches` accepts the same globs. List the exact glob in both the configuration and `on.push.branches`; GitHub matches release branches such as `1.x` against `*.x`, while the checker compares the declared patterns.
 
 **Required checks.** `paths-ignore` suits repositories without required checks. With required checks, a skipped workflow never reports and blocks the merge; use a `changes` job that lets expensive jobs skip, since a job skipped by its `if` reports success. The checker does not read branch protection, so confirm the required check names by hand.
 

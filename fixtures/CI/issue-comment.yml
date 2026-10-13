@@ -1,0 +1,11 @@
+name: bot
+on: [issue_comment]
+jobs:
+  bot:
+    runs-on: macos-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - run: composer test

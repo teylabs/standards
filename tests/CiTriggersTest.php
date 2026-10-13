@@ -70,6 +70,23 @@ test('[rule 51] workflow variants enforce boundaries without rejecting supported
     'configured branches' => [function (&$w) {
         $w['on']['push']['branches'] = ['trunk'];
     }, [], ['trunk'], null, true],
+    'configured release branch glob' => [function (&$w) {
+        $w['on']['push']['branches'] = ['main', '*.x'];
+    }, [], ['main', '*.x'], null, true],
+    'unconfigured release branch glob' => [function (&$w) {
+        $w['on']['push']['branches'] = ['main', '*.x'];
+    }, ['push-branches'], ['main'], null, true],
+    'mixed push and release still checks every job' => [function (&$w) {
+        $w['on'] = ['push' => ['branches' => ['*']], 'release' => null];
+        unset($w['concurrency']);
+        $w['jobs']['test']['if'] = "github.event_name == 'release'";
+        $w['jobs']['test']['runs-on'] = 'macos-latest';
+    }, ['push-branches', 'concurrency', 'os-matrix'], ['main'], null, true],
+    'mixed PR and release still checks PHP and drafts' => [function (&$w) {
+        $w['on'] = ['pull_request' => null, 'release' => null];
+        unset($w['jobs']['test']['if']);
+        $w['jobs']['test']['strategy']['matrix']['php-version'] = ['8.4', '8.5'];
+    }, ['draft-guard', 'php-matrix'], ['main'], null, true],
     'tag only' => [function (&$w) {
         $w['on']['push'] = ['tags' => ['v*']];
     }, [], ['main'], null, true],
@@ -261,9 +278,9 @@ test('[rule 51] every workflow and job is inspected, including yaml extensions a
     expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $findings))->toBe(['yaml', 'timeout', 'os-matrix']);
 });
 
-test('[rule 51] distribution detection uses config then composer then artisan, otherwise advisory unknown', function (?string $type, ?string $override, bool $artisan, string $expected) {
-    if ($type !== null) {
-        file_put_contents($this->ciBase.'/composer.json', json_encode(['type' => $type]));
+test('[rule 51] distribution detection uses config then composer then artisan, otherwise advisory unknown', function (?array $composer, ?string $override, bool $artisan, string $expected) {
+    if ($composer !== null) {
+        file_put_contents($this->ciBase.'/composer.json', json_encode($composer));
     }
 
     if (! $artisan) {
@@ -279,16 +296,60 @@ test('[rule 51] distribution detection uses config then composer then artisan, o
         expect(implode(' ', array_column($parser->advisories(), 'reason')))->toContain('Unknown', 'preflight.ci.distribution', 'PREFLIGHT_CI_DISTRIBUTION');
     }
 })->with([
-    ['project', null, false, 'app'],
-    ['library', null, true, 'package'],
-    ['laravel-package', null, false, 'package'],
-    ['composer-plugin', null, false, 'package'],
-    ['custom-distribution', null, false, 'package'],
-    ['project', 'package', true, 'package'],
-    ['library', 'app', false, 'app'],
+    [['type' => 'project'], null, false, 'app'],
+    [['type' => 'library'], null, true, 'package'],
+    [['type' => 'laravel-package'], null, false, 'package'],
+    [['type' => 'composer-plugin'], null, false, 'package'],
+    [['type' => 'custom-distribution'], null, false, 'package'],
+    [['type' => 'project'], 'package', true, 'package'],
+    [['type' => 'library'], 'app', false, 'app'],
+    [['name' => 'example/package'], null, false, 'package'],
+    [['name' => 'example/package'], null, true, 'package'],
+    [['name' => 'example/package'], 'app', true, 'app'],
     [null, null, true, 'app'],
     [null, null, false, 'unknown'],
 ]);
+
+test('[rule 51] non-CI trigger fixtures are exempt from CI-specific requirements', function (string $fixture) {
+    $path = $this->ciBase.'/.github/workflows/bot.yml';
+    copy(dirname(__DIR__).'/fixtures/CI/'.$fixture, $path);
+
+    foreach (['app', 'package'] as $distribution) {
+        expect((new CiTriggers($this->ciBase, distribution: $distribution))->findings())->toBe([]);
+    }
+
+    $workflow = Yaml::parseFile($path);
+    $workflow['concurrency'] = ['group' => 'bot', 'cancel-in-progress' => true];
+    $workflow['jobs']['bot']['if'] = '!github.event.pull_request.draft';
+    $workflow['jobs']['bot']['concurrency'] = $workflow['concurrency'];
+    file_put_contents($path, Yaml::dump($workflow, 10));
+
+    expect((new CiTriggers($this->ciBase))->findings())->toBe([]);
+})->with([
+    'pull-request-target.yml',
+    'issue-comment.yml',
+    'pull-request-review-comment.yml',
+    'release.yml',
+    'schedule.yml',
+    'workflow-dispatch.yml',
+    'workflow-run.yml',
+    'merge-group.yml',
+]);
+
+test('[rule 51] every bot job still needs a timeout', function () {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/issue-comment.yml');
+    unset($workflow['jobs']['bot']['timeout-minutes']);
+    $workflow['jobs']['other'] = $workflow['jobs']['bot'];
+    file_put_contents($this->ciBase.'/.github/workflows/bot.yml', Yaml::dump($workflow, 10));
+    $findings = (new CiTriggers($this->ciBase, distribution: 'package'))->findings();
+
+    expect(array_column($findings, 'job'))->toBe(['bot', 'other']);
+    expect(array_column($findings, 'workflow'))->toBe(['.github/workflows/bot.yml', '.github/workflows/bot.yml']);
+    expect(array_column($findings, 'reason'))->toBe([
+        'timeout: set timeout-minutes on every job.',
+        'timeout: set timeout-minutes on every job.',
+    ]);
+});
 
 test('[rule 51] packages require Windows before merge, not merely somewhere in CI', function (Closure $change, bool $gap) {
     $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
