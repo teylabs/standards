@@ -13,9 +13,11 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\Log\Context\ContextLogProcessor;
 use Illuminate\Log\LogManager;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Process\Process;
 use Tey\Standards\StandardsServiceProvider;
 
-require $argv[1] ?? dirname(__DIR__).'/vendor/autoload.php';
+$autoload = $argv[1] ?? dirname(__DIR__).'/vendor/autoload.php';
+require $autoload;
 
 $hidden = ['Pest\\', 'PhpParser\\'];
 
@@ -48,6 +50,35 @@ if (in_array('--hide-arch', $argv, true)) {
 foreach (in_array('--with-dev', $argv, true) ? [] : ['Pest\\TestSuite', 'Pest\\Arch\\SingleArchExpectation', 'PhpParser\\ParserFactory'] as $class) {
     if (class_exists($class)) {
         throw new RuntimeException('Architecture class is autoloadable: '.$class);
+    }
+}
+
+if (! in_array('--hide-arch', $argv, true) && ! in_array('--with-dev', $argv, true)) {
+    $guard = tempnam(sys_get_temp_dir(), 'standards-cli-guard-');
+    file_put_contents($guard, <<<'PHP'
+    <?php
+    register_shutdown_function(static function (): void {
+        foreach (['Illuminate\Foundation\Application', 'Pest\TestSuite', 'PhpParser\ParserFactory'] as $class) {
+            if (class_exists($class, false)) {
+                throw new RuntimeException('CLI loaded '.$class);
+            }
+        }
+    });
+    PHP);
+
+    try {
+        $binary = isset($argv[1]) ? dirname($autoload).'/bin/standards' : dirname(__DIR__).'/bin/standards';
+        $process = new Process([PHP_BINARY, '-d', 'auto_prepend_file='.$guard, $binary, 'ci', '--json'], dirname(__DIR__));
+        $process->mustRun();
+        $report = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+
+        if ($process->getErrorOutput() !== '' || $report['schema'] !== 1 || $report['findings'] !== [] || $report['exit_code'] !== 0) {
+            throw new RuntimeException('Production CLI did not inspect the package cleanly: '.$process->getOutput().$process->getErrorOutput());
+        }
+
+        echo "PASS: standards ci --json without Pest, PHP-Parser or a loaded Laravel Application.\n";
+    } finally {
+        unlink($guard);
     }
 }
 

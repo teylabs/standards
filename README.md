@@ -207,11 +207,45 @@ new Configuration(
 
 `Configuration::ciDefaultBranches` accepts the same globs. List the exact glob in both the configuration and `on.push.branches`; GitHub matches release branches such as `1.x` against `*.x`, while the checker compares the declared patterns.
 
+### Packages
+
+Packages without `artisan` use the Laravel-free CLI in `tey/standards` 0.6. Install it once as a dev dependency with `composer require --dev tey/standards:^0.6`. After the workflow's existing `composer install`, add one step:
+
+```yaml
+- run: vendor/bin/standards ci --strict
+```
+
+Packages normally keep their settings in their root `composer.json` under `extra`, rather than Laravel config:
+
+```json
+{
+    "extra": {
+        "tey-standards": {
+            "ci": {
+                "default-branches": ["main", "*.x"],
+                "distribution": "package",
+                "enforce": true
+            }
+        }
+    }
+}
+```
+
+Run once without enforcement, fix the findings, then opt in. The CLI calls the same `CiTriggers` parser as app preflight; it does not boot Laravel, read `.env` files or require Pest/PHP-Parser. On Windows, use `php vendor/bin/standards ci --strict`.
+
+```sh
+vendor/bin/standards ci [--strict] [--json] [--base=<dir>] [--default-branches=main,*.x] [--distribution=app|package] [--enforce]
+```
+
+Settings resolve in order: flags, process environment, `extra.tey-standards.ci`, defaults. `--base` defaults to the current directory. `--default-branches` and `PREFLIGHT_CI_DEFAULT_BRANCHES` are comma-separated names or globs; `extra` accepts a list. `PREFLIGHT_CI_DISTRIBUTION` overrides `distribution`, and `PREFLIGHT_CI_ENFORCE` overrides `enforce` (true/false, 1/0, yes/no or on/off). `--enforce` enables enforcement for that run. Defaults are `['main']`, auto-detected distribution and enforcement off.
+
+Human output lists requirement findings in a workflow/job/finding table, then advisories and a count/enforcement/exit summary. `--json` writes only `{"schema":1,"findings":[],"advisories":[],"enforce":false,"exit_code":0}` to stdout, with each finding or advisory using the parser's `workflow`, `job` and `reason` fields. Exit 1 requires all three: `--strict`, enforcement on and requirement findings. Otherwise findings exit 0; cache/macOS/Unknown advisories never fail. A missing workflows directory is an `unknown` advisory and exits 0. Unknown commands/options and invalid values exit 2 with usage on stderr. No command or `--help` prints usage; `ci` is the only command.
+
 **Required checks.** `paths-ignore` suits repositories without required checks. With required checks, a skipped workflow never reports and blocks the merge; use a `changes` job that lets expensive jobs skip, since a job skipped by its `if` reports success. The checker does not read branch protection, so confirm the required check names by hand.
 
 **Limits.** The checker does not run GitHub's expression engine. Ready-PR coverage resolves literal runners and matrices, include/exclude rows, `fromJSON` lists and simple event/draft boolean conditions and `condition && value || fallback` selectors. Unknown expressions do not prove Windows coverage; use a detectable leg or review and ratchet an inapplicable finding. App OS checks inspect all literal alternatives, including event-selected legs. PHP expressions choosing on `github.event_name` retain the existing exemption and need review. Reusable workflows, composite actions and wrapper scripts are not followed. The test scan recognises `php artisan test`, Pest, PHPUnit, `npm test`, `composer test`, Playwright and Vitest. Cache detection reads steps, not performance.
 
-**This package's CI.** The standalone workflow runs PHP 8.4/8.5 with Pest 4 and 5 on Ubuntu for ready PRs and main. Windows runs Pest 5 only to keep the matrix lean, loads PDO SQLite and runs architecture, parser, backlog and command-contract tests. A separate temp-app job installs the package beside Pest 5 and executes a `[rule 20]` architecture test with clean and negative controls, plus the preflight smoke test. Test-only signal doubles exercise non-alarm command behaviour without changing production code. Only the busy custom-check timeout, busy backlog timeout and real deployment/no-dev smoke test skip without PCNTL; each has a 2026-10-13 reason. A separate process verifies that the real preflight command still exits 2 without PCNTL rather than silently losing its timeout guard. Cookbook CI normally runs Linux only; issue #145 proves the package on GitHub's Windows runner with a temporary cookbook job removed before review.
+**This package's CI.** The standalone workflow runs PHP 8.4/8.5 with Pest 4 and 5 on Ubuntu for ready PRs and main. Windows runs Pest 5 only to keep the matrix lean, loads PDO SQLite and runs architecture, parser, backlog and command-contract tests. Every leg runs `php bin/standards ci --strict` with enforcement on. Production smoke installs the package as a dependency and runs `php vendor/bin/standards ci --json` on both platforms, checking that no Laravel `Application` was loaded; Windows then verifies deployment preflight's missing-PCNTL refusal. A separate temp-app job installs the package beside Pest 5 and executes a `[rule 20]` architecture test with clean and negative controls, plus the preflight smoke test. Test-only signal doubles exercise non-alarm command behaviour without changing production code. Only the busy custom-check timeout, busy backlog timeout and real deployment smoke test skip without PCNTL; each has a 2026-10-13 reason. A separate process verifies that the real preflight command still exits 2 without PCNTL rather than silently losing its timeout guard. Cookbook CI normally runs Linux only; issue #145 proves the package on GitHub's Windows runner with a temporary cookbook job removed before review.
 
 ## Queue: sync until needed
 

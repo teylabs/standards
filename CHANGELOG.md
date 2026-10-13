@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 - 2026-10-13
+
+### Added
+
+- Laravel-free `vendor/bin/standards ci` for packages, using the shared `CiTriggers` parser. Flags override process environment, then `composer.json` `extra.tey-standards.ci`, then defaults. Human findings/advisories and schema-1 JSON preserve advisory-by-default semantics: exit 1 only for requirement findings with both `--strict` and enforcement on; usage errors exit 2. (#159)
+- Process-level CLI contracts, strict package CI dogfooding, and production-only Composer-bin smoke coverage without Pest, PHP-Parser or a loaded Laravel Application. Windows runs the CLI smoke before verifying deployment preflight's missing-PCNTL refusal. Package adoption uses one CI step after dependency installation and keeps settings in Composer `extra`. (#159)
+
 ## 0.5.2 - 2026-10-13
 
 ### Fixed

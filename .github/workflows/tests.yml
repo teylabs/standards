@@ -42,18 +42,28 @@ jobs:
         run: composer validate --strict
       - name: Install dependencies
         run: composer require --dev "pestphp/pest:^${{ matrix.pest == 4 && '4.7' || '5.0' }}" "pestphp/pest-plugin-arch:^${{ matrix.pest }}.0" -W --no-interaction --prefer-dist
+      - name: Check CI standards
+        env:
+          PREFLIGHT_CI_ENFORCE: 'true'
+        run: php bin/standards ci --strict
       - name: Test
         run: composer test
       - name: Production install smoke test
-        # 2026-10-13: deployment preflight needs PCNTL alarms, unavailable on Windows.
-        if: runner.os != 'Windows'
+        # The CLI works without PCNTL; Windows also verifies the deployment refusal.
         shell: bash
         run: |
           production=$(mktemp -d)
           trap 'rm -rf "$production"' EXIT
-          tar --exclude=vendor --exclude=.git --exclude=composer.lock -cf - . | tar -xf - -C "$production"
+          mkdir "$production/package"
+          tar --exclude=vendor --exclude=.git --exclude=composer.lock -cf - . | tar -xf - -C "$production/package"
+          cat > "$production/composer.json" <<JSON
+          {
+              "repositories": [{ "type": "path", "url": "./package", "options": { "symlink": false } }],
+              "require": { "tey/standards": "*@dev" }
+          }
+          JSON
           composer install --working-dir="$production" --no-dev --no-interaction --prefer-dist --optimize-autoloader
-          php "$production/tests/no-dev-smoke.php"
+          php "$production/package/tests/no-dev-smoke.php" "$production/vendor/autoload.php" ${{ runner.os == 'Windows' && '--expect-no-pcntl' || '' }}
 
   pest-5-coexistence:
     name: architecture checks under Pest 5 in an app

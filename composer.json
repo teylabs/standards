@@ -57,10 +57,18 @@
             "FixtureBad\\": "fixtures/Bad/src/"
         }
     },
+    "bin": [
+        "bin/standards"
+    ],
     "scripts": {
         "test": "pest"
     },
     "extra": {
+        "tey-standards": {
+            "ci": {
+                "enforce": true
+            }
+        },
         "laravel": {
             "providers": [
                 "Tey\\Standards\\StandardsServiceProvider"

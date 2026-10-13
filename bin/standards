@@ -1,0 +1,159 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Tey\Standards\CiTriggers;
+
+$usage = <<<'TEXT'
+Usage: standards ci [--strict] [--json] [--base=<dir>]
+                    [--default-branches=main,*.x] [--distribution=app|package] [--enforce]
+       standards [--help]
+
+Inspect .github/workflows offline, without booting Laravel.
+Settings: flags > PREFLIGHT_CI_* environment > composer.json extra.tey-standards.ci > defaults.
+Defaults: current directory, main, auto-detected distribution, enforcement off.
+Exit: 0 for advisory runs; 1 for findings with --strict and enforcement on; 2 for invalid usage.
+TEXT;
+
+$arguments = array_slice($argv, 1);
+
+if ($arguments === [] || $arguments === ['--help']) {
+    echo $usage.PHP_EOL;
+    exit(0);
+}
+
+try {
+    if (array_shift($arguments) !== 'ci') {
+        throw new InvalidArgumentException('Unknown command; use standards ci.');
+    }
+
+    $options = [];
+
+    foreach ($arguments as $argument) {
+        if (in_array($argument, ['--strict', '--json', '--enforce', '--help'], true)) {
+            $options[substr($argument, 2)] = true;
+        } elseif (preg_match('/^--(base|default-branches|distribution)=(.*)$/s', $argument, $match) === 1) {
+            $options[$match[1]] = $match[2];
+        } else {
+            throw new InvalidArgumentException('Unknown option '.$argument.'; use standards ci --help.');
+        }
+    }
+
+    if (isset($options['help'])) {
+        echo $usage.PHP_EOL;
+        exit(0);
+    }
+
+    $baseOption = $options['base'] ?? getcwd();
+    $base = $baseOption === '' ? false : realpath($baseOption);
+
+    if ($base === false || ! is_dir($base)) {
+        throw new InvalidArgumentException('--base must name an existing directory.');
+    }
+
+    $composer = is_file($base.'/composer.json')
+        ? json_decode((string) file_get_contents($base.'/composer.json'), true, flags: JSON_THROW_ON_ERROR)
+        : [];
+    $extra = $composer['extra']['tey-standards']['ci'] ?? [];
+
+    if (! is_array($extra)) {
+        throw new InvalidArgumentException('extra.tey-standards.ci must be an object.');
+    }
+
+    $settings = [];
+
+    foreach (['default-branches' => ['main'], 'distribution' => null, 'enforce' => false] as $key => $default) {
+        $environment = getenv('PREFLIGHT_CI_'.strtoupper(str_replace('-', '_', $key)));
+        $settings[$key] = $options[$key] ?? ($environment !== false ? $environment : ($extra[$key] ?? $default));
+    }
+
+    $branches = $settings['default-branches'];
+    $branches = is_string($branches) ? array_map('trim', explode(',', $branches)) : $branches;
+
+    if (! is_array($branches) || ! array_is_list($branches) || $branches === []) {
+        throw new InvalidArgumentException('default-branches must be a non-empty list of branch names or globs.');
+    }
+
+    foreach ($branches as $branch) {
+        if (! is_string($branch) || $branch === '' || preg_match('/[\s,\x00-\x1f\x7f]/', $branch) === 1) {
+            throw new InvalidArgumentException('default-branches must contain non-empty branch names or globs without whitespace.');
+        }
+    }
+
+    $distribution = $settings['distribution'];
+
+    if ($distribution !== null && ! in_array($distribution, ['app', 'package'], true)) {
+        throw new InvalidArgumentException('distribution must be app or package.');
+    }
+
+    $enforce = filter_var($settings['enforce'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+    if ($enforce === null || $settings['enforce'] === '' || ! is_scalar($settings['enforce'])) {
+        throw new InvalidArgumentException('enforce must be a boolean (true/false, 1/0, yes/no or on/off).');
+    }
+} catch (InvalidArgumentException|JsonException $error) {
+    fwrite(STDERR, 'standards ci: '.$error->getMessage().PHP_EOL.$usage.PHP_EOL);
+    exit(2);
+}
+
+$autoload = $_composer_autoload_path ?? null;
+$directory = __DIR__;
+
+while ($autoload === null) {
+    if (is_file($directory.'/vendor/autoload.php')) {
+        $autoload = $directory.'/vendor/autoload.php';
+        break;
+    }
+
+    $parent = dirname($directory);
+
+    if ($parent === $directory) {
+        throw new RuntimeException('Composer autoloader not found; run composer install first.');
+    }
+
+    $directory = $parent;
+}
+
+require $autoload;
+
+$parser = new CiTriggers($base, $branches, $distribution);
+
+if ($parser->workflows() === []) {
+    $findings = [];
+    $advisories = [['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'unknown: no .github/workflows/*.yml or *.yaml files found.']];
+} else {
+    $findings = $parser->findings();
+    $advisories = $parser->advisories();
+}
+
+$exit = isset($options['strict']) && $enforce && $findings !== [] ? 1 : 0;
+
+if (isset($options['json'])) {
+    echo json_encode(['schema' => 1, 'findings' => $findings, 'advisories' => $advisories, 'enforce' => $enforce, 'exit_code' => $exit], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES).PHP_EOL;
+} else {
+    $workflowWidth = strlen('Workflow');
+    $jobWidth = strlen('Job');
+
+    foreach ([...$findings, ...$advisories] as $finding) {
+        $workflowWidth = max($workflowWidth, strlen($finding['workflow']));
+        $jobWidth = max($jobWidth, strlen($finding['job']));
+    }
+
+    echo 'Requirements'.PHP_EOL;
+    printf("%-{$workflowWidth}s  %-{$jobWidth}s  Finding\n", 'Workflow', 'Job');
+
+    foreach ($findings as $finding) {
+        printf("%-{$workflowWidth}s  %-{$jobWidth}s  %s\n", $finding['workflow'], $finding['job'], $finding['reason']);
+    }
+
+    echo PHP_EOL.'Advisories'.PHP_EOL;
+
+    foreach ($advisories as $finding) {
+        printf("%-{$workflowWidth}s  %-{$jobWidth}s  %s\n", $finding['workflow'], $finding['job'], $finding['reason']);
+    }
+
+    printf("\n%d requirement findings, %d advisories; enforce %s; exit code %d.\n", count($findings), count($advisories), $enforce ? 'on' : 'off', $exit);
+}
+
+exit($exit);
