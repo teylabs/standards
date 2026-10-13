@@ -64,7 +64,7 @@ CI can skip checks requiring production secrets with `--ci` and promote failed w
 php artisan standards:preflight --ci --strict
 ```
 
-Only `app.key`, `app.env-debug` and `database.config` are blocking core checks; mail, brand and CI checks have warning level and never block deployment. Blocking failures exit 1, warnings permit exit 0, and usage errors exit 2. `--strict` exits 1 on any selected failed check regardless of level, but advisory `warn` results still exit 0. CI secret skips are not passes. `--json` supplies board-readable levels and result types. Emergency `--skip=app.key,mail.transport` or `PREFLIGHT_SKIP` overrides are printed, logged and persisted until a passing check clears them. PHP CLI needs PCNTL for the five-second per-check guard. Configuration checks run offline; `queue.worker` alone reads queue storage, and `ci.triggers` reads workflow files. No hosting APIs are called. These checks do not prove credentials for other services or that a worker is running.
+Only `app.key`, `app.env-debug` and `database.config` are blocking core checks; mail, brand and CI checks have warning level and never block deployment. Blocking failures exit 1, warnings permit exit 0, and usage errors exit 2. `--strict` exits 1 on selected failed checks regardless of level, except `ci.triggers` until CI enforcement is enabled; advisory `warn` results still exit 0. CI secret skips are not passes. `--json` supplies board-readable levels and result types. Emergency `--skip=app.key,mail.transport` or `PREFLIGHT_SKIP` overrides are printed, logged and persisted until a passing check clears them. PHP CLI needs PCNTL for the five-second per-check guard. Configuration checks run offline; `queue.worker` alone reads queue storage, and `ci.triggers` reads workflow files. No hosting APIs are called. These checks do not prove credentials for other services or that a worker is running.
 
 See the [preflight reference](https://github.com/teylabs/cookbook/blob/main/docs/reference/standards-preflight.md) for the complete check list, configuration, skip records and a copyable app payment-webhook check. Implement `Tey\Standards\Preflight\Check` with `name()`, `level()`, `needsSecrets()` and `run()`, returning a `Result`. Register it once in a service provider:
 
@@ -137,6 +137,8 @@ Tests retain eighteen non-empty byte-exact defaults, generate the empty file, an
 
 ## CI triggers
 
+**Since 0.4.1, rule 51 is advisory by default.** New check groups arrive advisory, and an app opts in to enforcement per group, so a minor bump never turns CI red. Run `php artisan standards:preflight --ci --only=ci` once, fix the findings or record exact dated architecture ratchet entries, then set `PREFLIGHT_CI_ENFORCE=true` in CI. Pass the same config switch to `Configuration` below. Rebuild cached config after changing it. Ratchets apply to the architecture test; strict preflight still requires fixing its findings.
+
 CI runs once per change that matters. **Apps: Linux only, on every event**, with one deploy PHP version on PRs; extra PHP versions run nightly or manually. **Distributed packages: test Windows on ready PRs, before merge**, regardless of cost, and macOS where relevant (advisory). Others run them on those platforms. Distribution includes published packages, private-but-sold packages and generated output others use; an app is our own code deployed by us on Linux. Package PHP matrices may run on PRs. This is rule 51; the [CI triggers recipe](https://github.com/teylabs/cookbook/blob/main/docs/recipes/backend/ci-triggers.md) has the full workflow and required-check caveat.
 
 ```yaml
@@ -177,20 +179,22 @@ Detection, in order: `preflight.ci.distribution` (`app` or `package`, env `PREFL
 
 **Consolidate small jobs first.** GitHub rounds each job up to whole minutes; tiny split jobs pay that tax and repeat setup. 2m43s → 2m12s still bills three minutes: savings begin below 2:00. Cache only above ~45 s cold installs or just over a minute boundary. A measured warm Setup of 31 s → 26 s plus ~5 s restore saved about zero, against ±20 s runner noise. The advisory recognises lockfile-keyed `actions/cache`, `setup-node` with `cache: npm`, setup-php plus an `actions/cache` step on the Composer cache dir, or `ramsey/composer-install`. Composer `install`/`update` and npm `ci`/`install`/`i` without these get a suggestion, never a failure.
 
-The `[rule 51]` architecture test reports each finding with the workflow as the target and `job | reason` as the check. Record existing debt as exact, dated ratchet entries. Pass the preflight's options to `Configuration` so both judge the same workflows. Read Laravel config inside the test callback after the application boots, not while Pest registers tests; the [preset example](https://github.com/teylabs/cookbook/blob/main/docs/reference/standards-preset.md#configure-roots) shows that setup:
+The `[rule 51]` architecture test skips while enforcement is off, with an advisory reason, finding count and the command to see findings. `violations('51')` still returns every finding with the workflow as the target and `job | reason` as the check. With enforcement on, the test enforces the existing ratchet, including stale entries. Record existing debt as exact, dated ratchet entries. Pass the preflight's options to `Configuration` so both judge the same workflows and enforcement switch. Read Laravel config inside the test callback after the application boots, not while Pest registers tests; the [preset example](https://github.com/teylabs/cookbook/blob/main/docs/reference/standards-preset.md#configure-roots) shows that setup:
 
 ```php
 new Configuration(
     // ...the existing arguments
     ciDefaultBranches: config('preflight.ci.default_branches', ['main']),
     ciDistribution: config('preflight.ci.distribution'),
+    ciEnforce: config('preflight.ci.enforce', false),
 );
 ```
 
-`ci.triggers` is a warning-level preflight check in the `ci` group. It runs with `--ci` only; deploy runs report `skipped`, not a pass. Requirements fail the check: plain runs exit 0 when blocking checks pass, and `--strict` exits 1. Cache/macOS/Unknown advisories remain `warn` and exit 0 even under strict, with suggestions in both the message and JSON. Missing workflows are also advisory Unknown. Select it with `php artisan standards:preflight --ci --only=ci --strict`.
+`ci.triggers` is a warning-level preflight check in the `ci` group. It runs with `--ci` only; deploy runs report `skipped`, not a pass. Requirements still report `fail` in text, JSON and logs when enforcement is off, but `--strict` exits 0 for those findings. With enforcement on, `--strict` exits 1 as in 0.4.0. Plain runs exit 0 either way when blocking checks pass; blocking checks are unaffected. Cache/macOS/Unknown advisories remain `warn` and exit 0 even under strict, with suggestions in both the message and JSON. Missing workflows are also advisory Unknown. After opting in, select it with `php artisan standards:preflight --ci --only=ci --strict`.
 
 | Configuration | Default | Meaning |
 |---|---|---|
+| `preflight.ci.enforce` | `false` | Boolean via `PREFLIGHT_CI_ENFORCE`; opt in to strict preflight failures and architecture rule 51 enforcement. |
 | `preflight.ci.default_branches` | `['main']` | Branches a `push` trigger may list. |
 | `preflight.ci.distribution` | `null` | `app` or `package` via `PREFLIGHT_CI_DISTRIBUTION`; otherwise Composer type, then `artisan`, then Unknown. |
 
@@ -233,3 +237,4 @@ The package ships a Laravel Boost guideline. Select `tey/standards` during `php 
 *Changelog: 2026-10-13 — audited full upstream histories, published all nineteen defaults with reference-only SHA-1 values, and added warning-level ICO header/directory, PNG type/180×180 and SVG-root checks without GD. (#130)*
 *Changelog: 2026-10-13 — prepared 0.4.0 with the shared rule-51 parser and architecture/preflight checks, distribution detection, Linux-only apps, ready-PR Windows package coverage, advisory cache/macOS/Unknown suggestions and measured job-size guidance; Windows package CI and dated PCNTL limits. (#134)*
 *Changelog: 2026-10-13 — Cloud managed queues pass without backlog or network inspection; Windows command contracts use test-only signal doubles, leaving only real PCNTL-dependent tests skipped and retaining the production guard. (#145)*
+*Changelog: 2026-10-13 — prepared 0.4.1 with advisory-by-default rule 51, shared opt-in enforcement, visible preflight failures and architecture skip counts; document run, fix or ratchet, then opt in. (#150)*

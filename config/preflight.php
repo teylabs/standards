@@ -9,6 +9,7 @@ return [
     'timeout' => 5,
     'mail_generic_local_parts' => ['updates', 'hello', 'noreply', 'no-reply', 'no_reply', 'notifications', 'notify', 'info', 'support', 'mail'],
     'ci' => [
+        'enforce' => filter_var(env('PREFLIGHT_CI_ENFORCE', false), FILTER_VALIDATE_BOOLEAN),
         'default_branches' => ['main'],
         // app: our Linux deployment; package: anything others install or run. Null detects composer type, then artisan.
         'distribution' => env('PREFLIGHT_CI_DISTRIBUTION'),

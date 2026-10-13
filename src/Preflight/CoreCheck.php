@@ -135,6 +135,10 @@ final readonly class CoreCheck implements Check
         $parser = new CiTriggers($this->base, $this->config->get('preflight.ci.default_branches', ['main']), $this->config->get('preflight.ci.distribution'));
         $remedy = 'Apply docs/recipes/backend/ci-triggers.md; see tey/standards README (CI triggers) for findings and configuration.';
 
+        if (! $this->config->get('preflight.ci.enforce', false)) {
+            $remedy .= ' Rule 51 is advisory until PREFLIGHT_CI_ENFORCE=true; fix or ratchet findings before opting in.';
+        }
+
         if ($parser->workflows() === []) {
             return Result::warn('Unknown: no .github/workflows/*.yml or *.yaml files found. '.$remedy);
         }

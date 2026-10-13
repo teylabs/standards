@@ -1057,8 +1057,8 @@ test('[rule 50] the README table publishes both raw-content hashes for every def
     }
 });
 
-test('[rule 51] CI-only preflight reports pass, failure, strict promotion, skips and unknown evidence', function (bool $ci, bool $strict, ?string $fixture, string $status, int $exit) {
-    $this->preflight['config']->set('preflight.ci.distribution', 'app');
+test('[rule 51] CI-only preflight reports findings but strict enforcement is opt-in', function (bool $ci, bool $strict, bool $enforce, ?string $fixture, string $status, int $exit) {
+    $this->preflight['config']->set(['preflight.ci.distribution' => 'app', 'preflight.ci.enforce' => $enforce]);
 
     if ($fixture !== null) {
         mkdir($this->preflight->root.'/.github/workflows', 0777, true);
@@ -1073,6 +1073,11 @@ test('[rule 51] CI-only preflight reports pass, failure, strict promotion, skips
 
     if ($status === 'fail') {
         expect($results['ci.triggers']['message'])->toContain('.github/workflows/tests.yml', '[test]', 'timeout:', 'docs/recipes/backend/ci-triggers.md', 'README');
+        expect($tester->getErrorOutput())->toContain('PREFLIGHT CHECK FAILED: ci.triggers', '"status":"fail"');
+        expect(file_get_contents($this->preflight->root.'/default.log'))->toContain('PREFLIGHT CHECK FAILED: ci.triggers');
+        if (! $enforce) {
+            expect($results['ci.triggers']['message'])->toContain('PREFLIGHT_CI_ENFORCE=true');
+        }
     } elseif ($status === 'warn') {
         expect($results['ci.triggers']['message'])->toContain('Unknown');
     } elseif ($status === 'pass') {
@@ -1081,19 +1086,21 @@ test('[rule 51] CI-only preflight reports pass, failure, strict promotion, skips
         expect(file_get_contents($this->preflight->root.'/default.log'))->toContain('PREFLIGHT CHECK SKIPPED: ci.triggers', '"skipped":1', '"skips":["ci.triggers"]');
     }
 })->with([
-    [true, true, 'compliant.yml', 'pass', 0],
-    [true, false, 'timeout.yml', 'fail', 0],
-    [true, true, 'timeout.yml', 'fail', 1],
-    [false, true, 'timeout.yml', 'skipped', 0],
-    [false, false, null, 'skipped', 0],
-    [true, true, null, 'warn', 0],
+    [true, true, false, 'compliant.yml', 'pass', 0],
+    [true, false, false, 'timeout.yml', 'fail', 0],
+    [true, true, false, 'timeout.yml', 'fail', 0],
+    [true, false, true, 'timeout.yml', 'fail', 0],
+    [true, true, true, 'timeout.yml', 'fail', 1],
+    [false, true, true, 'timeout.yml', 'skipped', 0],
+    [false, false, false, null, 'skipped', 0],
+    [true, true, true, null, 'warn', 0],
 ]);
 
 test('[rule 51] preflight uses configured branch and distribution policies', function () {
     mkdir($this->preflight->root.'/.github/workflows', 0777, true);
     $source = str_replace(['branches: [main]', 'runs-on: ubuntu-latest'], ['branches: [trunk]', 'runs-on: windows-latest'], file_get_contents(dirname(__DIR__).'/fixtures/CI/php-matrix.yml'));
     file_put_contents($this->preflight->root.'/.github/workflows/tests.yml', $source);
-    $this->preflight['config']->set(['preflight.ci.default_branches' => ['trunk'], 'preflight.ci.distribution' => 'package']);
+    $this->preflight['config']->set(['preflight.ci.default_branches' => ['trunk'], 'preflight.ci.distribution' => 'package', 'preflight.ci.enforce' => true]);
     $options = ['--only' => 'ci', '--ci' => true, '--strict' => true, '--json' => true];
     expect(preflightCommand($this->preflight, $options)->getStatusCode())->toBe(0);
     $this->preflight['config']->set('preflight.ci.distribution', 'app');
@@ -1135,3 +1142,20 @@ test('[rule 51] the distributed standards workflow has no failures, with macOS a
     expect($result->status->value)->toBe('warn');
     expect($result->message)->toContain('macOS', 'cache:', 'Suggest')->not->toContain('windows-gap:', 'os-matrix:');
 });
+
+test('[rule 51] enforcement env is parsed as a boolean defaulting to false', function (?string $value, bool $expected) {
+    $autoload = array_key_first(ClassLoader::getRegisteredLoaders()).'/autoload.php';
+    $process = new Process([PHP_BINARY, '-r', 'require $argv[1]; $config = require $argv[2]; echo json_encode($config["ci"]["enforce"]);', $autoload, dirname(__DIR__).'/config/preflight.php'], env: ['PREFLIGHT_CI_ENFORCE' => $value ?? false]);
+    $process->mustRun();
+
+    expect(json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR))->toBe($expected);
+})->with([
+    'unset' => [null, false],
+    'true' => ['true', true],
+    'false' => ['false', false],
+    'one' => ['1', true],
+    'zero' => ['0', false],
+    'yes' => ['yes', true],
+    'off' => ['off', false],
+    'invalid' => ['invalid', false],
+]);

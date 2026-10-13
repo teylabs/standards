@@ -15,6 +15,7 @@ use Pest\TestSuite;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
 
 final class Conformance
@@ -69,6 +70,11 @@ final class Conformance
     public function assert(string $rule): void
     {
         $violations = $this->violations($rule);
+
+        if ($rule === '51' && ! $this->config->ciEnforce) {
+            Assert::markTestSkipped('Rule 51 is advisory until PREFLIGHT_CI_ENFORCE=true; run `php artisan standards:preflight --ci --only=ci` to see findings ('.count($violations).' findings).');
+        }
+
         $failures = $this->ratchet->failures($rule, $violations);
         expect($failures)->toBe([], implode("\n", $failures));
     }

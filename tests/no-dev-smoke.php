@@ -185,6 +185,15 @@ try {
     }
 
     file_put_contents($path, str_replace('    timeout-minutes: 10', '', $workflow));
+    $exit = $artisan->call('standards:preflight', $options);
+    $stdout = $artisan->output();
+
+    if ($exit !== 0 || json_decode($stdout, true)['results'][0]['status'] !== 'fail'
+        || ! str_contains($stdout, 'PREFLIGHT_CI_ENFORCE=true')) {
+        throw new RuntimeException('Advisory CI did not report the timeout finding without failing: '.$stdout);
+    }
+
+    $app['config']->set('preflight.ci.enforce', true);
 
     if ($artisan->call('standards:preflight', $options) !== 1) {
         throw new RuntimeException('Strict CI did not reject the timeout finding.');

@@ -56,5 +56,6 @@ final readonly class Configuration
         public array $allowlist = [],
         public array $ciDefaultBranches = ['main'],
         public ?string $ciDistribution = null,
+        public bool $ciEnforce = false,
     ) {}
 }

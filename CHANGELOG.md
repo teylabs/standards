@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 - 2026-10-13
+
+### Fixed
+
+- Make rule 51 enforcement opt-in with boolean `preflight.ci.enforce` (`PREFLIGHT_CI_ENFORCE`, default `false`) and `Configuration::ciEnforce`. CI preflight still reports `fail` findings, but strict mode ignores them until enabled; blocking checks are unchanged. Architecture rule 51 skips with an advisory reason and finding count until enabled, then enforces the existing ratchet. Document run, fix or ratchet, then opt in so upgrades do not turn CI red. (#150)
+
 ## 0.4.0 - 2026-10-13
 
 ### Added

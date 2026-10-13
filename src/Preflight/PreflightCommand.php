@@ -17,7 +17,7 @@ use Tey\Standards\Preflight;
 
 final class PreflightCommand extends Command
 {
-    public $signature = 'standards:preflight {--only= : Run checks in a dotted group (e.g. mail)} {--strict : Exit 1 on any failed check, regardless of level} {--ci : Skip checks requiring production secrets} {--skip= : Comma-separated exact check names} {--json : Write machine-readable JSON to stdout} {--stderr : Also write the summary and failed or warning checks to stderr} {--no-stderr : Disable automatic stderr reporting (takes precedence over --stderr)}';
+    public $signature = 'standards:preflight {--only= : Run checks in a dotted group (e.g. mail)} {--strict : Exit 1 on failed checks, except groups not opted into enforcement} {--ci : Skip checks requiring production secrets} {--skip= : Comma-separated exact check names} {--json : Write machine-readable JSON to stdout} {--stderr : Also write the summary and failed or warning checks to stderr} {--no-stderr : Disable automatic stderr reporting (takes precedence over --stderr)}';
 
     public $description = 'Check deployment configuration and queue backlog without hosting API calls';
 
@@ -84,7 +84,8 @@ final class PreflightCommand extends Command
                 }
             }
 
-            if ($result->status === Status::Fail && ($level === Level::Blocking || $this->option('strict'))) {
+            if ($result->status === Status::Fail && ($level === Level::Blocking
+                || ($this->option('strict') && ($name !== 'ci.triggers' || $config->get('preflight.ci.enforce', false))))) {
                 $exit = 1;
             }
 

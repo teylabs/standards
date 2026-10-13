@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Composer\Autoload\ClassLoader;
 use Pest\Arch\Support\Composer;
 use PHPUnit\Framework\AssertionFailedError;
+use PHPUnit\Framework\SkippedWithMessageException;
 use Symfony\Component\Process\Process;
 use Tey\Standards\Configuration;
 use Tey\Standards\Conformance;
@@ -18,7 +19,7 @@ foreach (ClassLoader::getRegisteredLoaders() as $loader) {
 /** Scope the package preset away from fixture and consumer namespaces. */
 arch()->preset()->strict()->ignoring(array_values(array_diff(Composer::userNamespaces(), ['Tey\\Standards'])));
 
-function fixtureConfiguration(string $kind, array $allowlist = []): Configuration
+function fixtureConfiguration(string $kind, array $allowlist = [], bool $ciEnforce = false): Configuration
 {
     $namespace = 'Fixture'.$kind;
 
@@ -47,14 +48,15 @@ function fixtureConfiguration(string $kind, array $allowlist = []): Configuratio
         mediaTrait: 'FixtureGood\\UI\\MediaBehaviour',
         mediaInterface: 'FixtureGood\\UI\\MediaContract',
         allowlist: $allowlist,
+        ciEnforce: $ciEnforce,
     );
 }
 
 foreach (Conformance::TESTS as $rule => $name) {
     test($name.' rejects a seeded violation and accepts the clean control', function () use ($rule) {
         $rule = (string) $rule;
-        (new Conformance(fixtureConfiguration('Good')))->assert($rule);
-        expect(fn () => (new Conformance(fixtureConfiguration('Bad')))->assert($rule))
+        (new Conformance(fixtureConfiguration('Good', ciEnforce: true)))->assert($rule);
+        expect(fn () => (new Conformance(fixtureConfiguration('Bad', ciEnforce: true)))->assert($rule))
             ->toThrow(AssertionFailedError::class, 'violation:');
     });
 }
@@ -83,8 +85,16 @@ test('an exact ratchet entry permits debt but cannot hide a second violation', f
 
 test('[rule 51] an exact dated CI exception permits debt and becomes stale after a fix', function () {
     $entry = ['rule' => '51', 'target' => '.github/workflows/tests.yml', 'check' => 'test | timeout: set timeout-minutes on every job.', 'reason' => 'Fixture timeout debt', 'date' => '2026-10-13'];
-    (new Conformance(fixtureConfiguration('Bad', [$entry])))->assert('51');
-    expect(fn () => (new Conformance(fixtureConfiguration('Good', [$entry])))->assert('51'))->toThrow(AssertionFailedError::class, 'stale exception');
+    (new Conformance(fixtureConfiguration('Bad', [$entry], ciEnforce: true)))->assert('51');
+    expect(fn () => (new Conformance(fixtureConfiguration('Good', [$entry], ciEnforce: true)))->assert('51'))->toThrow(AssertionFailedError::class, 'stale exception');
+});
+
+test('[rule 51] advisory architecture checks skip while findings remain available', function () {
+    $preset = new Conformance(fixtureConfiguration('Bad'));
+    expect($preset->violations('51'))->toBe([
+        ['target' => '.github/workflows/tests.yml', 'check' => 'test | timeout: set timeout-minutes on every job.'],
+    ]);
+    expect(fn () => $preset->assert('51'))->toThrow(SkippedWithMessageException::class, 'Rule 51 is advisory until PREFLIGHT_CI_ENFORCE=true; run `php artisan standards:preflight --ci --only=ci` to see findings');
 });
 
 test('fixed and deleted ratchet entries fail as stale, including native presets', function (string $rule, string $target, string $check) {
