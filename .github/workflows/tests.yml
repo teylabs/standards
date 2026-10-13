@@ -23,6 +23,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         php: ['8.4', '8.5']
+        pest: [4, 5]
+        # Linux proves both majors; Windows runs Pest 5 only to keep CI lean.
+        exclude:
+          - os: windows-latest
+            pest: 4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -36,7 +41,7 @@ jobs:
       - name: Validate package
         run: composer validate --strict
       - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
+        run: composer require --dev "pestphp/pest:^${{ matrix.pest == 4 && '4.7' || '5.0' }}" "pestphp/pest-plugin-arch:^${{ matrix.pest }}.0" -W --no-interaction --prefer-dist
       - name: Test
         run: composer test
       - name: Production install smoke test
@@ -51,7 +56,7 @@ jobs:
           php "$production/tests/no-dev-smoke.php"
 
   pest-5-coexistence:
-    name: install beside Pest 5
+    name: architecture checks under Pest 5 in an app
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -68,17 +73,71 @@ jobs:
       - name: Install with Pest 5 in an app
         run: |
           app=$(mktemp -d)
+          trap 'rm -rf "$app"' EXIT
           cat > "$app/composer.json" <<JSON
           {
+              "type": "project",
               "repositories": [{ "type": "path", "url": "$GITHUB_WORKSPACE", "options": { "symlink": false } }],
               "require": { "tey/standards": "*@dev" },
-              "require-dev": { "pestphp/pest": "^5.0" },
+              "require-dev": { "pestphp/pest": "^5.0", "pestphp/pest-plugin-arch": "^5.0", "nikic/php-parser": "^5.0" },
+              "autoload-dev": { "psr-4": { "FixtureGood\\\\": "fixtures/Good/src/", "FixtureBad\\\\": "fixtures/Bad/src/" } },
+              "scripts": { "test": "pest" },
               "minimum-stability": "dev",
               "prefer-stable": true,
               "config": { "allow-plugins": { "pestphp/pest-plugin": true } }
           }
           JSON
+          cp -R fixtures "$app/fixtures"
+          mkdir "$app/tests"
+          cp phpunit.xml "$app/phpunit.xml"
+          cat > "$app/tests/ConformanceTest.php" <<'PHP'
+          <?php
+
+          use PHPUnit\Framework\AssertionFailedError;
+          use Tey\Standards\Configuration;
+          use Tey\Standards\Conformance;
+
+          arch('[rule 20] placement passes clean code and rejects seeded violations under Pest 5', function () {
+              foreach (['Good', 'Bad'] as $kind) {
+                  $namespace = 'Fixture'.$kind;
+                  $checks = new Conformance(new Configuration(
+                      base: __DIR__.'/../fixtures/'.$kind,
+                      classRoots: ['src' => $namespace],
+                      sourceRoots: ['src', 'routes'],
+                      uiRoots: ['src/UI'],
+                      uiNamespaces: [$namespace.'\UI'],
+                      hostNamespaces: [$namespace],
+                      controllerRoots: ['src/Domain/*/Http/Controllers'],
+                      routeRoots: ['routes'],
+                      controllerSuffix: 'Controller',
+                      routeDirectory: 'routes',
+                      viewModelRoots: ['src/Domain/*/ViewModels', 'src/UI'],
+                      viewModelBases: ['FixtureGood\UI\TypedViewModel'],
+                      typedViewModel: 'FixtureGood\UI\TypedViewModel',
+                      viewModelSuffix: 'ViewModel',
+                      pageRoots: ['pages'],
+                      pageScaffolds: ['pages'],
+                      placements: ['Policy' => ['src/Domain/*/Policies'], 'Capability' => ['src/Domain/*/Enums']],
+                      retired: [$namespace.'\Retired' => ['src/Retired']],
+                      discoveryRoots: ['src/Domain', 'src/UI'],
+                      developmentNamespaces: ['Pest'],
+                      safeAttributes: [],
+                      mediaTrait: 'FixtureGood\UI\MediaBehaviour',
+                      mediaInterface: 'FixtureGood\UI\MediaContract',
+                  ));
+                  if ($kind === 'Good') {
+                      $checks->assert('20');
+                  } else {
+                      expect($checks->violations('20'))->toContain(
+                          ['target' => 'FixtureBad\Domain\Billing\ViewModels\UntypedName', 'check' => 'ViewModel needs configured suffix'],
+                          ['target' => 'FixtureBad\Domain\Billing\ViewModels\InvoiceViewModel', 'check' => 'ViewModel must extend typed base'],
+                      );
+                      expect(fn () => $checks->assert('20'))->toThrow(AssertionFailedError::class, 'violation:');
+                  }
+              }
+          });
+          PHP
           composer install --working-dir="$app" --no-interaction --prefer-dist
           composer show --working-dir="$app" pestphp/pest | grep -E '^versions'
           php tests/no-dev-smoke.php "$app/vendor/autoload.php" --with-dev
-          php -r 'require $argv[1]; try { Tey\Standards\Conformance::assertSupportedPest(Composer\InstalledVersions::getPrettyVersion("pestphp/pest")); exit(1); } catch (LogicException $e) { echo $e->getMessage(), PHP_EOL; }' "$app/vendor/autoload.php"
+          composer test --working-dir="$app"

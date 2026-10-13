@@ -43,7 +43,7 @@ final class Conformance
     public function __construct(private readonly Configuration $config)
     {
         if (! class_exists(TestSuite::class) || ! interface_exists(ArchExpectation::class) || ! class_exists(ParserFactory::class)) {
-            throw new LogicException('Architecture checks require pestphp/pest ^4.7, pestphp/pest-plugin-arch ^4.0 and nikic/php-parser ^5.0 in require-dev.');
+            throw new LogicException('Architecture checks require pestphp/pest ^4.7 || ^5.0, pestphp/pest-plugin-arch ^4.0 || ^5.0 and nikic/php-parser ^5.0 in require-dev.');
         }
 
         self::assertSupportedPest(InstalledVersions::isInstalled('pestphp/pest') ? InstalledVersions::getPrettyVersion('pestphp/pest') : null);
@@ -54,16 +54,15 @@ final class Conformance
     }
 
     /**
-     * The architecture adapter reads Pest 4 internals. Installing next to another
-     * Pest major is allowed (the deploy preflight never loads Pest); using the
-     * architecture checks there fails with a clear message instead.
+     * The architecture adapter reads reviewed Pest 4 and 5 internals. Other
+     * majors may coexist with the deploy preflight, which never loads Pest.
      */
     public static function assertSupportedPest(?string $version): void
     {
         $major = $version === null ? null : (int) ltrim($version, 'v');
 
-        if ($major !== null && $major !== 4) {
-            throw new LogicException("tey/standards 0.1 architecture checks support Pest 4 (4.7+); Pest {$version} is installed. The deploy preflight is unaffected.");
+        if ($major !== null && (! in_array($major, [4, 5], true) || ($major === 4 && version_compare(ltrim($version, 'v'), '4.7.0', '<')))) {
+            throw new LogicException("tey/standards architecture checks support Pest 4 (4.7+) and Pest 5; Pest {$version} is installed. The deploy preflight is unaffected.");
         }
     }
 

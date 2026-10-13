@@ -1,6 +1,6 @@
 # Tey Standards
 
-`tey/standards` provides offline deployment configuration checks and optional, rule-tagged Pest architecture tests with an exact debt ratchet. Keep it in production `require`; architecture checks need Pest 4.7+, pest-plugin-arch 4.x and PHP-Parser 5.x in `require-dev`.
+`tey/standards` provides offline deployment configuration checks and optional, rule-tagged Pest architecture tests with an exact debt ratchet. Keep it in production `require`; architecture checks need Pest 4.7+ or Pest 5, the matching pest-plugin-arch 4.x or 5.x and PHP-Parser 5.x in `require-dev`.
 
 Run `php artisan standards:preflight` before deploy migrations and stop on a nonzero exit. Use `--ci` to skip production-secret checks in CI and `--strict` to fail on failed warning-level checks. Advisory warnings remain non-blocking. A skipped check is not a pass.
 

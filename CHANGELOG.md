@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 - 2026-10-13
+
+### Added
+
+- Pest 5 architecture support alongside Pest 4.7+, with the same lazy-result adapter and negative fixtures under both majors. Preserve targeted diagnostic wording so exact ratchet entries survive the upgrade. (#147)
+- A dual-major Linux package CI matrix and a Pest 5 temp-app architecture test. Windows runs Pest 5 only to keep the matrix lean. (#147)
+
+### Changed
+
+- Broaden development constraints and suggestions to `pestphp/pest ^4.7 || ^5.0` and `pestphp/pest-plugin-arch ^4.0 || ^5.0`. PHP-Parser remains 5.x; production preflight dependencies and behaviour are unchanged. (#147)
+
 ## 0.4.1 - 2026-10-13
 
 ### Fixed

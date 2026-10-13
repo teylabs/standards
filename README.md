@@ -2,7 +2,7 @@
 
 `tey/standards` checks deployment configuration before migrate and checks configured PHP boundaries, placement and controller rules with named Pest tests. Each architecture result carries a conformance rule number. A dated ratchet permits existing failures and rejects stale exceptions.
 
-**Status: trial.** Requires PHP 8.4.1+ and Laravel 13 components. Architecture checks additionally require Pest 4.7+, its architecture plugin 4.x and PHP-Parser 5.x. Pest 5 is not supported.
+**Status: trial.** Requires PHP 8.4.1+ and Laravel 13 components. Architecture checks additionally require Pest 4.7+ or Pest 5, the matching architecture plugin 4.x or 5.x and PHP-Parser 5.x.
 
 ## Install
 
@@ -15,7 +15,7 @@ composer require tey/standards
 Laravel discovers the service provider automatically. The production install does not require Pest or PHP-Parser. For architecture checks, install the optional tools in the application's `require-dev`:
 
 ```sh
-composer require --dev 'pestphp/pest:^4.7' 'pestphp/pest-plugin-arch:^4.0' 'nikic/php-parser:^5.0' 'symfony/finder:^7.0 || ^8.0'
+composer require --dev 'pestphp/pest:^4.7 || ^5.0' 'pestphp/pest-plugin-arch:^4.0 || ^5.0' 'nikic/php-parser:^5.0' 'symfony/finder:^7.0 || ^8.0'
 ```
 
 ## Configure the Checks
@@ -44,7 +44,7 @@ Pass an explicit allow-list to `Configuration::allowlist`. Each entry has `rule`
 
 Rules 12, 14, 19, 20, 21, 22, 29 and 32 cover static PHP relationships and configured placement, not complete runtime behaviour. The no-dev check covers configured development namespaces, with safe attributes permitted only as imports and attributes. Literal `getPath` calls are prohibited; dynamic method calls are not resolved. Media classification uses the configured trait, including nested traits and inherited use. Money units cannot be inferred from casts, so rule 24 is not registered. Rule 51 parses workflow YAML; see [CI triggers](#ci-triggers) for its limits.
 
-Pest's `laravel`, `security` and `php` presets run unchanged over the configured class inventory. Laravel's upstream structural expectations assume `App` and stock framework folders; other namespaces still get its forbidden-function checks, not a translated Laravel layout. Record modular conflicts individually. The Pest 4 lazy-result adapter uses internal APIs and is covered by negative fixtures; Pest 5 needs a separate compatibility review.
+Pest's `laravel`, `security` and `php` presets run unchanged over the configured class inventory. Laravel's upstream structural expectations assume `App` and stock framework folders; other namespaces still get its forbidden-function checks, not a translated Laravel layout. Record modular conflicts individually. The shared Pest 4/5 lazy-result adapter uses reviewed internal APIs and is covered by negative fixtures under both majors. It preserves Pest 4 diagnostic wording for targeted method, base, suffix and attribute failures so exact ratchet entries survive a Pest 5 upgrade.
 
 **Apps do not get `strict()`.** The package's own suite runs `arch()->preset()->strict()` only over its `Tey\Standards` source, excluding fixture and consumer namespaces. Its classes use strict types, are final and have no protected methods. The cookbook's consumer checks remain without the strict preset.
 
@@ -202,7 +202,7 @@ new Configuration(
 
 **Limits.** The checker does not run GitHub's expression engine. Ready-PR coverage resolves literal runners and matrices, include/exclude rows, `fromJSON` lists and simple event/draft boolean conditions and `condition && value || fallback` selectors. Unknown expressions do not prove Windows coverage; use a detectable leg or review and ratchet an inapplicable finding. App OS checks inspect all literal alternatives, including event-selected legs. PHP expressions choosing on `github.event_name` retain the existing exemption and need review. Reusable workflows, composite actions and wrapper scripts are not followed. The test scan recognises `php artisan test`, Pest, PHPUnit, `npm test`, `composer test`, Playwright and Vitest. Cache detection reads steps, not performance.
 
-**This package's CI.** The standalone workflow runs PHP 8.4/8.5 on Ubuntu and Windows for ready PRs and main, and retains Pest 5 coexistence. Windows loads PDO SQLite and runs architecture, parser, backlog and command-contract tests. Test-only signal doubles exercise non-alarm command behaviour without changing production code. Only the busy custom-check timeout, busy backlog timeout and real deployment/no-dev smoke test skip without PCNTL; each has a 2026-10-13 reason. A separate process verifies that the real preflight command still exits 2 without PCNTL rather than silently losing its timeout guard. Cookbook CI normally runs Linux only; issue #145 proves the package on GitHub's Windows runner with a temporary cookbook job removed before review.
+**This package's CI.** The standalone workflow runs PHP 8.4/8.5 with Pest 4 and 5 on Ubuntu for ready PRs and main. Windows runs Pest 5 only to keep the matrix lean, loads PDO SQLite and runs architecture, parser, backlog and command-contract tests. A separate temp-app job installs the package beside Pest 5 and executes a `[rule 20]` architecture test with clean and negative controls, plus the preflight smoke test. Test-only signal doubles exercise non-alarm command behaviour without changing production code. Only the busy custom-check timeout, busy backlog timeout and real deployment/no-dev smoke test skip without PCNTL; each has a 2026-10-13 reason. A separate process verifies that the real preflight command still exits 2 without PCNTL rather than silently losing its timeout guard. Cookbook CI normally runs Linux only; issue #145 proves the package on GitHub's Windows runner with a temporary cookbook job removed before review.
 
 ## Queue: sync until needed
 
@@ -238,3 +238,4 @@ The package ships a Laravel Boost guideline. Select `tey/standards` during `php 
 *Changelog: 2026-10-13 — prepared 0.4.0 with the shared rule-51 parser and architecture/preflight checks, distribution detection, Linux-only apps, ready-PR Windows package coverage, advisory cache/macOS/Unknown suggestions and measured job-size guidance; Windows package CI and dated PCNTL limits. (#134)*
 *Changelog: 2026-10-13 — Cloud managed queues pass without backlog or network inspection; Windows command contracts use test-only signal doubles, leaving only real PCNTL-dependent tests skipped and retaining the production guard. (#145)*
 *Changelog: 2026-10-13 — prepared 0.4.1 with advisory-by-default rule 51, shared opt-in enforcement, visible preflight failures and architecture skip counts; document run, fix or ratchet, then opt in. (#150)*
+*Changelog: 2026-10-13 — prepared 0.5.0 with Pest 4.7+ and Pest 5 architecture support, stable targeted diagnostics, dual-major negative fixtures and a Pest 5 temp-app architecture check. (#147)*

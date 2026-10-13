@@ -9,6 +9,7 @@ use PHPUnit\Framework\SkippedWithMessageException;
 use Symfony\Component\Process\Process;
 use Tey\Standards\Configuration;
 use Tey\Standards\Conformance;
+use Tey\Standards\Native;
 
 /** Register before Pest builds its cached architecture inventory. */
 foreach (ClassLoader::getRegisteredLoaders() as $loader) {
@@ -119,6 +120,19 @@ test('native preset debt is allowed only while the same failure still exists', f
     expect(fn () => (new Conformance(fixtureConfiguration('Good', [$entry])))->assert('preset security'))->toThrow(AssertionFailedError::class, 'stale exception');
 });
 
+test('native diagnostics preserve the exact Pest 4 wording used by ratchets', function (string $method, array $arguments, string $description) {
+    $class = 'FixtureGood\\UI\\Link';
+    $path = str_replace('/', DIRECTORY_SEPARATOR, 'fixtures/Good/src/UI/Link.php');
+    expect(Native::failures(expect($class)->$method(...$arguments), $class))->toBe([
+        "Expecting '{$path}' {$description}.",
+    ]);
+})->with([
+    'method list' => ['toHaveMethod', [['handle', 'resolve']], "to have method 'handle', 'resolve'"],
+    'base' => ['toExtend', ['FixtureGood\\UI\\TypedViewModel'], "to extend 'FixtureGood\\UI\\TypedViewModel'"],
+    'suffix' => ['toHaveSuffix', ['ViewModel'], "to have suffix 'ViewModel'"],
+    'attribute' => ['toHaveAttribute', ['Attribute'], "to have attribute 'Attribute'"],
+]);
+
 test('ViewModel placement checks suffix, base and directory independently', function () {
     $violations = (new Conformance(fixtureConfiguration('Bad')))->violations('20');
     expect($violations)->toContain(
@@ -171,19 +185,22 @@ test('architecture checks explain missing optional dependencies', function (stri
     $process->run();
 
     expect($process->getExitCode())->toBe(0, $process->getErrorOutput());
-    expect($process->getOutput())->toContain('Architecture checks require', 'pestphp/pest ^4.7', 'pestphp/pest-plugin-arch ^4.0', 'nikic/php-parser ^5.0', 'require-dev');
+    expect($process->getOutput())->toContain('Architecture checks require', 'pestphp/pest ^4.7 || ^5.0', 'pestphp/pest-plugin-arch ^4.0 || ^5.0', 'nikic/php-parser ^5.0', 'require-dev');
 })->with(['Pest\\', 'Pest\\Arch\\', 'PhpParser\\']);
 
-test('architecture checks accept Pest 4 and refuse other majors with a clear message', function (?string $version, bool $supported) {
+test('architecture checks accept Pest 4.7+ and 5 and refuse unsupported versions clearly', function (?string $version, bool $supported) {
     $assert = fn () => Conformance::assertSupportedPest($version);
 
     $supported
         ? expect($assert)->not->toThrow(LogicException::class)
-        : expect($assert)->toThrow(LogicException::class, 'support Pest 4 (4.7+); Pest '.$version.' is installed. The deploy preflight is unaffected.');
+        : expect($assert)->toThrow(LogicException::class, 'support Pest 4 (4.7+) and Pest 5; Pest '.$version.' is installed. The deploy preflight is unaffected.');
 })->with([
-    'Pest 4' => ['4.7.2', true],
+    'Pest 4 minimum' => ['4.7.0', true],
     'Pest 4 tag' => ['v4.8.0', true],
     'not installed' => [null, true],
-    'Pest 5' => ['5.3.1', false],
+    'Pest 5 minimum' => ['5.0.0', true],
+    'Pest 5 tag' => ['v5.3.2', true],
+    'older Pest 4' => ['4.6.9', false],
     'Pest 3' => ['3.8.0', false],
+    'Pest 6' => ['6.0.0', false],
 ]);

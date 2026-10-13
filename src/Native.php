@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tey\Standards;
 
+use Composer\InstalledVersions;
 use Pest\Arch\Contracts\ArchExpectation;
 use Pest\Arch\GroupArchExpectation;
 use Pest\Arch\Objects\FunctionDescription;
@@ -16,7 +17,7 @@ use PHPUnit\Framework\AssertionFailedError;
 use ReflectionProperty;
 
 /**
- * Pest 4's lazy expectations have no public result API. Keep this version-bound
+ * Pest 4 and 5's lazy expectations have no public result API. Keep this
  * adapter separate, drain every leaf (including after a failure), and never
  * leave failing expectations to throw from a destructor during unwinding.
  */
@@ -41,7 +42,7 @@ final class Native
         }
 
         if (! $expectation instanceof SingleArchExpectation) {
-            throw new \LogicException('Unsupported Pest architecture expectation. Use Pest 4.');
+            throw new \LogicException('Unsupported Pest architecture expectation. Use Pest 4 (4.7+) or Pest 5.');
         }
 
         try {
@@ -49,7 +50,7 @@ final class Native
 
             return [];
         } catch (AssertionFailedError $error) {
-            return [$error->getMessage()];
+            return [self::diagnostic($error)];
         }
     }
 
@@ -99,13 +100,26 @@ final class Native
                     }
 
                     $ignored[$index][] = $target;
-                    $failures[] = ['target' => $target, 'check' => $error->getMessage()];
+                    $failures[] = ['target' => $target, 'check' => self::diagnostic($error)];
                     $found = true;
                 }
             }
         } while ($found);
 
         return array_values(array_unique($failures, SORT_REGULAR));
+    }
+
+    /** Preserve exact ratchet keys when Pest 5 brackets targeted expectation arguments. */
+    private static function diagnostic(AssertionFailedError $error): string
+    {
+        $message = $error->getMessage();
+
+        if (! str_starts_with(InstalledVersions::getVersion('pestphp/pest') ?? '', '5.')) {
+            return $message;
+        }
+
+        return preg_replace_callback('/(to (?:extend|have (?:method|suffix|attribute)) )((?:\[[^\]]*\])(?:, \[[^\]]*\])*)\.$/',
+            fn (array $match): string => $match[1].str_replace(['[', ']'], "'", $match[2]).'.', $message) ?? $message;
     }
 
     /** @return list<SingleArchExpectation> */
@@ -116,7 +130,7 @@ final class Native
         }
 
         if (! $expectation instanceof GroupArchExpectation) {
-            throw new \LogicException('Unsupported Pest architecture expectation. Use Pest 4.');
+            throw new \LogicException('Unsupported Pest architecture expectation. Use Pest 4 (4.7+) or Pest 5.');
         }
 
         $leaves = [];
