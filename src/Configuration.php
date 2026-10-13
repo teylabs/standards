@@ -27,6 +27,7 @@ final readonly class Configuration
      * @param  list<string>  $developmentNamespaces
      * @param  list<string>  $safeAttributes
      * @param  list<array{rule: string, target: string, check: string, reason: string, date: string}>  $allowlist
+     * @param  list<string>  $ciDefaultBranches
      */
     public function __construct(
         public string $base,
@@ -53,5 +54,7 @@ final readonly class Configuration
         public string $mediaTrait,
         public string $mediaInterface,
         public array $allowlist = [],
+        public array $ciDefaultBranches = ['main'],
+        public ?bool $ciPackage = null,
     ) {}
 }

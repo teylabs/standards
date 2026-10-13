@@ -28,6 +28,7 @@ final class Conformance
         '29' => '[rule 29] no Fortify authentication callback',
         '32' => '[rule 32] capabilities and policies follow configured placement',
         '12' => '[rule 12] live PHP does not reference retired namespaces',
+        '51' => '[rule 51] CI triggers conserve minutes without cancelling main',
         'no-dev' => '[no-dev boot] discovery roots do not depend on development tooling',
         'preset laravel' => '[preset laravel] stock Laravel conventions',
         'preset security' => '[preset security] no insecure PHP functions',
@@ -75,6 +76,11 @@ final class Conformance
     /** @return list<array{target: string, check: string}> */
     public function violations(string $rule): array
     {
+        if ($rule === '51') {
+            return array_map(fn (array $finding): array => ['target' => $finding['workflow'], 'check' => $finding['job'].' | '.$finding['reason']],
+                (new CiTriggers($this->config->base, $this->config->ciDefaultBranches, $this->config->ciPackage))->findings());
+        }
+
         $classes = $this->source->classes();
 
         return match ($rule) {

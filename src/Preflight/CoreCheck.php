@@ -13,11 +13,12 @@ use Illuminate\Redis\Connections\Connection as RedisConnection;
 use Illuminate\Redis\Connections\PhpRedisConnection;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
+use Tey\Standards\CiTriggers;
 use Throwable;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers'];
 
     /**
      * SHA-256 of upstream public/favicon.ico, favicon.svg and apple-touch-icon.png.
@@ -124,8 +125,29 @@ final readonly class CoreCheck implements Check
             'app.url' => $this->result($this->set('app.url') && (! $this->production() || (filter_var($this->config->get('app.url'), FILTER_VALIDATE_URL) !== false && parse_url((string) $this->config->get('app.url'), PHP_URL_SCHEME) === 'https')), 'Set APP_URL to the public HTTPS URL in production.'),
             'logging.channel' => $this->result($this->set('logging.default') && $this->set('logging.channels.'.$this->config->get('logging.default').'.driver'), 'Set LOG_CHANNEL to a configured logging channel.'),
             'brand.favicon' => $this->favicon(),
+            'ci.triggers' => $this->ciTriggers(),
             default => throw new InvalidArgumentException('Unknown core check: '.$this->check),
         };
+    }
+
+    private function ciTriggers(): Result
+    {
+        $parser = new CiTriggers($this->base, $this->config->get('preflight.ci.default_branches', ['main']), $this->config->get('preflight.ci.package'));
+        $remedy = 'Apply docs/recipes/backend/ci-triggers.md; see tey/standards README (CI triggers) for findings and configuration.';
+
+        if ($parser->workflows() === []) {
+            return Result::warn('Unknown: no .github/workflows/*.yml or *.yaml files found. '.$remedy);
+        }
+
+        $findings = $parser->findings();
+
+        if ($findings !== []) {
+            $first = array_map(fn (array $finding): string => $finding['workflow'].' ['.$finding['job'].'] '.$finding['reason'], array_slice($findings, 0, 5));
+
+            return Result::fail(implode(' ', $first).(count($findings) > 5 ? ' And '.(count($findings) - 5).' more findings.' : '').' '.$remedy);
+        }
+
+        return Result::pass('Workflow triggers, concurrency, draft guards, timeouts and PR matrices conform. Advisory docs-skip: review paths-ignore or a changes job against required checks online.');
     }
 
     private function favicon(): Result

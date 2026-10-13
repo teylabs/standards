@@ -116,16 +116,17 @@ try {
     $exit = $artisan->call('standards:preflight', ['--json' => true, '--no-stderr' => true]);
     $stdout = $artisan->output();
     $json = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);
-    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon'];
+    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers'];
 
     if ($exit !== 0 || $json['exit_code'] !== 0 || array_column($json['results'], 'check') !== $expected
-        || array_unique(array_column($json['results'], 'status')) !== ['pass']) {
-        throw new RuntimeException('Registered preflight did not pass all core checks: '.$stdout);
+        || array_column($json['results'], 'status') !== [...array_fill(0, count($expected) - 1, 'pass'), 'skipped']) {
+        throw new RuntimeException('Registered preflight did not pass deployment checks and skip CI: '.$stdout);
     }
 
     $log = file_get_contents($app->directory.'/preflight.log');
 
-    if (substr_count($log, 'PREFLIGHT CHECK PASSED:') !== count($expected)
+    if (substr_count($log, 'PREFLIGHT CHECK PASSED:') !== count($expected) - 1
+        || ! str_contains($log, 'PREFLIGHT CHECK SKIPPED: ci.triggers')
         || ! str_contains($log, 'PREFLIGHT SUMMARY {"exit_code":0,')
         || ! str_contains($log, '"check":"app.key","level":"blocking","status":"pass","message":')) {
         throw new RuntimeException('Preflight did not log every check and its summary.');
@@ -142,6 +143,46 @@ try {
 
     if ($tester->getErrorOutput() !== '') {
         throw new RuntimeException('Explicit --no-stderr did not suppress reporting.');
+    }
+
+    mkdir($app->directory.'/.github/workflows', 0777, true);
+    $workflow = <<<'YAML'
+    on:
+      push:
+        branches: [main]
+      pull_request:
+        types: [opened, synchronize, reopened, ready_for_review]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    jobs:
+      tests:
+        if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+          - run: php artisan test
+    YAML;
+    $path = $app->directory.'/.github/workflows/tests.yml';
+    file_put_contents($path, $workflow);
+    $options = ['--ci' => true, '--only' => 'ci', '--strict' => true, '--json' => true, '--no-stderr' => true];
+
+    if ($artisan->call('standards:preflight', $options) !== 0
+        || json_decode($artisan->output(), true)['results'][0]['status'] !== 'pass') {
+        throw new RuntimeException('CI YAML parsing failed without development dependencies.');
+    }
+
+    file_put_contents($path, str_replace('    timeout-minutes: 10', '', $workflow));
+
+    if ($artisan->call('standards:preflight', $options) !== 1) {
+        throw new RuntimeException('Strict CI did not reject the timeout finding.');
+    }
+
+    unlink($path);
+
+    if ($artisan->call('standards:preflight', $options) !== 0
+        || ! str_contains($artisan->output(), 'Unknown')) {
+        throw new RuntimeException('Missing workflows did not remain advisory.');
     }
 
     $app['config']->set(['queue.default' => 'async', 'queue.connections.async.driver' => 'database']);

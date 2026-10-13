@@ -153,11 +153,11 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning', 'brand.favicon' => 'warning'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning', 'brand.favicon' => 'warning', 'ci.triggers' => 'warning'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
-        expect($result['status'])->toBe('pass')->and($result['level'])->toBe($expected[$result['check']])->and($result['message'])->not->toBeEmpty();
+        expect($result['status'])->toBe($result['check'] === 'ci.triggers' ? 'skipped' : 'pass')->and($result['level'])->toBe($expected[$result['check']])->and($result['message'])->not->toBeEmpty();
     }
 
     expect(array_column($json['results'], 'check'))->toBe(array_keys($expected));
@@ -222,7 +222,7 @@ test('sender advisories are logged, reported and retain skip records even in str
 test('production-only warnings permit local defaults and distinct senders', function () {
     $this->preflight['config']->set(['app.env' => 'local', 'app.debug' => true, 'app.url' => 'http://localhost', 'queue.default' => 'sync', 'cache.default' => 'array', 'mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => 'hello@child.parent.test', 'mail.shared_parent_domain' => 'parent.test', 'mail.reply_to.address' => 'hello@parent.test']);
     $tester = preflightCommand($this->preflight, ['--json' => true]);
-    expect(array_unique(array_column(preflightResults($tester), 'status')))->toBe(['pass']);
+    expect(array_values(array_unique(array_column(preflightResults($tester), 'status'))))->toBe(['pass', 'skipped']);
 });
 
 test('API mail checks require both an installed package and its resolved config key', function (string $transport, string $package, string $key, string $env) {
@@ -514,10 +514,10 @@ test('every selected check and the final summary are logged on the standards or 
         expect(file_exists($this->preflight->directory.'/default.log'))->toBeFalse();
     }
 })->with([false, true])->with([
-    'pass' => ['app', [], false, ['pass' => 3, 'fail' => 0, 'warn' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 0],
-    'warning-level failure' => ['app', ['app.url' => 'http://app.test'], false, ['pass' => 2, 'fail' => 1, 'warn' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 0],
-    'advisory under strict' => ['mail', ['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => 'updates@parent.test', 'mail.reply_to.address' => 'hello@parent.test', 'mail.shared_parent_domain' => 'parent.test'], true, ['pass' => 2, 'fail' => 0, 'warn' => 1, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 0],
-    'blocking failure' => ['app', ['app.key' => null], false, ['pass' => 2, 'fail' => 1, 'warn' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 1],
+    'pass' => ['app', [], false, ['pass' => 3, 'fail' => 0, 'warn' => 0, 'skipped' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 0],
+    'warning-level failure' => ['app', ['app.url' => 'http://app.test'], false, ['pass' => 2, 'fail' => 1, 'warn' => 0, 'skipped' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 0],
+    'advisory under strict' => ['mail', ['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => 'updates@parent.test', 'mail.reply_to.address' => 'hello@parent.test', 'mail.shared_parent_domain' => 'parent.test'], true, ['pass' => 2, 'fail' => 0, 'warn' => 1, 'skipped' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 0],
+    'blocking failure' => ['app', ['app.key' => null], false, ['pass' => 2, 'fail' => 1, 'warn' => 0, 'skipped' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 1],
 ]);
 
 test('stderr reports both failed and advisory checks and the summary unless disabled', function (array $options, bool $enabled) {
@@ -582,7 +582,7 @@ JSON;
 
     expect($tester->getDisplay())->toBe($expected."\n");
     expect(file_get_contents($this->preflight->directory.'/default.log'))->toContain('PREFLIGHT CHECK PASSED: mail.transport', 'PREFLIGHT SUMMARY');
-    expect($tester->getErrorOutput())->toBe($stderr ? 'PREFLIGHT SUMMARY {"exit_code":0,"counts":{"pass":3,"fail":0,"warn":0,"skipped-in-ci":0,"skipped-by-request":0},"skips":[],"ci":false,"strict":false,"only":"mail"}'."\n" : '');
+    expect($tester->getErrorOutput())->toBe($stderr ? 'PREFLIGHT SUMMARY {"exit_code":0,"counts":{"pass":3,"fail":0,"warn":0,"skipped":0,"skipped-in-ci":0,"skipped-by-request":0},"skips":[],"ci":false,"strict":false,"only":"mail"}'."\n" : '');
 })->with([false, true]);
 
 test('summary logs current CI and emergency skips with their distinct counts', function () {
@@ -597,7 +597,7 @@ test('summary logs current CI and emergency skips with their distinct counts', f
     expect($entries[1]['context'])->toMatchArray(['check' => 'app.env-debug', 'status' => 'skipped-by-request', 'reason' => 'Emergency skip requested by --skip.']);
     expect($entries[1]['context'])->toHaveKeys(['time', 'commit', 'message', 'level']);
     expect($entries[2]['context'])->toMatchArray(['check' => 'app.url', 'status' => 'skipped-by-request', 'reason' => 'Emergency skip requested by PREFLIGHT_SKIP.']);
-    $summary = ['exit_code' => 0, 'counts' => ['pass' => 0, 'fail' => 0, 'warn' => 0, 'skipped-in-ci' => 1, 'skipped-by-request' => 2], 'skips' => ['app.key', 'app.env-debug', 'app.url'], 'ci' => true, 'strict' => true, 'only' => 'app'];
+    $summary = ['exit_code' => 0, 'counts' => ['pass' => 0, 'fail' => 0, 'warn' => 0, 'skipped' => 0, 'skipped-in-ci' => 1, 'skipped-by-request' => 2], 'skips' => ['app.key', 'app.env-debug', 'app.url'], 'ci' => true, 'strict' => true, 'only' => 'app'];
     expect($entries[3]['context'])->toBe($summary);
     expect($tester->getErrorOutput())->toContain('PREFLIGHT SUMMARY '.json_encode($summary, JSON_THROW_ON_ERROR));
 });
@@ -611,7 +611,7 @@ test('usage errors log an exit-two summary without changing JSON stdout', functi
     expect($tester->getStatusCode())->toBe(2);
     expect($tester->getDisplay())->toBe('{"schema":1,"results":[],"exit_code":2,"error":"Unknown check group: unknown"}'."\n");
     expect($entry['message'])->toBe('PREFLIGHT SUMMARY');
-    expect($entry['context'])->toBe(['exit_code' => 2, 'counts' => ['pass' => 0, 'fail' => 0, 'warn' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 'skips' => [], 'ci' => false, 'strict' => false, 'only' => 'unknown', 'error' => 'Unknown check group: unknown']);
+    expect($entry['context'])->toBe(['exit_code' => 2, 'counts' => ['pass' => 0, 'fail' => 0, 'warn' => 0, 'skipped' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 'skips' => [], 'ci' => false, 'strict' => false, 'only' => 'unknown', 'error' => 'Unknown check group: unknown']);
     expect($tester->getErrorOutput())->toContain('PREFLIGHT SUMMARY ', '"exit_code":2');
 });
 
@@ -993,4 +993,47 @@ test('[rule 50] the README table publishes both raw-content hashes for every def
         expect(hash('sha256', $contents))->toBe($sha256);
         expect(hash('sha1', $contents))->toBe($sha1);
     }
+});
+
+test('[rule 51] CI-only preflight reports pass, failure, strict promotion, skips and unknown evidence', function (bool $ci, bool $strict, ?string $fixture, string $status, int $exit) {
+    if ($fixture !== null) {
+        mkdir($this->preflight->root.'/.github/workflows', 0777, true);
+        copy(dirname(__DIR__).'/fixtures/CI/'.$fixture, $this->preflight->root.'/.github/workflows/tests.yml');
+    }
+
+    $tester = preflightCommand($this->preflight, ['--only' => 'ci', '--ci' => $ci, '--strict' => $strict, '--json' => true]);
+    $results = preflightResults($tester);
+    expect(array_keys($results))->toBe(['ci.triggers']);
+    expect($results['ci.triggers'])->toMatchArray(['level' => 'warning', 'status' => $status]);
+    expect($tester->getStatusCode())->toBe($exit);
+
+    if ($status === 'fail') {
+        expect($results['ci.triggers']['message'])->toContain('.github/workflows/tests.yml', '[test]', 'timeout:', 'docs/recipes/backend/ci-triggers.md', 'README');
+    } elseif ($status === 'warn') {
+        expect($results['ci.triggers']['message'])->toContain('Unknown');
+    } elseif ($status === 'pass') {
+        expect($results['ci.triggers']['message'])->toContain('Advisory docs-skip', 'required checks');
+    } else {
+        expect(file_get_contents($this->preflight->root.'/default.log'))->toContain('PREFLIGHT CHECK SKIPPED: ci.triggers', '"skipped":1', '"skips":["ci.triggers"]');
+    }
+})->with([
+    [true, true, 'compliant.yml', 'pass', 0],
+    [true, false, 'timeout.yml', 'fail', 0],
+    [true, true, 'timeout.yml', 'fail', 1],
+    [false, true, 'timeout.yml', 'skipped', 0],
+    [false, false, null, 'skipped', 0],
+    [true, true, null, 'warn', 0],
+]);
+
+test('[rule 51] preflight uses configured branch and package policies', function () {
+    mkdir($this->preflight->root.'/.github/workflows', 0777, true);
+    $source = str_replace('branches: [main]', 'branches: [trunk]', file_get_contents(dirname(__DIR__).'/fixtures/CI/php-matrix.yml'));
+    file_put_contents($this->preflight->root.'/.github/workflows/tests.yml', $source);
+    $this->preflight['config']->set(['preflight.ci.default_branches' => ['trunk'], 'preflight.ci.package' => true]);
+    $options = ['--only' => 'ci', '--ci' => true, '--strict' => true, '--json' => true];
+    expect(preflightCommand($this->preflight, $options)->getStatusCode())->toBe(0);
+    $this->preflight['config']->set('preflight.ci.package', false);
+    $tester = preflightCommand($this->preflight, $options);
+    expect($tester->getStatusCode())->toBe(1);
+    expect(preflightResults($tester)['ci.triggers']['message'])->toContain('php-matrix:')->not->toContain('push-branches:');
 });

@@ -8,6 +8,11 @@ return [
     'skip' => env('PREFLIGHT_SKIP', ''),
     'timeout' => 5,
     'mail_generic_local_parts' => ['updates', 'hello', 'noreply', 'no-reply', 'no_reply', 'notifications', 'notify', 'info', 'support', 'mail'],
+    'ci' => [
+        'default_branches' => ['main'],
+        // Null detects packages by the absence of artisan; packages may test multiple PHP versions on PRs.
+        'package' => null,
+    ],
     'brand' => [
         // Empty uses inertia.root_view (or app); override with every root Blade layout, relative to base_path().
         'layouts' => [],

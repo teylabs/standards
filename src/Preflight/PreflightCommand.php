@@ -118,14 +118,14 @@ final class PreflightCommand extends Command
             $status = Status::from($result['status']);
             $counts[$status->value]++;
 
-            if (in_array($status, [Status::SkippedInCi, Status::SkippedByRequest], true)) {
+            if (in_array($status, [Status::Skipped, Status::SkippedInCi, Status::SkippedByRequest], true)) {
                 $skips[] = $result['check'];
             }
 
             $label = match ($status) {
                 Status::Fail => 'FAILED',
                 Status::Warn => 'WARNING',
-                Status::SkippedInCi, Status::SkippedByRequest => 'SKIPPED',
+                Status::Skipped, Status::SkippedInCi, Status::SkippedByRequest => 'SKIPPED',
                 Status::Pass => 'PASSED',
             };
             $message = 'PREFLIGHT CHECK '.$label.': '.$result['check'];

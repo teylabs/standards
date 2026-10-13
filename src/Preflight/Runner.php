@@ -11,6 +11,10 @@ final class Runner
 {
     public function run(Check $check, int $seconds, bool $ci): Result
     {
+        if (! $ci && $check->name() === 'ci.triggers') {
+            return new Result(Status::Skipped, 'Skipped outside CI: workflow checks run only with --ci.');
+        }
+
         $handler = pcntl_signal_get_handler(SIGALRM);
         $async = pcntl_async_signals(true);
         $alarm = pcntl_alarm(0);

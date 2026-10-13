@@ -81,6 +81,12 @@ test('an exact ratchet entry permits debt but cannot hide a second violation', f
     expect(fn () => (new Conformance(fixtureConfiguration('Bad', [$entry])))->assert('21'))->toThrow(AssertionFailedError::class, 'InvoiceController::middleware');
 });
 
+test('[rule 51] an exact dated CI exception permits debt and becomes stale after a fix', function () {
+    $entry = ['rule' => '51', 'target' => '.github/workflows/tests.yml', 'check' => 'test | timeout: set timeout-minutes on every job.', 'reason' => 'Fixture timeout debt', 'date' => '2026-10-13'];
+    (new Conformance(fixtureConfiguration('Bad', [$entry])))->assert('51');
+    expect(fn () => (new Conformance(fixtureConfiguration('Good', [$entry])))->assert('51'))->toThrow(AssertionFailedError::class, 'stale exception');
+});
+
 test('fixed and deleted ratchet entries fail as stale, including native presets', function (string $rule, string $target, string $check) {
     $entry = compact('rule', 'target', 'check') + ['reason' => 'Fixture debt', 'date' => '2026-10-12'];
     expect(fn () => (new Conformance(fixtureConfiguration('Good', [$entry])))->assert($rule))

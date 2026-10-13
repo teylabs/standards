@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 - 2026-10-13
+
+### Added
+
+- `Tey\Standards\CiTriggers`, an offline parser for `.github/workflows` that returns findings with `workflow`, `job` (`workflow` for workflow-level findings) and `reason`. It covers push branches, pull request types when a job has a draft guard, concurrency and safe cancellation, the test job's draft guard, job timeouts, more than one PHP version on pull requests for an app, and non-Linux runners or OS matrices on pull requests. Each reason starts with its category and says what to change. (#134)
+- A `[rule 51]` architecture test that targets each workflow with `job | reason` as the check, so existing findings use the dated ratchet. `Configuration` accepts optional `ciDefaultBranches` (default `['main']`) and `ciPackage` (default `null`, detected from a missing `artisan`). (#134)
+- Warning-level `ci.triggers` preflight in the `ci` group. It runs with `--ci` only, fails on findings (exit 1 only under `--strict`) and reports Unknown (`warn`) when there are no workflow files. Configure it with `preflight.ci.default_branches` and `preflight.ci.package`. (#134)
+- A `skipped` result status for checks that do not apply to the current run; `ci.triggers` reports it in deploy runs. It is not a pass and is distinct from `skipped-in-ci`. (#134)
+
+### Changed
+
+- Require `symfony/yaml` (`^7.0 || ^8.0`) in production dependencies to parse workflow files. (#134)
+
 ## 0.3.0 - 2026-10-13
 
 ### Added
