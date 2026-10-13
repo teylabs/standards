@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="WSJF Planner Favicon">
+  <style>
+    .c { stroke: #0F172A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .a { fill: #84CC16; }
+    .d { fill: #0F172A; }
+  </style>
+  <!-- Collaboration triangle -->
+  <path class="c" d="M32 10 L16 38 L48 38 Z" />
+  <circle class="a" cx="32" cy="10" r="3" />
+  <circle class="a" cx="16" cy="38" r="3" />
+  <circle class="a" cx="48" cy="38" r="3" />
+  <!-- Ascending bars -->
+  <rect class="d" x="52" y="34" width="3" height="8" rx="1" />
+  <rect class="d" x="56" y="30" width="3" height="12" rx="1" />
+  <rect class="a" x="60" y="24" width="3" height="18" rx="1" />
+</svg>

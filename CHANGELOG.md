@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 - 2026-10-13
+
+### Added
+
+- Offline warning-level `brand.favicon` preflight in CI and the `brand` group, with strict failure promotion for missing/empty ICO files, current and historical Laravel default hashes, and missing or data-only icon links. Missing layout sources remain Unknown advisories. (#130)
+- `preflight.brand.layouts` root-source overrides and additive `preflight.brand.known_default_hashes`, documented source commits, generated app-owned fixtures, byte-exact default fixtures and production-only smoke coverage. (#130)
+
+### Changed
+
+- Require ICO header `00 00 01 00` and 16×16/32×32 directory entries, a PNG touch icon of exactly 180×180 via `getimagesize` without GD, and a non-empty SVG with an `<svg` root. Asset failures name the file and problem and retain warning-level strict/plain semantics. (#130)
+- Audit full skeleton and starter-kit Git histories, adding four historical skeleton ICOs and an intermediate React SVG. Publish all nineteen SHA-256 defaults and reference-only SHA-1 values in the README, with byte-exact fixtures and explicit current-per-kit coverage. Detection uses SHA-256 only. (#130)
+
 ## 0.2.0 - 2026-10-13
 
 ### Added

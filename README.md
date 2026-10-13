@@ -64,7 +64,7 @@ CI can skip checks requiring production secrets with `--ci` and promote failed w
 php artisan standards:preflight --ci --strict
 ```
 
-Only `app.key`, `app.env-debug` and `database.config` are blocking core checks; mail checks have warning level and never block deployment. Blocking failures exit 1, warnings permit exit 0, and usage errors exit 2. `--strict` exits 1 on any selected failed check regardless of level, but advisory `warn` results still exit 0. CI secret skips are not passes. `--json` supplies board-readable levels and result types. Emergency `--skip=app.key,mail.transport` or `PREFLIGHT_SKIP` overrides are printed, logged and persisted until a passing check clears them. PHP CLI needs PCNTL for the five-second per-check guard. Configuration checks run offline; `queue.worker` alone reads queue storage. No hosting APIs are called. These checks do not prove credentials for other services or that a worker is running.
+Only `app.key`, `app.env-debug` and `database.config` are blocking core checks; mail and brand checks have warning level and never block deployment. Blocking failures exit 1, warnings permit exit 0, and usage errors exit 2. `--strict` exits 1 on any selected failed check regardless of level, but advisory `warn` results still exit 0. CI secret skips are not passes. `--json` supplies board-readable levels and result types. Emergency `--skip=app.key,mail.transport` or `PREFLIGHT_SKIP` overrides are printed, logged and persisted until a passing check clears them. PHP CLI needs PCNTL for the five-second per-check guard. Configuration checks run offline; `queue.worker` alone reads queue storage. No hosting APIs are called. These checks do not prove credentials for other services or that a worker is running.
 
 See the [preflight reference](https://github.com/teylabs/cookbook/blob/main/docs/reference/standards-preflight.md) for the complete check list, configuration, skip records and a copyable app payment-webhook check. Implement `Tey\Standards\Preflight\Check` with `name()`, `level()`, `needsSecrets()` and `run()`, returning a `Result`. Register it once in a service provider:
 
@@ -89,6 +89,51 @@ cloud command:run <env> 'php artisan standards:preflight'
 ```
 
 Read the runner's output and the new log summary. This checks the deployed configuration; it does not send mail or prove that services are reachable.
+
+## Brand: an app-owned favicon set
+
+Ship the app's own `public/favicon.svg` with an `<svg` root, a non-empty `public/favicon.ico` with the ICO header `00 00 01 00` and 16×16 and 32×32 directory entries, and a PNG `public/apple-touch-icon.png` of exactly 180×180 pixels. Extra ICO sizes are allowed; a zero width or height byte means 256. Link them in every root layout, including guest, app and error shells. A plain monogram on a filled tile is a fallback for an app without a mark. Check it at 16px against light and dark tab bars. Do not retain Laravel's starter icons or a `data:` suppressor.
+
+`brand.favicon` is warning-level and reads files only, so it runs in `--ci` without secrets. A missing, unreadable or empty file, a wrong format or size, a known default in any of the three files, or a root layout with no non-data `rel="icon"` link returns `fail`: plain runs exit 0 when the blocking checks pass, and `--strict` exits 1. Each asset failure names the file and the problem. PNG type and dimensions use `getimagesize`; GD is not needed. Select it with `php artisan standards:preflight --only=brand --strict`.
+
+The default source is `resources/views/<inertia.root_view>.blade.php`, with dot notation resolved to directories and `app` used when unset. Override it with every root Blade layout for Livewire, Filament or additional shells. A missing or unreadable layout returns **Unknown**, an advisory `warn` even under strict mode; a broken link in another found layout still fails. Links are matched case-insensitively from source, excluding HTML and Blade comments. No Blade rendering or HTTP request occurs.
+
+Publish `config/preflight.php` with `php artisan vendor:publish --tag=standards-preflight-config`:
+
+| Configuration | Default | Meaning |
+|---|---|---|
+| `preflight.brand.layouts` | `[]` | Use Inertia's root view, or override with a list of layout paths relative to the application base path. Every listed layout is inspected. |
+| `preflight.brand.known_default_hashes` | `[]` | Add SHA-256 strings to the built-in defaults; does not replace them. |
+
+### Known Laravel defaults
+
+[`CoreCheck::KNOWN_DEFAULT_HASHES`](src/Preflight/CoreCheck.php) is the single detection list: **the checker compares SHA-256 only**, including configured additions. SHA-1 below hashes the same raw file bytes, not Git's blob header; it is reference only for apps that maintain their own icon tests. Never mix the columns in one comparison.
+
+The table covers every distinct version of the three public paths in the full Git histories of `laravel/laravel` and the Vue, React, Svelte and Livewire kits, across reachable branches and tags, audited 2026-10-13. Duplicate bytes share a row. The skeleton currently ships only the empty ICO. All four kits currently share the three rows labelled “current kits”. Their audited heads are [Vue](https://github.com/laravel/vue-starter-kit/commit/d282e817c6c2fa1bd475f7c42ea785ccfc67d0ab), [React](https://github.com/laravel/react-starter-kit/commit/717b8f55aefd82d25d4119eaebdc8e3a72b8d7e5), [Svelte](https://github.com/laravel/svelte-starter-kit/commit/76d6cf46b6cc7236121a75b9e4f1bea8809cb490) and [Livewire](https://github.com/laravel/livewire-starter-kit/commit/0f62a26c4e4b401c1300930f47d72a497add8cce); the [skeleton head](https://github.com/laravel/laravel/commit/f4000aeb018fcbf71d4a13e3ee4b80c7e2d45be5) has the empty file. Source links below pin one occurrence of each version.
+
+| File | Source | sha256 | SHA-1 |
+|---|---|---|---|
+| `favicon.ico` (empty) | [laravel/laravel](https://github.com/laravel/laravel/blob/26730cd5b3ceae03ffc5549e85b67d9c94e861ef/public/favicon.ico) | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `da39a3ee5e6b4b0d3255bfef95601890afd80709` |
+| `favicon.ico` | [current kits](https://github.com/laravel/vue-starter-kit/blob/e09dac8da170bba3eabd72a38cbc1c3f12171d6b/public/favicon.ico) | `4606a56e6ef3f5ec39201497f57069d5457ce9cea25227134d0ba378788e9070` | `4de5db574e6c589ef763ce57c4061f2269648ca4` |
+| `favicon.svg` | [current kits](https://github.com/laravel/vue-starter-kit/blob/e09dac8da170bba3eabd72a38cbc1c3f12171d6b/public/favicon.svg) | `242f4f8f93f5fbc6c8aeec500c9bac02dcfe68daba166d484c5cdc986c88d8ee` | `139952bf6929a4d223bec823dc1953798895ec6c` |
+| `apple-touch-icon.png` | [current kits](https://github.com/laravel/vue-starter-kit/blob/e09dac8da170bba3eabd72a38cbc1c3f12171d6b/public/apple-touch-icon.png) | `4001aa032ff113e1a268a9bbf1ab0fd9949439f9f54a85895956eb323aba977d` | `cdedf5b84942a5511948d1851ecd2c7930b5b1b9` |
+| `favicon.ico` | [Vue earlier](https://github.com/laravel/vue-starter-kit/blob/dc5bb6d1e2739156059b962f516369fb34f812d1/public/favicon.ico) | `bf8593aec29b1ed018f6ea5299eadd19eaccf5afce3a23bec2ac9592de73ff4c` | `3d4737b1c6bbf228253498bc4121980fb73fb357` |
+| `favicon.svg` | [Vue earlier](https://github.com/laravel/vue-starter-kit/blob/dc5bb6d1e2739156059b962f516369fb34f812d1/public/favicon.svg) | `0d1a66fd5d0a10327508953be9c6fa502a3d9d466fb505a934df06cffbddf8a2` | `f8bff57e1b1ff9d83bf1ca1d738fde6532a2f217` |
+| `apple-touch-icon.png` | [Vue earlier](https://github.com/laravel/vue-starter-kit/blob/dc5bb6d1e2739156059b962f516369fb34f812d1/public/apple-touch-icon.png) | `c359b8254a8a8a0137d9ec725627d28dbbbb1b543fca813e23d76a61870399f3` | `f8e12e68b98ba74e4d38361ac5b737415addb721` |
+| `favicon.ico` | [React earlier](https://github.com/laravel/react-starter-kit/blob/108963ea46bf55045a73504b57ecff70ee2181a4/public/favicon.ico) | `49eacef4006afcbef309d58d5e134dc118b993faa7a5a00d25c24048b2feb9cc` | `374e066b7af32f9de0fd48886061476540f26f2b` |
+| `favicon.svg` | [React earlier](https://github.com/laravel/react-starter-kit/blob/108963ea46bf55045a73504b57ecff70ee2181a4/public/favicon.svg) | `911847ef8aab1657b6395cbceca1f21bfd860e5736dc5d059ff3ba8c2270c1fb` | `ef42ae30126583cc83785027bb7bcf858d341e46` |
+| `apple-touch-icon.png` | [React earlier](https://github.com/laravel/react-starter-kit/blob/108963ea46bf55045a73504b57ecff70ee2181a4/public/apple-touch-icon.png) | `61a028f9d9e1fb30365982c5b9a5f283d6847c0f9906b9127d991d23c1e814e5` | `e7b3f4ebdc2e18be96b50eb97c236f90cee4b5bd` |
+| `favicon.ico` | [Livewire earlier](https://github.com/laravel/livewire-starter-kit/blob/50ff1b57279c6c93dc0d7f40269c8b8170f07493/public/favicon.ico) | `10712d787bbfd3c49b98a60839220ba4a10fa02c8b8b7e5c1f3d7eb61171f0dc` | `89fd70e8890ffbecc518a703d3055d7224857f30` |
+| `favicon.svg` | [Livewire earlier](https://github.com/laravel/livewire-starter-kit/blob/50ff1b57279c6c93dc0d7f40269c8b8170f07493/public/favicon.svg) | `da6a60c37187f21fc7152793daf4b4685626554e85c7de3f0a6e192def174ff0` | `5515ef615c56f3f4d6f035cc2f3580c39c7d1c46` |
+| `apple-touch-icon.png` | [Livewire earlier](https://github.com/laravel/livewire-starter-kit/blob/50ff1b57279c6c93dc0d7f40269c8b8170f07493/public/apple-touch-icon.png) | `cf5ee2ae15971b85a6850289b9176d4a23e9e69c6acace8aeb206bb946bfe947` | `b64abf45030cd5febe01beb9da3d5aa8b23de3c6` |
+| `favicon.ico` | [skeleton earlier](https://github.com/laravel/laravel/blob/a188d62105532fcf2a2839309fb71b862d904612/public/favicon.ico) | `1b8a202e0e4965bf8fd5740b95d4678d8183eba32b8f203acc4ec3be9016245e` | `44187157b030d5a936e75e6c10bff40afba052aa` |
+| `favicon.ico` | [skeleton earlier](https://github.com/laravel/laravel/blob/6285eea340ae2756213f2d879f30fcc9cc8110bb/public/favicon.ico) | `8c7bdd0465674177c249e68b8cf92a57b9071997d48e2283c47a69db6680b3ca` | `340d17dea62029ed6dd4505cd4d392390ac53693` |
+| `favicon.ico` | [skeleton earlier](https://github.com/laravel/laravel/blob/d5355a7a52eaad2695fee8ea0aefb0197b5dc38a/public/favicon.ico) | `382862f617fca26f9ccaeb98dc3944d6f977a43af3c15f2df5605c45ea23a8c5` | `1829829924b6d4a21486590152dcc766833e6cb2` |
+| `favicon.ico` | [skeleton earlier](https://github.com/laravel/laravel/blob/90b33ddc1aff273ecb6c31d97f075060ea7aed41/public/favicon.ico) | `8ada36385f6d68aa53f6fab3865588c4696f72f4cd55c50c4457d2d3d5cf8380` | `1521af4cd7fa6599f44ea34813f49597d8a3b6b3` |
+| `favicon.ico` | [skeleton earlier](https://github.com/laravel/laravel/blob/67fc2af3f4de208c3407da8eaa3dc1fb6d50847b/public/favicon.ico) | `2194a04330d5715154b60ec604ff539b10570baffe8e2427dc485b12cc0d64b9` | `1cd691781e3a3543d47604e992b54395c66b2307` |
+| `favicon.svg` | [React intermediate](https://github.com/laravel/react-starter-kit/blob/fe4281b79e6f4a528287f0f580343cc777ea897c/public/favicon.svg) | `99ef06a5e4e694047ee33176b8eef29ee5867fbec6af7b45caa273d6571fe1cc` | `df6169130b4f06008ede1c75ab9daa31073edbae` |
+
+Tests retain eighteen non-empty byte-exact defaults, generate the empty file, and pin each kit's current three files. The preflight checks headers, directory sizes, PNG dimensions, the SVG root and source icon links. It does not decode every raster payload, fully validate XML, request asset URLs or discover every rendered shell. Verify rendered links and legibility in the application's own rule-50 tests and visual review.
 
 ## Queue: sync until needed
 
@@ -119,3 +164,5 @@ The package ships a Laravel Boost guideline. Select `tey/standards` during `php 
 *Changelog: 2026-10-13 — prepared v0.1.0 for public release, with production-only preflight dependencies, optional development architecture tools, no-dev boot coverage and Boost guidance. (#105)*
 *Changelog: 2026-10-13 — log every preflight result and summary, add automatic and explicit stderr reporting without changing JSON stdout, and document verification after deploy. (#123)*
 *Changelog: 2026-10-13 — prepared 0.2.0 with sync until needed, then scale-to-zero managed queues; added driver-based advisory backlog evidence, nullable worker policy and deploy-timing guidance. Command-output regressions cover managed-queue remedies for policy conflicts, old backlog and unknown evidence. (#124)*
+*Changelog: 2026-10-13 — prepared 0.3.0 with offline warning-level brand.favicon, documented current and historical defaults, layout overrides, extra hashes, CI coverage and strict failure promotion. (#130)*
+*Changelog: 2026-10-13 — audited full upstream histories, published all nineteen defaults with reference-only SHA-1 values, and added warning-level ICO header/directory, PNG type/180×180 and SVG-root checks without GD. (#130)*

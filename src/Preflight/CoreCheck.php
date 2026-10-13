@@ -17,7 +17,57 @@ use Throwable;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon'];
+
+    /**
+     * SHA-256 of upstream public/favicon.ico, favicon.svg and apple-touch-icon.png.
+     * All reachable branches and tags in full Git mirrors of laravel/laravel and
+     * laravel/{vue,react,svelte,livewire}-starter-kit audited on 2026-10-13.
+     * Sources pin each distinct version; duplicate bytes appear only once.
+     * README's known-default table includes reference-only SHA-1 values.
+     *
+     * @var list<string>
+     */
+    public const KNOWN_DEFAULT_HASHES = [
+        // laravel/laravel@26730cd5b3ceae03ffc5549e85b67d9c94e861ef public/favicon.ico (empty).
+        'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        // laravel/vue-starter-kit@e09dac8da170bba3eabd72a38cbc1c3f12171d6b public/favicon.ico.
+        '4606a56e6ef3f5ec39201497f57069d5457ce9cea25227134d0ba378788e9070',
+        // Same commit, public/favicon.svg.
+        '242f4f8f93f5fbc6c8aeec500c9bac02dcfe68daba166d484c5cdc986c88d8ee',
+        // Same commit, public/apple-touch-icon.png.
+        '4001aa032ff113e1a268a9bbf1ab0fd9949439f9f54a85895956eb323aba977d',
+        // laravel/vue-starter-kit@dc5bb6d1e2739156059b962f516369fb34f812d1 public/favicon.ico.
+        'bf8593aec29b1ed018f6ea5299eadd19eaccf5afce3a23bec2ac9592de73ff4c',
+        // Same commit, public/favicon.svg.
+        '0d1a66fd5d0a10327508953be9c6fa502a3d9d466fb505a934df06cffbddf8a2',
+        // Same commit, public/apple-touch-icon.png.
+        'c359b8254a8a8a0137d9ec725627d28dbbbb1b543fca813e23d76a61870399f3',
+        // laravel/react-starter-kit@108963ea46bf55045a73504b57ecff70ee2181a4 public/favicon.ico.
+        '49eacef4006afcbef309d58d5e134dc118b993faa7a5a00d25c24048b2feb9cc',
+        // Same commit, public/favicon.svg.
+        '911847ef8aab1657b6395cbceca1f21bfd860e5736dc5d059ff3ba8c2270c1fb',
+        // Same commit, public/apple-touch-icon.png.
+        '61a028f9d9e1fb30365982c5b9a5f283d6847c0f9906b9127d991d23c1e814e5',
+        // laravel/livewire-starter-kit@50ff1b57279c6c93dc0d7f40269c8b8170f07493 public/favicon.ico.
+        '10712d787bbfd3c49b98a60839220ba4a10fa02c8b8b7e5c1f3d7eb61171f0dc',
+        // Same commit, public/favicon.svg.
+        'da6a60c37187f21fc7152793daf4b4685626554e85c7de3f0a6e192def174ff0',
+        // Same commit, public/apple-touch-icon.png.
+        'cf5ee2ae15971b85a6850289b9176d4a23e9e69c6acace8aeb206bb946bfe947',
+        // laravel/laravel@a188d62105532fcf2a2839309fb71b862d904612 public/favicon.ico (blob 90c94b357efdbf349103c0a0ab232c3dd4e21602).
+        '1b8a202e0e4965bf8fd5740b95d4678d8183eba32b8f203acc4ec3be9016245e',
+        // laravel/laravel@6285eea340ae2756213f2d879f30fcc9cc8110bb public/favicon.ico.
+        '8c7bdd0465674177c249e68b8cf92a57b9071997d48e2283c47a69db6680b3ca',
+        // laravel/laravel@d5355a7a52eaad2695fee8ea0aefb0197b5dc38a public/favicon.ico.
+        '382862f617fca26f9ccaeb98dc3944d6f977a43af3c15f2df5605c45ea23a8c5',
+        // laravel/laravel@90b33ddc1aff273ecb6c31d97f075060ea7aed41 public/favicon.ico.
+        '8ada36385f6d68aa53f6fab3865588c4696f72f4cd55c50c4457d2d3d5cf8380',
+        // laravel/laravel@67fc2af3f4de208c3407da8eaa3dc1fb6d50847b public/favicon.ico.
+        '2194a04330d5715154b60ec604ff539b10570baffe8e2427dc485b12cc0d64b9',
+        // laravel/react-starter-kit@fe4281b79e6f4a528287f0f580343cc777ea897c public/favicon.svg.
+        '99ef06a5e4e694047ee33176b8eef29ee5867fbec6af7b45caa273d6571fe1cc',
+    ];
 
     private const TRANSPORTS = [
         'resend' => [['resend/resend-php'], ['services.resend.key' => 'RESEND_API_KEY']],
@@ -27,7 +77,7 @@ final readonly class CoreCheck implements Check
         'ses-v2' => [['aws/aws-sdk-php'], ['services.ses.key' => 'AWS_ACCESS_KEY_ID', 'services.ses.secret' => 'AWS_SECRET_ACCESS_KEY']],
     ];
 
-    public function __construct(private string $check, private Repository $config) {}
+    public function __construct(private string $check, private Repository $config, private string $base) {}
 
     public function name(): string
     {
@@ -73,8 +123,122 @@ final readonly class CoreCheck implements Check
             'cache.store' => $this->result(! $this->production() || $this->config->get('cache.default') !== 'array', 'Set CACHE_STORE to a persistent store in production.'),
             'app.url' => $this->result($this->set('app.url') && (! $this->production() || (filter_var($this->config->get('app.url'), FILTER_VALIDATE_URL) !== false && parse_url((string) $this->config->get('app.url'), PHP_URL_SCHEME) === 'https')), 'Set APP_URL to the public HTTPS URL in production.'),
             'logging.channel' => $this->result($this->set('logging.default') && $this->set('logging.channels.'.$this->config->get('logging.default').'.driver'), 'Set LOG_CHANNEL to a configured logging channel.'),
+            'brand.favicon' => $this->favicon(),
             default => throw new InvalidArgumentException('Unknown core check: '.$this->check),
         };
+    }
+
+    private function favicon(): Result
+    {
+        $remedy = "Ship the app's own favicon.svg, a non-empty favicon.ico and a 180×180 apple-touch-icon.png, and link them in every root layout.";
+        $hashes = [...self::KNOWN_DEFAULT_HASHES, ...$this->config->get('preflight.brand.known_default_hashes', [])];
+
+        foreach (['favicon.ico', 'favicon.svg', 'apple-touch-icon.png'] as $name) {
+            $path = $this->base.'/public/'.$name;
+
+            if (! is_file($path) || ! is_readable($path) || filesize($path) === 0) {
+                return Result::fail('public/'.$name.' is missing, unreadable or empty. '.$remedy);
+            }
+
+            if (in_array(hash_file('sha256', $path), $hashes, true)) {
+                return Result::fail('public/'.$name.' matches a Laravel default. '.$remedy);
+            }
+        }
+
+        $ico = (string) file_get_contents($this->base.'/public/favicon.ico');
+
+        if (! str_starts_with($ico, "\x00\x00\x01\x00")) {
+            return Result::fail('public/favicon.ico must start with the ICO header 00 00 01 00. '.$remedy);
+        }
+
+        if (strlen($ico) < 6) {
+            return Result::fail('public/favicon.ico has a truncated ICO directory count. '.$remedy);
+        }
+
+        $count = ord($ico[4]) + (ord($ico[5]) << 8);
+
+        if (strlen($ico) < 6 + $count * 16) {
+            return Result::fail('public/favicon.ico has a truncated ICO directory. '.$remedy);
+        }
+
+        $sizes = [];
+
+        for ($index = 0; $index < $count; $index++) {
+            $width = ord($ico[6 + $index * 16]) ?: 256;
+            $height = ord($ico[7 + $index * 16]) ?: 256;
+            $sizes[] = $width.'×'.$height;
+        }
+
+        if (! in_array('16×16', $sizes, true) || ! in_array('32×32', $sizes, true)) {
+            return Result::fail('public/favicon.ico must contain 16×16 and 32×32 directory entries; found '.(implode(', ', $sizes) ?: 'none').'. '.$remedy);
+        }
+
+        $path = $this->base.'/public/apple-touch-icon.png';
+        $png = file_get_contents($path, false, null, 0, 8) === "\x89PNG\r\n\x1a\n" ? @getimagesize($path) : false;
+
+        if ($png === false || $png[2] !== IMAGETYPE_PNG) {
+            return Result::fail('public/apple-touch-icon.png must be a PNG image. '.$remedy);
+        }
+
+        if ($png[0] !== 180 || $png[1] !== 180) {
+            return Result::fail('public/apple-touch-icon.png must be 180×180 pixels; found '.$png[0].'×'.$png[1].'. '.$remedy);
+        }
+
+        $svg = preg_replace('/<!--.*?-->|<\?.*?\?>/s', '', (string) file_get_contents($this->base.'/public/favicon.svg')) ?? '';
+
+        if (preg_match('/<([A-Za-z][\w:.-]*)\b/', $svg, $root) !== 1 || $root[1] !== 'svg') {
+            return Result::fail('public/favicon.svg must contain an <svg root element. '.$remedy);
+        }
+
+        $layouts = $this->config->get('preflight.brand.layouts', []);
+
+        if ($layouts === []) {
+            $view = $this->config->get('inertia.root_view') ?? 'app';
+            $layouts = ['resources/views/'.str_replace('.', '/', $view).'.blade.php'];
+        }
+
+        $unknown = false;
+
+        foreach ($layouts as $layout) {
+            $path = $this->base.'/'.$layout;
+
+            if (! is_file($path) || ! is_readable($path)) {
+                $unknown = true;
+
+                continue;
+            }
+
+            if (! $this->hasIconLink((string) file_get_contents($path))) {
+                return Result::fail('Root layout '.$layout.' has no non-data icon link. '.$remedy);
+            }
+        }
+
+        return $unknown
+            ? Result::warn('Unknown: a root layout could not be found or read. Configure preflight.brand.layouts. '.$remedy)
+            : Result::pass('Favicon files have the required formats and sizes, are non-default and every inspected root layout has an icon link.');
+    }
+
+    private function hasIconLink(string $source): bool
+    {
+        $source = preg_replace('/{{--.*?--}}|<!--.*?-->/s', '', $source) ?? '';
+        preg_match_all('/<link\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>/i', $source, $links);
+
+        foreach ($links[0] as $link) {
+            preg_match_all('/\s([\w-]+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))/', $link, $matches, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL);
+            $attributes = [];
+
+            foreach ($matches as $match) {
+                $attributes[strtolower($match[1])] = strtolower(trim($match[2] ?? $match[3] ?? $match[4] ?? ''));
+            }
+
+            $href = $attributes['href'] ?? '';
+
+            if (in_array('icon', preg_split('/\s+/', $attributes['rel'] ?? '') ?: [], true) && $href !== '' && ! str_starts_with($href, 'data:')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function database(): Result

@@ -8,6 +8,12 @@ return [
     'skip' => env('PREFLIGHT_SKIP', ''),
     'timeout' => 5,
     'mail_generic_local_parts' => ['updates', 'hello', 'noreply', 'no-reply', 'no_reply', 'notifications', 'notify', 'info', 'support', 'mail'],
+    'brand' => [
+        // Empty uses inertia.root_view (or app); override with every root Blade layout, relative to base_path().
+        'layouts' => [],
+        // Extra SHA-256 defaults to reject, in addition to CoreCheck::KNOWN_DEFAULT_HASHES.
+        'known_default_hashes' => [],
+    ],
     'queue' => [
         // Sync until needed, then a scale-to-zero managed queue (Laravel Cloud managed queues).
         // A worker means whatever drains the queue, normally the managed queue, not an always-on process.

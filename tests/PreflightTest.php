@@ -21,16 +21,29 @@ use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Process\Process;
 use Tey\Standards\Preflight;
 use Tey\Standards\Preflight\Check;
+use Tey\Standards\Preflight\CoreCheck;
 use Tey\Standards\Preflight\Level;
 use Tey\Standards\Preflight\PreflightCommand;
 use Tey\Standards\Preflight\Result;
 use Tey\Standards\StandardsServiceProvider;
+
+function preflightPng(int $width, int $height): string
+{
+    $chunk = fn (string $type, string $bytes): string => pack('N', strlen($bytes)).$type.$bytes.pack('N', crc32($type.$bytes));
+
+    return "\x89PNG\r\n\x1a\n"
+        .$chunk('IHDR', pack('NNCCCCC', $width, $height, 8, 0, 0, 0, 0))
+        .$chunk('IDAT', gzcompress(str_repeat("\0".str_repeat("\0", $width), $height)))
+        .$chunk('IEND', '');
+}
 
 function preflightWorld(): Container
 {
     $app = new class extends Container
     {
         public string $directory;
+
+        public string $root;
 
         public function storagePath(string $path = ''): string
         {
@@ -39,7 +52,7 @@ function preflightWorld(): Container
 
         public function basePath(): string
         {
-            return dirname(__DIR__);
+            return $this->root;
         }
 
         public function configurationIsCached(): bool
@@ -53,6 +66,13 @@ function preflightWorld(): Container
         }
     };
     $app->directory = sys_get_temp_dir().'/preflight-'.bin2hex(random_bytes(6));
+    $app->root = $app->directory;
+    mkdir($app->root.'/public', 0777, true);
+    mkdir($app->root.'/resources/views', 0777, true);
+    file_put_contents($app->root.'/public/favicon.ico', pack('vvv', 0, 1, 2).pack('CCCCvvVV', 16, 16, 0, 0, 1, 32, 0, 38).pack('CCCCvvVV', 32, 32, 0, 0, 1, 32, 0, 38));
+    file_put_contents($app->root.'/public/favicon.svg', '<svg xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16"/></svg>');
+    file_put_contents($app->root.'/public/apple-touch-icon.png', preflightPng(180, 180));
+    file_put_contents($app->root.'/resources/views/app.blade.php', '<link rel="icon" href="/favicon.svg">');
     $config = new Repository([
         'app' => ['env' => 'production', 'debug' => false, 'key' => 'test-key', 'url' => 'https://app.test'],
         'database' => ['default' => 'sqlite', 'connections' => ['sqlite' => ['driver' => 'sqlite', 'database' => ':memory:']]],
@@ -133,7 +153,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning', 'brand.favicon' => 'warning'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -285,6 +305,8 @@ test('CI skips secret checks but still blocks non-secret failures', function () 
 });
 
 test('skips print a banner, log, persist and clear only after passing', function (bool $dedicated) {
+    $this->preflight->root = dirname(__DIR__);
+
     if ($dedicated) {
         $this->preflight['config']->set('logging.channels.standards', ['driver' => 'single', 'path' => $this->preflight->directory.'/standards.log']);
     }
@@ -785,3 +807,190 @@ test('worker policy env is parsed as a nullable boolean', function (?string $val
     'zero' => ['0', false],
     'invalid' => ['invalid', null],
 ]);
+
+test('[rule 50] every Laravel default fails without blocking deployment unless strict', function (?string $fixture) {
+    $extension = $fixture === null ? 'ico' : pathinfo($fixture, PATHINFO_EXTENSION);
+    $name = $extension === 'png' ? 'apple-touch-icon.png' : 'favicon.'.$extension;
+    $contents = $fixture === null ? '' : file_get_contents($fixture);
+    $hash = hash('sha256', $contents);
+    expect($hash)->toBe($fixture === null ? 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' : pathinfo($fixture, PATHINFO_FILENAME));
+    expect(CoreCheck::KNOWN_DEFAULT_HASHES)->toContain($hash);
+    file_put_contents($this->preflight->root.'/public/'.$name, $contents);
+
+    foreach ([false => 0, true => 1] as $strict => $exit) {
+        $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--ci' => true, '--strict' => (bool) $strict, '--json' => true]);
+        expect($tester->getStatusCode())->toBe($exit);
+        expect(preflightResults($tester))->toHaveCount(1);
+        expect(preflightResults($tester)['brand.favicon'])->toMatchArray(['level' => 'warning', 'status' => 'fail']);
+        expect(preflightResults($tester)['brand.favicon']['message'])->toContain($name, '180×180', 'every root layout');
+    }
+})->with([null, ...glob(dirname(__DIR__).'/fixtures/Favicons/*')]);
+
+test('[rule 50] missing ICO fails and app-owned files pass in the full CI run', function () {
+    $tester = preflightCommand($this->preflight, ['--ci' => true, '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(0);
+    expect(preflightResults($tester)['brand.favicon'])->toMatchArray(['level' => 'warning', 'status' => 'pass']);
+    $fixtures = array_map(fn (string $path): string => pathinfo($path, PATHINFO_FILENAME), glob(dirname(__DIR__).'/fixtures/Favicons/*'));
+    expect(CoreCheck::KNOWN_DEFAULT_HASHES)->toEqualCanonicalizing(['e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', ...$fixtures]);
+
+    unlink($this->preflight->root.'/public/favicon.ico');
+    $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(1);
+    expect(preflightResults($tester)['brand.favicon']['status'])->toBe('fail');
+    expect(preflightResults($tester)['brand.favicon']['message'])->toContain('favicon.ico');
+});
+
+test('[rule 50] layout source needs an actual icon link', function (string $source, string $status) {
+    file_put_contents($this->preflight->root.'/resources/views/app.blade.php', $source);
+    $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--strict' => true, '--json' => true]);
+    expect(preflightResults($tester)['brand.favicon']['status'])->toBe($status);
+    expect($tester->getStatusCode())->toBe($status === 'pass' ? 0 : 1);
+})->with([
+    'no link' => ['<html><head></head></html>', 'fail'],
+    'touch only' => ['<link rel="apple-touch-icon" href="/apple-touch-icon.png">', 'fail'],
+    'suppressor' => ['<link rel="icon" href="data:,">', 'fail'],
+    'case-insensitive data' => ["<LINK HREF=' DATA:image/svg+xml,abc' REL='ICON'>", 'fail'],
+    'commented HTML' => ['<!-- <link rel="icon" href="/favicon.svg"> -->', 'fail'],
+    'commented Blade' => ['{{-- <link rel="icon" href="/favicon.svg"> --}}', 'fail'],
+    'empty href' => ['<link rel="icon" href="">', 'fail'],
+    'real' => ['<link rel="icon" href="/favicon.svg">', 'pass'],
+    'unquoted uppercase' => ['<LINK HREF=/favicon.ico REL=ICON>', 'pass'],
+    'shortcut icon' => ["<link href='/favicon.ico' rel='shortcut icon'>", 'pass'],
+    'mixed' => ['<link rel="icon" href="data:,"><link rel="icon" href="/favicon.svg">', 'pass'],
+]);
+
+test('[rule 50] configured root views and every overridden layout are inspected', function () {
+    mkdir($this->preflight->root.'/resources/views/layouts');
+    file_put_contents($this->preflight->root.'/resources/views/app.blade.php', 'No icon link');
+    file_put_contents($this->preflight->root.'/resources/views/layouts/root.blade.php', '<link rel="icon" href="/favicon.svg">');
+    $this->preflight['config']->set('inertia.root_view', 'layouts.root');
+    $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(0);
+    expect(preflightResults($tester)['brand.favicon']['status'])->toBe('pass');
+
+    $this->preflight['config']->set('preflight.brand.layouts', ['resources/views/layouts/root.blade.php', 'resources/views/app.blade.php']);
+    $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(1);
+    expect(preflightResults($tester)['brand.favicon']['status'])->toBe('fail');
+
+    $this->preflight['config']->set('preflight.brand.layouts', ['resources/views/layouts/root.blade.php']);
+    expect(preflightResults(preflightCommand($this->preflight, ['--only' => 'brand', '--json' => true]))['brand.favicon']['status'])->toBe('pass');
+});
+
+test('[rule 50] missing layouts are unknown advisories even under strict', function (array $layouts) {
+    unlink($this->preflight->root.'/resources/views/app.blade.php');
+    $this->preflight['config']->set('preflight.brand.layouts', $layouts);
+    $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(0);
+    expect(preflightResults($tester)['brand.favicon']['status'])->toBe('warn');
+    expect(preflightResults($tester)['brand.favicon']['message'])->toContain('Unknown', 'every root layout');
+})->with([[[]], [['resources/views/missing.blade.php']]]);
+
+test('[rule 50] extra configured default hashes add to the built-in set', function () {
+    $path = $this->preflight->root.'/public/favicon.svg';
+    $this->preflight['config']->set('preflight.brand.known_default_hashes', [hash_file('sha256', $path)]);
+    $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(1);
+    expect(preflightResults($tester)['brand.favicon']['status'])->toBe('fail');
+
+    copy(dirname(__DIR__).'/fixtures/Favicons/242f4f8f93f5fbc6c8aeec500c9bac02dcfe68daba166d484c5cdc986c88d8ee.svg', $path);
+    $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(1);
+    expect(preflightResults($tester)['brand.favicon']['status'])->toBe('fail');
+});
+
+test('[rule 50] each current upstream set has byte-exact SHA-256 fixtures in the default list', function (string $repository, string $commit) {
+    $files = $repository === 'laravel' ? ['favicon.ico' => 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'] : [
+        'favicon.ico' => '4606a56e6ef3f5ec39201497f57069d5457ce9cea25227134d0ba378788e9070',
+        'favicon.svg' => '242f4f8f93f5fbc6c8aeec500c9bac02dcfe68daba166d484c5cdc986c88d8ee',
+        'apple-touch-icon.png' => '4001aa032ff113e1a268a9bbf1ab0fd9949439f9f54a85895956eb323aba977d',
+    ];
+
+    foreach ($files as $name => $hash) {
+        $contents = $repository === 'laravel' ? '' : file_get_contents(dirname(__DIR__).'/fixtures/Favicons/'.$hash.'.'.pathinfo($name, PATHINFO_EXTENSION));
+        expect(hash('sha256', $contents))->toBe($hash, 'laravel/'.$repository.'@'.$commit.' public/'.$name);
+        expect(CoreCheck::KNOWN_DEFAULT_HASHES)->toContain($hash);
+    }
+})->with([
+    'skeleton' => ['laravel', 'f4000aeb018fcbf71d4a13e3ee4b80c7e2d45be5'],
+    'Vue' => ['vue-starter-kit', 'd282e817c6c2fa1bd475f7c42ea785ccfc67d0ab'],
+    'React' => ['react-starter-kit', '717b8f55aefd82d25d4119eaebdc8e3a72b8d7e5'],
+    'Svelte' => ['svelte-starter-kit', '76d6cf46b6cc7236121a75b9e4f1bea8809cb490'],
+    'Livewire' => ['livewire-starter-kit', '0f62a26c4e4b401c1300930f47d72a497add8cce'],
+]);
+
+test('[rule 50] configured hashes compare SHA-256 only for every file', function (string $name) {
+    $path = $this->preflight->root.'/public/'.$name;
+    $this->preflight['config']->set('preflight.brand.known_default_hashes', [hash_file('sha1', $path)]);
+    $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--strict' => true, '--json' => true]);
+    expect(preflightResults($tester)['brand.favicon']['status'])->toBe('pass');
+
+    $this->preflight['config']->set('preflight.brand.known_default_hashes', [hash_file('sha256', $path)]);
+    $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(1);
+    expect(preflightResults($tester)['brand.favicon']['message'])->toContain($name, 'matches a Laravel default');
+})->with(['favicon.ico', 'favicon.svg', 'apple-touch-icon.png']);
+
+test('[rule 50] malformed or missing icon files warn and fail only under strict', function (string $name, ?string $contents, string $problem) {
+    $path = $this->preflight->root.'/public/'.$name;
+    if ($contents === null) {
+        unlink($path);
+    } else {
+        file_put_contents($path, $contents);
+    }
+
+    foreach ([false => 0, true => 1] as $strict => $exit) {
+        $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--ci' => true, '--strict' => (bool) $strict, '--json' => true]);
+        expect($tester->getStatusCode())->toBe($exit);
+        expect(preflightResults($tester)['brand.favicon'])->toMatchArray(['level' => 'warning', 'status' => 'fail']);
+        expect(preflightResults($tester)['brand.favicon']['message'])->toContain('public/'.$name, $problem);
+    }
+})->with([
+    'ICO header' => ['favicon.ico', 'not an ICO', 'ICO header'],
+    'cursor header' => ['favicon.ico', pack('vvv', 0, 2, 2).str_repeat("\0", 32), 'ICO header'],
+    'reserved header' => ['favicon.ico', pack('vvv', 1, 1, 2).str_repeat("\0", 32), 'ICO header'],
+    'truncated count' => ['favicon.ico', "\0\0\1\0", 'directory'],
+    'truncated directory' => ['favicon.ico', pack('vvv', 0, 1, 2).str_repeat("\0", 16), 'directory'],
+    'no entries' => ['favicon.ico', pack('vvv', 0, 1, 0), '16×16 and 32×32'],
+    'missing 16' => ['favicon.ico', pack('vvv', 0, 1, 1).pack('CCCCvvVV', 32, 32, 0, 0, 1, 32, 0, 22), '16×16'],
+    'missing 32' => ['favicon.ico', pack('vvv', 0, 1, 1).pack('CCCCvvVV', 16, 16, 0, 0, 1, 32, 0, 22), '32×32'],
+    'rectangular entries' => ['favicon.ico', pack('vvv', 0, 1, 2).pack('CCCCvvVV', 16, 32, 0, 0, 1, 32, 0, 38).pack('CCCCvvVV', 32, 16, 0, 0, 1, 32, 0, 38), '16×16 and 32×32'],
+    '256 is not 16 or 32' => ['favicon.ico', pack('vvv', 0, 1, 1).str_repeat("\0", 16), '256×256'],
+    'missing PNG' => ['apple-touch-icon.png', null, 'missing'],
+    'empty PNG' => ['apple-touch-icon.png', '', 'empty'],
+    'invalid PNG' => ['apple-touch-icon.png', 'not a PNG', 'PNG'],
+    'GIF named PNG' => ['apple-touch-icon.png', "GIF89a\xb4\0\xb4\0\x80\0\0".str_repeat("\0", 6).';', 'PNG'],
+    'narrow PNG' => ['apple-touch-icon.png', preflightPng(179, 180), 'found 179×180'],
+    'wide PNG' => ['apple-touch-icon.png', preflightPng(181, 180), 'found 181×180'],
+    'short PNG' => ['apple-touch-icon.png', preflightPng(180, 179), 'found 180×179'],
+    'tall PNG' => ['apple-touch-icon.png', preflightPng(180, 181), 'found 180×181'],
+    'missing SVG' => ['favicon.svg', null, 'missing'],
+    'empty SVG' => ['favicon.svg', '', 'empty'],
+    'whitespace SVG' => ['favicon.svg', '   ', '<svg root'],
+    'wrong SVG root' => ['favicon.svg', '<html><svg/></html>', '<svg root'],
+    'commented SVG' => ['favicon.svg', '<!-- <svg/> -->', '<svg root'],
+    'similar root name' => ['favicon.svg', '<svg-icon/>', '<svg root'],
+]);
+
+test('[rule 50] extra ICO sizes and XML declarations before the SVG root are allowed', function () {
+    $path = $this->preflight->root.'/public/favicon.ico';
+    $ico = file_get_contents($path);
+    file_put_contents($path, substr_replace($ico, pack('v', 3), 4, 2).str_repeat("\0", 16));
+    file_put_contents($this->preflight->root.'/public/favicon.svg', '<?xml version="1.0"?><!-- app icon --><svg xmlns="http://www.w3.org/2000/svg"/>');
+    $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--ci' => true, '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(0);
+    expect(preflightResults($tester)['brand.favicon']['status'])->toBe('pass');
+});
+
+test('[rule 50] the README table publishes both raw-content hashes for every default fixture', function () {
+    $readme = file_get_contents(dirname(__DIR__).'/README.md');
+    preg_match_all('/^\| `([^`]+)`[^|]*\|[^|]+\| `([a-f0-9]{64})` \| `([a-f0-9]{40})` \|$/m', $readme, $rows, PREG_SET_ORDER);
+    expect(array_column($rows, 2))->toEqualCanonicalizing(CoreCheck::KNOWN_DEFAULT_HASHES);
+
+    foreach ($rows as [, $name, $sha256, $sha1]) {
+        $contents = $sha256 === 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+            ? '' : file_get_contents(dirname(__DIR__).'/fixtures/Favicons/'.$sha256.'.'.pathinfo($name, PATHINFO_EXTENSION));
+        expect(hash('sha256', $contents))->toBe($sha256);
+        expect(hash('sha1', $contents))->toBe($sha1);
+    }
+});

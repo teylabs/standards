@@ -103,6 +103,12 @@ Container::setInstance($app);
 putenv('PREFLIGHT_SKIP');
 
 try {
+    mkdir($app->directory.'/public', 0777, true);
+    mkdir($app->directory.'/resources/views', 0777, true);
+    file_put_contents($app->directory.'/public/favicon.ico', pack('vvv', 0, 1, 2).pack('CCCCvvVV', 16, 16, 0, 0, 1, 32, 0, 38).pack('CCCCvvVV', 32, 32, 0, 0, 1, 32, 0, 38));
+    file_put_contents($app->directory.'/public/favicon.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    file_put_contents($app->directory.'/public/apple-touch-icon.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAAAAAAYplnuAAAANklEQVR4nO3BMQEAAADCoPVPbQlPoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgY39EAAGTgIAHAAAAAElFTkSuQmCC'));
+    file_put_contents($app->directory.'/resources/views/app.blade.php', '<link rel="icon" href="/favicon.ico">');
     $provider = new StandardsServiceProvider($app);
     $provider->register();
     $provider->boot();
@@ -110,7 +116,7 @@ try {
     $exit = $artisan->call('standards:preflight', ['--json' => true, '--no-stderr' => true]);
     $stdout = $artisan->output();
     $json = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);
-    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel'];
+    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon'];
 
     if ($exit !== 0 || $json['exit_code'] !== 0 || array_column($json['results'], 'check') !== $expected
         || array_unique(array_column($json['results'], 'status')) !== ['pass']) {

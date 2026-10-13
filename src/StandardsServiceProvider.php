@@ -16,7 +16,7 @@ final class StandardsServiceProvider extends ServiceProvider
 
         foreach (CoreCheck::NAMES as $name) {
             $id = 'standards.preflight.'.$name;
-            $this->app->bind($id, fn (): CoreCheck => new CoreCheck($name, $this->app->make('config')));
+            $this->app->bind($id, fn (): CoreCheck => new CoreCheck($name, $this->app->make('config'), $this->app->basePath()));
             $this->app->tag([$id], 'standards.preflight');
         }
     }
