@@ -51,7 +51,7 @@ function preflightWorld(): Container
     $config = new Repository([
         'app' => ['env' => 'production', 'debug' => false, 'key' => 'test-key', 'url' => 'https://app.test'],
         'database' => ['default' => 'sqlite', 'connections' => ['sqlite' => ['driver' => 'sqlite', 'database' => ':memory:']]],
-        'mail' => ['default' => 'log', 'mailers' => ['log' => ['transport' => 'log']], 'from' => ['address' => 'alerts@app.test']],
+        'mail' => ['default' => 'log', 'mailers' => ['log' => ['transport' => 'log']], 'from' => ['address' => 'alerts@app.test'], 'reply_to' => ['address' => 'hello@app.test']],
         'queue' => ['default' => 'database'],
         'cache' => ['default' => 'file'],
         'logging' => ['default' => 'single', 'channels' => ['single' => ['driver' => 'single', 'path' => $app->directory.'/default.log']]],
@@ -109,7 +109,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'queue.connection' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -154,7 +154,7 @@ test('each failure has the specified level and exit code', function (string $che
 ]);
 
 test('sender advisories are logged, reported and retain skip records even in strict mode', function () {
-    $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => 'INFO@parent.test', 'mail.shared_parent_domain' => 'parent.test']);
+    $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => 'INFO@parent.test', 'mail.shared_parent_domain' => 'parent.test', 'mail.reply_to.address' => 'hello@parent.test']);
     preflightCommand($this->preflight, ['--skip' => 'mail.from', '--json' => true]);
 
     $advisory = preflightCommand($this->preflight, ['--strict' => true, '--json' => true]);
@@ -177,7 +177,7 @@ test('sender advisories are logged, reported and retain skip records even in str
 });
 
 test('production-only warnings permit local defaults and distinct senders', function () {
-    $this->preflight['config']->set(['app.env' => 'local', 'app.debug' => true, 'app.url' => 'http://localhost', 'queue.default' => 'sync', 'cache.default' => 'array', 'mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => 'hello@child.parent.test', 'mail.shared_parent_domain' => 'parent.test']);
+    $this->preflight['config']->set(['app.env' => 'local', 'app.debug' => true, 'app.url' => 'http://localhost', 'queue.default' => 'sync', 'cache.default' => 'array', 'mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => 'hello@child.parent.test', 'mail.shared_parent_domain' => 'parent.test', 'mail.reply_to.address' => 'hello@parent.test']);
     $tester = preflightCommand($this->preflight, ['--json' => true]);
     expect(array_unique(array_column(preflightResults($tester), 'status')))->toBe(['pass']);
 });
@@ -390,7 +390,7 @@ test('strict group selection includes registered checks but excludes unrelated f
     Preflight::register($check::class);
     $this->preflight['config']->set('app.key', null);
     $tester = preflightCommand($this->preflight, ['--only' => 'mail', '--strict' => true, '--json' => true]);
-    expect(array_keys(preflightResults($tester)))->toBe(['mail.transport', 'mail.from', 'mail.custom']);
+    expect(array_keys(preflightResults($tester)))->toBe(['mail.transport', 'mail.from', 'mail.reply-to', 'mail.custom']);
     expect(preflightResults($tester)['mail.custom'])->toMatchArray(['level' => 'warning', 'status' => $advisory ? 'warn' : 'fail']);
     expect($tester->getStatusCode())->toBe($advisory ? 0 : 1);
 
@@ -398,3 +398,50 @@ test('strict group selection includes registered checks but excludes unrelated f
     expect($unknown->getStatusCode())->toBe(2)->and(json_decode($unknown->getDisplay(), true)['results'])->toBe([]);
     expect(glob($this->preflight->directory.'/framework/preflight/*.json'))->toBe([]);
 })->with([false, true]);
+
+test('reply-to validates addresses and the last two domain labels without blocking deployment', function (?string $replyTo, string $from, string $status) {
+    $this->preflight['config']->set([
+        'mail.default' => 'smtp',
+        'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'],
+        'mail.from.address' => $from,
+        'mail.reply_to.address' => $replyTo,
+    ]);
+
+    $deployment = preflightCommand($this->preflight, ['--json' => true]);
+    expect($deployment->getStatusCode())->toBe(0);
+    expect(preflightResults($deployment)['mail.reply-to'])->toMatchArray(['level' => 'warning', 'status' => $status]);
+
+    $strict = preflightCommand($this->preflight, ['--only' => 'mail', '--strict' => true, '--ci' => true, '--json' => true]);
+    expect($strict->getStatusCode())->toBe($status === 'pass' ? 0 : 1);
+    expect(preflightResults($strict)['mail.reply-to'])->toMatchArray(['level' => 'warning', 'status' => $status]);
+
+    if ($status === 'fail') {
+        expect(preflightResults($strict)['mail.reply-to']['message'])->toContain('MAIL_REPLY_TO_ADDRESS', 'mail.reply_to.address');
+    }
+})->with([
+    'unset' => [null, 'updates@app.test', 'fail'],
+    'empty' => ['', 'updates@app.test', 'fail'],
+    'blank' => ['   ', 'updates@app.test', 'fail'],
+    'invalid' => ['not-an-email', 'updates@app.test', 'fail'],
+    'different domain' => ['hello@other.test', 'updates@app.test', 'fail'],
+    'deceptive subdomain' => ['hello@app.test.other.test', 'updates@app.test', 'fail'],
+    'hello' => ['hello@app.test', 'updates@app.test', 'pass'],
+    'support' => ['support@app.test', 'updates@app.test', 'pass'],
+    'case insensitive' => ['Support@APP.TEST', 'updates@App.Test', 'pass'],
+    'subdomain sender' => ['hello@app.test', 'updates@mail.app.test', 'pass'],
+    'subdomain reply-to' => ['support@help.app.test', 'updates@app.test', 'pass'],
+    'invalid sender' => ['hello@app.test', 'invalid', 'fail'],
+]);
+
+test('local transports need neither a sender nor reply-to', function (string $transport) {
+    $this->preflight['config']->set([
+        'mail.default' => 'local',
+        'mail.mailers.local' => ['transport' => $transport],
+        'mail.from.address' => null,
+        'mail.reply_to.address' => null,
+    ]);
+
+    $tester = preflightCommand($this->preflight, ['--only' => 'mail', '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(0);
+    expect(preflightResults($tester)['mail.reply-to'])->toMatchArray(['level' => 'warning', 'status' => 'pass']);
+})->with(['log', 'array']);

@@ -108,7 +108,7 @@ try {
     $artisan = new Application($app, $app['events'], 'smoke');
     $exit = $artisan->call('standards:preflight', ['--json' => true]);
     $json = json_decode($artisan->output(), true, flags: JSON_THROW_ON_ERROR);
-    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'queue.connection', 'cache.store', 'app.url', 'logging.channel'];
+    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'cache.store', 'app.url', 'logging.channel'];
 
     if ($exit !== 0 || $json['exit_code'] !== 0 || array_column($json['results'], 'check') !== $expected
         || array_unique(array_column($json['results'], 'status')) !== ['pass']) {

@@ -10,7 +10,7 @@ use InvalidArgumentException;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'queue.connection', 'cache.store', 'app.url', 'logging.channel'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'cache.store', 'app.url', 'logging.channel'];
 
     private const TRANSPORTS = [
         'resend' => [['resend/resend-php'], ['services.resend.key' => 'RESEND_API_KEY']],
@@ -60,6 +60,7 @@ final readonly class CoreCheck implements Check
             'database.config' => $this->database(),
             'mail.transport' => $this->mailTransport(),
             'mail.from' => $this->mailFrom(),
+            'mail.reply-to' => $this->mailReplyTo(),
             'queue.connection' => $this->result(! $this->production() || $this->config->get('queue.default') !== 'sync', 'Set QUEUE_CONNECTION to a non-sync connection in production.'),
             'cache.store' => $this->result(! $this->production() || $this->config->get('cache.default') !== 'array', 'Set CACHE_STORE to a persistent store in production.'),
             'app.url' => $this->result($this->set('app.url') && (! $this->production() || (filter_var($this->config->get('app.url'), FILTER_VALIDATE_URL) !== false && parse_url((string) $this->config->get('app.url'), PHP_URL_SCHEME) === 'https')), 'Set APP_URL to the public HTTPS URL in production.'),
@@ -171,6 +172,31 @@ final readonly class CoreCheck implements Check
         return $generic
             ? Result::warn('Use a sender that names the brand on mail.shared_parent_domain (<brand>@<shared parent domain>).')
             : Result::pass('Configured sender is valid and app-specific.');
+    }
+
+    private function mailReplyTo(): Result
+    {
+        if (! $this->sendsMail()) {
+            return Result::pass('Log and array transports do not require Reply-To.');
+        }
+
+        $from = strtolower(trim((string) $this->config->get('mail.from.address')));
+        $replyTo = strtolower(trim((string) $this->config->get('mail.reply_to.address')));
+
+        if (filter_var($from, FILTER_VALIDATE_EMAIL) === false || filter_var($replyTo, FILTER_VALIDATE_EMAIL) === false) {
+            return Result::fail('Set MAIL_REPLY_TO_ADDRESS (mail.reply_to.address) and MAIL_FROM_ADDRESS to valid addresses on the app\'s own domain.');
+        }
+
+        return $this->mailDomain($from) === $this->mailDomain($replyTo)
+            ? Result::pass('Configured Reply-To is valid and on the sender\'s domain (last two labels).')
+            : Result::fail('Set MAIL_REPLY_TO_ADDRESS (mail.reply_to.address) to hello@ or the public support address on the same domain as MAIL_FROM_ADDRESS (last two labels).');
+    }
+
+    private function mailDomain(string $address): string
+    {
+        $domain = substr($address, strrpos($address, '@') + 1);
+
+        return implode('.', array_slice(explode('.', $domain), -2));
     }
 
     private function sendsMail(): bool
