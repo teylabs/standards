@@ -132,7 +132,7 @@ final readonly class CoreCheck implements Check
 
     private function ciTriggers(): Result
     {
-        $parser = new CiTriggers($this->base, $this->config->get('preflight.ci.default_branches', ['main']), $this->config->get('preflight.ci.package'));
+        $parser = new CiTriggers($this->base, $this->config->get('preflight.ci.default_branches', ['main']), $this->config->get('preflight.ci.distribution'));
         $remedy = 'Apply docs/recipes/backend/ci-triggers.md; see tey/standards README (CI triggers) for findings and configuration.';
 
         if ($parser->workflows() === []) {
@@ -140,14 +140,17 @@ final readonly class CoreCheck implements Check
         }
 
         $findings = $parser->findings();
+        $advisories = implode(' ', array_map(fn (array $finding): string => 'Advisory '.$finding['workflow'].' ['.$finding['job'].'] '.$finding['reason'], $parser->advisories()));
 
         if ($findings !== []) {
             $first = array_map(fn (array $finding): string => $finding['workflow'].' ['.$finding['job'].'] '.$finding['reason'], array_slice($findings, 0, 5));
 
-            return Result::fail(implode(' ', $first).(count($findings) > 5 ? ' And '.(count($findings) - 5).' more findings.' : '').' '.$remedy);
+            return Result::fail(implode(' ', $first).(count($findings) > 5 ? ' And '.(count($findings) - 5).' more findings.' : '').' '.$advisories.' '.$remedy);
         }
 
-        return Result::pass('Workflow triggers, concurrency, draft guards, timeouts and PR matrices conform. Advisory docs-skip: review paths-ignore or a changes job against required checks online.');
+        $message = 'Workflow triggers, concurrency, draft guards and timeouts conform. '.$advisories.' Advisory docs-skip: review paths-ignore or a changes job against required checks online.';
+
+        return $advisories === '' ? Result::pass($message) : Result::warn($message);
     }
 
     private function favicon(): Result

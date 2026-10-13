@@ -39,7 +39,7 @@ test('[rule 51] each fixture isolates its finding and the standard workflow pass
     ['os-matrix.yaml', 'os-matrix', 'test'],
 ]);
 
-test('[rule 51] workflow variants enforce boundaries without rejecting supported alternatives', function (Closure $change, array $categories, array $branches, ?bool $package, bool $artisan) {
+test('[rule 51] workflow variants enforce boundaries without rejecting supported alternatives', function (Closure $change, array $categories, array $branches, ?string $distribution, bool $artisan) {
     $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
     $change($workflow);
     file_put_contents($this->ciBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
@@ -48,7 +48,7 @@ test('[rule 51] workflow variants enforce boundaries without rejecting supported
         unlink($this->ciBase.'/artisan');
     }
 
-    $findings = (new CiTriggers($this->ciBase, $branches, $package))->findings();
+    $findings = (new CiTriggers($this->ciBase, $branches, $distribution))->findings();
     expect(array_map(fn (array $finding): string => explode(':', $finding['reason'])[0], $findings))->toBe($categories);
 })->with([
     'push shorthand' => [function (&$w) {
@@ -137,16 +137,17 @@ test('[rule 51] workflow variants enforce boundaries without rejecting supported
     }, ['os-matrix'], ['main'], null, true],
     'package override' => [function (&$w) {
         $w['jobs']['test']['strategy']['matrix']['php-version'] = ['8.4', '8.5'];
-    }, [], ['main'], true, true],
-    'package auto detection' => [function (&$w) {
+        $w['jobs']['test']['runs-on'] = 'windows-latest';
+    }, [], ['main'], 'package', true],
+    'unknown does not infer package' => [function (&$w) {
         $w['jobs']['test']['strategy']['matrix']['php-version'] = ['8.4', '8.5'];
     }, [], ['main'], null, false],
     'app override without artisan' => [function (&$w) {
         $w['jobs']['test']['strategy']['matrix']['php-version'] = ['8.4', '8.5'];
-    }, ['php-matrix'], ['main'], false, false],
-    'package still needs Linux' => [function (&$w) {
+    }, ['php-matrix'], ['main'], 'app', false],
+    'package Windows required' => [function (&$w) {
         $w['jobs']['test']['runs-on'] = 'windows-latest';
-    }, ['os-matrix'], ['main'], true, false],
+    }, [], ['main'], 'package', false],
     'single PHP' => [function (&$w) {
         $w['jobs']['test']['strategy']['matrix']['php-version'] = ['8.5'];
     }, [], ['main'], null, true],
@@ -156,20 +157,30 @@ test('[rule 51] workflow variants enforce boundaries without rejecting supported
     'conditional OS expression' => [function (&$w) {
         $w['jobs']['test']['runs-on'] = '${{ matrix.os }}';
         $w['jobs']['test']['strategy']['matrix']['os'] = '${{ github.event_name == \'pull_request\' && fromJSON(\'["ubuntu-latest"]\') || fromJSON(\'["ubuntu-latest", "windows-latest"]\') }}';
-    }, [], ['main'], null, true],
+    }, ['os-matrix'], ['main'], null, true],
     'conditional direct runner' => [function (&$w) {
         $w['jobs']['test']['runs-on'] = '${{ github.event_name == \'pull_request\' && \'ubuntu-latest\' || \'windows-latest\' }}';
-    }, [], ['main'], null, true],
+    }, ['os-matrix'], ['main'], null, true],
     'nightly workflow' => [function (&$w) {
         unset($w['on']['pull_request'], $w['jobs']['test']['if']);
         $w['jobs']['test']['runs-on'] = 'macos-latest';
         $w['jobs']['test']['strategy']['matrix']['php-version'] = ['8.4', '8.5'];
-    }, [], ['main'], null, true],
+    }, ['os-matrix'], ['main'], null, true],
     'nightly job' => [function (&$w) {
         $w['jobs']['test']['if'] = "github.event_name == 'schedule'";
         $w['jobs']['test']['runs-on'] = 'macos-latest';
         $w['jobs']['test']['strategy']['matrix']['php-version'] = ['8.4', '8.5'];
-    }, [], ['main'], null, true],
+    }, ['os-matrix'], ['main'], null, true],
+    'Windows on main' => [function (&$w) {
+        $w['jobs']['test']['if'] = "github.event_name == 'push'";
+        $w['jobs']['test']['runs-on'] = 'windows-latest';
+    }, ['os-matrix'], ['main'], null, true],
+    'OS matrix entry even with fixed Linux runner' => [function (&$w) {
+        $w['jobs']['test']['strategy']['matrix']['os'] = ['ubuntu-latest', 'windows-latest'];
+    }, ['os-matrix'], ['main'], null, true],
+    'other nonLinux OS matrix entry with fixed Linux runner' => [function (&$w) {
+        $w['jobs']['test']['strategy']['matrix']['os'] = ['ubuntu-latest', 'freebsd'];
+    }, ['os-matrix'], ['main'], null, true],
 ]);
 
 test('[rule 51] each supported test command needs a draft guard', function (string $command) {
@@ -179,7 +190,7 @@ test('[rule 51] each supported test command needs a draft guard', function (stri
     file_put_contents($this->ciBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
     expect((new CiTriggers($this->ciBase))->findings())->toHaveCount(1);
     expect((new CiTriggers($this->ciBase))->findings()[0]['reason'])->toStartWith('draft-guard:');
-})->with(['php artisan test', 'pest --parallel', 'phpunit', 'vendor/bin/pest', './vendor/bin/phpunit', 'npm test', 'npx playwright test', 'npx vitest run']);
+})->with(['php artisan test', 'pest --parallel', 'phpunit', 'vendor/bin/pest', './vendor/bin/phpunit', 'npm test', 'composer test', 'npx playwright test', 'npx vitest run']);
 
 test('[rule 51] every workflow and job is inspected, including yaml extensions and malformed YAML', function () {
     copy(dirname(__DIR__).'/fixtures/CI/timeout.yml', $this->ciBase.'/.github/workflows/first.yml');
@@ -189,3 +200,130 @@ test('[rule 51] every workflow and job is inspected, including yaml extensions a
     expect(array_column($findings, 'workflow'))->toBe(['.github/workflows/broken.yml', '.github/workflows/first.yml', '.github/workflows/second.yaml']);
     expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $findings))->toBe(['yaml', 'timeout', 'os-matrix']);
 });
+
+test('[rule 51] distribution detection uses config then composer then artisan, otherwise advisory unknown', function (?string $type, ?string $override, bool $artisan, string $expected) {
+    if ($type !== null) {
+        file_put_contents($this->ciBase.'/composer.json', json_encode(['type' => $type]));
+    }
+
+    if (! $artisan) {
+        unlink($this->ciBase.'/artisan');
+    }
+
+    copy(dirname(__DIR__).'/fixtures/CI/compliant.yml', $this->ciBase.'/.github/workflows/tests.yml');
+    $parser = new CiTriggers($this->ciBase, distribution: $override);
+    expect($parser->distribution())->toBe($expected);
+
+    if ($expected === 'unknown') {
+        expect($parser->findings())->toBe([]);
+        expect(implode(' ', array_column($parser->advisories(), 'reason')))->toContain('Unknown', 'preflight.ci.distribution', 'PREFLIGHT_CI_DISTRIBUTION');
+    }
+})->with([
+    ['project', null, false, 'app'],
+    ['library', null, true, 'package'],
+    ['laravel-package', null, false, 'package'],
+    ['composer-plugin', null, false, 'package'],
+    ['custom-distribution', null, false, 'package'],
+    ['project', 'package', true, 'package'],
+    ['library', 'app', false, 'app'],
+    [null, null, true, 'app'],
+    [null, null, false, 'unknown'],
+]);
+
+test('[rule 51] packages require Windows before merge, not merely somewhere in CI', function (Closure $change, bool $gap) {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
+    $workflow['jobs']['test']['runs-on'] = '${{ matrix.os }}';
+    $workflow['jobs']['test']['strategy']['matrix'] = ['os' => ['ubuntu-latest', 'windows-latest'], 'php' => ['8.4', '8.5']];
+    $change($workflow);
+    file_put_contents($this->ciBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
+    $parser = new CiTriggers($this->ciBase, distribution: 'package');
+    expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $parser->findings()))->toBe($gap ? ['windows-gap'] : []);
+    expect(implode(' ', array_column($parser->advisories(), 'reason')))->toContain('macOS');
+})->with([
+    'ready and draft guarded' => [function (&$w) {}, false],
+    'unguarded ready job' => [function (&$w) {
+        unset($w['jobs']['test']['if']);
+        $w['jobs']['test']['steps'] = [];
+    }, false],
+    'main only' => [function (&$w) {
+        $w['jobs']['test']['if'] = "github.event_name == 'push'";
+    }, true],
+    'nightly only' => [function (&$w) {
+        $w['jobs']['test']['if'] = "github.event_name == 'schedule'";
+    }, true],
+    'workflow main only' => [function (&$w) {
+        unset($w['on']['pull_request']);
+    }, true],
+    'no Windows' => [function (&$w) {
+        $w['jobs']['test']['strategy']['matrix']['os'] = ['ubuntu-latest'];
+    }, true],
+    'draft only' => [function (&$w) {
+        $w['jobs']['test']['if'] = 'github.event.pull_request.draft == true';
+        $w['jobs']['test']['steps'] = [];
+    }, true],
+    'excluded Windows' => [function (&$w) {
+        $w['jobs']['test']['strategy']['matrix']['exclude'] = [['os' => 'windows-latest']];
+    }, true],
+    'one Windows PHP excluded still has coverage' => [function (&$w) {
+        $w['jobs']['test']['strategy']['matrix']['exclude'] = [['php' => '8.4', 'os' => 'windows-latest']];
+    }, false],
+    'all Windows combinations excluded with reversed keys' => [function (&$w) {
+        $w['jobs']['test']['strategy']['matrix']['exclude'] = [['php' => '8.4', 'os' => 'windows-latest'], ['php' => '8.5', 'os' => 'windows-latest']];
+    }, true],
+    'included Windows' => [function (&$w) {
+        $w['jobs']['test']['strategy']['matrix'] = ['include' => [['os' => 'ubuntu-latest'], ['os' => 'windows-latest']]];
+    }, false],
+    'event-selected Windows main only' => [function (&$w) {
+        $w['jobs']['test']['strategy']['matrix']['os'] = '${{ github.event_name == \'pull_request\' && fromJSON(\'["ubuntu-latest"]\') || fromJSON(\'["ubuntu-latest", "windows-latest"]\') }}';
+    }, true],
+    'event-selected Windows on PR' => [function (&$w) {
+        $w['jobs']['test']['runs-on'] = '${{ github.event_name == \'pull_request\' && \'windows-latest\' || \'ubuntu-latest\' }}';
+    }, false],
+    'parenthesized ready guard' => [function (&$w) {
+        $w['jobs']['test']['if'] = "github.event_name == 'pull_request' && (github.event.pull_request.draft == false || github.event_name == 'push')";
+    }, false],
+    'parenthesized main guard' => [function (&$w) {
+        $w['jobs']['test']['if'] = "github.event_name == 'push' && (github.event.pull_request.draft == false || github.event_name == 'schedule')";
+    }, true],
+]);
+
+test('[rule 51] platform coverage combines ready legs across workflows and macOS stays advisory', function () {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
+    file_put_contents($this->ciBase.'/.github/workflows/linux.yml', Yaml::dump($workflow, 10));
+    $workflow['jobs']['test']['runs-on'] = 'windows-latest';
+    file_put_contents($this->ciBase.'/.github/workflows/windows.yml', Yaml::dump($workflow, 10));
+    $parser = new CiTriggers($this->ciBase, distribution: 'package');
+    expect($parser->findings())->toBe([]);
+    expect(implode(' ', array_column($parser->advisories(), 'reason')))->toContain('macOS');
+    $workflow['jobs']['test']['runs-on'] = 'macos-latest';
+    file_put_contents($this->ciBase.'/.github/workflows/mac.yml', Yaml::dump($workflow, 10));
+    expect($parser->findings())->toBe([])->and($parser->advisories())->toBe([]);
+});
+
+test('[rule 51] cache suggestions distinguish dependency caches from unrelated caches', function (string $install, array $cache, bool $advisory) {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
+    $workflow['jobs']['test']['steps'] = [['uses' => 'shivammathur/setup-php@v2'], ...$cache, ['run' => $install]];
+    file_put_contents($this->ciBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
+    $parser = new CiTriggers($this->ciBase);
+    expect($parser->findings())->toBe([]);
+    $suggestions = array_filter($parser->advisories(), fn ($f) => str_starts_with($f['reason'], 'cache:'));
+    expect($suggestions)->toHaveCount($advisory ? 1 : 0);
+
+    if ($advisory) {
+        expect(array_values($suggestions)[0]['reason'])->toContain('Suggest', '45', 'minute boundary');
+    }
+})->with([
+    ['composer install', [], true],
+    ['composer update --prefer-dist', [], true],
+    ['npm ci', [], true],
+    ['npm install', [], true],
+    ['npm i --ignore-scripts', [], true],
+    ['npm run install', [], false],
+    ['composer install', [['uses' => 'ramsey/composer-install@v3']], false],
+    ['npm ci', [['uses' => 'actions/setup-node@v6', 'with' => ['cache' => 'npm']]], false],
+    ['npm ci', [['uses' => 'actions/cache@v4', 'with' => ['path' => '~/.npm', 'key' => '${{ runner.os }}-${{ hashFiles(\'package-lock.json\') }}']]], false],
+    ['composer install', [['uses' => 'actions/cache@v4', 'with' => ['path' => '~/.composer/cache', 'key' => '${{ runner.os }}-${{ hashFiles(\'composer.lock\') }}']]], false],
+    ['composer install', [['uses' => 'actions/cache@v4', 'with' => ['path' => '${{ steps.composer-cache.outputs.dir }}', 'key' => 'composer-cache']]], false],
+    ['npm ci', [['uses' => 'actions/cache@v4', 'with' => ['path' => 'public/build', 'key' => 'assets']]], true],
+    ['composer install', [['uses' => 'actions/setup-node@v6', 'with' => ['cache' => 'npm']]], true],
+]);

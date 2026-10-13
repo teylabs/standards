@@ -78,7 +78,7 @@ final class Conformance
     {
         if ($rule === '51') {
             return array_map(fn (array $finding): array => ['target' => $finding['workflow'], 'check' => $finding['job'].' | '.$finding['reason']],
-                (new CiTriggers($this->config->base, $this->config->ciDefaultBranches, $this->config->ciPackage))->findings());
+                (new CiTriggers($this->config->base, $this->config->ciDefaultBranches, $this->config->ciDistribution))->findings());
         }
 
         $classes = $this->source->classes();
@@ -320,7 +320,7 @@ final class Conformance
         $paths = [];
 
         foreach ($classes as $class => $path) {
-            $paths[$this->config->base.'/'.$path] = $class;
+            $paths[realpath($this->config->base.'/'.$path) ?: $this->config->base.'/'.$path] = $class;
         }
 
         return Native::preset($type, array_values($this->config->classRoots), $paths);

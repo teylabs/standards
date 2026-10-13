@@ -92,6 +92,7 @@ $app->instance('config', new Repository([
     'mail' => ['default' => 'log', 'mailers' => ['log' => ['transport' => 'log']]],
     'queue' => ['default' => 'sync'],
     'cache' => ['default' => 'file'],
+    'preflight' => ['ci' => ['distribution' => 'app']],
     'logging' => ['default' => 'single', 'channels' => ['single' => ['driver' => 'single', 'path' => $app->directory.'/preflight.log']]],
 ]));
 $app->alias('config', ConfigContract::class);

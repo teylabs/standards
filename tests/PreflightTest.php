@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
 use Monolog\Formatter\JsonFormatter;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Yaml\Yaml;
 use Tey\Standards\Preflight;
 use Tey\Standards\Preflight\Check;
 use Tey\Standards\Preflight\CoreCheck;
@@ -94,6 +95,10 @@ function preflightWorld(): Container
 
 function preflightCommand(Container $app, array $options = []): CommandTester
 {
+    if (! function_exists('pcntl_alarm')) {
+        test()->markTestSkipped('2026-10-13: deployment preflight requires PCNTL alarms, unavailable on Windows.');
+    }
+
     $command = new PreflightCommand;
     $command->setLaravel($app);
     $tester = new CommandTester($command);
@@ -170,7 +175,7 @@ test('the provider boots and registers a working command without autoloadable ar
 
     expect($process->getExitCode())->toBe(0, $process->getErrorOutput());
     expect($process->getOutput())->toContain('PASS: provider boot and preflight without Pest or PHP-Parser');
-});
+})->skip(PHP_OS_FAMILY === 'Windows', '2026-10-13: the deployment smoke test requires PCNTL alarms, unavailable on Windows.');
 
 test('each failure has the specified level and exit code', function (string $check, array $changes, string $level, int $exit) {
     $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test']]);
@@ -808,6 +813,13 @@ test('worker policy env is parsed as a nullable boolean', function (?string $val
     'invalid' => ['invalid', null],
 ]);
 
+test('[rule 51] distribution config reads its environment override', function (?string $value) {
+    $autoload = array_key_first(ClassLoader::getRegisteredLoaders()).'/autoload.php';
+    $process = new Process([PHP_BINARY, '-r', 'require $argv[1]; $config = require $argv[2]; echo json_encode($config["ci"]["distribution"]);', $autoload, dirname(__DIR__).'/config/preflight.php'], env: ['PREFLIGHT_CI_DISTRIBUTION' => $value ?? false]);
+    $process->mustRun();
+    expect(json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR))->toBe($value);
+})->with([null, 'app', 'package']);
+
 test('[rule 50] every Laravel default fails without blocking deployment unless strict', function (?string $fixture) {
     $extension = $fixture === null ? 'ico' : pathinfo($fixture, PATHINFO_EXTENSION);
     $name = $extension === 'png' ? 'apple-touch-icon.png' : 'favicon.'.$extension;
@@ -996,6 +1008,8 @@ test('[rule 50] the README table publishes both raw-content hashes for every def
 });
 
 test('[rule 51] CI-only preflight reports pass, failure, strict promotion, skips and unknown evidence', function (bool $ci, bool $strict, ?string $fixture, string $status, int $exit) {
+    $this->preflight['config']->set('preflight.ci.distribution', 'app');
+
     if ($fixture !== null) {
         mkdir($this->preflight->root.'/.github/workflows', 0777, true);
         copy(dirname(__DIR__).'/fixtures/CI/'.$fixture, $this->preflight->root.'/.github/workflows/tests.yml');
@@ -1025,15 +1039,49 @@ test('[rule 51] CI-only preflight reports pass, failure, strict promotion, skips
     [true, true, null, 'warn', 0],
 ]);
 
-test('[rule 51] preflight uses configured branch and package policies', function () {
+test('[rule 51] preflight uses configured branch and distribution policies', function () {
     mkdir($this->preflight->root.'/.github/workflows', 0777, true);
-    $source = str_replace('branches: [main]', 'branches: [trunk]', file_get_contents(dirname(__DIR__).'/fixtures/CI/php-matrix.yml'));
+    $source = str_replace(['branches: [main]', 'runs-on: ubuntu-latest'], ['branches: [trunk]', 'runs-on: windows-latest'], file_get_contents(dirname(__DIR__).'/fixtures/CI/php-matrix.yml'));
     file_put_contents($this->preflight->root.'/.github/workflows/tests.yml', $source);
-    $this->preflight['config']->set(['preflight.ci.default_branches' => ['trunk'], 'preflight.ci.package' => true]);
+    $this->preflight['config']->set(['preflight.ci.default_branches' => ['trunk'], 'preflight.ci.distribution' => 'package']);
     $options = ['--only' => 'ci', '--ci' => true, '--strict' => true, '--json' => true];
     expect(preflightCommand($this->preflight, $options)->getStatusCode())->toBe(0);
-    $this->preflight['config']->set('preflight.ci.package', false);
+    $this->preflight['config']->set('preflight.ci.distribution', 'app');
     $tester = preflightCommand($this->preflight, $options);
     expect($tester->getStatusCode())->toBe(1);
     expect(preflightResults($tester)['ci.triggers']['message'])->toContain('php-matrix:')->not->toContain('push-branches:');
+});
+
+test('[rule 51] cache and unknown distribution suggestions never fail strict JSON preflight', function (bool $known, bool $cached, string $status) {
+    mkdir($this->preflight->root.'/.github/workflows', 0777, true);
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
+
+    if (! $cached) {
+        $workflow['jobs']['test']['steps'] = [['run' => 'npm ci']];
+    }
+
+    if ($known) {
+        file_put_contents($this->preflight->root.'/composer.json', '{"type":"project"}');
+    }
+
+    file_put_contents($this->preflight->root.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
+    $tester = preflightCommand($this->preflight, ['--only' => 'ci', '--ci' => true, '--strict' => true, '--json' => true]);
+    $result = preflightResults($tester)['ci.triggers'];
+    expect($tester->getStatusCode())->toBe(0);
+    expect($result['status'])->toBe($status);
+
+    if (! $cached) {
+        expect($result['message'])->toContain('Advisory', 'cache:', 'Suggest');
+    }
+
+    if (! $known) {
+        expect($result['message'])->toContain('Unknown', 'preflight.ci.distribution');
+    }
+})->with([[true, false, 'warn'], [true, true, 'pass'], [false, true, 'warn']]);
+
+test('[rule 51] the distributed standards workflow has no failures, with macOS and cache suggestions only', function () {
+    $check = new CoreCheck('ci.triggers', new Repository(['preflight' => ['ci' => ['distribution' => 'package']]]), dirname(__DIR__));
+    $result = $check->run();
+    expect($result->status->value)->toBe('warn');
+    expect($result->message)->toContain('macOS', 'cache:', 'Suggest')->not->toContain('windows-gap:', 'os-matrix:');
 });

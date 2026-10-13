@@ -55,6 +55,6 @@ final readonly class Configuration
         public string $mediaInterface,
         public array $allowlist = [],
         public array $ciDefaultBranches = ['main'],
-        public ?bool $ciPackage = null,
+        public ?string $ciDistribution = null,
     ) {}
 }

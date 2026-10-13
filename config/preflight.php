@@ -10,8 +10,8 @@ return [
     'mail_generic_local_parts' => ['updates', 'hello', 'noreply', 'no-reply', 'no_reply', 'notifications', 'notify', 'info', 'support', 'mail'],
     'ci' => [
         'default_branches' => ['main'],
-        // Null detects packages by the absence of artisan; packages may test multiple PHP versions on PRs.
-        'package' => null,
+        // app: our Linux deployment; package: anything others install or run. Null detects composer type, then artisan.
+        'distribution' => env('PREFLIGHT_CI_DISTRIBUTION'),
     ],
     'brand' => [
         // Empty uses inertia.root_view (or app); override with every root Blade layout, relative to base_path().

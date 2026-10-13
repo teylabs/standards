@@ -36,7 +36,7 @@ final class Source
 
             foreach ($directories as $directory) {
                 foreach ((new Finder)->files()->in($directory)->name($pattern)->exclude(['vendor', 'node_modules']) as $file) {
-                    $path = substr($file->getPathname(), strlen($this->config->base) + 1);
+                    $path = str_replace('\\', '/', substr($file->getPathname(), strlen($this->config->base) + 1));
                     $files[$path] = $file->getContents();
                 }
             }

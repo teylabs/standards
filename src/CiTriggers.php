@@ -10,7 +10,23 @@ use Symfony\Component\Yaml\Yaml;
 final readonly class CiTriggers
 {
     /** @param list<string> $defaultBranches */
-    public function __construct(private string $base, private array $defaultBranches = ['main'], private ?bool $package = null) {}
+    public function __construct(private string $base, private array $defaultBranches = ['main'], private ?string $distribution = null) {}
+
+    public function distribution(): string
+    {
+        if (in_array($this->distribution, ['app', 'package'], true)) {
+            return $this->distribution;
+        }
+
+        $composer = $this->base.'/composer.json';
+        $type = is_file($composer) ? (json_decode((string) file_get_contents($composer), true)['type'] ?? null) : null;
+
+        if (is_string($type) && $type !== '') {
+            return $type === 'project' ? 'app' : 'package';
+        }
+
+        return is_file($this->base.'/artisan') ? 'app' : 'unknown';
+    }
 
     /** @return list<string> */
     public function workflows(): array
@@ -24,10 +40,25 @@ final readonly class CiTriggers
     /** @return list<array{workflow: string, job: string, reason: string}> */
     public function findings(): array
     {
+        return $this->report()['findings'];
+    }
+
+    /** @return list<array{workflow: string, job: string, reason: string}> */
+    public function advisories(): array
+    {
+        return $this->report()['advisories'];
+    }
+
+    /** @return array{findings: list<array{workflow: string, job: string, reason: string}>, advisories: list<array{workflow: string, job: string, reason: string}>} */
+    private function report(): array
+    {
         $findings = [];
+        $advisories = [];
+        $readyRunners = [];
+        $distribution = $this->distribution();
 
         foreach ($this->workflows() as $path) {
-            $file = substr($path, strlen(rtrim($this->base, '/')) + 1);
+            $file = str_replace('\\', '/', substr($path, strlen(rtrim($this->base, '/\\')) + 1));
 
             try {
                 $workflow = Yaml::parseFile($path);
@@ -46,9 +77,48 @@ final readonly class CiTriggers
             foreach ($this->inspect($workflow) as $finding) {
                 $findings[] = ['workflow' => $file, ...$finding];
             }
+
+            foreach ($workflow['jobs'] ?? [] as $name => $job) {
+                if (! is_array($job)) {
+                    continue;
+                }
+
+                if ($this->needsCache($job)) {
+                    $advisories[] = ['workflow' => $file, 'job' => (string) $name, 'reason' => 'cache: Suggest measuring installs first; cache dependencies only above ~45 s cold or just over a minute boundary. Consolidate small jobs first.'];
+                }
+
+                if (array_key_exists('pull_request', $this->events($workflow)) && $this->readyCondition($job['if'] ?? true) === true) {
+                    $readyRunners = [...$readyRunners, ...$this->readyRunners($job)];
+                }
+            }
         }
 
-        return $findings;
+        if ($distribution === 'unknown') {
+            $advisories[] = ['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'distribution: Unknown; set preflight.ci.distribution (PREFLIGHT_CI_DISTRIBUTION) to app or package. Matrix policy was not checked.'];
+        }
+
+        if ($distribution === 'package' && $this->workflows() !== []) {
+            if (preg_match('/windows/i', implode(' ', $readyRunners)) !== 1) {
+                $findings[] = ['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'windows-gap: test Windows on ready pull_request before merge; others run distributed packages there. Drafts may skip it.'];
+            }
+
+            if (preg_match('/macos/i', implode(' ', $readyRunners)) !== 1) {
+                $advisories[] = ['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'macos: Suggest testing macOS on ready pull requests where relevant; no macOS leg was found.'];
+            }
+        }
+
+        return compact('findings', 'advisories');
+    }
+
+    /** @param array<mixed> $workflow
+     * @return array<string, mixed>
+     */
+    private function events(array $workflow): array
+    {
+        $events = $workflow['on'] ?? $workflow[true] ?? [];
+        $events = is_string($events) ? [$events => null] : (is_array($events) ? $events : []);
+
+        return array_is_list($events) ? array_fill_keys($events, null) : $events;
     }
 
     /**
@@ -57,9 +127,7 @@ final readonly class CiTriggers
      */
     private function inspect(array $workflow): array
     {
-        $events = $workflow['on'] ?? $workflow[true] ?? [];
-        $events = is_string($events) ? [$events => null] : (is_array($events) ? $events : []);
-        $events = array_is_list($events) ? array_fill_keys($events, null) : $events;
+        $events = $this->events($workflow);
         $jobs = $workflow['jobs'] ?? [];
         $findings = [];
 
@@ -94,19 +162,19 @@ final readonly class CiTriggers
                 $findings[] = ['job' => $name, 'reason' => 'concurrency: set workflow concurrency or concurrency on every job.'];
             }
 
+            $matrix = $job['strategy']['matrix'] ?? [];
+
+            if ($this->distribution() === 'app' && $this->nonLinux($job['runs-on'] ?? '', $matrix)) {
+                $findings[] = ['job' => $name, 'reason' => 'os-matrix: remove non-Linux legs on every event; our apps deploy on Linux only.'];
+            }
+
             if ($pullRequest && ! $this->excludesPullRequest($job['if'] ?? '')) {
                 if ($this->tests($job) && ! $guard) {
                     $findings[] = ['job' => $name, 'reason' => 'draft-guard: skip test jobs while github.event.pull_request.draft is true.'];
                 }
 
-                $matrix = $job['strategy']['matrix'] ?? [];
-
-                if (! ($this->package ?? ! is_file($this->base.'/artisan')) && $this->multiplePhpVersions($matrix)) {
+                if ($this->distribution() === 'app' && $this->multiplePhpVersions($matrix)) {
                     $findings[] = ['job' => $name, 'reason' => 'php-matrix: run one deploy PHP version on pull_request; select extra versions by github.event_name.'];
-                }
-
-                if ($this->nonLinux($job['runs-on'] ?? '', $matrix)) {
-                    $findings[] = ['job' => $name, 'reason' => 'os-matrix: use Linux on pull_request; select other OS legs by github.event_name.'];
                 }
             }
 
@@ -149,7 +217,7 @@ final readonly class CiTriggers
         foreach ($job['steps'] ?? [] as $step) {
             $run = $step['run'] ?? '';
 
-            if (is_string($run) && preg_match('/(?:\bphp\s+artisan\s+test\b|(?:^|[\s\/;&|])(?:pest|phpunit|vitest)(?:\s|$)|\bnpm\s+test\b|\bnpx\s+playwright\b)/m', $run) === 1) {
+            if (is_string($run) && preg_match('/(?:\bphp\s+artisan\s+test\b|(?:^|[\s\/;&|])(?:pest|phpunit|vitest)(?:\s|$)|\b(?:npm|composer)\s+test\b|\bnpx\s+playwright\b)/m', $run) === 1) {
                 return true;
             }
         }
@@ -188,8 +256,15 @@ final readonly class CiTriggers
 
     private function nonLinux(mixed $runner, mixed $matrix): bool
     {
-        if (is_string($runner) && str_contains($runner, 'github.event_name')) {
-            return false;
+        if (is_array($matrix)) {
+            foreach (['os', 'operating-system', 'operating_system'] as $key) {
+                $values = $matrix[$key] ?? [];
+                $values = is_array($values) ? $values : [$values];
+
+                if (array_any([...$values, ...array_column($matrix['include'] ?? [], $key)], fn ($value) => $this->nonLinux($value, []))) {
+                    return true;
+                }
+            }
         }
 
         if (is_string($runner) && preg_match('/matrix\.([\w-]+)/', $runner, $match) === 1) {
@@ -197,10 +272,6 @@ final readonly class CiTriggers
 
             if (is_array($runner) && is_array($matrix)) {
                 $runner = [...$runner, ...array_column($matrix['include'] ?? [], $match[1])];
-            }
-
-            if (is_string($runner) && str_contains($runner, 'github.event_name')) {
-                return false;
             }
         }
 
@@ -212,5 +283,167 @@ final readonly class CiTriggers
 
         return preg_match('/(?:windows|macos)/i', implode(' ', $labels)) === 1
             || ($labels !== [] && preg_match('/(?:ubuntu|linux)/i', implode(' ', $labels)) !== 1);
+    }
+
+    private function readyCondition(mixed $condition): ?bool
+    {
+        if (is_bool($condition)) {
+            return $condition;
+        }
+
+        if (! is_string($condition)) {
+            return null;
+        }
+
+        $condition = trim(str_replace(['${{', '}}'], '', $condition));
+        $condition = preg_replace_callback('/github\.event_name\s*(==|!=)\s*[\'"]([^\'"]+)[\'"]/', fn ($m) => (($m[2] === 'pull_request') === ($m[1] === '==')) ? 'true' : 'false', $condition);
+        $condition = str_replace('github.event.pull_request.draft', 'false', $condition);
+        $condition = preg_replace_callback('/\b(true|false)\s*(==|!=)\s*(true|false)\b/', fn ($m) => (($m[1] === $m[3]) === ($m[2] === '==')) ? 'true' : 'false', $condition);
+
+        while (preg_match('/\(([^()]*)\)/', $condition)) {
+            $condition = preg_replace_callback('/\(([^()]*)\)/', fn ($m) => match ($this->readyCondition($m[1])) {
+                true => 'true',
+                false => 'false',
+                null => 'unknown',
+            }, $condition);
+        }
+
+        $condition = preg_replace_callback('/!\s*(true|false)\b/', fn ($m) => $m[1] === 'true' ? 'false' : 'true', $condition);
+
+        while (preg_match('/\b(true|false)\s*&&\s*(true|false)\b/', $condition)) {
+            $condition = preg_replace_callback('/\b(true|false)\s*&&\s*(true|false)\b/', fn ($m) => $m[1] === 'true' && $m[2] === 'true' ? 'true' : 'false', $condition);
+        }
+
+        while (preg_match('/\b(true|false)\s*\|\|\s*(true|false)\b/', $condition)) {
+            $condition = preg_replace_callback('/\b(true|false)\s*\|\|\s*(true|false)\b/', fn ($m) => $m[1] === 'true' || $m[2] === 'true' ? 'true' : 'false', $condition);
+        }
+
+        return match (trim($condition)) {
+            'true' => true,
+            'false' => false,
+            default => null,
+        };
+    }
+
+    private function readyValue(mixed $value): mixed
+    {
+        if (! is_string($value) || ! str_contains($value, '${{')) {
+            return $value;
+        }
+
+        $expression = trim(str_replace(['${{', '}}'], '', $value));
+
+        if (preg_match('/^(.+?)\s*&&\s*(fromJSON\(.*?\)|\'[^\']*\')\s*\|\|\s*(.+)$/i', $expression, $match) === 1) {
+            $ready = $this->readyCondition($match[1]);
+
+            return $ready === null ? null : $this->readyValue('${{ '.($ready ? $match[2] : $match[3]).' }}');
+        }
+
+        if (preg_match('/^fromJSON\(\s*\'(.*)\'\s*\)$/is', $expression, $match) === 1) {
+            return json_decode(str_replace("''", "'", $match[1]), true);
+        }
+
+        return preg_match('/^\'([^\']*)\'$/', $expression, $match) === 1 ? $match[1] : null;
+    }
+
+    /** @param array<mixed> $job
+     * @return list<string>
+     */
+    private function readyRunners(array $job): array
+    {
+        $runner = $job['runs-on'] ?? '';
+
+        if (! is_string($runner) || preg_match('/matrix\.([\w-]+)/', $runner, $match) !== 1) {
+            $runner = $this->readyValue($runner);
+
+            return is_array($runner) ? array_values(array_filter($runner, is_string(...))) : (is_string($runner) ? [$runner] : []);
+        }
+
+        $matrix = $this->readyValue($job['strategy']['matrix'] ?? []);
+
+        if (! is_array($matrix)) {
+            return [];
+        }
+
+        $rows = [[]];
+        $keys = array_diff(array_keys($matrix), ['include', 'exclude']);
+
+        foreach ($keys as $key) {
+            $values = $this->readyValue($matrix[$key]);
+
+            if (! is_array($values)) {
+                return [];
+            }
+
+            $next = [];
+
+            foreach ($rows as $row) {
+                foreach ($values as $value) {
+                    $next[] = [...$row, $key => $value];
+                }
+            }
+
+            $rows = $next;
+        }
+
+        foreach ($matrix['exclude'] ?? [] as $exclude) {
+            $rows = array_values(array_filter($rows, fn ($row) => count(array_intersect_assoc($row, $exclude)) !== count($exclude)));
+        }
+
+        $added = [];
+
+        foreach ($matrix['include'] ?? [] as $include) {
+            $matched = false;
+            $originalValues = array_intersect_key($include, array_flip($keys));
+
+            foreach ($rows as &$row) {
+                if ($keys !== [] && count(array_intersect_assoc($row, $originalValues)) === count($originalValues)) {
+                    $row = [...$row, ...$include];
+                    $matched = true;
+                }
+            }
+
+            unset($row);
+
+            if (! $matched) {
+                $added[] = $include;
+            }
+        }
+
+        return array_values(array_filter(array_column([...$rows, ...$added], $match[1]), is_string(...)));
+    }
+
+    /** @param array<mixed> $job */
+    private function needsCache(array $job): bool
+    {
+        $installs = ['composer' => false, 'npm' => false];
+        $cached = ['composer' => false, 'npm' => false];
+        $php = false;
+        $composerCache = false;
+
+        foreach ($job['steps'] ?? [] as $step) {
+            $run = $step['run'] ?? '';
+
+            if (is_string($run)) {
+                $installs['composer'] = $installs['composer'] || preg_match('/\bcomposer\s+(?:install|update)\b/', $run) === 1;
+                $installs['npm'] = $installs['npm'] || preg_match('/\bnpm\s+(?:ci|install|i)\b/', $run) === 1;
+            }
+
+            $uses = $step['uses'] ?? '';
+            $with = $step['with'] ?? [];
+            $php = $php || str_starts_with($uses, 'shivammathur/setup-php@');
+            $cached['composer'] = $cached['composer'] || str_starts_with($uses, 'ramsey/composer-install@');
+            $cached['npm'] = $cached['npm'] || (str_starts_with($uses, 'actions/setup-node@') && ($with['cache'] ?? '') === 'npm');
+
+            if (preg_match('/^actions\/cache(?:\/restore)?@/', $uses) === 1) {
+                $key = $with['key'] ?? '';
+                $path = $with['path'] ?? '';
+                $cached['composer'] = $cached['composer'] || (str_contains($key, 'hashFiles(') && str_contains($key, 'composer.lock'));
+                $cached['npm'] = $cached['npm'] || (str_contains($key, 'hashFiles(') && str_contains($key, 'package-lock.json'));
+                $composerCache = $composerCache || preg_match('/composer.*cache|cache.*composer/i', $path) === 1;
+            }
+        }
+
+        return ($installs['composer'] && ! $cached['composer'] && ! ($php && $composerCache)) || ($installs['npm'] && ! $cached['npm']);
     }
 }

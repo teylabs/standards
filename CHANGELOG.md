@@ -1,17 +1,23 @@
 # Changelog
 
-## 0.4.0 - 2026-10-13
+## 0.4.0 - Unreleased
 
 ### Added
 
-- `Tey\Standards\CiTriggers`, an offline parser for `.github/workflows` that returns findings with `workflow`, `job` (`workflow` for workflow-level findings) and `reason`. It covers push branches, pull request types when a job has a draft guard, concurrency and safe cancellation, the test job's draft guard, job timeouts, more than one PHP version on pull requests for an app, and non-Linux runners or OS matrices on pull requests. Each reason starts with its category and says what to change. (#134)
-- A `[rule 51]` architecture test that targets each workflow with `job | reason` as the check, so existing findings use the dated ratchet. `Configuration` accepts optional `ciDefaultBranches` (default `['main']`) and `ciPackage` (default `null`, detected from a missing `artisan`). (#134)
-- Warning-level `ci.triggers` preflight in the `ci` group. It runs with `--ci` only, fails on findings (exit 1 only under `--strict`) and reports Unknown (`warn`) when there are no workflow files. Configure it with `preflight.ci.default_branches` and `preflight.ci.package`. (#134)
+- `Tey\Standards\CiTriggers`, an offline workflow parser returning `workflow`, `job` and category-prefixed `reason`. Requirements cover triggers, concurrency/safe cancellation, draft guards, timeouts, app PR PHP matrices, non-Linux app legs on any event (`os-matrix`) and missing ready-PR package Windows coverage (`windows-gap`). Distribution detection uses config, Composer type, then `artisan`, otherwise advisory Unknown. Repository-wide coverage targets `.github/workflows`. (#134)
+- Separate `advisories()` for uncached Composer/npm installs (`cache`), missing macOS and Unknown distribution. Preflight messages and JSON read as suggestions and never fail `--strict`; architecture checks only enforce requirements. Docs explain job consolidation, whole-minute billing, measured net-zero caching and when caching helps. (#134)
+- A `[rule 51]` architecture test with exact dated ratchets. `Configuration` accepts `ciDefaultBranches` (default `['main']`) and `ciDistribution` (default `null`). Shared config is `preflight.ci.distribution` (`app` | `package`, env `PREFLIGHT_CI_DISTRIBUTION`); the unreleased package flag is removed without a compatibility alias. (#134)
+- Warning-level `ci.triggers` preflight in the `ci` group. It runs with `--ci` only, fails requirements (exit 1 only under `--strict`) and keeps cache/macOS/Unknown advisories non-blocking. No workflows is advisory Unknown. (#134)
 - A `skipped` result status for checks that do not apply to the current run; `ci.triggers` reports it in deploy runs. It is not a pass and is distinct from `skipped-in-ci`. (#134)
 
 ### Changed
 
 - Require `symfony/yaml` (`^7.0 || ^8.0`) in production dependencies to parse workflow files. (#134)
+- The standalone package workflow tests PHP 8.4/8.5 on Ubuntu and Windows on ready PRs and main, with concurrency, explicit PR types, draft guards and timeouts; retains Pest 5 coexistence. (#134)
+
+### Fixed
+
+- Normalize source targets and native preset filesystem keys across path separators. Windows skips only PCNTL-dependent deployment-command/no-dev smoke tests, with a dated reason; parser, architecture and direct checks remain exercised. (#134)
 
 ## 0.3.0 - 2026-10-13
 

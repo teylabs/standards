@@ -137,7 +137,7 @@ Tests retain eighteen non-empty byte-exact defaults, generate the empty file, an
 
 ## CI triggers
 
-CI runs once per change that matters, on the PHP version and OS the app deploys to. This is conformance rule 51; the [CI triggers recipe](https://github.com/teylabs/cookbook/blob/main/docs/recipes/backend/ci-triggers.md) has the full workflow block, the draft/ready flow and nightly matrices.
+CI runs once per change that matters. **Apps: Linux only, on every event**, with one deploy PHP version on PRs; extra PHP versions run nightly or manually. **Distributed packages: test Windows on ready PRs, before merge**, regardless of cost, and macOS where relevant (advisory). Others run them on those platforms. Distribution includes published packages, private-but-sold packages and generated output others use; an app is our own code deployed by us on Linux. Package PHP matrices may run on PRs. This is rule 51; the [CI triggers recipe](https://github.com/teylabs/cookbook/blob/main/docs/recipes/backend/ci-triggers.md) has the full workflow and required-check caveat.
 
 ```yaml
 on:
@@ -157,7 +157,7 @@ jobs:
     timeout-minutes: 30
 ```
 
-`Tey\Standards\CiTriggers` parses the workflow files in `.github/workflows` offline. Construct it with the base path, the default branches (`['main']`) and an optional package flag; `findings()` returns a list of `workflow`, `job` and `reason` entries. A workflow-level finding has `job` set to `workflow`. Each reason starts with its category and says what to change:
+`Tey\Standards\CiTriggers` parses `.github/workflows` offline. Construct it with the base path, default branches (`['main']`) and optional `distribution: 'app'|'package'`; `findings()` returns failures as `workflow`, `job` and `reason` entries. `advisories()` returns suggestions separately in the same shape. A workflow-level entry has `job: workflow`; repository-wide coverage targets `.github/workflows`. Each reason starts with its category and says what to change:
 
 | Category | Finding |
 |---|---|
@@ -167,9 +167,15 @@ jobs:
 | Draft guard | A test job runs on draft pull requests. |
 | Timeout | A job has no `timeout-minutes`. |
 | PHP versions | An app runs more than one PHP version on pull requests. Packages are exempt. |
-| Runner OS | A pull request run uses a runner other than Linux, directly or through an OS matrix. |
+| `os-matrix` | An app has any non-Linux runner or OS matrix entry, on any event. |
+| `windows-gap` | A distributed package has no Windows leg on a ready PR, across all workflows. Main/nightly-only coverage does not count. |
+| `cache` (advisory) | A job installs Composer/npm dependencies without a recognised dependency cache. Suggest measuring, never fail. |
 
-Lint and static jobs may run on drafts. Docs-only skipping is advisory and never a finding. A repository without `artisan` is treated as a package, so its support matrix may run on pull requests.
+Lint and static jobs may run on drafts. Package Windows jobs may use the draft guard: ready PRs still run them. Missing macOS and docs-only skipping are advisory.
+
+Detection, in order: `preflight.ci.distribution` (`app` or `package`, env `PREFLIGHT_CI_DISTRIBUTION`); Composer type `project` → app, `library`, `laravel-package`, `composer-plugin` or another non-project type → package; `artisan` at the base path → app; otherwise advisory Unknown with config instructions. Generated output or sold apps use `package` explicitly if their Composer type says `project`. Repository access plays no part.
+
+**Consolidate small jobs first.** GitHub rounds each job up to whole minutes; tiny split jobs pay that tax and repeat setup. 2m43s → 2m12s still bills three minutes: savings begin below 2:00. Cache only above ~45 s cold installs or just over a minute boundary. A measured warm Setup of 31 s → 26 s plus ~5 s restore saved about zero, against ±20 s runner noise. The advisory recognises lockfile-keyed `actions/cache`, `setup-node` with `cache: npm`, setup-php plus an `actions/cache` step on the Composer cache dir, or `ramsey/composer-install`. Composer `install`/`update` and npm `ci`/`install`/`i` without these get a suggestion, never a failure.
 
 The `[rule 51]` architecture test reports each finding with the workflow as the target and `job | reason` as the check. Record existing debt as exact, dated ratchet entries. Pass the preflight's options to `Configuration` so both judge the same workflows. Read Laravel config inside the test callback after the application boots, not while Pest registers tests; the [preset example](https://github.com/teylabs/cookbook/blob/main/docs/reference/standards-preset.md#configure-roots) shows that setup:
 
@@ -177,20 +183,22 @@ The `[rule 51]` architecture test reports each finding with the workflow as the 
 new Configuration(
     // ...the existing arguments
     ciDefaultBranches: config('preflight.ci.default_branches', ['main']),
-    ciPackage: config('preflight.ci.package'),
+    ciDistribution: config('preflight.ci.distribution'),
 );
 ```
 
-`ci.triggers` is a warning-level preflight check in the `ci` group. It runs with `--ci` only. A deploy run reports it as `skipped`, because a production server has no workflows to judge; `skipped` is not a pass. Findings fail the check: plain runs exit 0 when the blocking checks pass, and `--strict` exits 1. A repository without workflow files returns **Unknown**, an advisory `warn`. Select it with `php artisan standards:preflight --ci --only=ci --strict`.
+`ci.triggers` is a warning-level preflight check in the `ci` group. It runs with `--ci` only; deploy runs report `skipped`, not a pass. Requirements fail the check: plain runs exit 0 when blocking checks pass, and `--strict` exits 1. Cache/macOS/Unknown advisories remain `warn` and exit 0 even under strict, with suggestions in both the message and JSON. Missing workflows are also advisory Unknown. Select it with `php artisan standards:preflight --ci --only=ci --strict`.
 
 | Configuration | Default | Meaning |
 |---|---|---|
 | `preflight.ci.default_branches` | `['main']` | Branches a `push` trigger may list. |
-| `preflight.ci.package` | `null` | `null` treats a repository without `artisan` as a package; `true` or `false` overrides that. |
+| `preflight.ci.distribution` | `null` | `app` or `package` via `PREFLIGHT_CI_DISTRIBUTION`; otherwise Composer type, then `artisan`, then Unknown. |
 
 **Required checks.** `paths-ignore` suits repositories without required checks. With required checks, a skipped workflow never reports and blocks the merge; use a `changes` job that lets expensive jobs skip, since a job skipped by its `if` reports success. The checker does not read branch protection, so confirm the required check names by hand.
 
-**Limits.** The checker does not run GitHub's expression engine. It detects literal matrix lists and plainly unconditional `fromJSON` lists; expressions that choose on `github.event_name` pass. Other expressions, including matrices built from inputs, variables or step outputs, need manual review. It does not follow reusable workflows (`uses:` on a job), composite actions or wrapper scripts that start another runner or PHP version. The test-command scan recognises `php artisan test`, `pest`, `phpunit`, `vendor/bin/pest`, `npm test`, `npx playwright` and `vitest` in run steps. Review indirect commands by hand and ratchet a finding that does not apply.
+**Limits.** The checker does not run GitHub's expression engine. Ready-PR coverage resolves literal runners and matrices, include/exclude rows, `fromJSON` lists and simple event/draft boolean conditions and `condition && value || fallback` selectors. Unknown expressions do not prove Windows coverage; use a detectable leg or review and ratchet an inapplicable finding. App OS checks inspect all literal alternatives, including event-selected legs. PHP expressions choosing on `github.event_name` retain the existing exemption and need review. Reusable workflows, composite actions and wrapper scripts are not followed. The test scan recognises `php artisan test`, Pest, PHPUnit, `npm test`, `composer test`, Playwright and Vitest. Cache detection reads steps, not performance.
+
+**This package's CI.** The standalone workflow runs PHP 8.4/8.5 on Ubuntu and Windows for ready PRs and main, and retains Pest 5 coexistence. Architecture/parser tests run on Windows. Deployment-command and no-dev preflight smoke tests require PCNTL alarms, which PHP does not provide on Windows; their skips carry a 2026-10-13 reason. The preflight command still requires PCNTL rather than silently losing its timeout guard. Cookbook CI runs Linux only; Windows execution is proven by the mirror's CI after publication, not by the cookbook's PR checks.
 
 ## Queue: sync until needed
 
@@ -223,4 +231,4 @@ The package ships a Laravel Boost guideline. Select `tey/standards` during `php 
 *Changelog: 2026-10-13 — prepared 0.2.0 with sync until needed, then scale-to-zero managed queues; added driver-based advisory backlog evidence, nullable worker policy and deploy-timing guidance. Command-output regressions cover managed-queue remedies for policy conflicts, old backlog and unknown evidence. (#124)*
 *Changelog: 2026-10-13 — prepared 0.3.0 with offline warning-level brand.favicon, documented current and historical defaults, layout overrides, extra hashes, CI coverage and strict failure promotion. (#130)*
 *Changelog: 2026-10-13 — audited full upstream histories, published all nineteen defaults with reference-only SHA-1 values, and added warning-level ICO header/directory, PNG type/180×180 and SVG-root checks without GD. (#130)*
-*Changelog: 2026-10-13 — prepared 0.4.0 with the offline `CiTriggers` parser, the `[rule 51]` architecture test and the CI-only warning-level `ci.triggers` preflight, a `skipped` status for deploy runs, shared default-branch and package options, and the required-check and expression limits. (#134)*
+*Changelog: 2026-10-13 — prepared 0.4.0 with the shared rule-51 parser and architecture/preflight checks, distribution detection, Linux-only apps, ready-PR Windows package coverage, advisory cache/macOS/Unknown suggestions and measured job-size guidance; Windows package CI and dated PCNTL limits. (#134)*
