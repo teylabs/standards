@@ -1,19 +1,26 @@
-# Standards: Architecture Checks for Laravel
+# Standards: Deployment Preflight and Architecture Checks for Laravel
 
-`tey/standards` checks configured PHP boundaries, placement and controller rules with named Pest tests. Each result carries a conformance rule number. A dated ratchet permits existing failures and rejects stale exceptions.
+`tey/standards` checks deployment configuration before migrate and checks configured PHP boundaries, placement and controller rules with named Pest tests. Each architecture result carries a conformance rule number. A dated ratchet permits existing failures and rejects stale exceptions.
 
-**Status: trial.** Requires PHP 8.4.1+, Laravel 13 components and Pest 4. This package is not published yet. Install its source with a Composer path repository. Architecture-only consumers can require it in development:
+**Status: trial.** Requires PHP 8.4.1+ and Laravel 13 components. Architecture checks additionally require Pest 4.7+, its architecture plugin 4.x and PHP-Parser 5.x. Pest 5 is not supported.
 
-```json
-{
-    "repositories": [{ "type": "path", "url": "packages/standards" }],
-    "require-dev": { "tey/standards": "@dev" }
-}
+## Install
+
+Install as a production dependency so deployment preflight remains available after `composer install --no-dev`:
+
+```sh
+composer require tey/standards
+```
+
+Laravel discovers the service provider automatically. The production install does not require Pest or PHP-Parser. For architecture checks, install the optional tools in the application's `require-dev`:
+
+```sh
+composer require --dev 'pestphp/pest:^4.7' 'pestphp/pest-plugin-arch:^4.0' 'nikic/php-parser:^5.0' 'symfony/finder:^7.0 || ^8.0'
 ```
 
 ## Configure the Checks
 
-Create a `Configuration` with the application's own roots, PSR-4 namespaces, suffixes and discovery boundaries. No application layout is built into the package. See [Configuration](src/Configuration.php) for every required argument and the [fixture configuration](tests/ConformanceTest.php) for a complete `src/Domain` + `src/UI` example.
+Create a `Configuration` with the application's own roots, PSR-4 namespaces, suffixes and discovery boundaries. No application layout is built into the package. See [Configuration](src/Configuration.php) for every required argument and the [fixture configuration](https://github.com/teylabs/standards/blob/main/tests/ConformanceTest.php) for a complete `src/Domain` + `src/UI` example.
 
 In `tests/Arch/ConformanceTest.php`, import `Tey\Standards\Configuration` and `Tey\Standards\Conformance`, construct `$configuration`, then register tests in the consuming file:
 
@@ -45,9 +52,32 @@ Run the package's tests with `composer install` and `composer test` in this dire
 
 ## Deployment preflight
 
-Run `php artisan standards:preflight` before migrate and `php artisan standards:preflight --ci` in CI. Only `app.key`, `app.env-debug` and `database.config` are blocking core checks; mail checks have warning level and never block deployment. Blocking failures exit 1, warnings permit exit 0, and usage errors exit 2. `--strict` exits 1 on any selected failed check regardless of level, but advisory `warn` results still exit 0. The cookbook's `mail:preflight` is the strict CI alias for `standards:preflight --only=mail --strict`. `--json` supplies board-readable levels and result types. Emergency `--skip=app.key,mail.transport` or `PREFLIGHT_SKIP` overrides are printed, logged and persisted until a passing check clears them. PHP CLI needs PCNTL for the five-second per-check guard.
+Add one deploy step **before migrate**, and stop deployment if it exits nonzero:
 
-Deploy consumers must retain the package (ordinary `require` when deploying with `--no-dev`). See the [preflight reference](../../docs/reference/standards-preflight.md) for the complete check list, configuration, skip records and a copyable app payment-webhook check. Tag app checks `standards.preflight`, or call `Tey\Standards\Preflight::register(CheckClass::class)` with the active container. No payment checks ship in core.
+```sh
+php artisan standards:preflight && php artisan migrate --force
+```
+
+CI can skip checks requiring production secrets with `--ci` and promote failed warning-level checks with `--strict`:
+
+```sh
+php artisan standards:preflight --ci --strict
+```
+
+Only `app.key`, `app.env-debug` and `database.config` are blocking core checks; mail checks have warning level and never block deployment. Blocking failures exit 1, warnings permit exit 0, and usage errors exit 2. `--strict` exits 1 on any selected failed check regardless of level, but advisory `warn` results still exit 0. CI secret skips are not passes. `--json` supplies board-readable levels and result types. Emergency `--skip=app.key,mail.transport` or `PREFLIGHT_SKIP` overrides are printed, logged and persisted until a passing check clears them. PHP CLI needs PCNTL for the five-second per-check guard. Checks inspect configuration offline; they do not prove that credentials work or services are reachable.
+
+See the [preflight reference](https://github.com/teylabs/cookbook/blob/main/docs/reference/standards-preflight.md) for the complete check list, configuration, skip records and a copyable app payment-webhook check. Implement `Tey\Standards\Preflight\Check` with `name()`, `level()`, `needsSecrets()` and `run()`, returning a `Result`. Register it once in a service provider:
+
+```php
+$this->app->tag([\App\Support\Preflight\PaymentWebhookCheck::class], 'standards.preflight');
+```
+
+Alternatively, call `Tey\Standards\Preflight::register(CheckClass::class)` with the active container. Use a unique lowercase dotted name, keep checks fast and never include secrets in results. No payment checks ship in core.
+
+## Agent guidance
+
+The package ships a Laravel Boost guideline. Select `tey/standards` during `php artisan boost:install` to include it in the application's agent instructions.
 
 *Changelog: 2026-10-12 — trial `tey/standards` package with configured checks, exact stale-checked ratchets, seeded negative controls and a package-source-only strict preset.*
 *Changelog: 2026-10-13 — added offline deploy preflight, registered checks, CI mode, timeout guards and persistent emergency skips; mail warns at deploy time, while generic --strict promotes failed results but not advisories for CI. (#105)*
+*Changelog: 2026-10-13 — prepared v0.1.0 for public release, with production-only preflight dependencies, optional development architecture tools, no-dev boot coverage and Boost guidance. (#105)*

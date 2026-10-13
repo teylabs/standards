@@ -13,6 +13,7 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\Log\Context\ContextLogProcessor;
 use Illuminate\Log\LogManager;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Process\Process;
 use Tey\Standards\Preflight;
 use Tey\Standards\Preflight\Check;
 use Tey\Standards\Preflight\Level;
@@ -116,6 +117,15 @@ test('the JSON contract lists every core check with its reviewed level and exits
     }
 
     expect(array_column($json['results'], 'check'))->toBe(array_keys($expected));
+});
+
+test('the provider boots and registers a working command without autoloadable architecture dependencies', function () {
+    $autoload = array_key_first(ClassLoader::getRegisteredLoaders()).'/autoload.php';
+    $process = new Process([PHP_BINARY, __DIR__.'/no-dev-smoke.php', $autoload, '--hide-arch']);
+    $process->run();
+
+    expect($process->getExitCode())->toBe(0, $process->getErrorOutput());
+    expect($process->getOutput())->toContain('PASS: provider boot and preflight without Pest or PHP-Parser');
 });
 
 test('each failure has the specified level and exit code', function (string $check, array $changes, string $level, int $exit) {

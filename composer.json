@@ -1,8 +1,16 @@
 {
     "name": "tey/standards",
-    "description": "Configured, rule-tagged architecture checks for Laravel applications.",
+    "description": "Deployment preflight and configured, rule-tagged architecture checks for Laravel applications.",
     "type": "library",
     "license": "MIT",
+    "keywords": ["laravel", "standards", "architecture", "preflight", "pest"],
+    "homepage": "https://github.com/teylabs/standards",
+    "support": {
+        "issues": "https://github.com/teylabs/standards/issues"
+    },
+    "authors": [
+        { "name": "Tey Labs" }
+    ],
     "require": {
         "php": "^8.4.1",
         "illuminate/config": "^13.0",
@@ -10,12 +18,25 @@
         "illuminate/filesystem": "^13.0",
         "illuminate/log": "^13.0",
         "illuminate/support": "^13.0",
+        "symfony/process": "^7.0 || ^8.0",
+        "vlucas/phpdotenv": "^5.6"
+    },
+    "require-dev": {
         "nikic/php-parser": "^5.0",
         "pestphp/pest": "^4.7",
         "pestphp/pest-plugin-arch": "^4.0",
-        "symfony/finder": "^7.0 || ^8.0",
-        "symfony/process": "^7.0 || ^8.0",
-        "vlucas/phpdotenv": "^5.6"
+        "symfony/finder": "^7.0 || ^8.0"
+    },
+    "suggest": {
+        "nikic/php-parser": "Required for architecture checks (^5.0); install in the app's require-dev.",
+        "pestphp/pest": "Required for architecture checks (^4.7); install in the app's require-dev.",
+        "pestphp/pest-plugin-arch": "Required for architecture checks (^4.0); install in the app's require-dev.",
+        "symfony/finder": "Required for architecture checks (^7.0 || ^8.0); install in the app's require-dev."
+    },
+    "conflict": {
+        "nikic/php-parser": "<5.0 || >=6.0",
+        "pestphp/pest": "<4.7 || >=5.0",
+        "pestphp/pest-plugin-arch": "<4.0 || >=5.0"
     },
     "autoload": {
         "psr-4": {

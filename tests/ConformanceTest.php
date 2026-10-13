@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Composer\Autoload\ClassLoader;
 use Pest\Arch\Support\Composer;
 use PHPUnit\Framework\AssertionFailedError;
+use Symfony\Component\Process\Process;
 use Tey\Standards\Configuration;
 use Tey\Standards\Conformance;
 
@@ -131,3 +132,28 @@ test('duplicate exceptions are rejected', function () {
     $entry = ['rule' => '29', 'target' => 'a', 'check' => 'b', 'reason' => 'why', 'date' => '2026-10-12'];
     expect(fn () => new Conformance(fixtureConfiguration('Good', [$entry, $entry])))->toThrow(InvalidArgumentException::class, 'Duplicate');
 });
+
+test('architecture checks explain missing optional dependencies', function (string $prefix) {
+    $code = <<<'PHP'
+    $loader = require $argv[1];
+    $loader->unregister();
+    spl_autoload_register(static function (string $class) use ($loader): void {
+        if (! str_starts_with($class, $GLOBALS['argv'][3])) {
+            $loader->loadClass($class);
+        }
+    });
+    try {
+        new Tey\Standards\Conformance(unserialize(base64_decode($argv[2])));
+        exit(1);
+    } catch (LogicException $error) {
+        echo $error->getMessage();
+    }
+    PHP;
+    $autoload = array_key_first(ClassLoader::getRegisteredLoaders()).'/autoload.php';
+    $configuration = base64_encode(serialize(fixtureConfiguration('Good')));
+    $process = new Process([PHP_BINARY, '-r', $code, $autoload, $configuration, $prefix]);
+    $process->run();
+
+    expect($process->getExitCode())->toBe(0, $process->getErrorOutput());
+    expect($process->getOutput())->toContain('Architecture checks require', 'pestphp/pest ^4.7', 'pestphp/pest-plugin-arch ^4.0', 'nikic/php-parser ^5.0', 'require-dev');
+})->with(['Pest\\', 'Pest\\Arch\\', 'PhpParser\\']);

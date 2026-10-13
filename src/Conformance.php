@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Tey\Standards;
 
 use InvalidArgumentException;
+use LogicException;
+use Pest\Arch\Contracts\ArchExpectation;
 use Pest\ArchPresets\Laravel;
 use Pest\ArchPresets\Php;
 use Pest\ArchPresets\Security;
+use Pest\TestSuite;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
+use PhpParser\ParserFactory;
 use ReflectionClass;
 
 final class Conformance
@@ -35,6 +39,10 @@ final class Conformance
 
     public function __construct(private readonly Configuration $config)
     {
+        if (! class_exists(TestSuite::class) || ! interface_exists(ArchExpectation::class) || ! class_exists(ParserFactory::class)) {
+            throw new LogicException('Architecture checks require pestphp/pest ^4.7, pestphp/pest-plugin-arch ^4.0 and nikic/php-parser ^5.0 in require-dev.');
+        }
+
         $this->source = new Source($config);
         $this->ratchet = new Ratchet($config->allowlist);
         $this->ratchet->assertRules(array_map('strval', array_keys(self::TESTS)));
