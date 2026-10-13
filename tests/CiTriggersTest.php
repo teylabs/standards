@@ -33,6 +33,7 @@ test('[rule 51] each fixture isolates its finding and the standard workflow pass
     ['push-branches.yml', 'push-branches', 'workflow'],
     ['pull-request-types.yml', 'pull-request-types', 'test'],
     ['concurrency.yml', 'concurrency', 'test'],
+    ['concurrency-draft.yml', 'concurrency-draft', 'workflow'],
     ['draft-guard.yml', 'draft-guard', 'test'],
     ['timeout.yml', 'timeout', 'test'],
     ['php-matrix.yml', 'php-matrix', 'test'],
@@ -102,7 +103,7 @@ test('[rule 51] workflow variants enforce boundaries without rejecting supported
         $w['concurrency']['cancel-in-progress'] = '${{ true }}';
     }, ['concurrency'], ['main'], null, true],
     'job cancellation overrides workflow' => [function (&$w) {
-        $w['jobs']['test']['concurrency'] = ['group' => 'tests', 'cancel-in-progress' => true];
+        $w['jobs']['test']['concurrency'] = ['group' => $w['concurrency']['group'], 'cancel-in-progress' => true];
     }, ['concurrency'], ['main'], null, true],
     'lint needs no draft guard or ready type' => [function (&$w) {
         unset($w['jobs']['test']['if']);
@@ -181,6 +182,65 @@ test('[rule 51] workflow variants enforce boundaries without rejecting supported
     'other nonLinux OS matrix entry with fixed Linux runner' => [function (&$w) {
         $w['jobs']['test']['strategy']['matrix']['os'] = ['ubuntu-latest', 'freebsd'];
     }, ['os-matrix'], ['main'], null, true],
+]);
+
+test('[rule 51] draft-aware concurrency checks every applicable scope once', function (Closure $change, array $jobs) {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
+    $change($workflow);
+    file_put_contents($this->ciBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
+    $findings = (new CiTriggers($this->ciBase))->findings();
+
+    expect(array_column($findings, 'job'))->toBe($jobs);
+
+    foreach ($findings as $finding) {
+        expect($finding['reason'])->toStartWith('concurrency-draft:')->toContain('github.event.pull_request.draft');
+    }
+})->with([
+    'unguarded workflow is exempt' => [function (&$w) {
+        unset($w['jobs']['test']['if']);
+        $w['jobs']['test']['steps'] = [['run' => 'composer lint']];
+        $w['concurrency']['group'] = '${{ github.workflow }}-${{ github.ref }}';
+    }, []],
+    'guarded non-test job still needs draft isolation' => [function (&$w) {
+        $w['jobs']['test']['steps'] = [['run' => 'composer lint']];
+        $w['concurrency']['group'] = 'lint';
+    }, ['workflow']],
+    'job group is checked despite safe workflow group' => [function (&$w) {
+        $w['jobs']['test']['concurrency'] = ['group' => 'tests'];
+    }, ['test']],
+    'job-only shorthand group' => [function (&$w) {
+        $w['jobs']['test']['concurrency'] = 'tests';
+        unset($w['concurrency']);
+    }, ['test']],
+    'job concurrency cannot isolate shared workflow group' => [function (&$w) {
+        $w['jobs']['test']['concurrency'] = $w['concurrency'];
+        $w['jobs']['other'] = $w['jobs']['test'];
+        $w['concurrency']['group'] = 'tests';
+    }, ['workflow']],
+    'unguarded sibling job is exempt' => [function (&$w) {
+        $w['jobs']['lint'] = ['concurrency' => 'lint', 'runs-on' => 'ubuntu-latest', 'timeout-minutes' => 5, 'steps' => [['run' => 'composer lint']]];
+    }, []],
+]);
+
+test('[rule 51] draft references allow expression whitespace and YAML quoting at both concurrency levels', function (string $group, bool $valid) {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
+    $workflow['concurrency'] = Yaml::parse('group: '.$group);
+    $workflow['jobs']['test']['concurrency'] = $workflow['concurrency'];
+    file_put_contents($this->ciBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
+    $findings = (new CiTriggers($this->ciBase))->findings();
+
+    expect(array_column($findings, 'job'))->toBe($valid ? [] : ['workflow', 'test']);
+
+    foreach ($findings as $finding) {
+        expect($finding['reason'])->toStartWith('concurrency-draft:');
+    }
+})->with([
+    'compact unquoted expression' => ['${{github.event.pull_request.draft}}-tests', true],
+    'single quoted embedded expression' => ['\'tests-${{  github.event.pull_request.draft  }}-${{ github.ref }}\'', true],
+    'double quoted whitespace around property access' => ['"${{ github . event . pull_request . draft }}-tests"', true],
+    'reference inside a larger expression' => ['"${{ format(\'{0}-{1}\', github.workflow, github.event.pull_request.draft) }}"', true],
+    'literal property name is not an expression' => ['"github.event.pull_request.draft"', false],
+    'different property is not draft' => ['${{ github.event.pull_request.draft_status }}', false],
 ]);
 
 test('[rule 51] each supported test command needs a draft guard', function (string $command) {

@@ -149,7 +149,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.draft }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -159,6 +159,10 @@ jobs:
     timeout-minutes: 30
 ```
 
+A push followed by `gh pr ready` sends a draft-snapshot `synchronize` and a `ready_for_review` event. A shared group lets the draft run cancel the full run, leaving a green PR with no suite.
+
+Include the draft state in the workflow group whenever any job has a draft guard, and in each guarded job's own group. Unguarded workflows and unguarded jobs' own groups are exempt.
+
 `Tey\Standards\CiTriggers` parses `.github/workflows` offline. Construct it with the base path, default branches (`['main']`) and optional `distribution: 'app'|'package'`; `findings()` returns failures as `workflow`, `job` and `reason` entries. `advisories()` returns suggestions separately in the same shape. A workflow-level entry has `job: workflow`; repository-wide coverage targets `.github/workflows`. Each reason starts with its category and says what to change:
 
 | Category | Finding |
@@ -166,6 +170,7 @@ jobs:
 | Push branches | A `push` trigger without `branches`, or with branches other than the default branches. |
 | Pull request types | A job has a draft guard, but `pull_request.types` does not include `ready_for_review`. |
 | Concurrency | No concurrency on the workflow or on every job, or `cancel-in-progress` that can cancel a main run. |
+| `concurrency-draft` | A workflow with any draft-guarded job, or a guarded job's own concurrency group, omits `github.event.pull_request.draft` from its group expression. |
 | Draft guard | A test job runs on draft pull requests. |
 | Timeout | A job has no `timeout-minutes`. |
 | PHP versions | An app runs more than one PHP version on pull requests. Packages are exempt. |
@@ -239,3 +244,4 @@ The package ships a Laravel Boost guideline. Select `tey/standards` during `php 
 *Changelog: 2026-10-13 — Cloud managed queues pass without backlog or network inspection; Windows command contracts use test-only signal doubles, leaving only real PCNTL-dependent tests skipped and retaining the production guard. (#145)*
 *Changelog: 2026-10-13 — prepared 0.4.1 with advisory-by-default rule 51, shared opt-in enforcement, visible preflight failures and architecture skip counts; document run, fix or ratchet, then opt in. (#150)*
 *Changelog: 2026-10-13 — prepared 0.5.0 with Pest 4.7+ and Pest 5 architecture support, stable targeted diagnostics, dual-major negative fixtures and a Pest 5 temp-app architecture check. (#147)*
+*Changelog: 2026-10-13 — prepared 0.5.1 with the concurrency-draft requirement: separate draft and ready concurrency groups to keep draft-snapshot runs from cancelling the full suite. (#151)*

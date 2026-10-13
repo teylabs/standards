@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 - 2026-10-13
+
+### Fixed
+
+- Require `github.event.pull_request.draft` in concurrency group expressions for workflows with draft-guarded jobs and for guarded jobs' own groups (`concurrency-draft`), under the shared `PREFLIGHT_CI_ENFORCE` opt-in. Draft-snapshot runs can no longer cancel ready runs when a push is followed by `gh pr ready`. Unguarded workflows and jobs' own groups are exempt; expression whitespace and YAML quoting are supported. Rule 51, the recipe, README and workflows use draft-aware groups. (#151)
+
 ## 0.5.0 - 2026-10-13
 
 ### Added

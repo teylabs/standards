@@ -165,7 +165,7 @@ try {
       pull_request:
         types: [opened, synchronize, reopened, ready_for_review]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.draft }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     jobs:
       tests:
@@ -184,6 +184,23 @@ try {
         throw new RuntimeException('CI YAML parsing failed without development dependencies.');
     }
 
+    file_put_contents($path, str_replace('-${{ github.event.pull_request.draft }}', '', $workflow));
+    $exit = $artisan->call('standards:preflight', $options);
+    $stdout = $artisan->output();
+
+    if ($exit !== 0 || json_decode($stdout, true)['results'][0]['status'] !== 'fail'
+        || ! str_contains($stdout, 'concurrency-draft:') || ! str_contains($stdout, 'PREFLIGHT_CI_ENFORCE=true')) {
+        throw new RuntimeException('Advisory CI did not report the draft concurrency finding without failing: '.$stdout);
+    }
+
+    $app['config']->set('preflight.ci.enforce', true);
+
+    if ($artisan->call('standards:preflight', $options) !== 1
+        || ! str_contains($artisan->output(), 'concurrency-draft:')) {
+        throw new RuntimeException('Strict CI did not reject the draft concurrency finding.');
+    }
+
+    $app['config']->set('preflight.ci.enforce', false);
     file_put_contents($path, str_replace('    timeout-minutes: 10', '', $workflow));
     $exit = $artisan->call('standards:preflight', $options);
     $stdout = $artisan->output();

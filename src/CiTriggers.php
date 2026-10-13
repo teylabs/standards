@@ -130,6 +130,7 @@ final readonly class CiTriggers
         $events = $this->events($workflow);
         $jobs = $workflow['jobs'] ?? [];
         $findings = [];
+        $hasDraftGuard = false;
 
         if (array_key_exists('push', $events)) {
             $push = $events['push'];
@@ -151,6 +152,7 @@ final readonly class CiTriggers
 
             $name = (string) $name;
             $guard = $this->draftGuard($job['if'] ?? '');
+            $hasDraftGuard = $hasDraftGuard || $guard;
 
             if ($pullRequest && $guard && ! in_array('ready_for_review', $types, true)) {
                 $findings[] = ['job' => $name, 'reason' => 'pull-request-types: include ready_for_review so draft-skipping jobs restart.'];
@@ -188,6 +190,17 @@ final readonly class CiTriggers
 
             if ($cancel === true || (is_string($cancel) && preg_match('/^(?:true|\$\{\{\s*true\s*\}\})$/i', trim($cancel)) === 1)) {
                 $findings[] = ['job' => (string) $name, 'reason' => 'concurrency: condition cancel-in-progress on pull_request so push/main runs finish.'];
+            }
+
+            $guard = $name === 'workflow' ? $hasDraftGuard : $this->draftGuard($jobs[$name]['if'] ?? '');
+
+            if ($guard && $concurrency !== null) {
+                $group = is_array($concurrency) ? ($concurrency['group'] ?? '') : $concurrency;
+                preg_match_all('/\$\{\{(.*?)\}\}/s', is_string($group) ? $group : '', $expressions);
+
+                if (! array_any($expressions[1], fn (string $expression): bool => preg_match('/\bgithub\s*\.\s*event\s*\.\s*pull_request\s*\.\s*draft\b/', $expression) === 1)) {
+                    $findings[] = ['job' => (string) $name, 'reason' => 'concurrency-draft: include github.event.pull_request.draft in the group expression so draft runs cannot cancel ready runs.'];
+                }
             }
         }
 
