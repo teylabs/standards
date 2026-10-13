@@ -12,6 +12,7 @@ use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Log\Context\ContextLogProcessor;
 use Illuminate\Log\LogManager;
+use Symfony\Component\Console\Tester\CommandTester;
 use Tey\Standards\StandardsServiceProvider;
 
 require $argv[1] ?? dirname(__DIR__).'/vendor/autoload.php';
@@ -106,13 +107,35 @@ try {
     $provider->register();
     $provider->boot();
     $artisan = new Application($app, $app['events'], 'smoke');
-    $exit = $artisan->call('standards:preflight', ['--json' => true]);
-    $json = json_decode($artisan->output(), true, flags: JSON_THROW_ON_ERROR);
+    $exit = $artisan->call('standards:preflight', ['--json' => true, '--no-stderr' => true]);
+    $stdout = $artisan->output();
+    $json = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);
     $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'cache.store', 'app.url', 'logging.channel'];
 
     if ($exit !== 0 || $json['exit_code'] !== 0 || array_column($json['results'], 'check') !== $expected
         || array_unique(array_column($json['results'], 'status')) !== ['pass']) {
-        throw new RuntimeException('Registered preflight did not pass all core checks: '.$artisan->output());
+        throw new RuntimeException('Registered preflight did not pass all core checks: '.$stdout);
+    }
+
+    $log = file_get_contents($app->directory.'/preflight.log');
+
+    if (substr_count($log, 'PREFLIGHT CHECK PASSED:') !== count($expected)
+        || ! str_contains($log, 'PREFLIGHT SUMMARY {"exit_code":0,')
+        || ! str_contains($log, '"check":"app.key","level":"blocking","status":"pass","message":')) {
+        throw new RuntimeException('Preflight did not log every check and its summary.');
+    }
+
+    $tester = new CommandTester($artisan->find('standards:preflight'));
+    $tester->execute(['--json' => true, '--stderr' => true], ['capture_stderr_separately' => true]);
+
+    if ($tester->getDisplay() !== $stdout || ! str_contains($tester->getErrorOutput(), 'PREFLIGHT SUMMARY ')) {
+        throw new RuntimeException('Stderr reporting changed JSON stdout or omitted its summary.');
+    }
+
+    $tester->execute(['--json' => true, '--no-stderr' => true], ['capture_stderr_separately' => true]);
+
+    if ($tester->getErrorOutput() !== '') {
+        throw new RuntimeException('Explicit --no-stderr did not suppress reporting.');
     }
 
     $app['config']->set('app.key', null);
@@ -137,7 +160,7 @@ try {
         throw new RuntimeException('Passing preflight did not clear the emergency skip.');
     }
 
-    echo "PASS: provider boot and preflight without Pest or PHP-Parser; all core checks, blocking failure, CI and skip recovery.\n";
+    echo "PASS: provider boot and preflight without Pest or PHP-Parser; all core checks, blocking failure, CI, skip recovery, logging and stderr.\n";
 } finally {
     (new Filesystem)->deleteDirectory($app->directory);
 }

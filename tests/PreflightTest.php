@@ -12,6 +12,7 @@ use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Log\Context\ContextLogProcessor;
 use Illuminate\Log\LogManager;
+use Monolog\Formatter\JsonFormatter;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Process\Process;
 use Tey\Standards\Preflight;
@@ -445,3 +446,127 @@ test('local transports need neither a sender nor reply-to', function (string $tr
     expect($tester->getStatusCode())->toBe(0);
     expect(preflightResults($tester)['mail.reply-to'])->toMatchArray(['level' => 'warning', 'status' => 'pass']);
 })->with(['log', 'array']);
+
+test('every selected check and the final summary are logged on the standards or default channel', function (bool $dedicated, string $group, array $changes, bool $strict, array $counts, int $exit) {
+    $channel = $dedicated ? 'standards' : 'single';
+    $path = $this->preflight->directory.'/result.log';
+    $this->preflight['config']->set('logging.channels.'.$channel, ['driver' => 'single', 'path' => $path, 'formatter' => JsonFormatter::class]);
+    $this->preflight['config']->set($changes);
+
+    $tester = preflightCommand($this->preflight, ['--only' => $group, '--strict' => $strict, '--json' => true, '--no-stderr' => true]);
+    $entries = array_map(fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR), file($path, FILE_IGNORE_NEW_LINES));
+    $summary = array_pop($entries);
+
+    expect($tester->getStatusCode())->toBe($exit);
+    expect(array_column($entries, 'context'))->toBe(array_values(preflightResults($tester)));
+    expect($summary['message'])->toBe('PREFLIGHT SUMMARY');
+    expect($summary['context'])->toBe(['exit_code' => $exit, 'counts' => $counts, 'skips' => [], 'ci' => false, 'strict' => $strict, 'only' => $group]);
+
+    foreach ($entries as $entry) {
+        expect($entry['level_name'])->toBe(in_array($entry['context']['status'], ['fail', 'warn'], true) ? 'WARNING' : 'INFO');
+    }
+
+    if ($dedicated) {
+        expect(file_exists($this->preflight->directory.'/default.log'))->toBeFalse();
+    }
+})->with([false, true])->with([
+    'pass' => ['app', [], false, ['pass' => 3, 'fail' => 0, 'warn' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 0],
+    'warning-level failure' => ['app', ['app.url' => 'http://app.test'], false, ['pass' => 2, 'fail' => 1, 'warn' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 0],
+    'advisory under strict' => ['mail', ['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => 'updates@parent.test', 'mail.reply_to.address' => 'hello@parent.test', 'mail.shared_parent_domain' => 'parent.test'], true, ['pass' => 2, 'fail' => 0, 'warn' => 1, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 0],
+    'blocking failure' => ['app', ['app.key' => null], false, ['pass' => 2, 'fail' => 1, 'warn' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 1],
+]);
+
+test('stderr reports both failed and advisory checks and the summary unless disabled', function (array $options, bool $enabled) {
+    $this->preflight['config']->set([
+        'mail.default' => 'smtp',
+        'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'],
+        'mail.from.address' => 'updates@parent.test',
+        'mail.shared_parent_domain' => 'parent.test',
+        'mail.reply_to.address' => null,
+    ]);
+
+    $tester = preflightCommand($this->preflight, ['--only' => 'mail', '--json' => true, ...$options]);
+
+    if ($enabled) {
+        $lines = explode("\n", trim($tester->getErrorOutput()));
+        expect($lines)->toHaveCount(3);
+        expect($lines[0])->toStartWith('PREFLIGHT CHECK WARNING: mail.from ')->toContain('"level":"warning","status":"warn"');
+        expect($lines[1])->toStartWith('PREFLIGHT CHECK FAILED: mail.reply-to ')->toContain('"level":"warning","status":"fail"');
+        expect($lines[2])->toStartWith('PREFLIGHT SUMMARY ')->toContain('"exit_code":0');
+        expect($tester->getErrorOutput())->not->toContain('mail.transport');
+    } else {
+        expect($tester->getErrorOutput())->toBe('');
+    }
+
+    expect($tester->getDisplay())->not->toContain('PREFLIGHT SUMMARY', 'PREFLIGHT CHECK');
+    expect($tester->getStatusCode())->toBe(0);
+})->with([
+    'explicit on' => [['--stderr' => true], true],
+    'explicit off' => [['--no-stderr' => true], false],
+    'off takes precedence' => [['--stderr' => true, '--no-stderr' => true], false],
+    'automatic' => [[], ! stream_isatty(STDOUT)],
+]);
+
+test('logging and stderr leave JSON stdout byte-identical', function (bool $stderr) {
+    $tester = preflightCommand($this->preflight, ['--only' => 'mail', '--json' => true, $stderr ? '--stderr' : '--no-stderr' => true]);
+    $expected = <<<'JSON'
+{
+    "schema": 1,
+    "results": [
+        {
+            "check": "mail.transport",
+            "level": "warning",
+            "status": "pass",
+            "message": "Configured mail transport packages and keys are present."
+        },
+        {
+            "check": "mail.from",
+            "level": "warning",
+            "status": "pass",
+            "message": "Log and array transports do not require a sender."
+        },
+        {
+            "check": "mail.reply-to",
+            "level": "warning",
+            "status": "pass",
+            "message": "Log and array transports do not require Reply-To."
+        }
+    ],
+    "exit_code": 0
+}
+JSON;
+
+    expect($tester->getDisplay())->toBe($expected."\n");
+    expect(file_get_contents($this->preflight->directory.'/default.log'))->toContain('PREFLIGHT CHECK PASSED: mail.transport', 'PREFLIGHT SUMMARY');
+    expect($tester->getErrorOutput())->toBe($stderr ? 'PREFLIGHT SUMMARY {"exit_code":0,"counts":{"pass":3,"fail":0,"warn":0,"skipped-in-ci":0,"skipped-by-request":0},"skips":[],"ci":false,"strict":false,"only":"mail"}'."\n" : '');
+})->with([false, true]);
+
+test('summary logs current CI and emergency skips with their distinct counts', function () {
+    $path = $this->preflight->directory.'/result.log';
+    $this->preflight['config']->set('logging.channels.single', ['driver' => 'single', 'path' => $path, 'formatter' => JsonFormatter::class]);
+    putenv('PREFLIGHT_SKIP=app.url');
+
+    $tester = preflightCommand($this->preflight, ['--only' => 'app', '--ci' => true, '--strict' => true, '--skip' => 'app.env-debug', '--json' => true, '--stderr' => true]);
+    $entries = array_map(fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR), file($path, FILE_IGNORE_NEW_LINES));
+    expect($entries)->toHaveCount(4);
+    expect($entries[0]['context'])->toMatchArray(['check' => 'app.key', 'level' => 'blocking', 'status' => 'skipped-in-ci']);
+    expect($entries[1]['context'])->toMatchArray(['check' => 'app.env-debug', 'status' => 'skipped-by-request', 'reason' => 'Emergency skip requested by --skip.']);
+    expect($entries[1]['context'])->toHaveKeys(['time', 'commit', 'message', 'level']);
+    expect($entries[2]['context'])->toMatchArray(['check' => 'app.url', 'status' => 'skipped-by-request', 'reason' => 'Emergency skip requested by PREFLIGHT_SKIP.']);
+    $summary = ['exit_code' => 0, 'counts' => ['pass' => 0, 'fail' => 0, 'warn' => 0, 'skipped-in-ci' => 1, 'skipped-by-request' => 2], 'skips' => ['app.key', 'app.env-debug', 'app.url'], 'ci' => true, 'strict' => true, 'only' => 'app'];
+    expect($entries[3]['context'])->toBe($summary);
+    expect($tester->getErrorOutput())->toContain('PREFLIGHT SUMMARY '.json_encode($summary, JSON_THROW_ON_ERROR));
+});
+
+test('usage errors log an exit-two summary without changing JSON stdout', function () {
+    $path = $this->preflight->directory.'/result.log';
+    $this->preflight['config']->set('logging.channels.single', ['driver' => 'single', 'path' => $path, 'formatter' => JsonFormatter::class]);
+    $tester = preflightCommand($this->preflight, ['--only' => 'unknown', '--json' => true, '--stderr' => true]);
+    $entry = json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($tester->getStatusCode())->toBe(2);
+    expect($tester->getDisplay())->toBe('{"schema":1,"results":[],"exit_code":2,"error":"Unknown check group: unknown"}'."\n");
+    expect($entry['message'])->toBe('PREFLIGHT SUMMARY');
+    expect($entry['context'])->toBe(['exit_code' => 2, 'counts' => ['pass' => 0, 'fail' => 0, 'warn' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 'skips' => [], 'ci' => false, 'strict' => false, 'only' => 'unknown', 'error' => 'Unknown check group: unknown']);
+    expect($tester->getErrorOutput())->toContain('PREFLIGHT SUMMARY ', '"exit_code":2');
+});

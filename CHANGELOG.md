@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 - 2026-10-13
+
+### Added
+
+- Full structured preflight results and an exit-code summary in the application log, on the `standards` channel or the default. The summary includes counts per status, active skips and CI, strict and group selection options.
+- Automatic stderr summaries and failed or advisory check lines when stdout is not a TTY, with explicit `--stderr` and `--no-stderr` overrides. JSON stdout is unchanged.
+- Post-deploy verification instructions for the application log and hosting command runner, plus logging and stderr coverage in the production-only smoke test.
+
 ## 0.1.1 - 2026-10-13
 
 ### Fixed
