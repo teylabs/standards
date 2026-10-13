@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Composer\Autoload\ClassLoader;
+use Illuminate\Filesystem\Filesystem;
 use Pest\Arch\Support\Composer;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\SkippedWithMessageException;
@@ -96,6 +97,28 @@ test('[rule 51] advisory architecture checks skip while findings remain availabl
         ['target' => '.github/workflows/tests.yml', 'check' => 'test | timeout: set timeout-minutes on every job.'],
     ]);
     expect(fn () => $preset->assert('51'))->toThrow(SkippedWithMessageException::class, 'Rule 51 is advisory until PREFLIGHT_CI_ENFORCE=true; run `php artisan standards:preflight --ci --only=ci` to see findings');
+});
+
+test('[rule 51] Configuration threads drafts through architecture enforcement', function () {
+    $base = sys_get_temp_dir().'/conformance-drafts-'.bin2hex(random_bytes(6));
+    mkdir($base.'/.github/workflows', 0777, true);
+    copy(dirname(__DIR__).'/fixtures/CI/draft-guard.yml', $base.'/.github/workflows/tests.yml');
+    $previous = getenv('GITHUB_EVENT_PATH');
+    putenv('GITHUB_EVENT_PATH');
+
+    try {
+        $arguments = array_replace(get_object_vars(fixtureConfiguration('Good', ciEnforce: true)), ['base' => $base, 'ciDistribution' => 'app']);
+        $lint = new Conformance(new Configuration(...$arguments));
+        expect(fn () => $lint->assert('51'))->toThrow(AssertionFailedError::class, 'draft-guard:');
+        $full = new Conformance(new Configuration(...array_replace($arguments, ['ciDrafts' => 'full'])));
+        $full->assert('51');
+        expect($full->violations('51'))->toBe([]);
+        $invalid = new Conformance(new Configuration(...array_replace($arguments, ['ciDrafts' => 'bogus'])));
+        expect(fn () => $invalid->assert('51'))->toThrow(AssertionFailedError::class, 'drafts-invalid: drafts must be lint or full; got "bogus".');
+    } finally {
+        putenv($previous === false ? 'GITHUB_EVENT_PATH' : 'GITHUB_EVENT_PATH='.$previous);
+        (new Filesystem)->deleteDirectory($base);
+    }
 });
 
 test('fixed and deleted ratchet entries fail as stale, including native presets', function (string $rule, string $target, string $check) {

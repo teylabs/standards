@@ -1143,6 +1143,41 @@ test('[rule 51] the distributed standards workflow has no failures, with macOS a
     expect($result->message)->toContain('macOS', 'cache:', 'Suggest')->not->toContain('windows-gap:', 'os-matrix:');
 });
 
+test('[rule 51] drafts env config reaches strict preflight including invalid values', function (?string $value, string $expected, string $status, int $exit) {
+    $autoload = array_key_first(ClassLoader::getRegisteredLoaders()).'/autoload.php';
+    $process = new Process([PHP_BINARY, '-r', 'require $argv[1]; $config = require $argv[2]; echo json_encode($config["ci"]);', $autoload, dirname(__DIR__).'/config/preflight.php'], env: ['PREFLIGHT_CI_DRAFTS' => $value ?? false]);
+    $process->mustRun();
+    $ci = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+    expect($ci['drafts'])->toBe($expected);
+    $this->preflight['config']->set('preflight.ci', [...$ci, 'enforce' => true, 'distribution' => 'app']);
+    mkdir($this->preflight->root.'/.github/workflows', 0777, true);
+    copy(dirname(__DIR__).'/fixtures/CI/draft-guard.yml', $this->preflight->root.'/.github/workflows/tests.yml');
+
+    $previous = getenv('GITHUB_EVENT_PATH');
+    putenv('GITHUB_EVENT_PATH');
+
+    try {
+        $tester = preflightCommand($this->preflight, ['--only' => 'ci', '--ci' => true, '--strict' => true, '--json' => true]);
+        $result = preflightResults($tester)['ci.triggers'];
+        expect($result['status'])->toBe($status);
+        expect($tester->getStatusCode())->toBe($exit);
+
+        if ($expected === 'bogus') {
+            expect($result['message'])->toContain('drafts-invalid:', '"bogus"', 'draft-guard:');
+            (new Filesystem)->deleteDirectory($this->preflight->root.'/.github');
+            $tester = preflightCommand($this->preflight, ['--only' => 'ci', '--ci' => true, '--strict' => true, '--json' => true]);
+            expect($tester->getStatusCode())->toBe(1);
+            expect(preflightResults($tester)['ci.triggers']['message'])->toContain('drafts-invalid:', '"bogus"');
+        }
+    } finally {
+        putenv($previous === false ? 'GITHUB_EVENT_PATH' : 'GITHUB_EVENT_PATH='.$previous);
+    }
+})->with([
+    'default' => [null, 'lint', 'fail', 1],
+    'full' => ['full', 'full', 'warn', 0],
+    'invalid' => ['bogus', 'bogus', 'fail', 1],
+]);
+
 test('[rule 51] enforcement env is parsed as a boolean defaulting to false', function (?string $value, bool $expected) {
     $autoload = array_key_first(ClassLoader::getRegisteredLoaders()).'/autoload.php';
     $process = new Process([PHP_BINARY, '-r', 'require $argv[1]; $config = require $argv[2]; echo json_encode($config["ci"]["enforce"]);', $autoload, dirname(__DIR__).'/config/preflight.php'], env: ['PREFLIGHT_CI_ENFORCE' => $value ?? false]);

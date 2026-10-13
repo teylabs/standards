@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use Illuminate\Config\Repository;
 use Illuminate\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
+use Tey\Standards\Preflight\CoreCheck;
 
 beforeEach(function () {
     $this->cliBase = sys_get_temp_dir().'/standards cli-'.bin2hex(random_bytes(6));
@@ -15,7 +17,7 @@ beforeEach(function () {
         $process = new Process(
             [PHP_BINARY, dirname(__DIR__).'/bin/standards', ...$arguments],
             $this->cliBase,
-            [...array_fill_keys(['PREFLIGHT_CI_DEFAULT_BRANCHES', 'PREFLIGHT_CI_DISTRIBUTION', 'PREFLIGHT_CI_ENFORCE'], false), ...$environment],
+            [...array_fill_keys(['PREFLIGHT_CI_DEFAULT_BRANCHES', 'PREFLIGHT_CI_DISTRIBUTION', 'PREFLIGHT_CI_ENFORCE', 'PREFLIGHT_CI_DRAFTS', 'GITHUB_EVENT_PATH'], false), ...$environment],
         );
         $process->run();
 
@@ -26,6 +28,66 @@ beforeEach(function () {
 afterEach(function () {
     (new Filesystem)->deleteDirectory($this->cliBase);
 });
+
+test('CLI and app config agree on full drafts with public, private and unknown event visibility', function (?bool $private, string $status, int $exit) {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/draft-guard.yml');
+    $workflow['jobs']['test']['steps'] = [['run' => 'composer test']];
+    file_put_contents($this->cliBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
+    $eventPath = $this->cliBase.'/event.json';
+
+    if ($private !== null) {
+        file_put_contents($eventPath, json_encode(['repository' => ['private' => $private]]));
+    }
+
+    $process = ($this->cli)(['ci', '--strict', '--enforce', '--json', '--drafts=full'], ['GITHUB_EVENT_PATH' => $eventPath]);
+    $report = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+    $previous = getenv('GITHUB_EVENT_PATH');
+    putenv('GITHUB_EVENT_PATH='.$eventPath);
+
+    try {
+        $result = (new CoreCheck('ci.triggers', new Repository(['preflight' => ['ci' => ['drafts' => 'full']]]), $this->cliBase))->run();
+        expect($result->status->value)->toBe($status);
+        expect($process->getExitCode())->toBe($exit);
+        expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $report['findings']))
+            ->toBe($private === true ? ['drafts-full-private', 'draft-guard'] : []);
+        expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $report['advisories']))
+            ->toBe($private === null ? ['drafts-full-unverified'] : []);
+
+        foreach ([...$report['findings'], ...$report['advisories']] as $finding) {
+            expect($result->message)->toContain($finding['reason']);
+        }
+    } finally {
+        putenv($previous === false ? 'GITHUB_EVENT_PATH' : 'GITHUB_EVENT_PATH='.$previous);
+    }
+})->with([
+    'public' => [false, 'pass', 0],
+    'private' => [true, 'fail', 1],
+    'unknown' => [null, 'warn', 0],
+]);
+
+test('draft settings use flags before env before extra before lint defaults', function (array $flags, array $environment, array $extra, array $categories) {
+    copy(dirname(__DIR__).'/fixtures/CI/draft-guard.yml', $this->cliBase.'/.github/workflows/tests.yml');
+    file_put_contents($this->cliBase.'/composer.json', json_encode(['type' => 'project', 'extra' => ['tey-standards' => ['ci' => $extra]]]));
+    $process = ($this->cli)(['ci', '--strict', '--enforce', '--json', ...$flags], $environment);
+    $report = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($process->getExitCode())->toBe($categories === [] ? 0 : 1);
+    expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $report['findings']))->toBe($categories);
+
+    if (in_array('drafts-invalid', $categories, true)) {
+        expect($report['findings'][0]['reason'])->toContain(json_encode($environment['PREFLIGHT_CI_DRAFTS'] ?? $extra['drafts']));
+    }
+})->with([
+    'default lint' => [[], [], [], ['draft-guard']],
+    'extra full' => [[], [], ['drafts' => 'full'], []],
+    'env lint overrides extra full' => [[], ['PREFLIGHT_CI_DRAFTS' => 'lint'], ['drafts' => 'full'], ['draft-guard']],
+    'env full overrides extra lint' => [[], ['PREFLIGHT_CI_DRAFTS' => 'full'], ['drafts' => 'lint'], []],
+    'flag lint overrides env full' => [['--drafts=lint'], ['PREFLIGHT_CI_DRAFTS' => 'full'], [], ['draft-guard']],
+    'flag full overrides invalid env' => [['--drafts=full'], ['PREFLIGHT_CI_DRAFTS' => 'bogus'], [], []],
+    'invalid env overrides extra full' => [[], ['PREFLIGHT_CI_DRAFTS' => 'bogus'], ['drafts' => 'full'], ['drafts-invalid', 'draft-guard']],
+    'invalid extra is a finding' => [[], [], ['drafts' => 'bogus'], ['drafts-invalid', 'draft-guard']],
+    'null extra is invalid rather than the default' => [[], [], ['drafts' => null], ['drafts-invalid', 'draft-guard']],
+]);
 
 test('the CLI reports compliant workflows as schema 1 JSON on stdout only', function () {
     $process = ($this->cli)(['ci', '--strict', '--enforce', '--json']);
@@ -102,6 +164,11 @@ test('missing workflows stay unknown advisories even with strict enforcement', f
         ->and($report['findings'])->toBe([])
         ->and($report['advisories'])->toHaveCount(1)
         ->and($report['advisories'][0]['reason'])->toStartWith('unknown:');
+
+    $invalid = ($this->cli)(['ci', '--strict', '--enforce', '--json'], ['PREFLIGHT_CI_DRAFTS' => 'bogus']);
+    $report = json_decode($invalid->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+    expect($invalid->getExitCode())->toBe(1);
+    expect($report['findings'][0]['reason'])->toStartWith('drafts-invalid:')->toContain('"bogus"');
 });
 
 test('human output lists requirements before advisories and summarizes enforcement and exit', function () {
@@ -126,10 +193,15 @@ test('invalid CLI usage exits 2 with a useful stderr message', function (array $
     expect($process->getExitCode())->toBe(2)
         ->and($process->getOutput())->toBe('')
         ->and($process->getErrorOutput())->toContain('standards ci:', 'Usage: standards ci');
+
+    if (in_array('--drafts=bogus', $arguments, true)) {
+        expect($process->getErrorOutput())->toContain('--drafts must be lint or full; got bogus.');
+    }
 })->with([
     'unknown command' => [['deploy'], []],
     'unknown option' => [['ci', '--strcit'], []],
     'distribution value' => [['ci', '--distribution=unknown'], []],
+    'drafts value' => [['ci', '--drafts=bogus'], []],
     'missing option value' => [['ci', '--base'], []],
     'empty base' => [['ci', '--base='], []],
     'empty branch' => [['ci', '--default-branches=main,'], []],

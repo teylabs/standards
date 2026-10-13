@@ -57,5 +57,6 @@ final readonly class Configuration
         public array $ciDefaultBranches = ['main'],
         public ?string $ciDistribution = null,
         public bool $ciEnforce = false,
+        public mixed $ciDrafts = 'lint',
     ) {}
 }

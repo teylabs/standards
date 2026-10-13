@@ -132,15 +132,11 @@ final readonly class CoreCheck implements Check
 
     private function ciTriggers(): Result
     {
-        $parser = new CiTriggers($this->base, $this->config->get('preflight.ci.default_branches', ['main']), $this->config->get('preflight.ci.distribution'));
+        $parser = new CiTriggers($this->base, $this->config->get('preflight.ci.default_branches', ['main']), $this->config->get('preflight.ci.distribution'), $this->config->get('preflight.ci.drafts', 'lint'));
         $remedy = 'Apply docs/recipes/backend/ci-triggers.md; see tey/standards README (CI triggers) for findings and configuration.';
 
         if (! $this->config->get('preflight.ci.enforce', false)) {
             $remedy .= ' Rule 51 is advisory until PREFLIGHT_CI_ENFORCE=true; fix or ratchet findings before opting in.';
-        }
-
-        if ($parser->workflows() === []) {
-            return Result::warn('Unknown: no .github/workflows/*.yml or *.yaml files found. '.$remedy);
         }
 
         $findings = $parser->findings();
@@ -150,6 +146,10 @@ final readonly class CoreCheck implements Check
             $first = array_map(fn (array $finding): string => $finding['workflow'].' ['.$finding['job'].'] '.$finding['reason'], array_slice($findings, 0, 5));
 
             return Result::fail(implode(' ', $first).(count($findings) > 5 ? ' And '.(count($findings) - 5).' more findings.' : '').' '.$advisories.' '.$remedy);
+        }
+
+        if ($parser->workflows() === []) {
+            return Result::warn('Unknown: no .github/workflows/*.yml or *.yaml files found. '.$advisories.' '.$remedy);
         }
 
         $message = 'Workflow triggers, concurrency, draft guards and timeouts conform. '.$advisories.' Advisory docs-skip: review paths-ignore or a changes job against required checks online.';

@@ -16,6 +16,72 @@ afterEach(function () {
     (new Filesystem)->deleteDirectory($this->ciBase);
 });
 
+test('[rule 51] full drafts use offline public visibility and fall back to lint for private repos', function (?bool $private, array $categories, array $advisories) {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
+    unset($workflow['jobs']['test']['if']);
+    $workflow['jobs']['test']['runs-on'] = '${{ matrix.os }}';
+    $workflow['jobs']['test']['strategy']['matrix'] = ['os' => ['ubuntu-latest', 'windows-latest', 'macos-latest']];
+    file_put_contents($this->ciBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
+    $eventPath = $this->ciBase.'/event.json';
+
+    if ($private !== null) {
+        file_put_contents($eventPath, json_encode(['repository' => ['private' => $private]]));
+    }
+
+    $parser = new CiTriggers($this->ciBase, distribution: 'package', drafts: 'full', eventPath: $eventPath);
+    expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $parser->findings()))->toBe($categories);
+    expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $parser->advisories()))->toBe($advisories);
+
+    if ($private === true) {
+        expect($parser->findings()[0]['reason'])->toBe('drafts-full-private: drafts: full is only for public repos; private repos skip full suites on drafts.');
+    } elseif ($private === null) {
+        expect($parser->advisories()[0]['reason'])->toContain('visibility', 'could not be confirmed');
+    }
+})->with([
+    'public' => [false, [], []],
+    'private' => [true, ['drafts-full-private', 'draft-guard'], []],
+    'unknown' => [null, [], ['drafts-full-unverified']],
+]);
+
+test('[rule 51] full exempts only the draft requirements', function () {
+    foreach (['draft-guard', 'pull-request-types', 'concurrency-draft', 'push-branches', 'concurrency', 'timeout', 'php-matrix', 'os-matrix'] as $category) {
+        $extension = $category === 'os-matrix' ? 'yaml' : 'yml';
+        copy(dirname(__DIR__).'/fixtures/CI/'.$category.'.'.$extension, $this->ciBase.'/.github/workflows/tests.yml');
+        $findings = (new CiTriggers($this->ciBase, drafts: 'full', eventPath: ''))->findings();
+        expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $findings))
+            ->toBe(in_array($category, ['draft-guard', 'pull-request-types', 'concurrency-draft'], true) ? [] : [$category]);
+    }
+});
+
+test('[rule 51] full still requires Windows on ready PRs, not just drafts or main', function (mixed $condition, bool $gap) {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
+    $workflow['jobs']['test']['if'] = $condition;
+    $workflow['jobs']['test']['runs-on'] = 'windows-latest';
+    file_put_contents($this->ciBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
+    $findings = (new CiTriggers($this->ciBase, distribution: 'package', drafts: 'full', eventPath: ''))->findings();
+    expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $findings))->toBe($gap ? ['windows-gap'] : []);
+})->with([
+    'drafts and ready' => [true, false],
+    'draft only' => ['github.event.pull_request.draft == true', true],
+    'main only' => ["github.event_name == 'push'", true],
+]);
+
+test('[rule 51] invalid drafts report their value and retain lint requirements even without workflows', function (mixed $drafts) {
+    copy(dirname(__DIR__).'/fixtures/CI/draft-guard.yml', $this->ciBase.'/.github/workflows/tests.yml');
+    $parser = new CiTriggers($this->ciBase, drafts: $drafts);
+    expect(array_map(fn ($f) => explode(':', $f['reason'])[0], $parser->findings()))->toBe(['drafts-invalid', 'draft-guard']);
+    expect($parser->findings()[0]['reason'])->toContain(json_encode($drafts), 'lint or full');
+    unlink($this->ciBase.'/.github/workflows/tests.yml');
+    expect($parser->findings())->toHaveCount(1);
+})->with(['bogus', '', false, [[]]]);
+
+test('[rule 51] malformed or non-boolean event visibility stays unverified', function (string $payload) {
+    file_put_contents($this->ciBase.'/event.json', $payload);
+    $parser = new CiTriggers($this->ciBase, distribution: 'app', drafts: 'full', eventPath: $this->ciBase.'/event.json');
+    expect($parser->findings())->toBe([]);
+    expect($parser->advisories()[0]['reason'])->toStartWith('drafts-full-unverified:');
+})->with(['{', '{}', '{"repository":{"private":"false"}}']);
+
 test('[rule 51] each fixture isolates its finding and the standard workflow passes', function (string $fixture, ?string $category, string $job) {
     $extension = pathinfo($fixture, PATHINFO_EXTENSION);
     copy(dirname(__DIR__).'/fixtures/CI/'.$fixture, $this->ciBase.'/.github/workflows/tests.'.$extension);

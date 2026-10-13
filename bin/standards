@@ -8,11 +8,12 @@ use Tey\Standards\CiTriggers;
 $usage = <<<'TEXT'
 Usage: standards ci [--strict] [--json] [--base=<dir>]
                     [--default-branches=main,*.x] [--distribution=app|package] [--enforce]
+                    [--drafts=lint|full]
        standards [--help]
 
 Inspect .github/workflows offline, without booting Laravel.
 Settings: flags > PREFLIGHT_CI_* environment > composer.json extra.tey-standards.ci > defaults.
-Defaults: current directory, main, auto-detected distribution, enforcement off.
+Defaults: current directory, main, auto-detected distribution, enforcement off, drafts lint.
 Exit: 0 for advisory runs; 1 for findings with --strict and enforcement on; 2 for invalid usage.
 TEXT;
 
@@ -33,7 +34,7 @@ try {
     foreach ($arguments as $argument) {
         if (in_array($argument, ['--strict', '--json', '--enforce', '--help'], true)) {
             $options[substr($argument, 2)] = true;
-        } elseif (preg_match('/^--(base|default-branches|distribution)=(.*)$/s', $argument, $match) === 1) {
+        } elseif (preg_match('/^--(base|default-branches|distribution|drafts)=(.*)$/s', $argument, $match) === 1) {
             $options[$match[1]] = $match[2];
         } else {
             throw new InvalidArgumentException('Unknown option '.$argument.'; use standards ci --help.');
@@ -63,9 +64,14 @@ try {
 
     $settings = [];
 
-    foreach (['default-branches' => ['main'], 'distribution' => null, 'enforce' => false] as $key => $default) {
+    foreach (['default-branches' => ['main'], 'distribution' => null, 'enforce' => false, 'drafts' => 'lint'] as $key => $default) {
         $environment = getenv('PREFLIGHT_CI_'.strtoupper(str_replace('-', '_', $key)));
-        $settings[$key] = $options[$key] ?? ($environment !== false ? $environment : ($extra[$key] ?? $default));
+        $configured = $key === 'drafts' && array_key_exists($key, $extra) ? $extra[$key] : ($extra[$key] ?? $default);
+        $settings[$key] = $options[$key] ?? ($environment !== false ? $environment : $configured);
+    }
+
+    if (isset($options['drafts']) && ! in_array($options['drafts'], ['lint', 'full'], true)) {
+        throw new InvalidArgumentException('--drafts must be lint or full; got '.$options['drafts'].'.');
     }
 
     $branches = $settings['default-branches'];
@@ -117,14 +123,12 @@ while ($autoload === null) {
 
 require $autoload;
 
-$parser = new CiTriggers($base, $branches, $distribution);
+$parser = new CiTriggers($base, $branches, $distribution, $settings['drafts']);
+$findings = $parser->findings();
+$advisories = $parser->advisories();
 
 if ($parser->workflows() === []) {
-    $findings = [];
-    $advisories = [['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'unknown: no .github/workflows/*.yml or *.yaml files found.']];
-} else {
-    $findings = $parser->findings();
-    $advisories = $parser->advisories();
+    $advisories[] = ['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'unknown: no .github/workflows/*.yml or *.yaml files found.'];
 }
 
 $exit = isset($options['strict']) && $enforce && $findings !== [] ? 1 : 0;

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 - 2026-10-13
+
+### Added
+
+- Shared `drafts: lint|full` across `CiTriggers`, `Configuration::ciDrafts`, app config/env and the package CLI/Composer `extra`, defaulting to `lint`. Public repos may opt out of draft guards, draft-aware concurrency and the `ready_for_review` requirement; every other check, including ready-PR Windows coverage, remains. Read visibility from the GitHub event payload offline: private repos retain lint requirements with `drafts-full-private`, unknown visibility honours full with an advisory, invalid config/env values become requirements and invalid CLI flags exit 2. Parser, entry-point, precedence and production-only smoke tests cover the contract. (#163)
+
 ## 0.6.0 - 2026-10-13
 
 ### Added

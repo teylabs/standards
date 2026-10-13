@@ -76,7 +76,16 @@ if (! in_array('--hide-arch', $argv, true) && ! in_array('--with-dev', $argv, tr
             throw new RuntimeException('Production CLI did not inspect the package cleanly: '.$process->getOutput().$process->getErrorOutput());
         }
 
+        $full = new Process([PHP_BINARY, '-d', 'auto_prepend_file='.$guard, $binary, 'ci', '--json', '--drafts=full'], dirname(__DIR__), ['GITHUB_EVENT_PATH' => false]);
+        $full->mustRun();
+        $report = json_decode($full->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+
+        if ($full->getErrorOutput() !== '' || $report['findings'] !== [] || ! array_any($report['advisories'], fn ($finding) => str_starts_with($finding['reason'], 'drafts-full-unverified:'))) {
+            throw new RuntimeException('Production CLI did not honour unverified full drafts: '.$full->getOutput().$full->getErrorOutput());
+        }
+
         echo "PASS: standards ci --json without Pest, PHP-Parser or a loaded Laravel Application.\n";
+        echo "PASS: standards ci --drafts=full honours unknown visibility with an advisory.\n";
     } finally {
         unlink($guard);
     }

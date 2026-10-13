@@ -83,7 +83,7 @@ final class Conformance
     {
         if ($rule === '51') {
             return array_map(fn (array $finding): array => ['target' => $finding['workflow'], 'check' => $finding['job'].' | '.$finding['reason']],
-                (new CiTriggers($this->config->base, $this->config->ciDefaultBranches, $this->config->ciDistribution))->findings());
+                (new CiTriggers($this->config->base, $this->config->ciDefaultBranches, $this->config->ciDistribution, $this->config->ciDrafts))->findings());
         }
 
         $classes = $this->source->classes();

@@ -10,7 +10,13 @@ use Symfony\Component\Yaml\Yaml;
 final readonly class CiTriggers
 {
     /** @param list<string> $defaultBranches */
-    public function __construct(private string $base, private array $defaultBranches = ['main'], private ?string $distribution = null) {}
+    public function __construct(
+        private string $base,
+        private array $defaultBranches = ['main'],
+        private ?string $distribution = null,
+        private mixed $drafts = 'lint',
+        private ?string $eventPath = null,
+    ) {}
 
     public function distribution(): string
     {
@@ -58,6 +64,20 @@ final readonly class CiTriggers
         $readyRunners = [];
         $hasCiWorkflow = false;
         $distribution = $this->distribution();
+        $fullDrafts = false;
+
+        if (! in_array($this->drafts, ['lint', 'full'], true)) {
+            $findings[] = ['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'drafts-invalid: drafts must be lint or full; got '.json_encode($this->drafts).'.'];
+        } elseif ($this->drafts === 'full') {
+            $private = $this->repositoryPrivate();
+            $fullDrafts = $private !== true;
+
+            if ($private === true) {
+                $findings[] = ['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'drafts-full-private: drafts: full is only for public repos; private repos skip full suites on drafts.'];
+            } elseif ($private === null) {
+                $advisories[] = ['workflow' => '.github/workflows', 'job' => 'workflow', 'reason' => 'drafts-full-unverified: repository visibility could not be confirmed from GITHUB_EVENT_PATH; drafts: full is honoured locally.'];
+            }
+        }
 
         foreach ($this->workflows() as $path) {
             $file = str_replace('\\', '/', substr($path, strlen(rtrim($this->base, '/\\')) + 1));
@@ -79,7 +99,7 @@ final readonly class CiTriggers
             $events = $this->events($workflow);
             $hasCiWorkflow = $hasCiWorkflow || array_key_exists('push', $events) || array_key_exists('pull_request', $events);
 
-            foreach ($this->inspect($workflow) as $finding) {
+            foreach ($this->inspect($workflow, $fullDrafts) as $finding) {
                 $findings[] = ['workflow' => $file, ...$finding];
             }
 
@@ -115,6 +135,19 @@ final readonly class CiTriggers
         return compact('findings', 'advisories');
     }
 
+    private function repositoryPrivate(): ?bool
+    {
+        $path = $this->eventPath ?? (getenv('GITHUB_EVENT_PATH') ?: '');
+
+        if ($path === '' || ! stream_is_local($path) || ! is_file($path) || ! is_readable($path)) {
+            return null;
+        }
+
+        $private = json_decode((string) file_get_contents($path), true)['repository']['private'] ?? null;
+
+        return is_bool($private) ? $private : null;
+    }
+
     /** @param array<mixed> $workflow
      * @return array<string, mixed>
      */
@@ -130,7 +163,7 @@ final readonly class CiTriggers
      * @param  array<mixed>  $workflow
      * @return list<array{job: string, reason: string}>
      */
-    private function inspect(array $workflow): array
+    private function inspect(array $workflow, bool $fullDrafts): array
     {
         $events = $this->events($workflow);
         $ciWorkflow = array_key_exists('push', $events) || array_key_exists('pull_request', $events);
@@ -160,7 +193,7 @@ final readonly class CiTriggers
             $guard = $this->draftGuard($job['if'] ?? '');
             $hasDraftGuard = $hasDraftGuard || $guard;
 
-            if ($pullRequest && $guard && ! in_array('ready_for_review', $types, true)) {
+            if (! $fullDrafts && $pullRequest && $guard && ! in_array('ready_for_review', $types, true)) {
                 $findings[] = ['job' => $name, 'reason' => 'pull-request-types: include ready_for_review so draft-skipping jobs restart.'];
             }
 
@@ -177,7 +210,7 @@ final readonly class CiTriggers
             }
 
             if ($pullRequest && ! $this->excludesPullRequest($job['if'] ?? '')) {
-                if ($this->tests($job) && ! $guard) {
+                if (! $fullDrafts && $this->tests($job) && ! $guard) {
                     $findings[] = ['job' => $name, 'reason' => 'draft-guard: skip test jobs while github.event.pull_request.draft is true.'];
                 }
 
@@ -204,7 +237,7 @@ final readonly class CiTriggers
 
             $guard = $name === 'workflow' ? $hasDraftGuard : $this->draftGuard($jobs[$name]['if'] ?? '');
 
-            if ($guard && $concurrency !== null) {
+            if (! $fullDrafts && $guard && $concurrency !== null) {
                 $group = is_array($concurrency) ? ($concurrency['group'] ?? '') : $concurrency;
                 preg_match_all('/\$\{\{(.*?)\}\}/s', is_string($group) ? $group : '', $expressions);
 

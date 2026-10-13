@@ -163,9 +163,11 @@ A push followed by `gh pr ready` sends a draft-snapshot `synchronize` and a `rea
 
 Include the draft state in the workflow group whenever any job has a draft guard, and in each guarded job's own group. Unguarded workflows and unguarded jobs' own groups are exempt.
 
+Since 0.6.1, public repos may set `drafts: full` to test drafts fully. The default `lint` keeps draft guards, draft-aware concurrency and the `ready_for_review` requirement. `full` exempts only those three requirements; packages still need Windows on ready PRs, and a Windows leg that runs on drafts too counts. Visibility comes only from readable `$GITHUB_EVENT_PATH` JSON (`repository.private`), never the network: private repos get `drafts-full-private` and retain `lint`; unknown visibility honours `full` with a `drafts-full-unverified` advisory. Invalid config/env values produce a `drafts-invalid` requirement naming the value.
+
 CI-specific requirements apply only to workflows whose `on` includes `push` or `pull_request`, in string, list or map form. Workflows triggered only by `pull_request_target`, `issue_comment`, `pull_request_review_comment`, `release`, `schedule`, `workflow_dispatch`, `workflow_run` or `merge_group` are exempt from trigger, concurrency, draft-guard and matrix findings. Mixed workflows keep these checks on every job, even jobs selected for another event. **Every job in every workflow still needs `timeout-minutes`: a hung bot job can burn up to 360 minutes.**
 
-`Tey\Standards\CiTriggers` parses `.github/workflows` offline. Construct it with the base path, default branches (`['main']`) and optional `distribution: 'app'|'package'`; `findings()` returns failures as `workflow`, `job` and `reason` entries. `advisories()` returns suggestions separately in the same shape. A workflow-level entry has `job: workflow`; repository-wide coverage targets `.github/workflows`. Each reason starts with its category and says what to change:
+`Tey\Standards\CiTriggers` parses `.github/workflows` offline. Construct it with the base path, default branches (`['main']`), optional `distribution: 'app'|'package'` and `drafts: 'lint'|'full'` (default `lint`); `eventPath` optionally overrides `$GITHUB_EVENT_PATH` for tests. `findings()` returns failures as `workflow`, `job` and `reason` entries. `advisories()` returns suggestions separately in the same shape. A workflow-level entry has `job: workflow`; repository-wide coverage targets `.github/workflows`. Each reason starts with its category and says what to change:
 
 | Category | Finding |
 |---|---|
@@ -178,6 +180,9 @@ CI-specific requirements apply only to workflows whose `on` includes `push` or `
 | PHP versions | An app runs more than one PHP version on pull requests. Packages are exempt. |
 | `os-matrix` | An app has any non-Linux runner or OS matrix entry, on any event. |
 | `windows-gap` | A distributed package has no Windows leg on a ready PR, across all workflows. Main/nightly-only coverage does not count. |
+| `drafts-invalid` | The configured drafts value is neither `lint` nor `full`; lint requirements still apply. |
+| `drafts-full-private` | `full` is ignored because the event payload confirms a private repository. |
+| `drafts-full-unverified` (advisory) | Repository visibility could not be confirmed; `full` is honoured. |
 | `cache` (advisory) | A job installs Composer/npm dependencies without a recognised dependency cache. Suggest measuring, never fail. |
 
 Lint and static jobs may run on drafts. Package Windows jobs may use the draft guard: ready PRs still run them. Missing macOS and docs-only skipping are advisory.
@@ -194,6 +199,7 @@ new Configuration(
     ciDefaultBranches: config('preflight.ci.default_branches', ['main']),
     ciDistribution: config('preflight.ci.distribution'),
     ciEnforce: config('preflight.ci.enforce', false),
+    ciDrafts: config('preflight.ci.drafts', 'lint'),
 );
 ```
 
@@ -204,6 +210,7 @@ new Configuration(
 | `preflight.ci.enforce` | `false` | Boolean via `PREFLIGHT_CI_ENFORCE`; opt in to strict preflight failures and architecture rule 51 enforcement. |
 | `preflight.ci.default_branches` | `['main']` | Branches or globs a `push` trigger may list, such as `['main', '*.x']` for release branches. |
 | `preflight.ci.distribution` | `null` | `app` or `package` via `PREFLIGHT_CI_DISTRIBUTION`; otherwise Composer type, then `artisan`, then Unknown. |
+| `preflight.ci.drafts` / `Configuration::ciDrafts` | `lint` | `lint` or `full` via `PREFLIGHT_CI_DRAFTS`; only public repos may opt out of draft requirements with `full`. |
 
 `Configuration::ciDefaultBranches` accepts the same globs. List the exact glob in both the configuration and `on.push.branches`; GitHub matches release branches such as `1.x` against `*.x`, while the checker compares the declared patterns.
 
@@ -224,6 +231,7 @@ Packages normally keep their settings in their root `composer.json` under `extra
             "ci": {
                 "default-branches": ["main", "*.x"],
                 "distribution": "package",
+                "drafts": "full",
                 "enforce": true
             }
         }
@@ -233,13 +241,19 @@ Packages normally keep their settings in their root `composer.json` under `extra
 
 Run once without enforcement, fix the findings, then opt in. The CLI calls the same `CiTriggers` parser as app preflight; it does not boot Laravel, read `.env` files or require Pest/PHP-Parser. On Windows, use `php vendor/bin/standards ci --strict`.
 
+The example opts a public package into full draft tests; omit `drafts` or set `lint` to keep the default draft policy.
+
 ```sh
-vendor/bin/standards ci [--strict] [--json] [--base=<dir>] [--default-branches=main,*.x] [--distribution=app|package] [--enforce]
+vendor/bin/standards ci [--strict] [--json] [--base=<dir>] [--default-branches=main,*.x] [--distribution=app|package] [--drafts=lint|full] [--enforce]
 ```
 
 Settings resolve in order: flags, process environment, `extra.tey-standards.ci`, defaults. `--base` defaults to the current directory. `--default-branches` and `PREFLIGHT_CI_DEFAULT_BRANCHES` are comma-separated names or globs; `extra` accepts a list. `PREFLIGHT_CI_DISTRIBUTION` overrides `distribution`, and `PREFLIGHT_CI_ENFORCE` overrides `enforce` (true/false, 1/0, yes/no or on/off). `--enforce` enables enforcement for that run. Defaults are `['main']`, auto-detected distribution and enforcement off.
 
-Human output lists requirement findings in a workflow/job/finding table, then advisories and a count/enforcement/exit summary. `--json` writes only `{"schema":1,"findings":[],"advisories":[],"enforce":false,"exit_code":0}` to stdout, with each finding or advisory using the parser's `workflow`, `job` and `reason` fields. Exit 1 requires all three: `--strict`, enforcement on and requirement findings. Otherwise findings exit 0; cache/macOS/Unknown advisories never fail. A missing workflows directory is an `unknown` advisory and exits 0. Unknown commands/options and invalid values exit 2 with usage on stderr. No command or `--help` prints usage; `ci` is the only command.
+| Option | Environment | Composer `extra.tey-standards.ci` | Default |
+|---|---|---|---|
+| `--drafts=lint\|full` | `PREFLIGHT_CI_DRAFTS` | `drafts` | `lint` |
+
+Human output lists requirement findings in a workflow/job/finding table, then advisories and a count/enforcement/exit summary. `--json` writes only `{"schema":1,"findings":[],"advisories":[],"enforce":false,"exit_code":0}` to stdout, with each finding or advisory using the parser's `workflow`, `job` and `reason` fields. Exit 1 requires all three: `--strict`, enforcement on and requirement findings. Otherwise findings exit 0; cache/macOS/Unknown advisories never fail. A missing workflows directory is an `unknown` advisory, but does not suppress invalid drafts or private-repo requirements. Unknown commands/options and invalid flag values (including `--drafts=bogus`) exit 2 with usage on stderr; invalid drafts from env or `extra` remain requirement findings. No command or `--help` prints usage; `ci` is the only command.
 
 **Required checks.** `paths-ignore` suits repositories without required checks. With required checks, a skipped workflow never reports and blocks the merge; use a `changes` job that lets expensive jobs skip, since a job skipped by its `if` reports success. The checker does not read branch protection, so confirm the required check names by hand.
 

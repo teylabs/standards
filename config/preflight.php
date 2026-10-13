@@ -13,6 +13,8 @@ return [
         'default_branches' => ['main'],
         // app: our Linux deployment; package: anything others install or run. Null detects composer type, then artisan.
         'distribution' => env('PREFLIGHT_CI_DISTRIBUTION'),
+        // lint: skip full suites on drafts; full: public repos may test drafts fully.
+        'drafts' => env('PREFLIGHT_CI_DRAFTS', 'lint'),
     ],
     'brand' => [
         // Empty uses inertia.root_view (or app); override with every root Blade layout, relative to base_path().
