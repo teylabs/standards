@@ -34,7 +34,7 @@ function preflightWorld(): Container
 
         public function basePath(): string
         {
-            return dirname(__DIR__, 3);
+            return dirname(__DIR__);
         }
 
         public function configurationIsCached(): bool
