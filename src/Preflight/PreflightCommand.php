@@ -19,7 +19,7 @@ final class PreflightCommand extends Command
 {
     public $signature = 'standards:preflight {--only= : Run checks in a dotted group (e.g. mail)} {--strict : Exit 1 on any failed check, regardless of level} {--ci : Skip checks requiring production secrets} {--skip= : Comma-separated exact check names} {--json : Write machine-readable JSON to stdout} {--stderr : Also write the summary and failed or warning checks to stderr} {--no-stderr : Disable automatic stderr reporting (takes precedence over --stderr)}';
 
-    public $description = 'Check deployment configuration without network calls';
+    public $description = 'Check deployment configuration and queue backlog without hosting API calls';
 
     public function handle(Preflight $registry, Repository $config, Filesystem $files, Runner $runner, LogManager $logs): int
     {

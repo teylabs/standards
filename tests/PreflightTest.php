@@ -8,10 +8,14 @@ use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Config\Repository as ConfigContract;
 use Illuminate\Contracts\Log\ContextLogProcessor as ContextProcessorContract;
+use Illuminate\Database\Connectors\ConnectionFactory;
+use Illuminate\Database\DatabaseManager;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Log\Context\ContextLogProcessor;
 use Illuminate\Log\LogManager;
+use Illuminate\Support\Carbon;
 use Monolog\Formatter\JsonFormatter;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Process\Process;
@@ -53,7 +57,7 @@ function preflightWorld(): Container
         'app' => ['env' => 'production', 'debug' => false, 'key' => 'test-key', 'url' => 'https://app.test'],
         'database' => ['default' => 'sqlite', 'connections' => ['sqlite' => ['driver' => 'sqlite', 'database' => ':memory:']]],
         'mail' => ['default' => 'log', 'mailers' => ['log' => ['transport' => 'log']], 'from' => ['address' => 'alerts@app.test'], 'reply_to' => ['address' => 'hello@app.test']],
-        'queue' => ['default' => 'database'],
+        'queue' => ['default' => 'sync'],
         'cache' => ['default' => 'file'],
         'logging' => ['default' => 'single', 'channels' => ['single' => ['driver' => 'single', 'path' => $app->directory.'/default.log']]],
     ]);
@@ -91,6 +95,25 @@ function preflightInstalledPackages(array $data): void
         ->setValue(null, array_fill_keys(array_keys(ClassLoader::getRegisteredLoaders()), $data));
 }
 
+function preflightDatabase(Container $app): DatabaseManager
+{
+    $app['config']->set([
+        'database.connections.backlog' => ['driver' => 'sqlite', 'database' => ':memory:'],
+        'queue.default' => 'async',
+        'queue.connections.async' => ['driver' => 'database', 'connection' => 'backlog', 'table' => 'worker_jobs', 'queue' => 'notifications'],
+    ]);
+    $database = new DatabaseManager($app, new ConnectionFactory($app));
+    $app->instance('db', $database);
+    $database->connection('backlog')->getSchemaBuilder()->create('worker_jobs', function (Blueprint $table) {
+        $table->id();
+        $table->string('queue');
+        $table->unsignedInteger('available_at');
+        $table->unsignedInteger('reserved_at')->nullable();
+    });
+
+    return $database;
+}
+
 beforeEach(function () {
     $this->previousContainer = Container::getInstance();
     $this->skipEnvironment = getenv('PREFLIGHT_SKIP');
@@ -110,7 +133,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -146,7 +169,6 @@ test('each failure has the specified level and exit code', function (string $che
     ['mail.from', ['mail.from.address' => 'hello@example.com'], 'warning', 0],
     ['mail.from', ['mail.from.address' => 'hello@sub.example.com'], 'warning', 0],
     ['mail.from', ['mail.from.address' => 'invalid'], 'warning', 0],
-    ['queue.connection', ['queue.default' => 'sync'], 'warning', 0],
     ['cache.store', ['cache.default' => 'array'], 'warning', 0],
     ['app.url', ['app.url' => 'http://app.test'], 'warning', 0],
     ['app.url', ['app.url' => 'https:///'], 'warning', 0],
@@ -570,3 +592,196 @@ test('usage errors log an exit-two summary without changing JSON stdout', functi
     expect($entry['context'])->toBe(['exit_code' => 2, 'counts' => ['pass' => 0, 'fail' => 0, 'warn' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 'skips' => [], 'ci' => false, 'strict' => false, 'only' => 'unknown', 'error' => 'Unknown check group: unknown']);
     expect($tester->getErrorOutput())->toContain('PREFLIGHT SUMMARY ', '"exit_code":2');
 });
+
+test('queue checks agree with sync until needed for every worker policy', function (string $connection, ?bool $expectedWorker, string $connectionStatus, string $workerStatus) {
+    if ($connection !== 'sync') {
+        preflightDatabase($this->preflight);
+    }
+    $this->preflight['config']->set('queue.default', $connection);
+    if ($expectedWorker !== null) {
+        $this->preflight['config']->set('preflight.queue.expect_worker', $expectedWorker);
+    }
+
+    $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
+    $results = preflightResults($tester);
+    expect($tester->getStatusCode())->toBe(0);
+    expect(array_keys($results))->toBe(['queue.connection', 'queue.worker']);
+    expect($results['queue.connection'])->toMatchArray(['level' => 'warning', 'status' => $connectionStatus]);
+    expect($results['queue.worker'])->toMatchArray(['level' => 'warning', 'status' => $workerStatus]);
+    if ($connectionStatus === 'warn') {
+        expect($results['queue.connection']['message'])->toContain('QUEUE_CONNECTION=sync', 'Laravel Cloud managed queues');
+    }
+    if ($workerStatus === 'warn') {
+        expect($results['queue.worker']['message'])->toBe($results['queue.connection']['message']);
+    }
+})->with([
+    'sync unset' => ['sync', null, 'pass', 'pass'],
+    'sync false' => ['sync', false, 'pass', 'pass'],
+    'sync true' => ['sync', true, 'warn', 'pass'],
+    'async unset' => ['async', null, 'pass', 'pass'],
+    'async false' => ['async', false, 'warn', 'warn'],
+    'async true' => ['async', true, 'pass', 'pass'],
+]);
+
+test('database backlog checks only the configured available queue with one read', function (?int $age, int $threshold, string $status) {
+    Carbon::setTestNow('2026-10-13 12:00:00');
+    $now = Carbon::now()->getTimestamp();
+    $database = preflightDatabase($this->preflight)->connection('backlog');
+    $database->table('worker_jobs')->insert([
+        ['queue' => 'elsewhere', 'available_at' => $now - 3600, 'reserved_at' => null],
+        ['queue' => 'notifications', 'available_at' => $now + 60, 'reserved_at' => null],
+        ['queue' => 'notifications', 'available_at' => $now - 3600, 'reserved_at' => $now - 30],
+    ]);
+    if ($age !== null) {
+        $database->table('worker_jobs')->insert([
+            ['queue' => 'notifications', 'available_at' => $now - 30, 'reserved_at' => null],
+            ['queue' => 'notifications', 'available_at' => $now - $age, 'reserved_at' => null],
+        ]);
+    }
+    $this->preflight['config']->set('preflight.queue.max_backlog_minutes', $threshold);
+    $database->enableQueryLog();
+
+    try {
+        $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
+        $result = preflightResults($tester)['queue.worker'];
+        expect($tester->getStatusCode())->toBe(0);
+        expect($result)->toMatchArray(['level' => 'warning', 'status' => $status]);
+        expect($database->getQueryLog())->toHaveCount(1);
+        if ($status === 'warn') {
+            expect($result['message'])->toContain((string) $threshold, "Enable the hosting platform's managed queue (Laravel Cloud managed queues)", 'QUEUE_CONNECTION=sync');
+        }
+    } finally {
+        Carbon::setTestNow();
+    }
+})->with([
+    'empty available queue' => [null, 15, 'pass'],
+    'fresh backlog' => [899, 15, 'pass'],
+    'at threshold' => [900, 15, 'pass'],
+    'old backlog' => [901, 15, 'warn'],
+    'raised threshold' => [901, 20, 'pass'],
+    'lowered threshold' => [301, 5, 'warn'],
+]);
+
+test('queue evidence is unknown without exposing connection exceptions', function (string $driver, string $reason) {
+    $this->preflight['config']->set([
+        'queue.default' => 'async',
+        'queue.connections.async.driver' => $driver,
+    ]);
+    $this->preflight->bind($driver === 'redis' ? 'redis' : 'db', function () {
+        throw new RuntimeException('secret-must-not-leak');
+    });
+
+    $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(0);
+    expect(preflightResults($tester)['queue.worker'])->toMatchArray(['level' => 'warning', 'status' => 'warn']);
+    expect(preflightResults($tester)['queue.worker']['message'])->toContain('Unknown', $reason, 'Laravel Cloud managed queues', 'QUEUE_CONNECTION=sync');
+    expect($tester->getDisplay())->not->toContain('secret-must-not-leak');
+})->with([
+    'unsupported driver' => ['sqs', 'unsupported'],
+    'database error' => ['database', 'connection'],
+    'redis error' => ['redis', 'connection'],
+]);
+
+test('CI skips worker evidence before opening a queue connection', function () {
+    $this->preflight['config']->set(['queue.default' => 'async', 'queue.connections.async.driver' => 'database']);
+    $this->preflight->bind('db', function () {
+        throw new RuntimeException('The production database must not be opened in CI.');
+    });
+
+    $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--ci' => true, '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(0);
+    expect(preflightResults($tester)['queue.connection']['status'])->toBe('pass');
+    expect(preflightResults($tester)['queue.worker'])->toMatchArray(['level' => 'warning', 'status' => 'skipped-in-ci']);
+});
+
+test('worker timeout remains advisory even in strict mode', function () {
+    $this->preflight['config']->set(['queue.default' => 'async', 'queue.connections.async.driver' => 'database', 'preflight.timeout' => 1]);
+    $this->preflight->bind('db', function () {
+        while (true) {
+            hrtime(true);
+        }
+    });
+
+    $started = microtime(true);
+    $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(0);
+    expect(preflightResults($tester)['queue.worker'])->toMatchArray(['level' => 'warning', 'status' => 'warn']);
+    expect(preflightResults($tester)['queue.worker']['message'])->toContain('Unknown', 'timed out after 1s', 'Laravel Cloud managed queues', 'QUEUE_CONNECTION=sync');
+    expect(microtime(true) - $started)->toBeLessThan(3);
+});
+
+test('Redis backlog uses one atomic read and reports indeterminate ages as unknown', function (int $length, mixed $createdAt, string $status, bool $unknown) {
+    $client = new class($length, $createdAt)
+    {
+        public int $calls = 0;
+
+        public function __construct(private int $length, private mixed $createdAt) {}
+
+        public function isCluster(): bool
+        {
+            return false;
+        }
+
+        public function command(string $method, array $parameters): array
+        {
+            $this->calls++;
+            [, $keys, $key] = $parameters;
+            expect($method)->toBe('eval');
+            expect($keys)->toBe(1)->and($key)->toBe('queues:notifications');
+
+            return [$this->length, json_encode(['createdAt' => $this->createdAt])];
+        }
+    };
+    $redis = new class($client)
+    {
+        public function __construct(private object $client) {}
+
+        public function connection(string $name): object
+        {
+            expect($name)->toBe('backlog');
+
+            return $this->client;
+        }
+    };
+    $this->preflight->instance('redis', $redis);
+    $this->preflight['config']->set([
+        'queue.default' => 'async',
+        'queue.connections.async' => ['driver' => 'redis', 'connection' => 'backlog', 'queue' => 'notifications'],
+    ]);
+    Carbon::setTestNow('2026-10-13 12:00:00');
+
+    try {
+        $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
+        $result = preflightResults($tester)['queue.worker'];
+        expect($tester->getStatusCode())->toBe(0)->and($client->calls)->toBe(1);
+        expect($result)->toMatchArray(['level' => 'warning', 'status' => $status]);
+        expect(str_contains($result['message'], 'Unknown'))->toBe($unknown);
+        if ($status === 'warn') {
+            expect($result['message'])->toContain('Laravel Cloud managed queues', 'QUEUE_CONNECTION=sync');
+        }
+    } finally {
+        Carbon::setTestNow();
+    }
+})->with([
+    'empty' => [0, null, 'pass', false],
+    'fresh' => [2, 1791892501, 'pass', false],
+    'at threshold' => [2, 1791891900, 'pass', false],
+    'old' => [2, 1791891899, 'warn', false],
+    'no timestamp' => [2, null, 'warn', true],
+    'invalid timestamp' => [2, 'not-a-timestamp', 'warn', true],
+]);
+
+test('worker policy env is parsed as a nullable boolean', function (?string $value, ?bool $expected) {
+    $autoload = array_key_first(ClassLoader::getRegisteredLoaders()).'/autoload.php';
+    $process = new Process([PHP_BINARY, '-r', 'require $argv[1]; $config = require $argv[2]; echo json_encode($config["queue"]["expect_worker"]);', $autoload, dirname(__DIR__).'/config/preflight.php'], env: ['PREFLIGHT_QUEUE_EXPECT_WORKER' => $value ?? false]);
+    $process->mustRun();
+
+    expect(json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR))->toBe($expected);
+})->with([
+    'unset' => [null, null],
+    'true' => ['true', true],
+    'false' => ['false', false],
+    'one' => ['1', true],
+    'zero' => ['0', false],
+    'invalid' => ['invalid', null],
+]);

@@ -64,7 +64,7 @@ CI can skip checks requiring production secrets with `--ci` and promote failed w
 php artisan standards:preflight --ci --strict
 ```
 
-Only `app.key`, `app.env-debug` and `database.config` are blocking core checks; mail checks have warning level and never block deployment. Blocking failures exit 1, warnings permit exit 0, and usage errors exit 2. `--strict` exits 1 on any selected failed check regardless of level, but advisory `warn` results still exit 0. CI secret skips are not passes. `--json` supplies board-readable levels and result types. Emergency `--skip=app.key,mail.transport` or `PREFLIGHT_SKIP` overrides are printed, logged and persisted until a passing check clears them. PHP CLI needs PCNTL for the five-second per-check guard. Checks inspect configuration offline; they do not prove that credentials work or services are reachable.
+Only `app.key`, `app.env-debug` and `database.config` are blocking core checks; mail checks have warning level and never block deployment. Blocking failures exit 1, warnings permit exit 0, and usage errors exit 2. `--strict` exits 1 on any selected failed check regardless of level, but advisory `warn` results still exit 0. CI secret skips are not passes. `--json` supplies board-readable levels and result types. Emergency `--skip=app.key,mail.transport` or `PREFLIGHT_SKIP` overrides are printed, logged and persisted until a passing check clears them. PHP CLI needs PCNTL for the five-second per-check guard. Configuration checks run offline; `queue.worker` alone reads queue storage. No hosting APIs are called. These checks do not prove credentials for other services or that a worker is running.
 
 See the [preflight reference](https://github.com/teylabs/cookbook/blob/main/docs/reference/standards-preflight.md) for the complete check list, configuration, skip records and a copyable app payment-webhook check. Implement `Tey\Standards\Preflight\Check` with `name()`, `level()`, `needsSecrets()` and `run()`, returning a `Result`. Register it once in a service provider:
 
@@ -90,6 +90,26 @@ cloud command:run <env> 'php artisan standards:preflight'
 
 Read the runner's output and the new log summary. This checks the deployed configuration; it does not send mail or prove that services are reachable.
 
+## Queue: sync until needed
+
+**Sync until needed; when async work is genuinely needed, use a scale-to-zero managed queue, not an always-on worker.** An app without async work runs `QUEUE_CONNECTION=sync`. Use the hosting platform's managed queue ([Laravel Cloud managed queues](https://cloud.laravel.com/docs/queues#managed-queues)) when async work is needed. `queue.connection` now passes for sync in production when `preflight.queue.expect_worker` is unset or false, instead of warning by default.
+
+The names `queue.worker`, `expect_worker` and `PREFLIGHT_QUEUE_EXPECT_WORKER` stay unchanged. “A worker” here means whatever drains the queue, normally the managed queue. The checks remain driver-based; they do not inspect hosting configuration or require a Cloud-specific driver.
+
+Publish `config/preflight.php` with `php artisan vendor:publish --tag=standards-preflight-config`. Both queue checks read `preflight.queue.expect_worker`, parsed from `PREFLIGHT_QUEUE_EXPECT_WORKER` as a nullable boolean:
+
+| Setting | Sync queue | Async queue |
+|---|---|---|
+| Unset (`null`, default) | Pass; no worker needed. | Connection passes; inspect backlog. |
+| `false` | Pass; deliberately synchronous. | Both checks warn that a queue is configured but no worker is expected. |
+| `true` | Connection warns that a worker is expected but work runs synchronously; backlog check is not applicable. | Connection passes; inspect backlog. |
+
+`queue.worker` is advisory, never blocking even under `--strict`, and skipped with `--ci`. For database queues it reads the oldest unreserved job whose `available_at` is due, in the configured connection, table and queue. Age means time waiting since availability, so deliberately delayed jobs do not warn early. For Redis it reads the ready-list length and first payload atomically in one Lua call, using the configured connection and queue; the payload's Unix-seconds `createdAt` gives age when present. Delayed and reserved Redis sets are not inspected or migrated. Empty and fresh backlogs pass, but neither proves a worker exists.
+
+`preflight.queue.max_backlog_minutes` defaults to 15 (`PREFLIGHT_QUEUE_MAX_BACKLOG_MINUTES`). Jobs waiting **longer than** that threshold warn. Unsupported drivers, missing Redis age, connection errors and timeouts report **Unknown** as a `warn` result, with a safe reason. The check makes at most one query or Redis call within `preflight.timeout` (default five seconds). Enable the hosting platform's managed queue (Laravel Cloud managed queues) for this connection, or set `QUEUE_CONNECTION=sync` deliberately for future jobs and review the existing backlog. Switching to sync or a new managed connection does not move or drain jobs already queued on the old connection.
+
+The preflight runs **before migrate** and sees the previous release's queue. A backlog warning means “jobs are waiting and nothing is draining them”, not “this deploy broke something”. It is a signal to investigate: a slow or overloaded worker can also cause an old backlog. Heartbeats are deferred; no hosting API or worker-process inspection is performed.
+
 ## Agent guidance
 
 The package ships a Laravel Boost guideline. Select `tey/standards` during `php artisan boost:install` to include it in the application's agent instructions.
@@ -98,3 +118,4 @@ The package ships a Laravel Boost guideline. Select `tey/standards` during `php 
 *Changelog: 2026-10-13 — added offline deploy preflight, registered checks, CI mode, timeout guards and persistent emergency skips; mail warns at deploy time, while generic --strict promotes failed results but not advisories for CI. (#105)*
 *Changelog: 2026-10-13 — prepared v0.1.0 for public release, with production-only preflight dependencies, optional development architecture tools, no-dev boot coverage and Boost guidance. (#105)*
 *Changelog: 2026-10-13 — log every preflight result and summary, add automatic and explicit stderr reporting without changing JSON stdout, and document verification after deploy. (#123)*
+*Changelog: 2026-10-13 — prepared 0.2.0 with sync until needed, then scale-to-zero managed queues; added driver-based advisory backlog evidence, nullable worker policy and deploy-timing guidance. Command-output regressions cover managed-queue remedies for policy conflicts, old backlog and unknown evidence. (#124)*

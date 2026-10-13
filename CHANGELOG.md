@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 - 2026-10-13
+
+### Added
+
+- Advisory `queue.worker` backlog checks for database and Redis queues, with a configurable 15-minute age threshold, unknown evidence for unsupported drivers and connection errors, CI skips and bounded reads. No heartbeat or hosting API check is included. (#124)
+- Nullable `preflight.queue.expect_worker` (`PREFLIGHT_QUEUE_EXPECT_WORKER`) and `preflight.queue.max_backlog_minutes` (`PREFLIGHT_QUEUE_MAX_BACKLOG_MINUTES`), with queue policy and pre-migrate timing guidance. (#124)
+
+### Changed
+
+- The default queue policy is sync until needed, then the hosting platform's scale-to-zero managed queue (Laravel Cloud managed queues), never an always-on worker. `queue.connection` now passes for sync in production with the worker expectation unset or false, instead of warning. Explicit expectation conflicts warn without blocking, even under `--strict`. Messages and docs point to managed queues or deliberate sync; the checks remain driver-based and public names stay unchanged. (#124)
+
 ## 0.1.2 - 2026-10-13
 
 ### Added

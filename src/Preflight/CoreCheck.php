@@ -5,12 +5,19 @@ declare(strict_types=1);
 namespace Tey\Standards\Preflight;
 
 use Composer\InstalledVersions;
+use Illuminate\Container\Container;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Redis\Factory as RedisFactory;
+use Illuminate\Database\DatabaseManager;
+use Illuminate\Redis\Connections\Connection as RedisConnection;
+use Illuminate\Redis\Connections\PhpRedisConnection;
+use Illuminate\Support\Carbon;
 use InvalidArgumentException;
+use Throwable;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'cache.store', 'app.url', 'logging.channel'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel'];
 
     private const TRANSPORTS = [
         'resend' => [['resend/resend-php'], ['services.resend.key' => 'RESEND_API_KEY']],
@@ -35,7 +42,7 @@ final readonly class CoreCheck implements Check
 
     public function needsSecrets(): bool
     {
-        if ($this->check === 'app.key') {
+        if (in_array($this->check, ['app.key', 'queue.worker'], true)) {
             return true;
         }
 
@@ -61,7 +68,8 @@ final readonly class CoreCheck implements Check
             'mail.transport' => $this->mailTransport(),
             'mail.from' => $this->mailFrom(),
             'mail.reply-to' => $this->mailReplyTo(),
-            'queue.connection' => $this->result(! $this->production() || $this->config->get('queue.default') !== 'sync', 'Set QUEUE_CONNECTION to a non-sync connection in production.'),
+            'queue.connection' => $this->queueConnection(),
+            'queue.worker' => $this->queueWorker(),
             'cache.store' => $this->result(! $this->production() || $this->config->get('cache.default') !== 'array', 'Set CACHE_STORE to a persistent store in production.'),
             'app.url' => $this->result($this->set('app.url') && (! $this->production() || (filter_var($this->config->get('app.url'), FILTER_VALIDATE_URL) !== false && parse_url((string) $this->config->get('app.url'), PHP_URL_SCHEME) === 'https')), 'Set APP_URL to the public HTTPS URL in production.'),
             'logging.channel' => $this->result($this->set('logging.default') && $this->set('logging.channels.'.$this->config->get('logging.default').'.driver'), 'Set LOG_CHANNEL to a configured logging channel.'),
@@ -76,6 +84,92 @@ final readonly class CoreCheck implements Check
             && ($this->set($connection.'.database') || $this->set($connection.'.url'));
 
         return $this->result($configured, 'Set DB_CONNECTION and its database or DB_URL configuration.');
+    }
+
+    private function syncQueue(): bool
+    {
+        return $this->config->get('queue.connections.'.$this->config->get('queue.default').'.driver', $this->config->get('queue.default')) === 'sync';
+    }
+
+    private function queueConnection(): Result
+    {
+        $expected = $this->config->get('preflight.queue.expect_worker');
+
+        if ($this->syncQueue() && $expected === true) {
+            return Result::warn("A worker is expected but the queue runs synchronously. Enable the hosting platform's managed queue (Laravel Cloud managed queues) and configure its async connection, or keep QUEUE_CONNECTION=sync deliberately and set PREFLIGHT_QUEUE_EXPECT_WORKER=false.");
+        }
+
+        if (! $this->syncQueue() && $expected === false) {
+            return Result::warn("A queue is configured but no worker is expected. Set QUEUE_CONNECTION=sync deliberately, or enable the hosting platform's managed queue (Laravel Cloud managed queues) for this connection and set PREFLIGHT_QUEUE_EXPECT_WORKER=true.");
+        }
+
+        return Result::pass('Queue connection matches the sync until needed policy.');
+    }
+
+    private function queueWorker(): Result
+    {
+        if ($this->syncQueue()) {
+            return Result::pass('Worker backlog check is not applicable to a synchronous queue.');
+        }
+
+        if ($this->config->get('preflight.queue.expect_worker') === false) {
+            return $this->queueConnection();
+        }
+
+        $connection = $this->config->get('queue.connections.'.$this->config->get('queue.default'), []);
+        $driver = $connection['driver'] ?? '';
+        $queue = $connection['queue'] ?? 'default';
+        $now = Carbon::now()->getTimestamp();
+
+        try {
+            if ($driver === 'database') {
+                /** @var DatabaseManager $database */
+                $database = Container::getInstance()->make('db');
+                $oldest = $database->connection($connection['connection'] ?? null)
+                    ->table($connection['table'] ?? 'jobs')
+                    ->where('queue', $queue)
+                    ->whereNull('reserved_at')
+                    ->where('available_at', '<=', $now)
+                    ->oldest('available_at')
+                    ->value('available_at');
+
+                if ($oldest === null) {
+                    return Result::pass('No available jobs are waiting; this does not prove a worker is running.');
+                }
+            } elseif ($driver === 'redis') {
+                /** @var RedisFactory $redis */
+                $redis = Container::getInstance()->make('redis');
+                $client = $redis->connection($connection['connection'] ?? 'default');
+                $key = 'queues:'.($client->isCluster() && ! RedisConnection::hasHashTag($queue) ? '{'.$queue.'}' : $queue);
+                $script = "return {redis.call('LLEN', KEYS[1]), redis.call('LINDEX', KEYS[1], 0)}";
+                [$length, $payload] = $client->command('eval', $client instanceof PhpRedisConnection ? [$script, [$key], 1] : [$script, 1, $key]);
+
+                if ($length === 0) {
+                    return Result::pass('No ready jobs are waiting; this does not prove a worker is running.');
+                }
+
+                $oldest = is_string($payload) ? (json_decode($payload, true)['createdAt'] ?? null) : null;
+
+                if (! is_int($oldest) || $oldest <= 0) {
+                    return $this->unknownQueue('Redis has waiting jobs but their oldest age cannot be determined.');
+                }
+            } else {
+                return $this->unknownQueue('Backlog inspection is unsupported for the configured queue driver.');
+            }
+        } catch (Throwable) {
+            return $this->unknownQueue('Queue connection or backlog read failed; check the connection configuration (exception details withheld to protect secrets).');
+        }
+
+        $minutes = $this->config->get('preflight.queue.max_backlog_minutes', 15);
+
+        return $now - (int) $oldest > $minutes * 60
+            ? Result::warn('Available jobs have waited longer than '.$minutes." minutes. Enable the hosting platform's managed queue (Laravel Cloud managed queues) for this connection, or set QUEUE_CONNECTION=sync deliberately for future jobs; review the existing backlog.")
+            : Result::pass('Available backlog is within '.$minutes.' minutes; this does not prove a worker is running.');
+    }
+
+    private function unknownQueue(string $reason): Result
+    {
+        return Result::warn('Unknown: '.$reason." Verify the hosting platform's managed queue (Laravel Cloud managed queues) is enabled for this connection, or set QUEUE_CONNECTION=sync deliberately for future jobs; review any existing backlog.");
     }
 
     private function mailTransport(): Result

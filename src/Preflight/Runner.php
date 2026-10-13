@@ -28,10 +28,10 @@ final class Runner
                 : $check->run();
 
             return $timedOut || (hrtime(true) - $started) / 1e9 >= $seconds
-                ? Result::fail("Check timed out after {$seconds}s; fix the check or its bounded timeout.")
+                ? $this->failure($check, "Check timed out after {$seconds}s; fix the check or its bounded timeout.")
                 : $result;
         } catch (Throwable) {
-            return Result::fail($timedOut
+            return $this->failure($check, $timedOut
                 ? "Check timed out after {$seconds}s; fix the check or its bounded timeout."
                 : 'Check threw an exception; fix the check configuration (exception details withheld to protect secrets).');
         } finally {
@@ -43,5 +43,12 @@ final class Runner
                 pcntl_alarm($alarm);
             }
         }
+    }
+
+    private function failure(Check $check, string $message): Result
+    {
+        return $check->name() === 'queue.worker'
+            ? Result::warn('Unknown: '.$message." Verify the hosting platform's managed queue (Laravel Cloud managed queues) is enabled for this connection, or set QUEUE_CONNECTION=sync deliberately for future jobs; review any existing backlog.")
+            : Result::fail($message);
     }
 }

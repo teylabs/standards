@@ -90,7 +90,7 @@ $app->instance('config', new Repository([
     'app' => ['env' => 'production', 'debug' => false, 'key' => 'smoke-key', 'url' => 'https://app.test'],
     'database' => ['default' => 'sqlite', 'connections' => ['sqlite' => ['driver' => 'sqlite', 'database' => ':memory:']]],
     'mail' => ['default' => 'log', 'mailers' => ['log' => ['transport' => 'log']]],
-    'queue' => ['default' => 'database'],
+    'queue' => ['default' => 'sync'],
     'cache' => ['default' => 'file'],
     'logging' => ['default' => 'single', 'channels' => ['single' => ['driver' => 'single', 'path' => $app->directory.'/preflight.log']]],
 ]));
@@ -110,7 +110,7 @@ try {
     $exit = $artisan->call('standards:preflight', ['--json' => true, '--no-stderr' => true]);
     $stdout = $artisan->output();
     $json = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);
-    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'cache.store', 'app.url', 'logging.channel'];
+    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel'];
 
     if ($exit !== 0 || $json['exit_code'] !== 0 || array_column($json['results'], 'check') !== $expected
         || array_unique(array_column($json['results'], 'status')) !== ['pass']) {
@@ -136,6 +136,13 @@ try {
 
     if ($tester->getErrorOutput() !== '') {
         throw new RuntimeException('Explicit --no-stderr did not suppress reporting.');
+    }
+
+    $app['config']->set(['queue.default' => 'async', 'queue.connections.async.driver' => 'database']);
+
+    if ($artisan->call('standards:preflight', ['--only' => 'queue', '--strict' => true, '--json' => true]) !== 0
+        || ! str_contains($artisan->output(), 'Unknown')) {
+        throw new RuntimeException('Unavailable queue storage did not remain advisory without development dependencies.');
     }
 
     $app['config']->set('app.key', null);
