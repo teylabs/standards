@@ -2,7 +2,7 @@
 
 `tey/standards` checks configured PHP boundaries, placement and controller rules with named Pest tests. Each result carries a conformance rule number. A dated ratchet permits existing failures and rejects stale exceptions.
 
-**Status: trial.** Requires PHP 8.4.1+ and Pest 4. This package is not published yet. Install its source with a Composer path repository and require it only in development:
+**Status: trial.** Requires PHP 8.4.1+, Laravel 13 components and Pest 4. This package is not published yet. Install its source with a Composer path repository. Architecture-only consumers can require it in development:
 
 ```json
 {
@@ -41,6 +41,13 @@ Pest's `laravel`, `security` and `php` presets run unchanged over the configured
 
 **Apps do not get `strict()`.** The package's own suite runs `arch()->preset()->strict()` only over its `Tey\Standards` source, excluding fixture and consumer namespaces. Its classes use strict types, are final and have no protected methods. The cookbook's consumer checks remain without the strict preset.
 
-Run the package's tests with `composer install` and `composer test` in this directory. The fixture checks never execute their forbidden code. The package has no service provider and does not boot an application.
+Run the package's tests with `composer install` and `composer test` in this directory. The fixture checks never execute their forbidden code. The package's discoverable service provider registers only its preflight command and core checks; architecture checks remain opt-in Pest tests. The package suite uses a lightweight container, not a full application.
+
+## Deployment preflight
+
+Run `php artisan standards:preflight` before migrate and `php artisan standards:preflight --ci` in CI. Only `app.key`, `app.env-debug` and `database.config` are blocking core checks; mail checks have warning level and never block deployment. Blocking failures exit 1, warnings permit exit 0, and usage errors exit 2. `--strict` exits 1 on any selected failed check regardless of level, but advisory `warn` results still exit 0. The cookbook's `mail:preflight` is the strict CI alias for `standards:preflight --only=mail --strict`. `--json` supplies board-readable levels and result types. Emergency `--skip=app.key,mail.transport` or `PREFLIGHT_SKIP` overrides are printed, logged and persisted until a passing check clears them. PHP CLI needs PCNTL for the five-second per-check guard.
+
+Deploy consumers must retain the package (ordinary `require` when deploying with `--no-dev`). See the [preflight reference](../../docs/reference/standards-preflight.md) for the complete check list, configuration, skip records and a copyable app payment-webhook check. Tag app checks `standards.preflight`, or call `Tey\Standards\Preflight::register(CheckClass::class)` with the active container. No payment checks ship in core.
 
 *Changelog: 2026-10-12 — trial `tey/standards` package with configured checks, exact stale-checked ratchets, seeded negative controls and a package-source-only strict preset.*
+*Changelog: 2026-10-13 — added offline deploy preflight, registered checks, CI mode, timeout guards and persistent emergency skips; mail warns at deploy time, while generic --strict promotes failed results but not advisories for CI. (#105)*
