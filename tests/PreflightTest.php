@@ -23,6 +23,7 @@ use Symfony\Component\Yaml\Yaml;
 use Tey\Standards\Preflight;
 use Tey\Standards\Preflight\Check;
 use Tey\Standards\Preflight\CoreCheck;
+use Tey\Standards\Preflight\InstallCheck;
 use Tey\Standards\Preflight\Level;
 use Tey\Standards\Preflight\PreflightCommand;
 use Tey\Standards\Preflight\Result;
@@ -83,7 +84,7 @@ function preflightWorld(): Container
     file_put_contents($app->root.'/composer.json', '{"type":"project","require":{"laravel/nightwatch":"^1.30"}}');
     $config = new Repository([
         'nightwatch' => ['sampling' => ['requests' => 0.1, 'exceptions' => 1.0, 'commands' => 1.0, 'scheduled_tasks' => 1.0]],
-        'app' => ['env' => 'production', 'debug' => false, 'key' => 'test-key', 'url' => 'https://app.test'],
+        'app' => ['env' => 'production', 'debug' => false, 'key' => 'base64:'.base64_encode(str_repeat('k', 32)), 'url' => 'https://app.test'],
         'database' => ['default' => 'sqlite', 'connections' => ['sqlite' => ['driver' => 'sqlite', 'database' => ':memory:']]],
         'mail' => ['default' => 'log', 'mailers' => ['log' => ['transport' => 'log']], 'from' => ['address' => 'alerts@app.test'], 'reply_to' => ['address' => 'hello@app.test']],
         'queue' => ['default' => 'sync'],
@@ -166,7 +167,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning', 'brand.favicon' => 'warning', 'ci.triggers' => 'warning', 'nightwatch.ready' => 'warning'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning', 'brand.favicon' => 'warning', 'ci.triggers' => 'warning', 'nightwatch.ready' => 'warning', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -328,7 +329,9 @@ test('API mail checks require both an installed package and its resolved config 
         preflightInstalledPackages($data);
         $missing = preflightCommand($this->preflight, ['--strict' => true, '--json' => true]);
         expect($missing->getStatusCode())->toBe(1)->and(preflightResults($missing)['mail.transport']['message'])->toContain($package);
-        expect(preflightCommand($this->preflight, ['--json' => true])->getStatusCode())->toBe(0);
+        // A missing transport package now blocks deployment through install.mail.
+        $deploy = preflightCommand($this->preflight, ['--json' => true]);
+        expect($deploy->getStatusCode())->toBe(1)->and(preflightResults($deploy)['install.mail'])->toMatchArray(['level' => 'blocking', 'status' => 'fail']);
         $data['versions'][$package] = ['version' => '1.0.0', 'dev_requirement' => false];
         preflightInstalledPackages($data);
         $missingKey = preflightCommand($this->preflight, ['--strict' => true, '--json' => true]);
@@ -1270,3 +1273,284 @@ test('[rule 51] enforcement env is parsed as a boolean defaulting to false', fun
     'off' => ['off', false],
     'invalid' => ['invalid', false],
 ]);
+
+function preflightInstall(Container $app, array $options = []): array
+{
+    $tester = preflightCommand($app, ['--only' => 'install', '--json' => true, ...$options]);
+
+    return [preflightResults($tester), $tester->getStatusCode(), $tester->getDisplay()];
+}
+
+function preflightWithPackages(array $add, array $remove, callable $callback): void
+{
+    $original = InstalledVersions::getRawData();
+    $data = $original;
+
+    foreach ($add as $package) {
+        $data['versions'][$package] = ['version' => '1.0.0', 'dev_requirement' => false];
+    }
+
+    foreach ($remove as $package) {
+        unset($data['versions'][$package]);
+    }
+
+    try {
+        preflightInstalledPackages($data);
+        $callback();
+    } finally {
+        InstalledVersions::reload($original);
+    }
+}
+
+test('install checks block deployment and pass for a configured app', function (bool $ci) {
+    [$results, $exit] = preflightInstall($this->preflight, ['--ci' => $ci]);
+    expect($exit)->toBe(0)->and(array_keys($results))->toBe(InstallCheck::NAMES);
+
+    foreach ($results as $name => $result) {
+        expect($result['level'])->toBe('blocking')
+            ->and($result['status'])->toBe($ci && in_array($name, ['install.tables', 'install.secrets'], true) ? 'skipped-in-ci' : 'pass');
+    }
+})->with([false, true]);
+
+test('install checks skip packages that are not apps', function () {
+    file_put_contents($this->preflight->root.'/composer.json', '{"type":"library","require":{"ext-missing-for-preflight":"*"}}');
+    $this->preflight['config']->set(['app.key' => null, 'mail.default' => 'resend', 'mail.mailers.resend' => ['transport' => 'resend']]);
+    [$results, $exit] = preflightInstall($this->preflight, ['--strict' => true]);
+    expect($exit)->toBe(0)->and(array_unique(array_column($results, 'status')))->toBe(['skipped']);
+});
+
+test('[regression] a resend mailer without resend/resend-php blocks deployment', function () {
+    $this->preflight['config']->set(['mail.default' => 'failover', 'mail.mailers.failover' => ['transport' => 'failover', 'mailers' => ['resend', 'log']], 'mail.mailers.resend' => ['transport' => 'resend'], 'services.resend.key' => 're_not_for_output']);
+
+    preflightWithPackages([], ['resend/resend-php'], function () {
+        [$results, $exit] = preflightInstall($this->preflight, ['--ci' => true]);
+        expect($exit)->toBe(1)->and($results['install.mail'])->toMatchArray(['level' => 'blocking', 'status' => 'fail'])
+            ->and($results['install.mail']['message'])->toBe('mail.mailers.resend uses the resend transport; install resend/resend-php.');
+    });
+
+    preflightWithPackages(['resend/resend-php'], [], function () {
+        [$results, $exit, $display] = preflightInstall($this->preflight);
+        expect($exit)->toBe(0)->and($results['install.mail']['status'])->toBe('pass')->and($display)->not->toContain('re_not_for_output');
+    });
+});
+
+test('mail transports need each of their packages', function (string $transport, string $package) {
+    $this->preflight['config']->set(['mail.default' => 'api', 'mail.mailers.api' => ['transport' => $transport]]);
+
+    preflightWithPackages(['symfony/http-client', 'symfony/postmark-mailer', 'symfony/mailgun-mailer', 'aws/aws-sdk-php'], [$package], function () use ($package) {
+        [$results] = preflightInstall($this->preflight, ['--ci' => true]);
+        expect($results['install.mail']['status'])->toBe('fail')->and($results['install.mail']['message'])->toContain($package);
+    });
+})->with([
+    ['postmark', 'symfony/postmark-mailer'],
+    ['postmark', 'symfony/http-client'],
+    ['mailgun', 'symfony/mailgun-mailer'],
+    ['ses', 'aws/aws-sdk-php'],
+    ['ses-v2', 'aws/aws-sdk-php'],
+]);
+
+test('[regression] an s3 disk without league/flysystem-aws-s3-v3 blocks deployment', function (array $config) {
+    $this->preflight['config']->set(['filesystems.default' => 'local', 'filesystems.disks.local' => ['driver' => 'local'], 'filesystems.disks.s3' => ['driver' => 's3'], ...$config]);
+
+    preflightWithPackages([], ['league/flysystem-aws-s3-v3'], function () {
+        [$results, $exit] = preflightInstall($this->preflight, ['--ci' => true]);
+        expect($exit)->toBe(1)->and($results['install.filesystems'])->toMatchArray(['level' => 'blocking', 'status' => 'fail']);
+        expect($results['install.filesystems']['message'])->toContain('league/flysystem-aws-s3-v3')->toContain('filesystems.disks.');
+    });
+
+    preflightWithPackages(['league/flysystem-aws-s3-v3'], [], function () {
+        expect(preflightInstall($this->preflight)[0]['install.filesystems']['status'])->toBe('pass');
+    });
+})->with([
+    'default disk' => [['filesystems.default' => 's3']],
+    'cloud disk' => [['filesystems.cloud' => 's3']],
+    'media disk' => [['media-library.disk_name' => 's3']],
+    'bucket set' => [['filesystems.disks.s3.bucket' => 'uploads']],
+    'scoped disk' => [['filesystems.disks.tenant' => ['driver' => 'scoped', 'disk' => 's3', 'prefix' => 'a'], 'filesystems.default' => 'tenant']],
+]);
+
+test('unused stock disks pass and unknown selected disks fail', function () {
+    $this->preflight['config']->set(['filesystems.default' => 'local', 'filesystems.disks' => ['local' => ['driver' => 'local'], 's3' => ['driver' => 's3', 'bucket' => ''], 'ftp' => ['driver' => 'ftp', 'host' => null]]]);
+
+    preflightWithPackages([], ['league/flysystem-aws-s3-v3', 'league/flysystem-ftp'], function () {
+        expect(preflightInstall($this->preflight)[0]['install.filesystems']['status'])->toBe('pass');
+        $this->preflight['config']->set('filesystems.disks.ftp.host', 'ftp.app.test');
+        expect(preflightInstall($this->preflight)[0]['install.filesystems']['message'])->toContain('league/flysystem-ftp');
+        $this->preflight['config']->set(['filesystems.disks.ftp.host' => null, 'media-library.disk_name' => 'media']);
+        expect(preflightInstall($this->preflight)[0]['install.filesystems']['message'])->toContain('filesystems.disks.media is not configured');
+    });
+});
+
+test('queue, cache and session drivers need their client', function (array $config, array $missing, string $message) {
+    $this->preflight['config']->set($config);
+
+    preflightWithPackages([], $missing, function () use ($message) {
+        [$results, $exit] = preflightInstall($this->preflight, ['--ci' => true]);
+        expect($exit)->toBe(1)->and($results['install.drivers']['status'])->toBe('fail')->and($results['install.drivers']['message'])->toContain($message);
+    });
+
+    preflightWithPackages($missing, [], function () {
+        expect(preflightInstall($this->preflight, ['--ci' => true])[0]['install.drivers']['status'])->toBe('pass');
+    });
+})->with([
+    'predis cache' => [['database.redis.client' => 'predis', 'cache.default' => 'redis', 'cache.stores.redis' => ['driver' => 'redis']], ['predis/predis'], 'predis/predis'],
+    'predis session' => [['database.redis.client' => 'predis', 'session.driver' => 'redis'], ['predis/predis'], 'session.driver'],
+    'sqs queue' => [['queue.default' => 'sqs', 'queue.connections.sqs' => ['driver' => 'sqs']], ['aws/aws-sdk-php'], 'queue.connections.sqs'],
+    'dynamodb in a failover store' => [['cache.default' => 'failover', 'cache.stores.failover' => ['driver' => 'failover', 'stores' => ['dynamodb', 'file']], 'cache.stores.dynamodb' => ['driver' => 'dynamodb']], ['aws/aws-sdk-php'], 'cache.stores.dynamodb'],
+]);
+
+test('phpredis and memcached are probed as extensions', function (string $driver, string $extension) {
+    $this->preflight['config']->set(['database.redis.client' => 'phpredis', 'cache.default' => 'store', 'cache.stores.store' => ['driver' => $driver]]);
+    [$results] = preflightInstall($this->preflight, ['--ci' => true]);
+    expect($results['install.drivers']['status'])->toBe(extension_loaded($extension) ? 'pass' : 'fail');
+
+    if (! extension_loaded($extension)) {
+        expect($results['install.drivers']['message'])->toContain('PHP extension');
+    }
+})->with([['redis', 'redis'], ['memcached', 'memcached']]);
+
+test('database-backed drivers need their tables on the configured connection', function () {
+    $this->preflight['config']->set([
+        'database.connections.store' => ['driver' => 'sqlite', 'database' => ':memory:'],
+        'session.driver' => 'database', 'session.connection' => 'store',
+        'cache.default' => 'database', 'cache.stores.database' => ['driver' => 'database', 'connection' => 'store', 'table' => 'cache', 'lock_table' => 'cache_locks'],
+        'queue.default' => 'database', 'queue.connections.database' => ['driver' => 'database', 'connection' => 'store', 'table' => 'jobs'],
+        'queue.batching' => ['database' => 'store', 'table' => 'job_batches'],
+        'queue.failed' => ['driver' => 'database-uuids', 'database' => 'store', 'table' => 'failed_jobs'],
+    ]);
+    $database = new DatabaseManager($this->preflight, new ConnectionFactory($this->preflight));
+    $this->preflight->instance('db', $database);
+
+    [$results, $exit] = preflightInstall($this->preflight);
+    expect($exit)->toBe(1)->and($results['install.tables']['status'])->toBe('fail')
+        ->and($results['install.tables']['message'])->toBe('Missing tables: sessions (session.table), cache (cache.stores.database.table), cache_locks (cache.stores.database.lock_table), jobs (queue.connections.database.table), job_batches (queue.batching.table), failed_jobs (queue.failed.table). Run the migrations that create them.');
+
+    foreach (['sessions', 'cache', 'cache_locks', 'jobs', 'job_batches', 'failed_jobs'] as $table) {
+        $database->connection('store')->getSchemaBuilder()->create($table, fn (Blueprint $blueprint) => $blueprint->id());
+    }
+
+    expect(preflightInstall($this->preflight)[0]['install.tables']['status'])->toBe('pass');
+});
+
+test('an unreachable database is reported as not checked without passing', function () {
+    $this->preflight['config']->set(['session.driver' => 'database', 'database.connections.sqlite.password' => 'db-secret-not-for-output']);
+    $this->preflight->bind('db', function () {
+        throw new RuntimeException('connection refused with db-secret-not-for-output');
+    });
+
+    [$results, $exit, $display] = preflightInstall($this->preflight);
+    expect($exit)->toBe(1)->and($results['install.tables']['status'])->toBe('fail')
+        ->and($results['install.tables']['message'])->toStartWith('Not checked: the default database connection could not be read for session.table')
+        ->and($display)->not->toContain('db-secret-not-for-output');
+});
+
+test('extensions required by composer.json and composer.lock must be loaded', function (string $file, string $contents, string $message) {
+    file_put_contents($this->preflight->root.'/'.$file, $contents);
+    [$results, $exit] = preflightInstall($this->preflight, ['--ci' => true]);
+    expect($exit)->toBe(1)->and($results['install.extensions']['status'])->toBe('fail')->and($results['install.extensions']['message'])->toContain($message);
+
+    file_put_contents($this->preflight->root.'/'.$file, str_replace('missing-for-preflight', 'json', $contents));
+    expect(preflightInstall($this->preflight, ['--ci' => true])[0]['install.extensions'])->toMatchArray(['status' => 'pass', 'message' => 'Every PHP extension required by composer.json and '.($file === 'composer.lock' ? 'composer.lock' : 'a scan of app/ (no composer.lock)').' is loaded.']);
+})->with([
+    'manifest' => ['composer.json', '{"type":"project","require":{"ext-missing-for-preflight":"*"}}', 'composer.json requires ext-missing-for-preflight'],
+    'lock' => ['composer.lock', '{"packages":[{"name":"vendor/money","require":{"ext-missing-for-preflight":"*"}}],"packages-dev":[{"name":"vendor/dev","require":{"ext-dev-only":"*"}}]}', 'vendor/money requires ext-missing-for-preflight'],
+]);
+
+test('without a lock file app source is scanned for bcmath and intl', function () {
+    mkdir($this->preflight->root.'/app');
+    file_put_contents($this->preflight->root.'/app/Money.php', '<?php return bcadd("1", "2", 2);');
+    [$results] = preflightInstall($this->preflight, ['--ci' => true]);
+
+    if (extension_loaded('bcmath')) {
+        expect($results['install.extensions']['message'])->toContain('a scan of app/');
+    } else {
+        expect($results['install.extensions']['message'])->toBe('Enable the bcmath PHP extension (app/ calls it; no composer.lock to read).');
+    }
+});
+
+test('image drivers need their extension when named or used by Media Library conversions', function () {
+    $this->preflight['config']->set('image.driver', 'imagick');
+    [$results] = preflightInstall($this->preflight, ['--ci' => true]);
+    expect($results['install.extensions']['status'])->toBe(extension_loaded('imagick') ? 'pass' : 'fail');
+
+    $this->preflight['config']->set(['image.driver' => null, 'media-library.image_driver' => 'imagick']);
+    expect(preflightInstall($this->preflight, ['--ci' => true])[0]['install.extensions']['status'])->toBe('pass');
+
+    preflightWithPackages(['spatie/laravel-medialibrary'], [], function () {
+        mkdir($this->preflight->root.'/app');
+        file_put_contents($this->preflight->root.'/app/Photo.php', '<?php class Photo { public function registerMediaConversions(): void {} }');
+        [$results] = preflightInstall($this->preflight, ['--ci' => true]);
+        expect($results['install.extensions']['status'])->toBe(extension_loaded('imagick') ? 'pass' : 'fail');
+
+        if (! extension_loaded('imagick')) {
+            expect($results['install.extensions']['message'])->toBe('Enable the imagick PHP extension (media-library.image_driver names it and app/ defines conversions).');
+        }
+    });
+});
+
+test('secrets must be well-formed and are never printed', function (array $config, string $message) {
+    $this->preflight['config']->set($config);
+    [$results, $exit, $display] = preflightInstall($this->preflight);
+    expect($exit)->toBe(1)->and($results['install.secrets'])->toMatchArray(['level' => 'blocking', 'status' => 'fail'])
+        ->and($results['install.secrets']['message'])->toContain($message);
+
+    foreach ($config as $key => $value) {
+        if ($key !== 'app.cipher' && is_string($value) && strlen($value) > 6) {
+            expect($display)->not->toContain($value);
+        }
+    }
+
+    expect(preflightInstall($this->preflight, ['--ci' => true])[0]['install.secrets']['status'])->toBe('skipped-in-ci');
+})->with([
+    'missing key' => [['app.key' => ''], 'Set APP_KEY'],
+    'short key' => [['app.key' => 'base64:'.base64_encode('short-key-material')], 'app.key does not decode to the 32-byte key'],
+    'raw key' => [['app.key' => 'not-a-base64-application-key'], 'app.key does not decode'],
+    'aes-128 length' => [['app.cipher' => 'aes-128-cbc'], '16-byte key aes-128-cbc'],
+    'previous key' => [['app.previous_keys' => ['base64:'.base64_encode('old')]], 'app.previous_keys.0'],
+    'asterisks' => [['services.stripe.secret' => '********'], 'services.stripe.secret'],
+    'changeme' => [['database.connections.sqlite.password' => 'ChangeMe'], 'database.connections.sqlite.password'],
+    'secret' => [['services.github.client_secret' => 'secret'], 'services.github.client_secret'],
+    'placeholder' => [['services.resend.key' => 'placeholder'], 'services.resend.key'],
+    'empty resend key' => [['mail.default' => 'resend', 'mail.mailers.resend' => ['transport' => 'resend'], 'services.resend.key' => ''], 'services.resend.key (or its mailer override) is empty'],
+]);
+
+test('passport keys need PEM headers and real newlines from env or key files', function () {
+    $pem = fn (string $kind): string => "-----BEGIN {$kind} KEY-----\nMIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Qu\n-----END {$kind} KEY-----\n";
+
+    preflightWithPackages(['laravel/passport'], [], function () use ($pem) {
+        expect(preflightInstall($this->preflight)[0]['install.secrets']['message'])->toContain('the oauth-private.key file');
+
+        $this->preflight['config']->set(['passport.private_key' => str_replace("\n", '\n', $pem('PRIVATE')), 'passport.public_key' => $pem('PUBLIC')]);
+        [$results, , $display] = preflightInstall($this->preflight);
+        expect($results['install.secrets']['message'])->toStartWith('passport.private_key is not a PEM key with real newlines')->and($display)->not->toContain('MIIBOgIBAAJB');
+
+        $this->preflight['config']->set(['passport.private_key' => $pem('PRIVATE'), 'passport.public_key' => null]);
+        mkdir($this->preflight->root.'/storage');
+        file_put_contents($this->preflight->root.'/storage/oauth-public.key', $pem('PUBLIC'));
+        expect(preflightInstall($this->preflight)[0]['install.secrets']['status'])->toBe('pass');
+    });
+});
+
+test('views that use @vite need the build manifest', function (?string $directory) {
+    $this->preflight['config']->set('preflight.vite.build_directory', $directory ?? 'build');
+    file_put_contents($this->preflight->root.'/resources/views/app.blade.php', "<link rel=\"icon\" href=\"/favicon.svg\">\n@vite(['resources/js/app.ts'])");
+    $manifest = 'public/'.($directory ?? 'build').'/manifest.json';
+
+    [$results, $exit] = preflightInstall($this->preflight, ['--ci' => true]);
+    expect($exit)->toBe(1)->and($results['install.vite'])->toMatchArray(['status' => 'fail', 'message' => $manifest.' is missing or not valid JSON; run the asset build (npm run build) before deploying.']);
+
+    mkdir(dirname($this->preflight->root.'/'.$manifest), 0777, true);
+    file_put_contents($this->preflight->root.'/'.$manifest, '{}');
+    expect(preflightInstall($this->preflight, ['--ci' => true])[0]['install.vite']['status'])->toBe('pass');
+})->with([null, 'assets/compiled']);
+
+test('install failures keep skip records until the check passes', function () {
+    $this->preflight['config']->set('app.key', '');
+    $path = $this->preflight->directory.'/framework/preflight/install.secrets.json';
+
+    expect(preflightInstall($this->preflight, ['--skip' => 'install.secrets'])[1])->toBe(0)->and(file_exists($path))->toBeTrue();
+    expect(preflightInstall($this->preflight)[1])->toBe(1)->and(file_exists($path))->toBeTrue();
+
+    $this->preflight['config']->set('app.key', 'base64:'.base64_encode(str_repeat('n', 32)));
+    expect(preflightInstall($this->preflight)[1])->toBe(0)->and(file_exists($path))->toBeFalse();
+});

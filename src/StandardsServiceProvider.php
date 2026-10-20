@@ -6,6 +6,7 @@ namespace Tey\Standards;
 
 use Illuminate\Support\ServiceProvider;
 use Tey\Standards\Preflight\CoreCheck;
+use Tey\Standards\Preflight\InstallCheck;
 use Tey\Standards\Preflight\PreflightCommand;
 
 final class StandardsServiceProvider extends ServiceProvider
@@ -17,6 +18,12 @@ final class StandardsServiceProvider extends ServiceProvider
         foreach (CoreCheck::NAMES as $name) {
             $id = 'standards.preflight.'.$name;
             $this->app->bind($id, fn (): CoreCheck => new CoreCheck($name, $this->app->make('config'), $this->app->basePath()));
+            $this->app->tag([$id], 'standards.preflight');
+        }
+
+        foreach (InstallCheck::NAMES as $name) {
+            $id = 'standards.preflight.'.$name;
+            $this->app->bind($id, fn (): InstallCheck => new InstallCheck($name, $this->app->make('config'), $this->app->basePath()));
             $this->app->tag([$id], 'standards.preflight');
         }
     }

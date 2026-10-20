@@ -22,6 +22,10 @@ return [
         // Extra SHA-256 defaults to reject, in addition to CoreCheck::KNOWN_DEFAULT_HASHES.
         'known_default_hashes' => [],
     ],
+    'vite' => [
+        // The directory under public/ that holds manifest.json; match Vite::useBuildDirectory().
+        'build_directory' => 'build',
+    ],
     'queue' => [
         // Sync until needed, then a scale-to-zero managed queue (Laravel Cloud managed queues).
         // A worker means whatever drains the queue, normally the managed queue, not an always-on process.

@@ -128,7 +128,7 @@ $app = new class extends Container
 $app->directory = sys_get_temp_dir().'/standards-no-dev-'.bin2hex(random_bytes(6));
 $app->instance('config', new Repository([
     'nightwatch' => ['sampling' => ['requests' => 0.1, 'exceptions' => 1.0, 'commands' => 1.0, 'scheduled_tasks' => 1.0]],
-    'app' => ['env' => 'production', 'debug' => false, 'key' => 'smoke-key', 'url' => 'https://app.test'],
+    'app' => ['env' => 'production', 'debug' => false, 'key' => 'base64:'.base64_encode(str_repeat('k', 32)), 'url' => 'https://app.test'],
     'database' => ['default' => 'sqlite', 'connections' => ['sqlite' => ['driver' => 'sqlite', 'database' => ':memory:']]],
     'mail' => ['default' => 'log', 'mailers' => ['log' => ['transport' => 'log']]],
     'queue' => ['default' => 'sync'],
@@ -172,10 +172,10 @@ try {
         return;
     }
 
-    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready'];
+    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'install.mail', 'install.filesystems', 'install.drivers', 'install.tables', 'install.extensions', 'install.secrets', 'install.vite'];
 
     if ($exit !== 0 || $json['exit_code'] !== 0 || array_column($json['results'], 'check') !== $expected
-        || array_column($json['results'], 'status') !== [...array_fill(0, count($expected) - 2, 'pass'), 'skipped', 'pass']) {
+        || array_column($json['results'], 'status') !== [...array_fill(0, 12, 'pass'), 'skipped', ...array_fill(0, 8, 'pass')]) {
         throw new RuntimeException('Registered preflight did not pass deployment checks and skip CI: '.$stdout);
     }
 
@@ -274,6 +274,8 @@ try {
         throw new RuntimeException('Unavailable queue storage did not remain advisory without development dependencies.');
     }
 
+    $app['config']->set('queue.default', 'sync');
+
     $app['config']->set('app.key', null);
 
     if ($artisan->call('standards:preflight', ['--json' => true]) !== 1) {
@@ -284,12 +286,12 @@ try {
         throw new RuntimeException('CI preflight did not skip the missing secret.');
     }
 
-    if ($artisan->call('standards:preflight', ['--skip' => 'app.key', '--json' => true]) !== 0
+    if ($artisan->call('standards:preflight', ['--skip' => 'app.key,install.secrets', '--json' => true]) !== 0
         || ! is_file($app->storagePath('framework/preflight/app.key.json'))) {
         throw new RuntimeException('Emergency skip was not persisted.');
     }
 
-    $app['config']->set('app.key', 'fixed');
+    $app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('k', 32)));
 
     if ($artisan->call('standards:preflight', ['--json' => true]) !== 0
         || is_file($app->storagePath('framework/preflight/app.key.json'))) {

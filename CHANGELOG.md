@@ -4,6 +4,7 @@
 
 ### Added
 
+- Blocking `install.*` preflight group that proves configured drivers can run: `install.mail` and `install.filesystems` (transport packages and Flysystem adapters, pinning a `resend` mailer without `resend/resend-php` and an `s3` disk without `league/flysystem-aws-s3-v3`), `install.drivers` (redis client, SQS/DynamoDB SDK, memcached), `install.tables` (database-backed session, cache, queue, batch and failed-job tables), `install.extensions` (Composer `ext-*` requirements, image drivers), `install.secrets` (APP_KEY length, Passport PEM keys, placeholder secrets) and `install.vite` (build manifest). Values are never printed; packages that are not apps skip the group. Prepared for the next minor (0.7.0), not tagged or released.
 - Limit rule 54 to deployed applications; `nightwatch.ready` skips packages without warnings using the shared rule-51 distribution detection, including strict deploy/CI coverage. (#172)
 - Warning-level `nightwatch.ready` checks the runtime dependency, published config and sampling rates without a token in deploy and CI modes; failures block only with `--strict`. Prepared for the next minor, not tagged or released. (#172)
 - Shared manifest page-scaffold reader and consistent directory/component casing rules for the standalone audit and Arch preset. (#171)
