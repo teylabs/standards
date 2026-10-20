@@ -1,0 +1,49 @@
+{
+    "scaffolds": [
+        "app",
+        "resources",
+        "js",
+        "pages",
+        "layouts",
+        "auth",
+        "settings"
+    ],
+    "paths": [
+        {
+            "path": "resources/js/pages/auth/Page.vue",
+            "valid": true
+        },
+        {
+            "path": "resources/js/pages/settings/Page.vue",
+            "valid": true
+        },
+        {
+            "path": "resources/js/layouts/app/Layout.vue",
+            "valid": true
+        },
+        {
+            "path": "resources/js/pages/unlisted/Page.vue",
+            "valid": false
+        },
+        {
+            "path": "resources/js/pages/auth/auth.vue",
+            "valid": false
+        },
+        {
+            "path": "resources/js/Pages/Auth/Page.vue",
+            "valid": false
+        },
+        {
+            "path": "resources/js/pages/Auth/bad-name.vue",
+            "valid": false
+        },
+        {
+            "path": "resources/js/pages/9Bad/Page.vue",
+            "valid": false
+        },
+        {
+            "path": "resources/js/pages/Auth.Name/Page.vue",
+            "valid": false
+        }
+    ]
+}

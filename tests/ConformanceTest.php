@@ -11,6 +11,7 @@ use Symfony\Component\Process\Process;
 use Tey\Standards\Configuration;
 use Tey\Standards\Conformance;
 use Tey\Standards\Native;
+use Tey\Standards\PageConventions;
 
 /** Register before Pest builds its cached architecture inventory. */
 foreach (ClassLoader::getRegisteredLoaders() as $loader) {
@@ -155,6 +156,43 @@ test('native diagnostics preserve the exact Pest 4 wording used by ratchets', fu
     'suffix' => ['toHaveSuffix', ['ViewModel'], "to have suffix 'ViewModel'"],
     'attribute' => ['toHaveAttribute', ['Attribute'], "to have attribute 'Attribute'"],
 ]);
+
+test('rule 20 reads shared scaffold allowances without exempting other page paths', function () {
+    $original = fixtureConfiguration('Good');
+    $directory = 'PageFixture'.bin2hex(random_bytes(8));
+    $base = $original->base.'/'.$directory;
+    $filesystem = new Filesystem;
+
+    try {
+        foreach (['pages/auth/Page.vue', 'pages/settings/Page.vue', 'layouts/app/Layout.vue'] as $path) {
+            $filesystem->ensureDirectoryExists(dirname($base.'/resources/js/'.$path));
+            file_put_contents($base.'/resources/js/'.$path, '<template />');
+        }
+
+        file_put_contents($base.'/composer.json', json_encode(['extra' => ['tey-standards' => [
+            'pageScaffolds' => ['resources', 'js', 'pages', 'layouts', 'auth', 'settings', 'app'],
+        ]]], JSON_THROW_ON_ERROR));
+        $configuration = new Configuration(...array_replace(get_object_vars($original), [
+            'pageRoots' => [$directory.'/resources/js/pages', $directory.'/resources/js/layouts'],
+            'pageScaffolds' => PageConventions::scaffolds($base),
+        ]));
+        (new Conformance($configuration))->assert('20');
+
+        $filesystem->ensureDirectoryExists($base.'/resources/js/pages/unlisted');
+        file_put_contents($base.'/resources/js/pages/unlisted/Page.vue', '<template />');
+        file_put_contents($base.'/resources/js/pages/auth/auth.vue', '<template />');
+        $filesystem->ensureDirectoryExists($base.'/resources/js/pages/9Bad');
+        file_put_contents($base.'/resources/js/pages/9Bad/Page.vue', '<template />');
+        $paths = array_column((new Conformance($configuration))->violations('20'), 'target');
+        expect($paths)->toEqualCanonicalizing([
+            $directory.'/resources/js/pages/unlisted/Page.vue',
+            $directory.'/resources/js/pages/auth/auth.vue',
+            $directory.'/resources/js/pages/9Bad/Page.vue',
+        ]);
+    } finally {
+        $filesystem->deleteDirectory($base);
+    }
+});
 
 test('ViewModel placement checks suffix, base and directory independently', function () {
     $violations = (new Conformance(fixtureConfiguration('Bad')))->violations('20');

@@ -194,13 +194,8 @@ final class Conformance
         }
 
         foreach ($this->source->files($this->config->pageRoots, '*.vue') as $path => $text) {
-            foreach (explode('/', $path) as $part) {
-                $stem = pathinfo($part, PATHINFO_FILENAME);
-
-                if (! in_array($part, $this->config->pageScaffolds, true) && preg_match('/^[a-z]/', $stem)) {
-                    $violations[] = ['target' => $path, 'check' => 'page path must use PascalCase except configured scaffolds'];
-                    break;
-                }
+            if (! PageConventions::validPath($path, $this->config->pageScaffolds)) {
+                $violations[] = ['target' => $path, 'check' => 'page path must use PascalCase except configured scaffolds'];
             }
         }
 

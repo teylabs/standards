@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Shared manifest page-scaffold reader and consistent directory/component casing rules for the standalone audit and Arch preset. (#171)
+
 ## 0.6.1 - 2026-10-13
 
 ### Added
