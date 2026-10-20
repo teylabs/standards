@@ -112,7 +112,7 @@ The `install` group proves that every configured driver can actually run. Each c
 | `install.secrets` | `APP_KEY` (and `app.previous_keys`) decode to the cipher's key length; Passport's keys (when installed), from config or the `oauth-*.key` files, are PEM with real newlines, not literal `\n`; no secret-named config key (`*key`, `*secret`, `*token`, `*password`, `*passphrase`) is a run of asterisks, `placeholder`, `changeme` or `secret`; the default mailer's API secret is not empty. | Skipped in CI (`--ci`). Credentials are not tried against their services. |
 | `install.vite` | When a Blade view under `resources/views` uses `@vite`, `public/<build>/manifest.json` exists and is JSON. Set `preflight.vite.build_directory` to match `Vite::useBuildDirectory()`. | Entries in the manifest are not compared with the views. |
 
-Run the deploy step after the asset build and with the production database reachable, or `install.vite` and `install.tables` fail. The group is unreleased, prepared for the next minor (0.7.0).
+Run the deploy step after the asset build and with the production database reachable, or `install.vite` and `install.tables` fail. The group arrived in 0.7.0.
 
 ## Brand: an app-owned favicon set
 
