@@ -127,6 +127,7 @@ $app = new class extends Container
 };
 $app->directory = sys_get_temp_dir().'/standards-no-dev-'.bin2hex(random_bytes(6));
 $app->instance('config', new Repository([
+    'nightwatch' => ['sampling' => ['requests' => 0.1, 'exceptions' => 1.0, 'commands' => 1.0, 'scheduled_tasks' => 1.0]],
     'app' => ['env' => 'production', 'debug' => false, 'key' => 'smoke-key', 'url' => 'https://app.test'],
     'database' => ['default' => 'sqlite', 'connections' => ['sqlite' => ['driver' => 'sqlite', 'database' => ':memory:']]],
     'mail' => ['default' => 'log', 'mailers' => ['log' => ['transport' => 'log']]],
@@ -146,6 +147,9 @@ putenv('PREFLIGHT_SKIP');
 try {
     mkdir($app->directory.'/public', 0777, true);
     mkdir($app->directory.'/resources/views', 0777, true);
+    mkdir($app->directory.'/config');
+    file_put_contents($app->directory.'/config/nightwatch.php', '<?php return [];');
+    file_put_contents($app->directory.'/composer.json', '{"require":{"laravel/nightwatch":"^1.30"}}');
     file_put_contents($app->directory.'/public/favicon.ico', pack('vvv', 0, 1, 2).pack('CCCCvvVV', 16, 16, 0, 0, 1, 32, 0, 38).pack('CCCCvvVV', 32, 32, 0, 0, 1, 32, 0, 38));
     file_put_contents($app->directory.'/public/favicon.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>');
     file_put_contents($app->directory.'/public/apple-touch-icon.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAAAAAAYplnuAAAANklEQVR4nO3BMQEAAADCoPVPbQlPoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgY39EAAGTgIAHAAAAAElFTkSuQmCC'));
@@ -168,10 +172,10 @@ try {
         return;
     }
 
-    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers'];
+    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready'];
 
     if ($exit !== 0 || $json['exit_code'] !== 0 || array_column($json['results'], 'check') !== $expected
-        || array_column($json['results'], 'status') !== [...array_fill(0, count($expected) - 1, 'pass'), 'skipped']) {
+        || array_column($json['results'], 'status') !== [...array_fill(0, count($expected) - 2, 'pass'), 'skipped', 'pass']) {
         throw new RuntimeException('Registered preflight did not pass deployment checks and skip CI: '.$stdout);
     }
 

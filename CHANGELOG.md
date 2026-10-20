@@ -4,6 +4,8 @@
 
 ### Added
 
+- Limit rule 54 to deployed applications; `nightwatch.ready` skips packages without warnings using the shared rule-51 distribution detection, including strict deploy/CI coverage. (#172)
+- Warning-level `nightwatch.ready` checks the runtime dependency, published config and sampling rates without a token in deploy and CI modes; failures block only with `--strict`. Prepared for the next minor, not tagged or released. (#172)
 - Shared manifest page-scaffold reader and consistent directory/component casing rules for the standalone audit and Arch preset. (#171)
 
 ## 0.6.1 - 2026-10-13

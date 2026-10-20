@@ -90,6 +90,14 @@ cloud command:run <env> 'php artisan standards:preflight'
 
 Read the runner's output and the new log summary. This checks the deployed configuration; it does not send mail or prove that services are reachable.
 
+## Nightwatch Readiness
+
+Rule 54 applies only to running (deployed) applications, never packages; CI checks application readiness before deployment. `nightwatch.ready` reuses `CiTriggers::distribution()`: `preflight.ci.distribution` first, Composer type next (`project` is an app; any other or missing type is a package), and `artisan` only without a Composer manifest. Packages return `skipped` without warnings, including under `--strict`.
+
+`nightwatch.ready` requires `laravel/nightwatch` in Composer `require`, a readable `config/nightwatch.php`, and effective `nightwatch.sampling` rates: requests between 0 and 0.1, exceptions, commands and scheduled tasks at 1.0. It is warning-level and needs no token: failures exit 0 normally and 1 under `--strict`, including in CI. Select it with `php artisan standards:preflight --only=nightwatch --ci --strict`.
+
+Run without sampling overrides to check defaults, and against cached production config to check deployed rates. The app must commit the config, default requests to 0.1, cap overrides at 0.1 and stay dormant without `NIGHTWATCH_TOKEN`; prove those source and boot contracts in the app's tests. Preflight does not inspect Git tracking or prove ingestion. Deploy notes should say Laravel Cloud → Connect Nightwatch is the only remaining step. The check is unreleased, for the next minor.
+
 ## Brand: an app-owned favicon set
 
 Ship the app's own `public/favicon.svg` with an `<svg` root, a non-empty `public/favicon.ico` with the ICO header `00 00 01 00` and 16×16 and 32×32 directory entries, and a PNG `public/apple-touch-icon.png` of exactly 180×180 pixels. Extra ICO sizes are allowed; a zero width or height byte means 256. Link them in every root layout, including guest, app and error shells. A plain monogram on a filled tile is a fallback for an app without a mark. Check it at 16px against light and dark tab bars. Do not retain Laravel's starter icons or a `data:` suppressor.

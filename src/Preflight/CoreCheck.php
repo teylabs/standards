@@ -18,7 +18,7 @@ use Throwable;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready'];
 
     /**
      * SHA-256 of upstream public/favicon.ico, favicon.svg and apple-touch-icon.png.
@@ -126,8 +126,43 @@ final readonly class CoreCheck implements Check
             'logging.channel' => $this->result($this->set('logging.default') && $this->set('logging.channels.'.$this->config->get('logging.default').'.driver'), 'Set LOG_CHANNEL to a configured logging channel.'),
             'brand.favicon' => $this->favicon(),
             'ci.triggers' => $this->ciTriggers(),
+            'nightwatch.ready' => $this->nightwatchReady(),
             default => throw new InvalidArgumentException('Unknown core check: '.$this->check),
         };
+    }
+
+    private function nightwatchReady(): Result
+    {
+        $distribution = (new CiTriggers($this->base, distribution: $this->config->get('preflight.ci.distribution')))->distribution();
+
+        if ($distribution === 'package') {
+            return new Result(Status::Skipped, 'Not applicable to packages.');
+        }
+
+        $path = $this->base.'/composer.json';
+        $composer = is_readable($path) ? json_decode((string) file_get_contents($path), true) : null;
+
+        if (! is_array($composer) || ! isset($composer['require']['laravel/nightwatch'])) {
+            return Result::fail('Add laravel/nightwatch to composer.json require (not require-dev).');
+        }
+
+        if (! is_file($this->base.'/config/nightwatch.php') || ! is_readable($this->base.'/config/nightwatch.php')) {
+            return Result::fail('Publish and commit config/nightwatch.php with the rule 54 sampling rates.');
+        }
+
+        foreach (['requests', 'exceptions', 'commands', 'scheduled_tasks'] as $kind) {
+            $rate = $this->config->get('nightwatch.sampling.'.$kind);
+            $valid = is_numeric($rate) && is_finite((float) $rate)
+                && ($kind === 'requests' ? (float) $rate >= 0.0 && (float) $rate <= 0.1 : (float) $rate === 1.0);
+
+            if (! $valid) {
+                return Result::fail('Set nightwatch.sampling.'.$kind.($kind === 'requests'
+                    ? ' to a default of 0.1, capped between 0.0 and 0.1.'
+                    : ' to 1.0.'));
+            }
+        }
+
+        return Result::pass('Nightwatch runtime dependency, config and sampling rates are ready. Laravel Cloud → Connect Nightwatch is the only remaining deploy step.');
     }
 
     private function ciTriggers(): Result

@@ -78,7 +78,11 @@ function preflightWorld(): Container
     file_put_contents($app->root.'/public/favicon.svg', '<svg xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16"/></svg>');
     file_put_contents($app->root.'/public/apple-touch-icon.png', preflightPng(180, 180));
     file_put_contents($app->root.'/resources/views/app.blade.php', '<link rel="icon" href="/favicon.svg">');
+    mkdir($app->root.'/config');
+    file_put_contents($app->root.'/config/nightwatch.php', '<?php return [];');
+    file_put_contents($app->root.'/composer.json', '{"type":"project","require":{"laravel/nightwatch":"^1.30"}}');
     $config = new Repository([
+        'nightwatch' => ['sampling' => ['requests' => 0.1, 'exceptions' => 1.0, 'commands' => 1.0, 'scheduled_tasks' => 1.0]],
         'app' => ['env' => 'production', 'debug' => false, 'key' => 'test-key', 'url' => 'https://app.test'],
         'database' => ['default' => 'sqlite', 'connections' => ['sqlite' => ['driver' => 'sqlite', 'database' => ':memory:']]],
         'mail' => ['default' => 'log', 'mailers' => ['log' => ['transport' => 'log']], 'from' => ['address' => 'alerts@app.test'], 'reply_to' => ['address' => 'hello@app.test']],
@@ -162,7 +166,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning', 'brand.favicon' => 'warning', 'ci.triggers' => 'warning'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning', 'brand.favicon' => 'warning', 'ci.triggers' => 'warning', 'nightwatch.ready' => 'warning'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -171,6 +175,76 @@ test('the JSON contract lists every core check with its reviewed level and exits
 
     expect(array_column($json['results'], 'check'))->toBe(array_keys($expected));
 });
+
+test('[rule 54] Nightwatch readiness failures warn normally and block strict CI', function (string $target, mixed $value, string $message) {
+    $this->preflight['config']->set('preflight.ci.distribution', 'app');
+
+    if (in_array($target, ['composer.json', 'config/nightwatch.php'], true)) {
+        $path = $this->preflight->root.'/'.$target;
+        $value === null ? unlink($path) : file_put_contents($path, $value);
+    } else {
+        $this->preflight['config']->set('nightwatch.sampling.'.$target, $value);
+    }
+
+    foreach ([false => 0, true => 1] as $strict => $exit) {
+        $tester = preflightCommand($this->preflight, ['--only' => 'nightwatch', '--ci' => true, '--strict' => (bool) $strict, '--json' => true]);
+        expect($tester->getStatusCode())->toBe($exit);
+        expect(preflightResults($tester)['nightwatch.ready'])->toMatchArray(['level' => 'warning', 'status' => 'fail']);
+        expect(preflightResults($tester)['nightwatch.ready']['message'])->toContain($message);
+    }
+})->with([
+    'missing manifest' => ['composer.json', null, 'require'],
+    'invalid manifest' => ['composer.json', '{', 'require'],
+    'dev-only package' => ['composer.json', '{"require-dev":{"laravel/nightwatch":"^1.30"}}', 'require'],
+    'missing config' => ['config/nightwatch.php', null, 'config/nightwatch.php'],
+    'missing requests' => ['requests', null, 'sampling.requests'],
+    'excess requests' => ['requests', 0.1001, 'sampling.requests'],
+    'negative requests' => ['requests', -0.1, 'sampling.requests'],
+    'invalid requests' => ['requests', 'invalid', 'sampling.requests'],
+    'non-finite requests' => ['requests', NAN, 'sampling.requests'],
+    'exceptions' => ['exceptions', 0.5, 'sampling.exceptions'],
+    'commands' => ['commands', null, 'sampling.commands'],
+    'scheduled tasks' => ['scheduled_tasks', 0.0, 'sampling.scheduled_tasks'],
+]);
+
+test('[rule 54] Nightwatch readiness runs without secrets in deploy and CI modes', function (bool $ci, mixed $requests) {
+    $this->preflight['config']->set('nightwatch.sampling.requests', $requests);
+    $tester = preflightCommand($this->preflight, ['--only' => 'nightwatch', '--ci' => $ci, '--strict' => true, '--json' => true]);
+    expect($tester->getStatusCode())->toBe(0);
+    expect(preflightResults($tester)['nightwatch.ready'])->toMatchArray(['level' => 'warning', 'status' => 'pass']);
+})->with([[false, 0.1], [true, 0.0], [true, '0.05']]);
+
+test('[rule 54] Nightwatch shares distribution detection and skips packages without warnings', function (?string $type, ?string $override, bool $manifest, bool $artisan, string $status) {
+    $path = $this->preflight->root.'/composer.json';
+    if ($manifest) {
+        file_put_contents($path, json_encode($type === null ? [] : ['type' => $type], JSON_THROW_ON_ERROR));
+    } else {
+        unlink($path);
+    }
+    if ($artisan) {
+        file_put_contents($this->preflight->root.'/artisan', '<?php');
+    }
+    unlink($this->preflight->root.'/config/nightwatch.php');
+    $this->preflight['config']->set('preflight.ci.distribution', $override);
+
+    foreach ([false, true] as $ci) {
+        $tester = preflightCommand($this->preflight, ['--only' => 'nightwatch', '--ci' => $ci, '--strict' => true, '--json' => true, '--stderr' => true]);
+        expect(preflightResults($tester)['nightwatch.ready']['status'])->toBe($status);
+        expect($tester->getStatusCode())->toBe($status === 'skipped' ? 0 : 1);
+        if ($status === 'skipped') {
+            expect($tester->getErrorOutput())->not->toContain('PREFLIGHT CHECK');
+            expect(file_get_contents($this->preflight->directory.'/default.log'))->not->toContain('.WARNING:');
+        }
+    }
+})->with([
+    'library' => ['library', null, true, false, 'skipped'],
+    'missing type beats artisan' => [null, null, true, true, 'skipped'],
+    'other package type' => ['composer-plugin', null, true, false, 'skipped'],
+    'project' => ['project', null, true, false, 'fail'],
+    'artisan fallback' => [null, null, false, true, 'fail'],
+    'configured package wins' => ['project', 'package', true, true, 'skipped'],
+    'configured app wins' => ['library', 'app', true, false, 'fail'],
+]);
 
 test('the provider boots and registers a working command without autoloadable architecture dependencies', function () {
     $autoload = array_key_first(ClassLoader::getRegisteredLoaders()).'/autoload.php';
@@ -1119,6 +1193,8 @@ test('[rule 51] cache and unknown distribution suggestions never fail strict JSO
 
     if ($known) {
         file_put_contents($this->preflight->root.'/composer.json', '{"type":"project"}');
+    } else {
+        unlink($this->preflight->root.'/composer.json');
     }
 
     file_put_contents($this->preflight->root.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
