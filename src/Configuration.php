@@ -104,5 +104,6 @@ final readonly class Configuration
             'tailwindcss' => ['tailwindcss-development'],
         ],
         public array $boostSkillRoots = ['.claude/skills', '.agents/skills', '.codex/skills'],
+        public string $mcpManifest = 'docs/mcp-capabilities.json',
     ) {}
 }

@@ -44,6 +44,7 @@ final class Conformance
         'pest-only' => '[pest-only] tests use Pest instead of PHPUnit test classes',
         'tia' => '[tia] local test runs require an explicit TIA choice',
         'boost' => '[boost] stack guidance and skills are present',
+        '55' => '[rule 55] MCP capability declarations map UI, shared operations and parity tests',
         'no-dev' => '[no-dev boot] discovery roots do not depend on development tooling',
         'preset laravel' => '[preset laravel] stock Laravel conventions',
         'preset security' => '[preset security] no insecure PHP functions',
@@ -138,6 +139,10 @@ final class Conformance
                 'tia' => (new Checks\Tia($this->config))->violations(),
                 'boost' => (new Checks\Boost($this->config))->violations(),
             };
+        }
+
+        if ($rule === '55') {
+            return (new Checks\McpParity($this->config->base, $this->config->mcpManifest))->violations();
         }
 
         $classes = $this->source->classes();

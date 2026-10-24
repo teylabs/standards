@@ -266,3 +266,19 @@ test('architecture checks accept Pest 4.7+ and 5 and refuse unsupported versions
     'Pest 3' => ['3.8.0', false],
     'Pest 6' => ['6.0.0', false],
 ]);
+
+test('MCP declarations can use a configured manifest without loading application classes', function () {
+    $base = dirname(__DIR__).'/fixtures/McpRun'.bin2hex(random_bytes(6));
+    $files = new Filesystem;
+    $files->copyDirectory(dirname(__DIR__).'/fixtures/Good', $base);
+    try {
+        $files->ensureDirectoryExists($base.'/config');
+        rename($base.'/docs/mcp-capabilities.json', $base.'/config/capabilities.json');
+        $configuration = new Configuration(...array_replace(get_object_vars(fixtureConfiguration('Good')), [
+            'base' => $base, 'mcpManifest' => 'config/capabilities.json', 'classRoots' => ['absent' => 'Absent'],
+        ]));
+        (new Conformance($configuration))->assert('55');
+    } finally {
+        $files->deleteDirectory($base);
+    }
+});

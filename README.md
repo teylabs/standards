@@ -36,6 +36,29 @@ foreach (Conformance::TESTS as $rule => $name) {
 
 Add `tests/Arch` to `phpunit.xml`. Run `vendor/bin/pest --testsuite=Arch --log-junit=conformance-junit.xml`; retain the file in CI as `conformance-junit` with the run's commit and conclusion. Missing, skipped or expired evidence is UNVERIFIED, not PASS.
 
+## MCP capability declarations (rule 55)
+
+Rule `55` validates `docs/mcp-capabilities.json` schema v1. Override the project-relative path with the trailing `Configuration::mcpManifest` parameter. Every capability needs UI references, a shared operation, an implemented tool, resource or human-approval protocol, explicit scopes and existing host-owned parity test files. Write, external and protocol paths require their additional coverage categories and confirmation or handoff contracts. Semantic variants must match normalized options, defaults and ordered effects in both adapters and appear in the reviewed inventory in both directions.
+
+References stay within allowed source roots. Hidden segments, traversal, symlinks and missing files fail. Package source references require a locked, installed package; parity tests remain host-owned. Findings use the manifest path and stable numbered diagnostics, never arbitrary manifest text or file contents, so exact dated ratchet entries work.
+
+This is declaration validation only, equivalent to the standalone audit's `DECLARED` result. It does not execute tests, prove registration, discover every UI capability or establish business parity. Review inventory completeness and run the mapped tests separately. Package fixtures cover accepted and rejected declarations; the host repository also runs an opt-in PHP/Python differential test over the existing Python fixtures (`STANDARDS_PHP_PARITY=1 python3 -B -m unittest discover -s tests/conformance -p test_standards_mcp_parity.py`). The public package suite does not require Python.
+
+### Rules 63–70
+
+These rules remain manual. Their Detect and Verify requirements depend on application semantics or runtime evidence; source candidates alone cannot safely fail a ratchet. No additional rule key is registered for them.
+
+| Rule                   | Probe key | Why                                                                                                                                           |
+| ---------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 63 · Proven secrets    | manual    | Requires a successful authenticated call per secret and environment; no static signal exists.                                                 |
+| 64 · Form actions      | manual    | Detect explicitly calls for manual review; form state, sticky behaviour and leave warnings need browser evidence.                             |
+| 65 · Hands-free deploy | manual    | Extra commands and sync hooks need context to identify required deploy work; migration idempotence and rollback need execution.               |
+| 66 · Account mail      | manual    | The required message inventory and preference rules depend on account features and registered security listeners.                             |
+| 67 · First run         | manual    | Reachable routes, provisioning modes, onboarding gates and empty states need request-level evidence.                                          |
+| 68 · Wizard            | manual    | Real-state completion, optional-step gating and default handling cannot be inferred from step names or source matches.                        |
+| 69 · Checklist         | manual    | Reconciliation and dismissal depend on real state, viewer and workspace boundaries.                                                           |
+| 70 · Computed values   | manual    | Derived amounts cannot be distinguished soundly from recorded inputs or exempt counts; mappings and reconciliation need review and execution. |
+
 ## Add a Ratchet Entry
 
 Pass an explicit allow-list to `Configuration::allowlist`. Each entry has `rule`, `target` (exact relative path or class), `check` (exact diagnostic), `reason` and a real `Y-m-d` `date`. Inspect `$preset->violations('20')` when reviewing a failure. Never build the allow-list by discovering current violations at test time. Fixed, deleted, duplicate and unknown-rule entries fail.

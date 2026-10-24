@@ -9,6 +9,7 @@
 - Add ratcheted frontend descriptor and declared-import checks, with opt-in plus, new-tab, dropzone and toast conventions. (#274)
 
 - Add ratchet-compatible Pest-only, local TIA guard and Boost stack guidance checks with configurable test bases and skills. (#273)
+- Add ratchet-compatible MCP capability declaration validation (rule 55), configurable manifest paths, fixture parity with the standalone probe, and a manual-check table for rules 63–70 (#275).
 
 ## 0.7.0 - 2026-10-20
 
@@ -28,6 +29,7 @@
 ### Changed
 
 - Packages run the CLI in a separate global-tool job (`composer global require tey/standards:^0.6` on PHP 8.4), not as a dev dependency, which breaks package matrices on older PHP or Laravel. The README's Packages section has the job. (#163)
+
 
 ## 0.6.0 - 2026-10-13
 
