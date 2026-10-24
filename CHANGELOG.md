@@ -1,15 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 - 2026-10-24
+
+### Upgrading
+
+- **New architecture rules register automatically.** Apps that loop over `Conformance::TESTS` now run `actions`, `toast`, `mail`, `providers`, `descriptors`, `js-imports`, `pest-only`, `tia`, `boost` and `55`, and rule `21` also checks controller bodies. Run the suite once after upgrading, then fix each finding or baseline it in your allowlist with a dated reason. The `ui plus`, `ui new-tab`, `ui dropzone` and `ui toast` rules stay off unless listed in `Configuration::optionalRules`.
 
 ### Added
 
-- Add ratcheted backend namespace, toast, notification mail and no-dev provider checks to `tey/standards`, with configurable namespace bans and mail composer. (#272, #270)
-- Added rule 21 AST checks for controller validation, helpers, persistence, operation delegation and response negotiation, with configurable classifiers and dated adoption debt. (#271)
-- Add ratcheted frontend descriptor and declared-import checks, with opt-in plus, new-tab, dropzone and toast conventions. (#274)
-
-- Add ratchet-compatible Pest-only, local TIA guard and Boost stack guidance checks with configurable test bases and skills. (#273)
-- Add ratchet-compatible MCP capability declaration validation (rule 55), configurable manifest paths, fixture parity with the standalone probe, and a manual-check table for rules 63–70 (#275).
+- Rule 21 checks controller bodies: no inline validation, no helpers beyond response formatting, no direct persistence, one Action or Query per action, and no JSON-versus-redirect forks. Classifiers are configurable. (#271)
+- Backend checks: `actions` (no `Operations`-style namespaces; configurable), `toast` (outcomes give Toastable feedback, never session flash keys), `mail` (Notifications only, with an optional composer) and `providers` (`bootstrap/providers.php` lists nothing a no-dev install lacks). (#272, #270)
+- Frontend checks: `descriptors` (no role checks or boolean can-maps in pages or responses) and `js-imports` (every bare import is declared), plus the opt-in `ui plus`, `ui new-tab`, `ui dropzone` and `ui toast` conventions. (#274)
+- Test tooling checks: `pest-only` (no PHPUnit test classes outside configured bases), `tia` (the local TIA guard in `tests/Pest.php`, with a snippet in the README) and `boost` (Boost's config, guidelines and stack skills). (#273)
+- Rule 55 validates `docs/mcp-capabilities.json` schema v1 declarations, with a configurable path and results matching the standalone audit. Rules 63–70 stay manual; the README gives the reason for each. (#275)
 
 ## 0.7.0 - 2026-10-20
 

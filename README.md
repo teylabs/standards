@@ -159,7 +159,7 @@ Rule 54 applies only to running (deployed) applications, never packages; CI chec
 
 `nightwatch.ready` requires `laravel/nightwatch` in Composer `require`, a readable `config/nightwatch.php`, and effective `nightwatch.sampling` rates: requests between 0 and 0.1, exceptions, commands and scheduled tasks at 1.0. It is warning-level and needs no token: failures exit 0 normally and 1 under `--strict`, including in CI. Select it with `php artisan standards:preflight --only=nightwatch --ci --strict`.
 
-Run without sampling overrides to check defaults, and against cached production config to check deployed rates. The app must commit the config, default requests to 0.1, cap overrides at 0.1 and stay dormant without `NIGHTWATCH_TOKEN`; prove those source and boot contracts in the app's tests. Preflight does not inspect Git tracking or prove ingestion. Deploy notes should say Laravel Cloud → Connect Nightwatch is the only remaining step. The check is unreleased, for the next minor.
+Run without sampling overrides to check defaults, and against cached production config to check deployed rates. The app must commit the config, default requests to 0.1, cap overrides at 0.1 and stay dormant without `NIGHTWATCH_TOKEN`; prove those source and boot contracts in the app's tests. Preflight does not inspect Git tracking or prove ingestion. Deploy notes should say Laravel Cloud → Connect Nightwatch is the only remaining step. The check arrived in 0.7.0.
 
 ## Installed drivers
 
