@@ -6,6 +6,8 @@ class InvoiceController
 {
     public function store(): mixed
     {
+        validator([]);
+
         return back()->with('status', 'Saved');
     }
 

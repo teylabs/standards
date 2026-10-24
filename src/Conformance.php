@@ -107,7 +107,7 @@ final class Conformance
             '14' => $this->routes(),
             '22' => $this->dependencies($this->config->uiRoots, $this->config->hostNamespaces, $this->config->uiNamespaces),
             '20' => $this->placement($classes),
-            '21' => $this->cruddy(),
+            '21' => [...$this->cruddy(), ...(new Checks\ControllerBodies($this->config, $this->source))->violations()],
             '19' => $this->media($classes),
             '29' => $this->fortify(),
             '32' => $this->roles($classes),

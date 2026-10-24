@@ -50,6 +50,26 @@ Pest's `laravel`, `security` and `php` presets run unchanged over the configured
 
 Run the package's tests with `composer install` and `composer test` in this directory. The fixture checks never execute their forbidden code. The package's discoverable service provider registers only its preflight command and core checks; architecture checks remain opt-in Pest tests. The package suite uses a lightweight container, not a full application.
 
+## Rule 21: Thin Controller Bodies
+
+Rule 21 retains every CRUDDY public-surface and route check. It also parses controller method bodies with PHP-Parser, resolves imported class aliases and reports one exact path + check per method:
+
+| Check string (followed by ` \| PostController::store`) | Detects |
+| --- | --- |
+| `inline validation` | `Validator::make()`, global `validator()`, request `validate()` and `$this->validate()`, including in helpers and closures. Use FormRequests. |
+| `non-response helper` | Private/protected methods other than the constructor or a response formatter. |
+| `direct persistence` | Calls to `DB::` and recognised model/builder writes, including `create`, `update`, `save`, `delete`, `forceDelete`, bulk writes and quiet variants. |
+| `multiple operations` | A resource action or `__invoke` constructs or invokes more than one distinct recognised Action/Query class. Repeated calls to the same class count once. |
+| `response negotiation` | Request `wantsJson()`, `expectsJson()`, `ajax()` or `acceptsJson()`. Choose the response contract at the route boundary. |
+
+The default helper shape is exactly one `return` of `response()`, `redirect()`, `to_route()`, `back()`, an Inertia render/modal, or a Response/Redirect facade factory. Known response chains (including toast macros) are permitted. Arguments may contain data, but nested service calls, object construction, assignments and extra statements fail this shape. This intentionally narrow default never treats a response return type or a name such as `persist` as proof of formatting. A host can allow its own helper names with trailing `Configuration(controllerResponseHelperPattern: '/^(jsonResponse|pageResponse)$/', ...)`. Use named arguments with your existing configuration; the pattern defaults to `null`. Invalid patterns fail configuration. This opt-in only permits the helper: validation, writes and response negotiation inside it still fail independently.
+
+Operation detection defaults to namespace segments `Actions` and `Queries` anywhere in the resolved class name, or class suffixes `Action` and `Query`. Override the trailing `controllerOperationNamespaces` and `controllerOperationSuffixes` arrays for the host's vocabulary; namespace paths match complete segments, never substrings. Empty arrays disable that classifier. The scan recognises static calls, new instances, typed action parameters, typed/promoted controller properties, local assignments, invokable objects and `app(X::class)` / `resolve(X::class)` calls. It flags orchestration of multiple classes, not the absence of an operation in a render-only action. Whether the chosen operation owns all business logic remains a review question.
+
+To keep false positives low, a method named `save`, `validate` or `expectsJson` on an unrelated service is not enough. Model/builder receivers come from resolved parameter/property types, local assignments, construction and common fluent model chains; a `Models` namespace segment, Eloquent Model inheritance or an Eloquent Builder identifies them. Request receivers use Request types/subclasses, a `Request` suffix, `$request` or the global `request()` helper. Unknown relationship return types, untyped services, dynamic calls, inherited/trait method bodies, container strings and arbitrary factory results are not resolved. This is static candidate detection, not proof that every write or operation is found.
+
+Each diagnostic uses rule `21`, a relative controller path and a stable check such as `inline validation | PostController::store`. Existing dated ratchet entries work unchanged, and stale entries still fail. Run `composer test` here for passing/failing fixtures, configuration controls, independent call forms and ratchet tests; run the host's rule-21 architecture test to review its own debt.
+
 ## Deployment preflight
 
 Add one deploy step **before migrate**, and stop deployment if it exits nonzero:

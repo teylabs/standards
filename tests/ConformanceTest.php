@@ -68,7 +68,7 @@ test('the CRUDDY package catches all existing route and public-surface cases', f
     $violations = (new Conformance(fixtureConfiguration('Bad')))->violations('21');
     $checks = array_column($violations, 'check');
 
-    foreach (['method | InvoiceController::pay', 'method | InvoiceController::middleware', 'mixed-invoke | InvoiceController', 'flat-tuple | /invoices/pay => [pay]', 'action-string | /old => @old', 'resource-route | resource(invoices)', 'routed-method | /invoices/reorder => reorder', 'verb-uri | /invoices/reorder'] as $check) {
+    foreach (['inline validation | InvoiceController::store', 'method | InvoiceController::pay', 'method | InvoiceController::middleware', 'mixed-invoke | InvoiceController', 'flat-tuple | /invoices/pay => [pay]', 'action-string | /old => @old', 'resource-route | resource(invoices)', 'routed-method | /invoices/reorder => reorder', 'verb-uri | /invoices/reorder'] as $check) {
         expect($checks)->toContain($check);
     }
 });

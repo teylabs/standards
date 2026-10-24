@@ -28,6 +28,8 @@ final readonly class Configuration
      * @param  list<string>  $safeAttributes
      * @param  list<array{rule: string, target: string, check: string, reason: string, date: string}>  $allowlist
      * @param  list<string>  $forbiddenNamespaces  full namespace prefixes or exact namespace segments
+     * @param  list<string>  $controllerOperationNamespaces  namespace segments or qualified namespace paths
+     * @param  list<string>  $controllerOperationSuffixes
      * @param  list<string>  $ciDefaultBranches
      */
     public function __construct(
@@ -61,5 +63,8 @@ final readonly class Configuration
         public mixed $ciDrafts = 'lint',
         public array $forbiddenNamespaces = ['Operations'],
         public ?string $mailComposer = null,
+        public ?string $controllerResponseHelperPattern = null,
+        public array $controllerOperationNamespaces = ['Actions', 'Queries'],
+        public array $controllerOperationSuffixes = ['Action', 'Query'],
     ) {}
 }
