@@ -41,6 +41,9 @@ final class Conformance
         '32' => '[rule 32] capabilities and policies follow configured placement',
         '12' => '[rule 12] live PHP does not reference retired namespaces',
         '51' => '[rule 51] CI triggers conserve minutes without cancelling main',
+        'pest-only' => '[pest-only] tests use Pest instead of PHPUnit test classes',
+        'tia' => '[tia] local test runs require an explicit TIA choice',
+        'boost' => '[boost] stack guidance and skills are present',
         'no-dev' => '[no-dev boot] discovery roots do not depend on development tooling',
         'preset laravel' => '[preset laravel] stock Laravel conventions',
         'preset security' => '[preset security] no insecure PHP functions',
@@ -127,6 +130,14 @@ final class Conformance
             };
 
             return $check->violations();
+        }
+
+        if (in_array($rule, ['pest-only', 'tia', 'boost'], true)) {
+            return match ($rule) {
+                'pest-only' => (new Checks\PestOnly($this->config))->violations(),
+                'tia' => (new Checks\Tia($this->config))->violations(),
+                'boost' => (new Checks\Boost($this->config))->violations(),
+            };
         }
 
         $classes = $this->source->classes();

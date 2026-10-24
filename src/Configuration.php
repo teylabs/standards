@@ -37,6 +37,9 @@ final readonly class Configuration
      * @param  list<string>  $uiActionComponents
      * @param  list<string>  $uiPlusIcons
      * @param  list<string>  $uiExternalIcons
+     * @param  list<string>  $testBasePaths
+     * @param  array<string, list<string>>  $boostSkills  Composer or npm package => required skills
+     * @param  list<string>  $boostSkillRoots
      * @param  list<string>  $ciDefaultBranches
      */
     public function __construct(
@@ -84,5 +87,22 @@ final readonly class Configuration
         public string $uiToastLibrary = 'vue-sonner',
         public string $uiToastModule = 'app/UI/resources/js/Notification/NotificationCenter.vue',
         public string $uiNotificationCenter = 'app/UI/resources/js/Notification/NotificationCenter.vue',
+        public array $testBasePaths = ['tests/TestCase.php'],
+        public array $boostSkills = [
+            'laravel/framework' => ['laravel-best-practices'],
+            'pestphp/pest' => ['pest-testing'],
+            'laravel/folio' => ['folio-routing'],
+            'laravel/fortify' => ['fortify-development'],
+            'laravel/wayfinder' => ['wayfinder-development'],
+            'tey/mod' => ['mod-development', 'mod-learning-patterns'],
+            'inertiaui/modal' => ['inertia-modal-development'],
+            'lorisleiva/laravel-actions' => ['laravel-actions'],
+            'spatie/laravel-medialibrary' => ['medialibrary-development'],
+            'spatie/laravel-permission' => ['laravel-permission-development'],
+            'spatie/laravel-query-builder' => ['laravel-query-builder'],
+            '@inertiajs/vue3' => ['inertia-vue-development'],
+            'tailwindcss' => ['tailwindcss-development'],
+        ],
+        public array $boostSkillRoots = ['.claude/skills', '.agents/skills', '.codex/skills'],
     ) {}
 }

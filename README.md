@@ -70,6 +70,26 @@ To keep false positives low, a method named `save`, `validate` or `expectsJson` 
 
 Each diagnostic uses rule `21`, a relative controller path and a stable check such as `inline validation | PostController::store`. Existing dated ratchet entries work unchanged, and stale entries still fail. Run `composer test` here for passing/failing fixtures, configuration controls, independent call forms and ratchet tests; run the host's rule-21 architecture test to review its own debt.
 
+## Test tooling checks
+
+`pest-only`, `tia` and `boost` run through `Conformance::TESTS` and use the same exact, dated ratchet as the numbered rules.
+
+- `pest-only` parses PHP under `tests/` without loading it. It flags PHPUnit or Laravel TestCase subclasses with `test*` methods or PHPUnit `#[Test]` attributes, including aliases and inheritance through test classes. `Configuration::testBasePaths` defaults to `['tests/TestCase.php']`; other `*Case.php` files are accepted when referenced by Pest's `extend()` or `uses()`. Configure additional base paths explicitly. External custom base-class ancestry and dynamically declared test methods are not resolved.
+- `tia` checks `tests/Pest.php` for the guard below: an argv assignment from `$_SERVER['argv'] ?? []`, all five conditions joined with `&&`, strict flag checks against that variable, and a direct integer `exit` from 1 to 255. Comments, zero exits and nested conditional exits do not count. This is a static guard-shape check, not proof that TIA has a coverage driver or a valid replay cache. Pest 4 apps can baseline this rule until their Pest 5 adoption.
+- `boost` requires `laravel/boost` in Composer `require-dev`, a readable JSON object in `boost.json`, `.ai/guidelines/`, and a non-empty generated `<laravel-boost-guidelines>` block in `AGENTS.md` or `CLAUDE.md`. Without the dependency it emits one prerequisite finding. It checks non-empty `SKILL.md` files for declared Composer and npm stack packages using `Configuration::boostSkills` (package name → list of skill names). Replace that map for another stack; unrelated packages add no requirements. `boostSkillRoots` defaults to `.claude/skills`, `.agents/skills` and `.codex/skills`. This checks source declarations and generated files, not an installed vendor tree, guideline freshness or live MCP connectivity.
+
+Paste this guard near the start of `tests/Pest.php`, after imports and before test registration:
+
+```php
+$argv = $_SERVER['argv'] ?? [];
+if (getenv('CI') === false && getenv('PARATEST') === false && getenv('PEST_TIA') === false && ! in_array('--tia', $argv, true) && ! in_array('--no-tia', $argv, true)) {
+    fwrite(STDERR, "Choose --tia for local tests or --no-tia for an explicit full run.\n");
+    exit(1);
+}
+```
+
+Run local Pest 5 tests with `vendor/bin/pest --tia` (PCOV or Xdebug is needed to record coverage). Use `--no-tia` for an explicit uncached run or browser specifications. CI and parallel/TIA workers bypass the local guard; CI still executes the full selected suite. The checker does not add the guard or configure TIA for the app.
+
 ## Deployment preflight
 
 Add one deploy step **before migrate**, and stop deployment if it exits nonzero:

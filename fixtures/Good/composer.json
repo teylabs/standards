@@ -1,0 +1,7 @@
+{
+    "require-dev": {
+        "laravel/boost": "^2.0",
+        "pestphp/pest": "^5.0"
+    },
+    "type": "project"
+}
