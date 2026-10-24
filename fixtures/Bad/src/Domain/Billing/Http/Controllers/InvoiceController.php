@@ -4,9 +4,12 @@ namespace FixtureBad\Domain\Billing\Http\Controllers;
 
 class InvoiceController
 {
-    public function __invoke(): void {}
+    public function store(): mixed
+    {
+        return back()->with('status', 'Saved');
+    }
 
-    public function store(): void {}
+    public function __invoke(): void {}
 
     public function pay(): void {}
 

@@ -21,6 +21,10 @@ use ReflectionClass;
 final class Conformance
 {
     public const TESTS = [
+        'actions' => '[actions] backend units use configured Action namespaces',
+        'toast' => '[toast] outcomes use Toastable feedback',
+        'mail' => '[mail] mail uses notifications and the configured composer',
+        'providers' => '[providers] bootstrap providers survive a no-dev install',
         '14' => '[rule 14] UI does not build host routes',
         '22' => '[rule 22] UI has no host PHP dependencies',
         '20' => '[rule 20] classes, controllers, pages and typed ViewModels follow configured placement',
@@ -84,6 +88,17 @@ final class Conformance
         if ($rule === '51') {
             return array_map(fn (array $finding): array => ['target' => $finding['workflow'], 'check' => $finding['job'].' | '.$finding['reason']],
                 (new CiTriggers($this->config->base, $this->config->ciDefaultBranches, $this->config->ciDistribution, $this->config->ciDrafts))->findings());
+        }
+
+        if (in_array($rule, ['actions', 'toast', 'mail', 'providers'], true)) {
+            $check = match ($rule) {
+                'actions' => new Checks\Actions($this->config, $this->source),
+                'toast' => new Checks\Toast($this->config, $this->source),
+                'mail' => new Checks\Mail($this->config, $this->source),
+                'providers' => new Checks\Providers($this->config, $this->source),
+            };
+
+            return $check->violations();
         }
 
         $classes = $this->source->classes();

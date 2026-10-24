@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add ratcheted backend namespace, toast, notification mail and no-dev provider checks to `tey/standards`, with configurable namespace bans and mail composer. (#272, #270)
+
 ## 0.7.0 - 2026-10-20
 
 ### Added
