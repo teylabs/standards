@@ -37,6 +37,8 @@ final readonly class Configuration
      * @param  list<string>  $uiActionComponents
      * @param  list<string>  $uiPlusIcons
      * @param  list<string>  $uiExternalIcons
+     * @param  list<string>  $uiExternalLabelComponents  components that render the external icon themselves
+     * @param  list<string>  $uiToastRenderers  project-relative files allowed to import the toast library
      * @param  list<string>  $testBasePaths
      * @param  array<string, list<string>>  $boostSkills  Composer or npm package => required skills
      * @param  list<string>  $boostSkillRoots
@@ -105,5 +107,7 @@ final readonly class Configuration
         ],
         public array $boostSkillRoots = ['.claude/skills', '.agents/skills', '.codex/skills'],
         public string $mcpManifest = 'docs/mcp-capabilities.json',
+        public array $uiExternalLabelComponents = [],
+        public array $uiToastRenderers = [],
     ) {}
 }

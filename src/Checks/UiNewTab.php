@@ -21,7 +21,7 @@ final class UiNewTab
                     continue;
                 }
                 $rel = preg_split('/\s+/', trim(FrontendSource::attribute($action['attributes'], 'rel') ?? '')) ?: [];
-                if (! in_array('noopener', $rel, true) || ! FrontendSource::hasIcon($action['attributes'].' '.$action['inner'], $config->uiExternalIcons)) {
+                if (! in_array('noopener', $rel, true) || ! FrontendSource::hasIcon($action['attributes'].' '.$action['inner'], [...$config->uiExternalIcons, ...$config->uiExternalLabelComponents])) {
                     $violations[] = ['target' => $path, 'check' => 'new-tab action needs noopener and external icon'];
                 }
             }

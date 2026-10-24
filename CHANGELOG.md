@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `ui new-tab` accepts configured label components (`uiExternalLabelComponents`), `ui toast` accepts configured renderer files (`uiToastRenderers`), `js-imports` reads static `resolve.alias` keys from `vite.config`, and `providers` skips entries guarded by `class_exists`. Real detection is unchanged. (#302)
+
 ## 0.8.0 - 2026-10-24
 
 ### Upgrading

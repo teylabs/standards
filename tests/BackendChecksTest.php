@@ -155,3 +155,20 @@ test('providers classifies installed dev classmaps by their resolved package dir
         $loader->unregister();
     }
 });
+
+test('providers does not flag entries guarded by class_exists but still flags unconditional dev providers', function () {
+    file_put_contents($this->backendBase.'/composer.json', json_encode(['require-dev' => ['pestphp/pest' => '*']]));
+    file_put_contents($this->backendBase.'/composer.lock', json_encode(['packages-dev' => [['name' => 'pestphp/pest', 'autoload' => ['psr-4' => ['Pest\\' => 'src/']]]]]));
+    $run = fn (string $source): array => ($this->backend)('providers', $source, path: 'bootstrap/providers.php');
+    $dev = ['target' => 'bootstrap/providers.php', 'check' => 'Pest\TestSuite belongs to require-dev'];
+
+    expect($run('return [\Pest\TestSuite::class];'))->toBe([$dev]);
+    expect($run('return [\Tey\Standards\StandardsServiceProvider::class, class_exists(\Pest\TestSuite::class) ? \Pest\TestSuite::class : null];'))->toBe([]);
+    expect($run('return [...(class_exists(\Pest\TestSuite::class) ? [\Pest\TestSuite::class] : [])];'))->toBe([]);
+    expect($run('return array_filter([\Pest\TestSuite::class, \Missing\Provider::class], class_exists(...));'))->toBe([]);
+    expect($run('return array_filter([\Pest\TestSuite::class], fn ($provider) => class_exists($provider));'))->toBe([]);
+    expect($run('if (class_exists(\Pest\TestSuite::class)) { return [\Pest\TestSuite::class]; } return [];'))->toBe([]);
+    expect($run('if (class_exists(\Other\Thing::class)) { return [\Pest\TestSuite::class]; } return [];'))->toBe([$dev]);
+    expect($run('return array_filter([\Pest\TestSuite::class], fn ($provider) => $provider !== null);'))->toBe([['target' => 'bootstrap/providers.php', 'check' => 'provider list must be a literal array']]);
+    expect($run('return [class_exists(\Other\Thing::class) ? \Pest\TestSuite::class : null];'))->toBe([$dev]);
+});

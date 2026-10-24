@@ -185,3 +185,54 @@ test('frontend declarations and explicit missing roots are checked', function ()
 test('frontend Vue script extraction ignores commented scripts', function () {
     expect(FrontendSource::imports(FrontendSource::script('Posts.vue', "<!-- <script>import 'comment';</script> --><script>import 'real';</script>")))->toBe(['real']);
 });
+
+test('ui new-tab counts a configured label component as the external icon', function () {
+    $base = dirname(__DIR__).'/.phpunit.cache/label-'.bin2hex(random_bytes(5));
+    mkdir($base.'/client', 0777, true);
+    file_put_contents($base.'/client/Posts.vue', '<template><a target="_blank" rel="noopener"><ExternalLabel>Posts</ExternalLabel></a></template>');
+    try {
+        expect((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['client']])))->violations('ui new-tab'))->toHaveCount(1);
+        $config = frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['client'], 'uiExternalLabelComponents' => ['ExternalLabel']]);
+        expect((new Conformance($config))->violations('ui new-tab'))->toBe([]);
+        file_put_contents($base.'/client/Posts.vue', '<template><a target="_blank" rel="noopener"><OtherLabel>Posts</OtherLabel></a></template>');
+        expect((new Conformance($config))->violations('ui new-tab'))->toHaveCount(1);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('ui toast lets configured renderers import the toast library and nobody else', function () {
+    $base = dirname(__DIR__).'/.phpunit.cache/toast-'.bin2hex(random_bytes(5));
+    mkdir($base.'/client', 0777, true);
+    file_put_contents($base.'/client/Toaster.vue', "<script setup>import { Toaster } from 'vue-sonner';</script>");
+    file_put_contents($base.'/client/Caller.vue', "<script setup>import { toast } from 'vue-sonner';</script>");
+    try {
+        $overrides = ['base' => $base, 'frontendRoots' => ['client']];
+        expect(array_column((new Conformance(frontendConfiguration(overrides: $overrides)))->violations('ui toast'), 'target'))->toEqualCanonicalizing(['client/Toaster.vue', 'client/Caller.vue']);
+        $config = frontendConfiguration(overrides: [...$overrides, 'uiToastRenderers' => ['client/Toaster.vue']]);
+        expect((new Conformance($config))->violations('ui toast'))->toBe([['target' => 'client/Caller.vue', 'check' => 'toast library imported outside configured module']]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('js-imports reads static vite resolve.alias keys and ignores dynamic ones', function (string $config) {
+    $base = dirname(__DIR__).'/.phpunit.cache/vite-'.bin2hex(random_bytes(5));
+    mkdir($base.'/client', 0777, true);
+    file_put_contents($base.'/package.json', '{}');
+    file_put_contents($base.'/vite.config.ts', $config);
+    file_put_contents($base.'/client/Posts.ts', "import a from '@app/a';\nimport b from '#shared';\nimport c from '@dynamic/c';\nimport d from 'real-missing';\nimport e from '@appx/e';");
+    try {
+        $overrides = ['base' => $base, 'frontendRoots' => ['client'], 'frontendAliases' => ['@/']];
+        expect(array_column((new Conformance(frontendConfiguration(overrides: $overrides)))->violations('js-imports'), 'check'))->toBe([
+            'undeclared package import: @dynamic/c',
+            'undeclared package import: real-missing',
+            'undeclared package import: @appx/e',
+        ]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+})->with([
+    'object keys' => ["export default defineConfig({ resolve: { alias: { '@app': path.resolve('x'), '#shared': 'y', [dynamicKey]: 'z', ...spread } } });"],
+    'find array' => ["export default { resolve: { alias: [{ find: '@app', replacement: 'x' }, { find: \"#shared\", replacement: 'y' }, { find: /^re/, replacement: 'z' }, { find: dynamicFind, replacement: 'w' }] } };"],
+]);
