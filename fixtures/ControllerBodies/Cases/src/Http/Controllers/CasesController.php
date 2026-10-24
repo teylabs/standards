@@ -3,7 +3,10 @@
 namespace BodyCases\Http\Controllers;
 
 use BodyCases\Actions\SavePost;
+use BodyCases\Jobs\PublishPostAction;
 use BodyCases\Jobs\WriteTask;
+use BodyCases\Kit\Data\Action;
+use BodyCases\Kit\Data\ExportAction;
 use BodyCases\Models\Post;
 use BodyCases\Queries\FindPosts;
 use BodyCases\Reporting\Read;
@@ -262,5 +265,24 @@ class UnmappedController
     public function store(): void
     {
         validator([]);
+    }
+}
+
+/** A descriptor Data class named Action is not an operation. */
+class DescriptorController
+{
+    public function show(): array
+    {
+        return [FindPosts::run(), new Action('Save', '/posts/1', 'put'), new ExportAction('Export', '/posts.csv')];
+    }
+}
+
+/** A suffix on a longer name outside Data still counts. */
+class SuffixOnlyController
+{
+    public function store(): void
+    {
+        PublishPostAction::run();
+        FindPosts::run();
     }
 }

@@ -29,7 +29,8 @@ final readonly class Configuration
      * @param  list<array{rule: string, target: string, check: string, reason: string, date: string}>  $allowlist
      * @param  list<string>  $forbiddenNamespaces  full namespace prefixes or exact namespace segments
      * @param  list<string>  $controllerOperationNamespaces  namespace segments or qualified namespace paths
-     * @param  list<string>  $controllerOperationSuffixes
+     * @param  list<string>  $controllerOperationSuffixes  matched on the short class name, which must be longer than the suffix
+     * @param  list<string>  $controllerNonOperationNamespaces  namespace segments that are never operations (descriptor Data classes)
      * @param  list<string>|null  $frontendRoots  null scans existing resources/js and UI roots
      * @param  list<string>  $frontendAliases  local import prefixes
      * @param  list<string>|null  $descriptorResponseRoots  null uses sourceRoots
@@ -109,5 +110,6 @@ final readonly class Configuration
         public string $mcpManifest = 'docs/mcp-capabilities.json',
         public array $uiExternalLabelComponents = [],
         public array $uiToastRenderers = [],
+        public array $controllerNonOperationNamespaces = ['Data'],
     ) {}
 }

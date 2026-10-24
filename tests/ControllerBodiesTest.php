@@ -130,6 +130,14 @@ test('rule 21 operation vocabulary is configurable with namespace boundaries', f
     expect($suffixes)->not->toContain('multiple operations | StaticController::store');
 });
 
+test('rule 21 does not count descriptor Data classes as operations', function () {
+    $checks = array_column(bodyViolations('Cases'), 'check');
+    expect($checks)->not->toContain('multiple operations | DescriptorController::show');
+    expect($checks)->toContain('multiple operations | SuffixOnlyController::store');
+    $configured = array_column(bodyViolations('Cases', ['controllerNonOperationNamespaces' => []]), 'check');
+    expect($configured)->toContain('multiple operations | DescriptorController::show');
+});
+
 test('rule 21 response helper shape rejects work hidden behind response construction', function () {
     $checks = array_column(bodyViolations('Cases'), 'check');
     foreach (['persist', 'sideEffect', 'disguised'] as $method) {

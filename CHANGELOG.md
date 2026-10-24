@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Rule 21 no longer counts a descriptor Data class named like an operation (for example a kit `Action` descriptor) as a second operation: suffixes match only longer short names, and classes in a `Data` namespace segment never count (`controllerNonOperationNamespaces`, default `['Data']`). (#302)
 - `ui new-tab` accepts configured label components (`uiExternalLabelComponents`), `ui toast` accepts configured renderer files (`uiToastRenderers`), `js-imports` reads static `resolve.alias` keys from `vite.config`, and `providers` skips entries guarded by `class_exists`. Real detection is unchanged. (#302)
 
 ## 0.8.0 - 2026-10-24

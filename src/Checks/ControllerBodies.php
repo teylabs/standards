@@ -215,13 +215,19 @@ final class ControllerBodies
         if ($class === null) {
             return false;
         }
+        foreach ($this->config->controllerNonOperationNamespaces as $namespace) {
+            if (str_contains('\\'.$class.'\\', '\\'.trim($namespace, '\\').'\\')) {
+                return false;
+            }
+        }
         foreach ($this->config->controllerOperationNamespaces as $namespace) {
             if (str_contains('\\'.$class.'\\', '\\'.trim($namespace, '\\').'\\')) {
                 return true;
             }
         }
+        $short = substr(strrchr('\\'.$class, '\\') ?: $class, 1);
         foreach ($this->config->controllerOperationSuffixes as $suffix) {
-            if ($suffix !== '' && str_ends_with($class, $suffix)) {
+            if ($suffix !== '' && $short !== $suffix && str_ends_with($short, $suffix)) {
                 return true;
             }
         }
