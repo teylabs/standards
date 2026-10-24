@@ -6,6 +6,8 @@
 
 - Add ratcheted backend namespace, toast, notification mail and no-dev provider checks to `tey/standards`, with configurable namespace bans and mail composer. (#272, #270)
 - Added rule 21 AST checks for controller validation, helpers, persistence, operation delegation and response negotiation, with configurable classifiers and dated adoption debt. (#271)
+- Add ratcheted frontend descriptor and declared-import checks, with opt-in plus, new-tab, dropzone and toast conventions. (#274)
+
 
 ## 0.7.0 - 2026-10-20
 

@@ -52,6 +52,7 @@ function fixtureConfiguration(string $kind, array $allowlist = [], bool $ciEnfor
         mediaInterface: 'FixtureGood\\UI\\MediaContract',
         allowlist: $allowlist,
         ciEnforce: $ciEnforce,
+        optionalRules: ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast'],
     );
 }
 

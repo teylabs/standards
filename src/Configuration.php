@@ -30,6 +30,13 @@ final readonly class Configuration
      * @param  list<string>  $forbiddenNamespaces  full namespace prefixes or exact namespace segments
      * @param  list<string>  $controllerOperationNamespaces  namespace segments or qualified namespace paths
      * @param  list<string>  $controllerOperationSuffixes
+     * @param  list<string>|null  $frontendRoots  null scans existing resources/js and UI roots
+     * @param  list<string>  $frontendAliases  local import prefixes
+     * @param  list<string>|null  $descriptorResponseRoots  null uses sourceRoots
+     * @param  list<string>  $optionalRules
+     * @param  list<string>  $uiActionComponents
+     * @param  list<string>  $uiPlusIcons
+     * @param  list<string>  $uiExternalIcons
      * @param  list<string>  $ciDefaultBranches
      */
     public function __construct(
@@ -66,5 +73,16 @@ final readonly class Configuration
         public ?string $controllerResponseHelperPattern = null,
         public array $controllerOperationNamespaces = ['Actions', 'Queries'],
         public array $controllerOperationSuffixes = ['Action', 'Query'],
+        public ?array $frontendRoots = null,
+        public array $frontendAliases = ['@/', '~/'],
+        public ?array $descriptorResponseRoots = null,
+        public array $optionalRules = [],
+        public array $uiActionComponents = ['Button', 'button', 'ModalLink', 'Link', 'a', 'DropdownMenuItem'],
+        public array $uiPlusIcons = ['Plus', 'PlusIcon'],
+        public array $uiExternalIcons = ['ArrowUpRight', 'ArrowUpRightIcon', 'ExternalLink', 'ExternalLinkIcon'],
+        public string $uiDropzone = 'app/UI/resources/js/Form/InputFile.vue',
+        public string $uiToastLibrary = 'vue-sonner',
+        public string $uiToastModule = 'app/UI/resources/js/Notification/NotificationCenter.vue',
+        public string $uiNotificationCenter = 'app/UI/resources/js/Notification/NotificationCenter.vue',
     ) {}
 }

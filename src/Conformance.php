@@ -25,6 +25,13 @@ final class Conformance
         'toast' => '[toast] outcomes use Toastable feedback',
         'mail' => '[mail] mail uses notifications and the configured composer',
         'providers' => '[providers] bootstrap providers survive a no-dev install',
+        'descriptors' => '[descriptors] UI consumes descriptors without authorization checks',
+        'js-imports' => '[js-imports] frontend imports name declared packages',
+        'ui plus' => '[ui plus] add actions carry a plus icon',
+        'ui new-tab' => '[ui new-tab] new-tab actions carry noopener and an external icon',
+        'ui dropzone' => '[ui dropzone] only the configured dropzone owns file inputs',
+        'ui toast' => '[ui toast] notifications use one configured toast path',
+
         '14' => '[rule 14] UI does not build host routes',
         '22' => '[rule 22] UI has no host PHP dependencies',
         '20' => '[rule 20] classes, controllers, pages and typed ViewModels follow configured placement',
@@ -72,6 +79,10 @@ final class Conformance
 
     public function assert(string $rule): void
     {
+        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+            Assert::markTestSkipped('Optional rule ['.$rule.'] is disabled; enable it in Configuration::optionalRules.');
+        }
+
         $violations = $this->violations($rule);
 
         if ($rule === '51' && ! $this->config->ciEnforce) {
@@ -85,6 +96,23 @@ final class Conformance
     /** @return list<array{target: string, check: string}> */
     public function violations(string $rule): array
     {
+        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+            return [];
+        }
+
+        $frontend = match ($rule) {
+            'descriptors' => (new Checks\Descriptors)->violations($this->config),
+            'js-imports' => (new Checks\JsImports)->violations($this->config),
+            'ui plus' => (new Checks\UiPlus)->violations($this->config),
+            'ui new-tab' => (new Checks\UiNewTab)->violations($this->config),
+            'ui dropzone' => (new Checks\UiDropzone)->violations($this->config),
+            'ui toast' => (new Checks\UiToast)->violations($this->config),
+            default => null,
+        };
+        if ($frontend !== null) {
+            return $frontend;
+        }
+
         if ($rule === '51') {
             return array_map(fn (array $finding): array => ['target' => $finding['workflow'], 'check' => $finding['job'].' | '.$finding['reason']],
                 (new CiTriggers($this->config->base, $this->config->ciDefaultBranches, $this->config->ciDistribution, $this->config->ciDrafts))->findings());

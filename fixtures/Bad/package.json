@@ -1,0 +1,12 @@
+{
+    "dependencies": {
+        "vue": "*",
+        "@scope/widgets": "*"
+    },
+    "devDependencies": {
+        "test-helper": "*"
+    },
+    "peerDependencies": {
+        "peer-helper": "*"
+    }
+}

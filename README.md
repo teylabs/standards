@@ -364,3 +364,36 @@ These opt-in architecture tests register automatically with `Conformance::TESTS`
 | `providers` | Literal entries in `bootstrap/providers.php` must autoload and must not belong to Composer's dev-only autoload namespaces or package directories. Lock `packages-dev` metadata and root `autoload-dev` are checked even when development dependencies are currently installed. No provider is instantiated and the bootstrap file is never executed.                                                    |
 
 PHP checks resolve imports and aliases and ignore comments and strings. Toast analysis inspects direct return chains, ternaries and match arms, not variable assignments or redirects hidden in helpers. Route detection covers literal Route facade calls (including fluent calls), class constants and explicit invokable tuples/strings; dynamic registrations are not resolved. Composer mail checks are structural references, not proof of delivery or branding. Provider checks use the active autoloader plus lock metadata; they do not replace an isolated no-dev boot test or prove arbitrary provider dependencies survive boot. Missing bootstrap provider files are inapplicable. Keep `composer.lock` available for dev-package classification.
+
+## Frontend source checks
+
+The `descriptors` rule rejects role/permission checks and boolean can-maps in frontend source and PHP response arrays. The `js-imports` rule checks bare package imports against dependencies, devDependencies and peerDependencies in `package.json`. Four UI checks are opt-in through `Configuration::optionalRules`: `ui plus`, `ui new-tab`, `ui dropzone` and `ui toast`. These are static source checks; runtime authorization and response contracts still need application tests.
+
+| Rule          | Source contract                                                                                                                                                                                                                                                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `descriptors` | `.vue` scripts/template expressions and `.ts`/`.js` source contain no role/permission checks, admin flags or boolean can-maps. PHP literal arrays keyed `can` are flagged, including computed entries. Render server action descriptors instead.                                                                                        |
+| `js-imports`  | Static imports (including side effects and types), re-exports and literal dynamic imports name declared dependencies, devDependencies or peerDependencies. Scoped subpaths map to their package. Relative imports, `node:` and configured alias prefixes are local. Missing package manifests produce a finding; malformed JSON throws. |
+| `ui plus`     | Static Add/New/Create labels on configured action tags carry a configured plus icon, including self-closing tags with `label`/`icon` attributes.                                                                                                                                                                                        |
+| `ui new-tab`  | Configured action tags with literal `target="_blank"` carry an exact `noopener` rel token and a configured external icon.                                                                                                                                                                                                               |
+| `ui dropzone` | Native file inputs (including literal `:type` bindings) occur only in the configured owner file.                                                                                                                                                                                                                                        |
+| `ui toast`    | Only the configured module imports the toast library; templates outside the notification centre do not access loose `flash.status`, `success`, `message`, `error` or `toast`.                                                                                                                                                           |
+
+All options below are trailing named constructor arguments. Defaults preserve optional UI enforcement as off. Explicit frontend roots must exist (unmatched globs may be empty); overlapping roots are deduplicated.
+
+| Configuration             | Default                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| `frontendRoots`           | `null`: existing `resources/js` plus `uiRoots`; configure module frontend roots explicitly. |
+| `frontendAliases`         | `['@/', '~/']` prefix matches; include the app's actual Vite aliases.                       |
+| `descriptorResponseRoots` | `null`: `sourceRoots`; narrow this to response/ViewModel roots if needed.                   |
+| `optionalRules`           | `[]`; assertions report skipped for disabled optional rules, never behavioural PASS.        |
+| `uiActionComponents`      | `['Button', 'button', 'ModalLink', 'Link', 'a', 'DropdownMenuItem']`                        |
+| `uiPlusIcons`             | `['Plus', 'PlusIcon']`                                                                      |
+| `uiExternalIcons`         | `['ArrowUpRight', 'ArrowUpRightIcon', 'ExternalLink', 'ExternalLinkIcon']`                  |
+| `uiDropzone`              | `app/UI/resources/js/Form/InputFile.vue`                                                    |
+| `uiToastLibrary`          | `vue-sonner`                                                                                |
+| `uiToastModule`           | `app/UI/resources/js/Notification/NotificationCenter.vue`                                   |
+| `uiNotificationCenter`    | `app/UI/resources/js/Notification/NotificationCenter.vue`                                   |
+
+These defaults name the cookbook kit. A host with a Dropzone or notify adapter sets its own exact project-relative owner paths. Optional checks can expose existing kit debt: enabling `ui dropzone` does not exempt other file-input components automatically.
+
+Limits: the JavaScript lexer discards comments and treats strings/template literals as opaque. It does not resolve variables, interpolated dynamic imports, aliases defined only in build configuration, or template-string expressions. UI checks inspect literal tags, attributes, labels and icons; dynamic bindings, runtime components and indirect flash aliases need behavioural tests. PHP arrays are parsed, never executed; a `can` map outside a response can be a source candidate too. Tiptap's `can()` is a known non-authorization use; baseline the exact finding with a dated reason. No package installation, app boot or network access occurs during the source checks.
