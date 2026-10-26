@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Upgrading
+
+- **The non-blocking level is now `advisory`.** JSON results, log context and the table print `"level": "advisory"` where they printed `"warning"`. Update any dashboard or script that matches the old value. `Level::Warning` stays as a deprecated alias of `Level::Advisory`, so custom checks keep working.
+
+### Changed
+
+- A non-interactive `standards:preflight` run (a deploy command, or `--no-interaction`) prints only failed, advisory and emergency-skipped checks, then one summary line. Passing deploys no longer print "warning", which Laravel Cloud flags as "Logs contain warnings". Interactive runs keep the full table. Advisory results print `PREFLIGHT CHECK ADVISORY` on stderr and log at `notice`. (teylabs/standards#3)
+
 ## 0.9.0 - 2026-10-26
 
 ### Upgrading

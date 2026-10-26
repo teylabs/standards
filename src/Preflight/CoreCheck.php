@@ -88,7 +88,7 @@ final readonly class CoreCheck implements Check
     public function level(): Level
     {
         return in_array($this->check, ['app.key', 'app.env-debug', 'database.config'], true)
-            ? Level::Blocking : Level::Warning;
+            ? Level::Blocking : Level::Advisory;
     }
 
     public function needsSecrets(): bool

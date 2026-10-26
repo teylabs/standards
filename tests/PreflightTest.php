@@ -102,12 +102,12 @@ function preflightWorld(): Container
     return $app;
 }
 
-function preflightCommand(Container $app, array $options = []): CommandTester
+function preflightCommand(Container $app, array $options = [], bool $interactive = true): CommandTester
 {
     $command = new PreflightCommand;
     $command->setLaravel($app);
     $tester = new CommandTester($command);
-    $tester->execute($options, ['capture_stderr_separately' => true]);
+    $tester->execute($options, ['capture_stderr_separately' => true, 'interactive' => $interactive]);
 
     return $tester;
 }
@@ -167,7 +167,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning', 'brand.favicon' => 'warning', 'ci.triggers' => 'warning', 'nightwatch.ready' => 'warning', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -190,7 +190,7 @@ test('[rule 54] Nightwatch readiness failures warn normally and block strict CI'
     foreach ([false => 0, true => 1] as $strict => $exit) {
         $tester = preflightCommand($this->preflight, ['--only' => 'nightwatch', '--ci' => true, '--strict' => (bool) $strict, '--json' => true]);
         expect($tester->getStatusCode())->toBe($exit);
-        expect(preflightResults($tester)['nightwatch.ready'])->toMatchArray(['level' => 'warning', 'status' => 'fail']);
+        expect(preflightResults($tester)['nightwatch.ready'])->toMatchArray(['level' => 'advisory', 'status' => 'fail']);
         expect(preflightResults($tester)['nightwatch.ready']['message'])->toContain($message);
     }
 })->with([
@@ -212,7 +212,7 @@ test('[rule 54] Nightwatch readiness runs without secrets in deploy and CI modes
     $this->preflight['config']->set('nightwatch.sampling.requests', $requests);
     $tester = preflightCommand($this->preflight, ['--only' => 'nightwatch', '--ci' => $ci, '--strict' => true, '--json' => true]);
     expect($tester->getStatusCode())->toBe(0);
-    expect(preflightResults($tester)['nightwatch.ready'])->toMatchArray(['level' => 'warning', 'status' => 'pass']);
+    expect(preflightResults($tester)['nightwatch.ready'])->toMatchArray(['level' => 'advisory', 'status' => 'pass']);
 })->with([[false, 0.1], [true, 0.0], [true, '0.05']]);
 
 test('[rule 54] Nightwatch shares distribution detection and skips packages without warnings', function (?string $type, ?string $override, bool $manifest, bool $artisan, string $status) {
@@ -276,17 +276,17 @@ test('each failure has the specified level and exit code', function (string $che
     ['app.env-debug', ['app.debug' => true], 'blocking', 1],
     ['database.config', ['database.default' => 'missing'], 'blocking', 1],
     ['database.config', ['database.connections.sqlite.database' => null], 'blocking', 1],
-    ['mail.transport', ['mail.default' => 'missing'], 'warning', 0],
-    ['mail.from', ['mail.from.address' => null], 'warning', 0],
-    ['mail.from', ['mail.from.address' => null, 'app.env' => 'local'], 'warning', 0],
-    ['mail.from', ['mail.from.address' => 'hello@example.com'], 'warning', 0],
-    ['mail.from', ['mail.from.address' => 'hello@sub.example.com'], 'warning', 0],
-    ['mail.from', ['mail.from.address' => 'invalid'], 'warning', 0],
-    ['cache.store', ['cache.default' => 'array'], 'warning', 0],
-    ['app.url', ['app.url' => 'http://app.test'], 'warning', 0],
-    ['app.url', ['app.url' => 'https:///'], 'warning', 0],
-    ['app.url', ['app.url' => ''], 'warning', 0],
-    ['logging.channel', ['logging.default' => 'missing'], 'warning', 0],
+    ['mail.transport', ['mail.default' => 'missing'], 'advisory', 0],
+    ['mail.from', ['mail.from.address' => null], 'advisory', 0],
+    ['mail.from', ['mail.from.address' => null, 'app.env' => 'local'], 'advisory', 0],
+    ['mail.from', ['mail.from.address' => 'hello@example.com'], 'advisory', 0],
+    ['mail.from', ['mail.from.address' => 'hello@sub.example.com'], 'advisory', 0],
+    ['mail.from', ['mail.from.address' => 'invalid'], 'advisory', 0],
+    ['cache.store', ['cache.default' => 'array'], 'advisory', 0],
+    ['app.url', ['app.url' => 'http://app.test'], 'advisory', 0],
+    ['app.url', ['app.url' => 'https:///'], 'advisory', 0],
+    ['app.url', ['app.url' => ''], 'advisory', 0],
+    ['logging.channel', ['logging.default' => 'missing'], 'advisory', 0],
 ]);
 
 test('sender advisories are logged, reported and retain skip records even in strict mode', function () {
@@ -295,15 +295,15 @@ test('sender advisories are logged, reported and retain skip records even in str
 
     $advisory = preflightCommand($this->preflight, ['--strict' => true, '--json' => true]);
     expect($advisory->getStatusCode())->toBe(0);
-    expect(preflightResults($advisory)['mail.from'])->toMatchArray(['level' => 'warning', 'status' => 'warn']);
-    expect(file_get_contents($this->preflight->directory.'/default.log'))->toContain('PREFLIGHT CHECK WARNING: mail.from');
+    expect(preflightResults($advisory)['mail.from'])->toMatchArray(['level' => 'advisory', 'status' => 'warn']);
+    expect(file_get_contents($this->preflight->directory.'/default.log'))->toContain('PREFLIGHT CHECK ADVISORY: mail.from');
     $path = $this->preflight->directory.'/framework/preflight/mail.from.json';
     expect(file_exists($path))->toBeTrue();
 
     $this->preflight['config']->set('mail.from.address', null);
     $failure = preflightCommand($this->preflight, ['--json' => true]);
     expect($failure->getStatusCode())->toBe(0);
-    expect(preflightResults($failure)['mail.from'])->toMatchArray(['level' => 'warning', 'status' => 'fail']);
+    expect(preflightResults($failure)['mail.from'])->toMatchArray(['level' => 'advisory', 'status' => 'fail']);
     expect(file_get_contents($this->preflight->directory.'/default.log'))->toContain('PREFLIGHT CHECK FAILED: mail.from');
     expect(file_exists($path))->toBeTrue();
 
@@ -497,7 +497,7 @@ test('apps can register tagged checks with timeouts and secret-safe exception ou
         expect(microtime(true) - $started)->toBeLessThan(3)->and($tester->getDisplay())->toContain('timed out after 1s');
     }
 })->with([
-    ['failure', Level::Warning, 0], ['failure', Level::Blocking, 1], ['exception', Level::Blocking, 1], ['timeout', Level::Blocking, 1],
+    ['failure', Level::Advisory, 0], ['failure', Level::Blocking, 1], ['exception', Level::Blocking, 1], ['timeout', Level::Blocking, 1],
 ]);
 
 test('invalid timeout configuration is a usage error', function () {
@@ -517,7 +517,7 @@ test('strict group selection includes registered checks but excludes unrelated f
 
         public function level(): Level
         {
-            return Level::Warning;
+            return Level::Advisory;
         }
 
         public function needsSecrets(): bool
@@ -535,7 +535,7 @@ test('strict group selection includes registered checks but excludes unrelated f
     $this->preflight['config']->set('app.key', null);
     $tester = preflightCommand($this->preflight, ['--only' => 'mail', '--strict' => true, '--json' => true]);
     expect(array_keys(preflightResults($tester)))->toBe(['mail.transport', 'mail.from', 'mail.reply-to', 'mail.custom']);
-    expect(preflightResults($tester)['mail.custom'])->toMatchArray(['level' => 'warning', 'status' => $advisory ? 'warn' : 'fail']);
+    expect(preflightResults($tester)['mail.custom'])->toMatchArray(['level' => 'advisory', 'status' => $advisory ? 'warn' : 'fail']);
     expect($tester->getStatusCode())->toBe($advisory ? 0 : 1);
 
     $unknown = preflightCommand($this->preflight, ['--only' => 'mai', '--skip' => 'mail.from', '--json' => true]);
@@ -553,11 +553,11 @@ test('reply-to validates addresses and the last two domain labels without blocki
 
     $deployment = preflightCommand($this->preflight, ['--json' => true]);
     expect($deployment->getStatusCode())->toBe(0);
-    expect(preflightResults($deployment)['mail.reply-to'])->toMatchArray(['level' => 'warning', 'status' => $status]);
+    expect(preflightResults($deployment)['mail.reply-to'])->toMatchArray(['level' => 'advisory', 'status' => $status]);
 
     $strict = preflightCommand($this->preflight, ['--only' => 'mail', '--strict' => true, '--ci' => true, '--json' => true]);
     expect($strict->getStatusCode())->toBe($status === 'pass' ? 0 : 1);
-    expect(preflightResults($strict)['mail.reply-to'])->toMatchArray(['level' => 'warning', 'status' => $status]);
+    expect(preflightResults($strict)['mail.reply-to'])->toMatchArray(['level' => 'advisory', 'status' => $status]);
 
     if ($status === 'fail') {
         expect(preflightResults($strict)['mail.reply-to']['message'])->toContain('MAIL_REPLY_TO_ADDRESS', 'mail.reply_to.address');
@@ -587,7 +587,7 @@ test('local transports need neither a sender nor reply-to', function (string $tr
 
     $tester = preflightCommand($this->preflight, ['--only' => 'mail', '--strict' => true, '--json' => true]);
     expect($tester->getStatusCode())->toBe(0);
-    expect(preflightResults($tester)['mail.reply-to'])->toMatchArray(['level' => 'warning', 'status' => 'pass']);
+    expect(preflightResults($tester)['mail.reply-to'])->toMatchArray(['level' => 'advisory', 'status' => 'pass']);
 })->with(['log', 'array']);
 
 test('every selected check and the final summary are logged on the standards or default channel', function (bool $dedicated, string $group, array $changes, bool $strict, array $counts, int $exit) {
@@ -606,7 +606,11 @@ test('every selected check and the final summary are logged on the standards or 
     expect($summary['context'])->toBe(['exit_code' => $exit, 'counts' => $counts, 'skips' => [], 'ci' => false, 'strict' => $strict, 'only' => $group]);
 
     foreach ($entries as $entry) {
-        expect($entry['level_name'])->toBe(in_array($entry['context']['status'], ['fail', 'warn'], true) ? 'WARNING' : 'INFO');
+        expect($entry['level_name'])->toBe(match ($entry['context']['status']) {
+            'fail', 'skipped-by-request' => 'WARNING',
+            'warn' => 'NOTICE',
+            default => 'INFO',
+        });
     }
 
     if ($dedicated) {
@@ -618,6 +622,20 @@ test('every selected check and the final summary are logged on the standards or 
     'advisory under strict' => ['mail', ['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => 'updates@parent.test', 'mail.reply_to.address' => 'hello@parent.test', 'mail.shared_parent_domain' => 'parent.test'], true, ['pass' => 2, 'fail' => 0, 'warn' => 1, 'skipped' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 0],
     'blocking failure' => ['app', ['app.key' => null], false, ['pass' => 2, 'fail' => 1, 'warn' => 0, 'skipped' => 0, 'skipped-in-ci' => 0, 'skipped-by-request' => 0], 1],
 ]);
+
+test('[regression] a non-interactive deploy run prints only the checks that need attention and never the word warning', function () {
+    $quiet = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false);
+    expect($quiet->getStatusCode())->toBe(0)
+        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 22 checks, 21 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
+
+    $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => null]);
+    $attention = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false)->getDisplay();
+    expect($attention)->toContain('mail.from', 'advisory', 'failed')->not->toContain('mail.transport')
+        ->and(stripos($attention, 'warning'))->toBeFalse();
+
+    expect(preflightCommand($this->preflight, ['--no-stderr' => true])->getDisplay())->toContain('mail.transport')
+        ->and(Level::Warning)->toBe(Level::Advisory);
+});
 
 test('stderr reports both failed and advisory checks and the summary unless disabled', function (array $options, bool $enabled) {
     $this->preflight['config']->set([
@@ -633,8 +651,8 @@ test('stderr reports both failed and advisory checks and the summary unless disa
     if ($enabled) {
         $lines = explode("\n", trim($tester->getErrorOutput()));
         expect($lines)->toHaveCount(3);
-        expect($lines[0])->toStartWith('PREFLIGHT CHECK WARNING: mail.from ')->toContain('"level":"warning","status":"warn"');
-        expect($lines[1])->toStartWith('PREFLIGHT CHECK FAILED: mail.reply-to ')->toContain('"level":"warning","status":"fail"');
+        expect($lines[0])->toStartWith('PREFLIGHT CHECK ADVISORY: mail.from ')->toContain('"level":"advisory","status":"warn"');
+        expect($lines[1])->toStartWith('PREFLIGHT CHECK FAILED: mail.reply-to ')->toContain('"level":"advisory","status":"fail"');
         expect($lines[2])->toStartWith('PREFLIGHT SUMMARY ')->toContain('"exit_code":0');
         expect($tester->getErrorOutput())->not->toContain('mail.transport');
     } else {
@@ -658,19 +676,19 @@ test('logging and stderr leave JSON stdout byte-identical', function (bool $stde
     "results": [
         {
             "check": "mail.transport",
-            "level": "warning",
+            "level": "advisory",
             "status": "pass",
             "message": "Configured mail transport packages and keys are present."
         },
         {
             "check": "mail.from",
-            "level": "warning",
+            "level": "advisory",
             "status": "pass",
             "message": "Log and array transports do not require a sender."
         },
         {
             "check": "mail.reply-to",
-            "level": "warning",
+            "level": "advisory",
             "status": "pass",
             "message": "Log and array transports do not require Reply-To."
         }
@@ -734,8 +752,8 @@ test('queue checks agree with sync until needed for every worker policy', functi
     $results = preflightResults($tester);
     expect($tester->getStatusCode())->toBe(0);
     expect(array_keys($results))->toBe(['queue.connection', 'queue.worker']);
-    expect($results['queue.connection'])->toMatchArray(['level' => 'warning', 'status' => $connectionStatus]);
-    expect($results['queue.worker'])->toMatchArray(['level' => 'warning', 'status' => $workerStatus]);
+    expect($results['queue.connection'])->toMatchArray(['level' => 'advisory', 'status' => $connectionStatus]);
+    expect($results['queue.worker'])->toMatchArray(['level' => 'advisory', 'status' => $workerStatus]);
     if ($connectionStatus === 'warn') {
         expect($results['queue.connection']['message'])->toContain('QUEUE_CONNECTION=sync', 'Laravel Cloud managed queues');
     }
@@ -799,7 +817,7 @@ test('database backlog checks only the configured available queue with one read'
         $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
         $result = preflightResults($tester)['queue.worker'];
         expect($tester->getStatusCode())->toBe(0);
-        expect($result)->toMatchArray(['level' => 'warning', 'status' => $status]);
+        expect($result)->toMatchArray(['level' => 'advisory', 'status' => $status]);
         expect($database->getQueryLog())->toHaveCount(1);
         if ($status === 'warn') {
             expect($result['message'])->toContain((string) $threshold, "Enable the hosting platform's managed queue (Laravel Cloud managed queues)", 'QUEUE_CONNECTION=sync');
@@ -827,7 +845,7 @@ test('queue evidence is unknown without exposing connection exceptions', functio
 
     $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
     expect($tester->getStatusCode())->toBe(0);
-    expect(preflightResults($tester)['queue.worker'])->toMatchArray(['level' => 'warning', 'status' => 'warn']);
+    expect(preflightResults($tester)['queue.worker'])->toMatchArray(['level' => 'advisory', 'status' => 'warn']);
     expect(preflightResults($tester)['queue.worker']['message'])->toContain('Unknown', $reason, 'Laravel Cloud managed queues', 'QUEUE_CONNECTION=sync');
     expect($tester->getDisplay())->not->toContain('secret-must-not-leak');
 })->with([
@@ -845,7 +863,7 @@ test('CI skips worker evidence before opening a queue connection', function () {
     $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--ci' => true, '--strict' => true, '--json' => true]);
     expect($tester->getStatusCode())->toBe(0);
     expect(preflightResults($tester)['queue.connection']['status'])->toBe('pass');
-    expect(preflightResults($tester)['queue.worker'])->toMatchArray(['level' => 'warning', 'status' => 'skipped-in-ci']);
+    expect(preflightResults($tester)['queue.worker'])->toMatchArray(['level' => 'advisory', 'status' => 'skipped-in-ci']);
 });
 
 test('worker timeout remains advisory even in strict mode', function () {
@@ -859,7 +877,7 @@ test('worker timeout remains advisory even in strict mode', function () {
     $started = microtime(true);
     $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
     expect($tester->getStatusCode())->toBe(0);
-    expect(preflightResults($tester)['queue.worker'])->toMatchArray(['level' => 'warning', 'status' => 'warn']);
+    expect(preflightResults($tester)['queue.worker'])->toMatchArray(['level' => 'advisory', 'status' => 'warn']);
     expect(preflightResults($tester)['queue.worker']['message'])->toContain('Unknown', 'timed out after 1s', 'Laravel Cloud managed queues', 'QUEUE_CONNECTION=sync');
     expect(microtime(true) - $started)->toBeLessThan(3);
 })->skip(! function_exists('pcntl_alarm'), '2026-10-13: interrupting a busy backlog read requires real PCNTL alarms, unavailable on Windows.');
@@ -908,7 +926,7 @@ test('Redis backlog uses one atomic read and reports indeterminate ages as unkno
         $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
         $result = preflightResults($tester)['queue.worker'];
         expect($tester->getStatusCode())->toBe(0)->and($client->calls)->toBe(1);
-        expect($result)->toMatchArray(['level' => 'warning', 'status' => $status]);
+        expect($result)->toMatchArray(['level' => 'advisory', 'status' => $status]);
         expect(str_contains($result['message'], 'Unknown'))->toBe($unknown);
         if ($status === 'warn') {
             expect($result['message'])->toContain('Laravel Cloud managed queues', 'QUEUE_CONNECTION=sync');
@@ -960,7 +978,7 @@ test('[rule 50] every Laravel default fails without blocking deployment unless s
         $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--ci' => true, '--strict' => (bool) $strict, '--json' => true]);
         expect($tester->getStatusCode())->toBe($exit);
         expect(preflightResults($tester))->toHaveCount(1);
-        expect(preflightResults($tester)['brand.favicon'])->toMatchArray(['level' => 'warning', 'status' => 'fail']);
+        expect(preflightResults($tester)['brand.favicon'])->toMatchArray(['level' => 'advisory', 'status' => 'fail']);
         expect(preflightResults($tester)['brand.favicon']['message'])->toContain($name, '180×180', 'every root layout');
     }
 })->with([null, ...glob(dirname(__DIR__).'/fixtures/Favicons/*')]);
@@ -968,7 +986,7 @@ test('[rule 50] every Laravel default fails without blocking deployment unless s
 test('[rule 50] missing ICO fails and app-owned files pass in the full CI run', function () {
     $tester = preflightCommand($this->preflight, ['--ci' => true, '--strict' => true, '--json' => true]);
     expect($tester->getStatusCode())->toBe(0);
-    expect(preflightResults($tester)['brand.favicon'])->toMatchArray(['level' => 'warning', 'status' => 'pass']);
+    expect(preflightResults($tester)['brand.favicon'])->toMatchArray(['level' => 'advisory', 'status' => 'pass']);
     $fixtures = array_map(fn (string $path): string => pathinfo($path, PATHINFO_FILENAME), glob(dirname(__DIR__).'/fixtures/Favicons/*'));
     expect(CoreCheck::KNOWN_DEFAULT_HASHES)->toEqualCanonicalizing(['e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', ...$fixtures]);
 
@@ -1081,7 +1099,7 @@ test('[rule 50] malformed or missing icon files warn and fail only under strict'
     foreach ([false => 0, true => 1] as $strict => $exit) {
         $tester = preflightCommand($this->preflight, ['--only' => 'brand', '--ci' => true, '--strict' => (bool) $strict, '--json' => true]);
         expect($tester->getStatusCode())->toBe($exit);
-        expect(preflightResults($tester)['brand.favicon'])->toMatchArray(['level' => 'warning', 'status' => 'fail']);
+        expect(preflightResults($tester)['brand.favicon'])->toMatchArray(['level' => 'advisory', 'status' => 'fail']);
         expect(preflightResults($tester)['brand.favicon']['message'])->toContain('public/'.$name, $problem);
     }
 })->with([
@@ -1145,7 +1163,7 @@ test('[rule 51] CI-only preflight reports findings but strict enforcement is opt
     $tester = preflightCommand($this->preflight, ['--only' => 'ci', '--ci' => $ci, '--strict' => $strict, '--json' => true]);
     $results = preflightResults($tester);
     expect(array_keys($results))->toBe(['ci.triggers']);
-    expect($results['ci.triggers'])->toMatchArray(['level' => 'warning', 'status' => $status]);
+    expect($results['ci.triggers'])->toMatchArray(['level' => 'advisory', 'status' => $status]);
     expect($tester->getStatusCode())->toBe($exit);
 
     if ($status === 'fail') {

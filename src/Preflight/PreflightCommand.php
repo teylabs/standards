@@ -17,7 +17,7 @@ use Tey\Standards\Preflight;
 
 final class PreflightCommand extends Command
 {
-    public $signature = 'standards:preflight {--only= : Run checks in a dotted group (e.g. mail)} {--strict : Exit 1 on failed checks, except groups not opted into enforcement} {--ci : Skip checks requiring production secrets} {--skip= : Comma-separated exact check names} {--json : Write machine-readable JSON to stdout} {--stderr : Also write the summary and failed or warning checks to stderr} {--no-stderr : Disable automatic stderr reporting (takes precedence over --stderr)}';
+    public $signature = 'standards:preflight {--only= : Run checks in a dotted group (e.g. mail)} {--strict : Exit 1 on failed checks, except groups not opted into enforcement} {--ci : Skip checks requiring production secrets} {--skip= : Comma-separated exact check names} {--json : Write machine-readable JSON to stdout} {--stderr : Also write the summary and failed or advisory checks to stderr} {--no-stderr : Disable automatic stderr reporting (takes precedence over --stderr)}';
 
     public $description = 'Check deployment configuration and queue backlog without hosting API calls';
 
@@ -94,8 +94,17 @@ final class PreflightCommand extends Command
 
         if ($this->option('json')) {
             $this->line(json_encode(['schema' => 1, 'results' => $results, 'exit_code' => $exit], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
-        } else {
+        } elseif ($this->input->isInteractive()) {
             $this->table(['Check', 'Level', 'Result', 'Message'], $results);
+        } else {
+            // Deploy logs flag lines by keyword, so a non-interactive run prints only what needs attention.
+            $attention = array_values(array_filter($results, fn (array $result): bool => in_array($result['status'], [Status::Fail->value, Status::Warn->value, Status::SkippedByRequest->value], true)));
+
+            if ($attention !== []) {
+                $this->table(['Check', 'Level', 'Result', 'Message'], $attention);
+            }
+
+            $this->line($this->summaryLine($results, $exit));
         }
 
         $this->report($results, $exit, $logger, $skipContexts);
@@ -125,12 +134,16 @@ final class PreflightCommand extends Command
 
             $label = match ($status) {
                 Status::Fail => 'FAILED',
-                Status::Warn => 'WARNING',
+                Status::Warn => 'ADVISORY',
                 Status::Skipped, Status::SkippedInCi, Status::SkippedByRequest => 'SKIPPED',
                 Status::Pass => 'PASSED',
             };
             $message = 'PREFLIGHT CHECK '.$label.': '.$result['check'];
-            $logger->log(in_array($status, [Status::Fail, Status::Warn, Status::SkippedByRequest], true) ? 'warning' : 'info', $message, [...($skipContexts[$result['check']] ?? []), ...$result]);
+            $logger->log(match ($status) {
+                Status::Fail, Status::SkippedByRequest => 'warning',
+                Status::Warn => 'notice',
+                default => 'info',
+            }, $message, [...($skipContexts[$result['check']] ?? []), ...$result]);
 
             if ($stderr && in_array($status, [Status::Fail, Status::Warn], true)) {
                 $errorOutput->writeln($message.' '.json_encode($result, JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
@@ -148,6 +161,17 @@ final class PreflightCommand extends Command
         if ($stderr) {
             $errorOutput->writeln('PREFLIGHT SUMMARY '.json_encode($summary, JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
         }
+    }
+
+    /**
+     * @param  list<array{check: string, level: string, status: string, message: string}>  $results
+     */
+    private function summaryLine(array $results, int $exit): string
+    {
+        $counts = array_count_values(array_column($results, 'status'));
+        $skipped = ($counts[Status::Skipped->value] ?? 0) + ($counts[Status::SkippedInCi->value] ?? 0) + ($counts[Status::SkippedByRequest->value] ?? 0);
+
+        return sprintf('Preflight: %d checks, %d passed, %d failed, %d advisory, %d skipped (exit %d).', count($results), $counts[Status::Pass->value] ?? 0, $counts[Status::Fail->value] ?? 0, $counts[Status::Warn->value] ?? 0, $skipped, $exit);
     }
 
     private function banner(string $check, string $reason): void
