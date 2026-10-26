@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `install.sessions` reads the resolved `session.driver` and falls back to the environment only when the config has none. On Laravel Cloud it failed every Passport deploy with "SESSION_DRIVER is not set in this environment", even with `SESSION_DRIVER=database` set, because the deploy step doesn't expose the variable to the process. An `array` driver now fails too. (teylabs/standards#4)
+
 ## 0.10.0 - 2026-10-26
 
 ### Upgrading

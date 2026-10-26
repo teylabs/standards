@@ -1549,7 +1549,7 @@ test('passport keys need PEM headers and real newlines from env or key files', f
     });
 });
 
-test('OAuth consent needs an explicit server-side session driver outside local', function (bool $passport, ?string $driver, ?string $environment, string $appEnv, string $status, string $message) {
+test('OAuth consent needs a server-side session driver outside local', function (bool $passport, ?string $driver, ?string $environment, string $appEnv, string $status, string $message) {
     $previous = getenv('SESSION_DRIVER');
     $environment === null ? putenv('SESSION_DRIVER') : putenv('SESSION_DRIVER='.$environment);
     $this->preflight['config']->set(['session.driver' => $driver, 'app.env' => $appEnv, 'preflight.sessions.consent' => ! $passport && $driver !== null]);
@@ -1565,11 +1565,14 @@ test('OAuth consent needs an explicit server-side session driver outside local',
         $previous === false ? putenv('SESSION_DRIVER') : putenv('SESSION_DRIVER='.$previous);
     }
 })->with([
-    'cookie with passport' => [true, 'cookie', 'cookie', 'production', 'fail', 'SESSION_DRIVER is cookie'],
-    'unset with passport' => [true, 'database', null, 'production', 'fail', 'is not set in this environment'],
-    'database with passport' => [true, 'database', 'database', 'production', 'pass', 'set explicitly'],
-    'redis on staging' => [true, 'redis', 'redis', 'staging', 'pass', 'set explicitly'],
-    'cookie for configured MCP consent' => [false, 'cookie', 'cookie', 'production', 'fail', 'SESSION_DRIVER is cookie'],
+    'cookie with passport' => [true, 'cookie', 'cookie', 'production', 'fail', 'The session driver is cookie'],
+    '[regression] config set, environment variable absent (Laravel Cloud deploy)' => [true, 'database', null, 'production', 'pass', 'The session driver (database)'],
+    'config unset, environment fallback' => [true, null, 'redis', 'production', 'pass', 'The session driver (redis)'],
+    'neither config nor environment' => [true, null, null, 'production', 'fail', 'No session driver is configured'],
+    'array with passport' => [true, 'array', null, 'production', 'fail', 'The session driver is array'],
+    'database with passport' => [true, 'database', 'database', 'production', 'pass', 'The session driver (database)'],
+    'redis on staging' => [true, 'redis', 'redis', 'staging', 'pass', 'The session driver (redis)'],
+    'cookie for configured MCP consent' => [false, 'cookie', 'cookie', 'production', 'fail', 'The session driver is cookie'],
     'cookie locally' => [true, 'cookie', 'cookie', 'local', 'pass', 'No OAuth consent'],
     'no consent screen' => [false, null, null, 'production', 'pass', 'No OAuth consent'],
 ]);

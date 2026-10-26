@@ -462,8 +462,9 @@ final readonly class InstallCheck implements Check
     /**
      * OAuth consent keeps the authorization request in the session. A cookie
      * session passes the browser's 4KB limit, the cookie is dropped and the
-     * consent fails, so the driver must be a server-side store, set per
-     * environment rather than left to the platform's default.
+     * consent fails, so the driver must be a server-side store. The resolved
+     * config is the evidence: a platform's deploy step need not expose its
+     * variables to the process, so the raw environment is only a fallback.
      */
     private function sessions(): Result
     {
@@ -473,15 +474,21 @@ final readonly class InstallCheck implements Check
             return Result::pass('No OAuth consent screen is installed.');
         }
 
-        if ($this->config->get('session.driver') === 'cookie') {
-            return Result::fail('SESSION_DRIVER is cookie; OAuth consent outgrows the 4KB cookie. Set SESSION_DRIVER=database (or redis) in this environment.');
+        $driver = $this->config->get('session.driver');
+
+        if (! $this->filled($driver)) {
+            $driver = Env::get('SESSION_DRIVER') ?? (getenv('SESSION_DRIVER') ?: null);
         }
 
-        if (! $this->filled(Env::get('SESSION_DRIVER'))) {
-            return Result::fail('SESSION_DRIVER is not set in this environment; set SESSION_DRIVER=database (or redis) explicitly for OAuth consent.');
+        if (! $this->filled($driver)) {
+            return Result::fail('No session driver is configured; set SESSION_DRIVER=database (or redis) for OAuth consent.');
         }
 
-        return Result::pass('The session driver is set explicitly and is not cookie.');
+        if (in_array($driver, ['cookie', 'array'], true)) {
+            return Result::fail('The session driver is '.$driver.'; OAuth consent needs a server-side session. Set SESSION_DRIVER=database (or redis) in this environment.');
+        }
+
+        return Result::pass('The session driver ('.$driver.') keeps OAuth consent on the server.');
     }
 
     private function vite(): Result
