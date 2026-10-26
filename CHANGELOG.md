@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 - 2026-10-26
+
+### Upgrading
+
+- **`install.sessions` blocks deploys.** An app with Passport (or `preflight.sessions.consent` set) must set `SESSION_DRIVER=database` or `redis` in each deployed environment before upgrading, or the deploy preflight fails.
 
 ### Added
 
