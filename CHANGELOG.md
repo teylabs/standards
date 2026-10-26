@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Blocking `install.sessions` preflight check: with Passport or a configured MCP consent screen (`preflight.sessions.consent`), a deployed environment fails on a `cookie` session driver or an unset `SESSION_DRIVER`, since OAuth consent outgrows the 4KB cookie. (#345)
+
 ## 0.8.1 - 2026-10-24
 
 ### Fixed

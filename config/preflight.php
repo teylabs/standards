@@ -26,6 +26,10 @@ return [
         // The directory under public/ that holds manifest.json; match Vite::useBuildDirectory().
         'build_directory' => 'build',
     ],
+    'sessions' => [
+        // True when an OAuth consent screen runs without laravel/passport (for example an MCP consent screen).
+        'consent' => false,
+    ],
     'queue' => [
         // Sync until needed, then a scale-to-zero managed queue (Laravel Cloud managed queues).
         // A worker means whatever drains the queue, normally the managed queue, not an always-on process.

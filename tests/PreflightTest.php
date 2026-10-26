@@ -167,7 +167,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning', 'brand.favicon' => 'warning', 'ci.triggers' => 'warning', 'nightwatch.ready' => 'warning', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'warning', 'mail.from' => 'warning', 'mail.reply-to' => 'warning', 'queue.connection' => 'warning', 'queue.worker' => 'warning', 'cache.store' => 'warning', 'app.url' => 'warning', 'logging.channel' => 'warning', 'brand.favicon' => 'warning', 'ci.triggers' => 'warning', 'nightwatch.ready' => 'warning', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -1308,7 +1308,7 @@ test('install checks block deployment and pass for a configured app', function (
 
     foreach ($results as $name => $result) {
         expect($result['level'])->toBe('blocking')
-            ->and($result['status'])->toBe($ci && in_array($name, ['install.tables', 'install.secrets'], true) ? 'skipped-in-ci' : 'pass');
+            ->and($result['status'])->toBe($ci && in_array($name, ['install.tables', 'install.secrets', 'install.sessions'], true) ? 'skipped-in-ci' : 'pass');
     }
 })->with([false, true]);
 
@@ -1530,6 +1530,31 @@ test('passport keys need PEM headers and real newlines from env or key files', f
         expect(preflightInstall($this->preflight)[0]['install.secrets']['status'])->toBe('pass');
     });
 });
+
+test('OAuth consent needs an explicit server-side session driver outside local', function (bool $passport, ?string $driver, ?string $environment, string $appEnv, string $status, string $message) {
+    $previous = getenv('SESSION_DRIVER');
+    $environment === null ? putenv('SESSION_DRIVER') : putenv('SESSION_DRIVER='.$environment);
+    $this->preflight['config']->set(['session.driver' => $driver, 'app.env' => $appEnv, 'preflight.sessions.consent' => ! $passport && $driver !== null]);
+
+    try {
+        preflightWithPackages($passport ? ['laravel/passport'] : [], $passport ? [] : ['laravel/passport'], function () use ($status, $message) {
+            $result = preflightInstall($this->preflight)[0]['install.sessions'];
+            expect($result['status'])->toBe($status)->and($result['message'])->toContain($message);
+        });
+
+        expect(preflightInstall($this->preflight, ['--ci' => true])[0]['install.sessions']['status'])->toBe('skipped-in-ci');
+    } finally {
+        $previous === false ? putenv('SESSION_DRIVER') : putenv('SESSION_DRIVER='.$previous);
+    }
+})->with([
+    'cookie with passport' => [true, 'cookie', 'cookie', 'production', 'fail', 'SESSION_DRIVER is cookie'],
+    'unset with passport' => [true, 'database', null, 'production', 'fail', 'is not set in this environment'],
+    'database with passport' => [true, 'database', 'database', 'production', 'pass', 'set explicitly'],
+    'redis on staging' => [true, 'redis', 'redis', 'staging', 'pass', 'set explicitly'],
+    'cookie for configured MCP consent' => [false, 'cookie', 'cookie', 'production', 'fail', 'SESSION_DRIVER is cookie'],
+    'cookie locally' => [true, 'cookie', 'cookie', 'local', 'pass', 'No OAuth consent'],
+    'no consent screen' => [false, null, null, 'production', 'pass', 'No OAuth consent'],
+]);
 
 test('views that use @vite need the build manifest', function (?string $directory) {
     $this->preflight['config']->set('preflight.vite.build_directory', $directory ?? 'build');

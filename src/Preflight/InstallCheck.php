@@ -7,6 +7,7 @@ namespace Tey\Standards\Preflight;
 use Composer\InstalledVersions;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Support\Env;
 use InvalidArgumentException;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -25,7 +26,7 @@ use Throwable;
  */
 final readonly class InstallCheck implements Check
 {
-    public const NAMES = ['install.mail', 'install.filesystems', 'install.drivers', 'install.tables', 'install.extensions', 'install.secrets', 'install.vite'];
+    public const NAMES = ['install.mail', 'install.filesystems', 'install.drivers', 'install.tables', 'install.extensions', 'install.secrets', 'install.vite', 'install.sessions'];
 
     private const MAIL_PACKAGES = [
         'resend' => ['resend/resend-php'],
@@ -61,7 +62,7 @@ final readonly class InstallCheck implements Check
     public function needsSecrets(): bool
     {
         // Tables need the production database; secrets need the production environment.
-        return in_array($this->check, ['install.tables', 'install.secrets'], true);
+        return in_array($this->check, ['install.tables', 'install.secrets', 'install.sessions'], true);
     }
 
     public function run(): Result
@@ -78,6 +79,7 @@ final readonly class InstallCheck implements Check
             'install.extensions' => $this->extensions(),
             'install.secrets' => $this->secrets(),
             'install.vite' => $this->vite(),
+            'install.sessions' => $this->sessions(),
             default => throw new InvalidArgumentException('Unknown install check: '.$this->check),
         };
     }
@@ -455,6 +457,31 @@ final readonly class InstallCheck implements Check
         }
 
         return $found;
+    }
+
+    /**
+     * OAuth consent keeps the authorization request in the session. A cookie
+     * session passes the browser's 4KB limit, the cookie is dropped and the
+     * consent fails, so the driver must be a server-side store, set per
+     * environment rather than left to the platform's default.
+     */
+    private function sessions(): Result
+    {
+        $consent = InstalledVersions::isInstalled('laravel/passport') || (bool) $this->config->get('preflight.sessions.consent', false);
+
+        if (! $consent || in_array($this->config->get('app.env'), ['local', 'testing'], true)) {
+            return Result::pass('No OAuth consent screen is installed.');
+        }
+
+        if ($this->config->get('session.driver') === 'cookie') {
+            return Result::fail('SESSION_DRIVER is cookie; OAuth consent outgrows the 4KB cookie. Set SESSION_DRIVER=database (or redis) in this environment.');
+        }
+
+        if (! $this->filled(Env::get('SESSION_DRIVER'))) {
+            return Result::fail('SESSION_DRIVER is not set in this environment; set SESSION_DRIVER=database (or redis) explicitly for OAuth consent.');
+        }
+
+        return Result::pass('The session driver is set explicitly and is not cookie.');
     }
 
     private function vite(): Result
