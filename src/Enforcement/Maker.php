@@ -195,13 +195,7 @@ final class Maker
             }
         }
 
-        $testCase = preg_match('/(?:extend|uses)\(\s*\\\\?([\w\\\\]+)::class/', $pest, $match) === 1 ? $match[1] : 'TestCase';
-
-        if (! str_contains($testCase, '\\') && preg_match('/^use\s+([\w\\\\]+\\\\'.preg_quote($testCase, '/').');/m', $pest, $import) === 1) {
-            $testCase = $import[1];
-        }
-
-        $testCase = str_contains($testCase, '\\') ? $testCase : 'Tests\\'.$testCase;
+        $testCase = $this->applicationCase($pest);
         $stamp = '// '.Hook::STAMP;
         $at = strpos($contents, $stamp);
 
@@ -212,6 +206,63 @@ final class Maker
         $end = strpos($contents, "\n", $at) + 1;
 
         return substr($contents, 0, $end)."\npest()->extend(\\".$testCase."::class);\n".substr($contents, $end);
+    }
+
+    /**
+     * The application's test case from tests/Pest.php: the extend()/uses()
+     * whose ->in() covers general tests (a glob, Feature or Unit), never one
+     * scoped to browser tests; else Tests\TestCase. Names resolve through the
+     * file's use imports.
+     */
+    private function applicationCase(string $pest): string
+    {
+        $imports = [];
+
+        preg_match_all('/^use\s+\\\\?([\w\\\\]+)(?:\s+as\s+(\w+))?\s*;/m', $pest, $uses, PREG_SET_ORDER);
+
+        foreach ($uses as $use) {
+            $alias = ($use[2] ?? '') !== '' ? $use[2] : substr((string) strrchr('\\'.$use[1], '\\'), 1);
+            $imports[$alias] = $use[1];
+        }
+
+        $resolve = function (string $name) use ($imports): string {
+            $name = ltrim($name, '\\');
+            $first = explode('\\', $name)[0];
+
+            return isset($imports[$first]) ? $imports[$first].substr($name, strlen($first)) : $name;
+        };
+
+        $candidates = [];
+
+        preg_match_all('/(?:extend|uses)\(\s*([\\\\\w]+)::class[^;]*?->in\(([^)]*)\)/s', $pest, $chains, PREG_SET_ORDER);
+
+        foreach ($chains as $chain) {
+            preg_match_all('/[\'"]([^\'"]+)[\'"]/', $chain[2], $folders);
+            $folders = $folders[1];
+
+            if ($folders !== [] && array_filter($folders, fn (string $folder): bool => stripos($folder, 'browser') === false) === []) {
+                continue;
+            }
+
+            if (stripos($chain[1], 'browser') !== false) {
+                continue;
+            }
+
+            $general = array_filter($folders, fn (string $folder): bool => str_contains($folder, '*') || in_array(trim($folder, '/'), ['.', '', 'Feature', 'Unit'], true));
+            $candidates[] = [$general !== [] ? 0 : 1, $resolve($chain[1])];
+        }
+
+        usort($candidates, fn (array $a, array $b): int => $a[0] <=> $b[0]);
+
+        if ($candidates !== [] && $candidates[0][0] === 0) {
+            return $candidates[0][1];
+        }
+
+        if (is_file($this->base.'/tests/TestCase.php')) {
+            return 'Tests\\TestCase';
+        }
+
+        return $candidates[0][1] ?? 'Tests\\TestCase';
     }
 
     /**

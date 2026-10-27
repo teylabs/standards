@@ -576,3 +576,29 @@ test('every leaf whose make command has a proven generator is ready', function (
     expect(TreeCatalog::shipped()->node('settings.workspace')->status)->toBe('ready')
         ->and(TreeCatalog::shipped()->node('data-actions.action')->status)->toBe('ready');
 });
+
+test('a generated test binds the application test case, never a browser case, resolved through Pest.php imports', function (string $pest, string $expected) {
+    $base = fixtureApp();
+
+    try {
+        file_put_contents($base.'/tests/Pest.php', $pest);
+        (new Maker($base, TreeCatalog::shipped()))->make('page', 'Widgets', 'index');
+
+        expect(file_get_contents($base.'/tests/Feature/Widgets/IndexPageTest.php'))->toContain("pest()->extend(\\{$expected}::class);");
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+})->with([
+    'browser first, named groups, then a glob (the starter shape)' => [<<<'PEST'
+        <?php
+
+        use Tests\Browser\BrowserCase;
+        use Tests\Cases\AppCase;
+
+        pest()->extend(BrowserCase::class)->in('Browser');
+        pest()->extend(AppCase::class)->in('Cases', 'Concierge');
+        pest()->extend(AppCase::class)->in('*Test.php');
+        PEST, 'Tests\Cases\AppCase'],
+    'aliased import' => ["<?php\n\nuse Acme\\Testing\\Base as Base;\n\nuses(Base::class)->in('Unit');\n", 'Acme\Testing\Base'],
+    'only a browser case: fall back to Tests\TestCase' => ["<?php\n\npest()->extend(BrowserCase::class)->in('Browser');\n", 'Tests\TestCase'],
+]);
