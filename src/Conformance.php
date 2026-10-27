@@ -240,7 +240,8 @@ final class Conformance
                 $violations[] = ['target' => $class, 'check' => 'controller outside configured Http controllers'];
             }
 
-            $viewModel = str_ends_with($class, $this->config->viewModelSuffix) || $reflection->isSubclassOf($this->config->typedViewModel);
+            $typed = $this->config->typedViewModel;
+            $viewModel = str_ends_with($class, $this->config->viewModelSuffix) || ($typed !== '' && $reflection->isSubclassOf($typed));
 
             if (! $viewModel || in_array($class, $this->config->viewModelBases, true)) {
                 continue;
@@ -254,7 +255,7 @@ final class Conformance
                 $violations[] = ['target' => $class, 'check' => 'ViewModel needs configured suffix'];
             }
 
-            foreach (Native::failures(expect($class)->toExtend($this->config->typedViewModel), $class) as $failure) {
+            foreach ($typed === '' ? [] : Native::failures(expect($class)->toExtend($typed), $class) as $failure) {
                 $violations[] = ['target' => $class, 'check' => 'ViewModel must extend typed base'];
             }
         }

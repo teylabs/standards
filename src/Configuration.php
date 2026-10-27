@@ -19,6 +19,7 @@ final readonly class Configuration
      * @param  list<string>  $routeRoots
      * @param  list<string>  $viewModelRoots
      * @param  list<string>  $viewModelBases  typed base and compatibility bases, not exemptions
+     * @param  string  $typedViewModel  the base every ViewModel extends; '' for none (rule 20 then finds ViewModels by suffix and requires no base)
      * @param  list<string>  $pageRoots
      * @param  list<string>  $pageScaffolds
      * @param  array<string, list<string>>  $placements  class suffix => allowed directories

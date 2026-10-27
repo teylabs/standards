@@ -280,7 +280,7 @@ final class Maker
         $file = $this->base.'/'.($this->paths['configuration'] ?? 'tests/Arch/configuration.php');
         $config = is_file($file) ? (static fn (string $file): mixed => require $file)($file) : null;
         $config = $config instanceof Configuration ? $config : null;
-        $base = $this->paths['view_model'] ?? $config?->typedViewModel ?? 'Tey\\Kit\\Features\\Core\\ViewModels\\ViewModel';
+        $base = ($this->paths['view_model'] ?? null) ?: ((string) $config?->typedViewModel ?: 'Tey\\Kit\\Features\\Core\\ViewModels\\ViewModel');
         // A ViewModel reads the model, which the UI layer may not (rule 22): the first ViewModel root outside the UI roots.
         $roots = array_values(array_filter($config->viewModelRoots ?? [], fn (string $root): bool => array_filter($config->uiRoots ?? [], fn (string $ui): bool => fnmatch($ui, rtrim((string) preg_replace('/\*.*$/', '', $root), '/'))) === []));
         $folder = trim((string) preg_replace('/\*.*$/', '', $this->paths['view_models'] ?? $roots[0] ?? $app.'/ViewModels'), '/');

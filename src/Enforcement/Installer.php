@@ -161,7 +161,7 @@ final class Installer
             'controllerSuffix' => 'Controller',
             'routeDirectory' => 'routes',
             'viewModelRoots' => array_values(array_unique([...$globs('ViewModels*'), ...$modViewModels])),
-            'viewModelBases' => [$typed],
+            'viewModelBases' => $typed === '' ? [] : [$typed],
             'typedViewModel' => $typed,
             'viewModelSuffix' => 'ViewModel',
             'pageRoots' => [...($pages === [] ? ['resources/js/pages*'] : $pages), ...$modPages],
@@ -178,7 +178,7 @@ final class Installer
         $notes = [
             'class roots '.($classRoots === [] ? 'none found' : implode(', ', array_map(fn (string $root, string $namespace): string => "{$root} => {$namespace}", $roots, array_values($classRoots)))),
             'Inertia pages '.($pages === [] ? 'not found (glob resources/js/pages*)' : implode(', ', $pages)),
-            'typed ViewModel base '.$typed,
+            'typed ViewModel base '.($typed === '' ? 'none found (ViewModels are checked by suffix; set typedViewModel once the app has a base)' : $typed),
             'tey/kit '.($kit ? 'present' : 'absent'),
             'tey/mod '.($mod ? 'present, layout '.$layout.($modControllers === [] ? '' : ', module controllers '.implode(', ', $modControllers)) : 'absent'),
             'optional UI rules off (enable in optionalRules)',
@@ -254,7 +254,8 @@ final class Installer
             }
         }
 
-        return in_array('spatie/laravel-data', $packages, true) ? 'Spatie\\LaravelData\\Data' : 'App\\ViewModels\\ViewModel';
+        // No typed base to infer: none, rather than a class the app does not have (rule 20 then checks ViewModels by suffix only).
+        return in_array('spatie/laravel-data', $packages, true) ? 'Spatie\\LaravelData\\Data' : '';
     }
 
     private function hasConformanceTest(): bool
