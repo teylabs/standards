@@ -12,7 +12,7 @@ use Tey\Standards\Patterns\TreeCatalog;
 
 final class MakeCommand extends Command
 {
-    public $signature = 'standards:make {unit : crud, page, action, capability-tool, settings-section or command; model, policy, job or notification through tey/mod} {name : StudlyCase name (crud: the singular record name)} {--flavor= : The leaf flavor, as standards:pattern prints it} {--leaf= : The leaf to stamp, when several leaves share this make command} {--bulk : crud: selectable rows and a bulk delete} {--mcp : crud: read and write capability tools} {--soft-deletes : crud: soft deletes and a restoration} {--backfill : command: fill a column for rows that lack it (the default)} {--maintenance : command: delete stale rows} {--report : command: count, read-only}';
+    public $signature = 'standards:make {unit : crud, page, action, capability-tool, settings-section, command, webhook or api-client; model, policy, job or notification through tey/mod} {name : StudlyCase name (crud: the singular record name)} {--flavor= : The leaf flavor, as standards:pattern prints it} {--leaf= : The leaf to stamp, when several leaves share this make command} {--bulk : crud: selectable rows and a bulk delete} {--mcp : crud: read and write capability tools} {--soft-deletes : crud: soft deletes and a restoration} {--backfill : command: fill a column for rows that lack it (the default)} {--maintenance : command: delete stale rows} {--report : command: count, read-only} {--sdk : api-client: the official SDK behind the contract} {--http : api-client: Laravel\'s Http with timeout, retries and backoff (the default)}';
 
     public $description = 'Scaffold conformant code for a pattern leaf';
 
@@ -25,8 +25,17 @@ final class MakeCommand extends Command
 
             return 2;
         }
+        $client = array_keys(array_filter(['sdk' => $this->option('sdk'), 'http' => $this->option('http')]));
+        if (count($client) > 1 || ($client !== [] && ($unit !== 'api-client' || $this->option('flavor') !== null))) {
+            $this->error('Choose --sdk or --http, for standards:make api-client only.');
+
+            return 2;
+        }
+        $chosen = [...$chosen, ...$client];
         $flavor = $this->option('flavor') ?? $chosen[0] ?? match ($unit) {
             'command' => 'backfill',
+            'webhook' => 'signed',
+            'api-client' => 'http',
             'page' => 'index',
             'action' => 'plain',
             'capability-tool' => 'read',

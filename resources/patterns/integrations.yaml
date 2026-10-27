@@ -10,13 +10,19 @@ nodes:
       - { answer: "Another provider's API or webhooks", next: integrations.provider }
       - { answer: "None of these", next: integrations.byo }
   - id: integrations.provider
-    question: Is there an official provider SDK and a fake driver for tests, or is it a known kind of service?
+    question: What do you need from the provider?
     options:
-      - { answer: "Yes: wrap the SDK behind a contract with a fake", next: integrations.outbound }
-      - { answer: "No: raw HTTP or inbound signed webhooks", next: integrations.webhooks }
+      - { answer: "Receive its signed webhooks", next: integrations.webhook }
+      - { answer: "Call its API", next: integrations.api }
       - { answer: "An accounting package to sync invoices with", next: integrations.accounting }
       - { answer: "A full-text search index", next: integrations.search }
       - { answer: "None of these", next: integrations.provider.byo }
+  - id: integrations.api
+    question: Is there an official SDK, and a fake driver for tests?
+    options:
+      - { answer: "Yes: wrap the official SDK behind a contract, with a fake", next: integrations.api-client }
+      - { answer: "No: Laravel's Http behind a contract, with a fake", next: integrations.api-client.http }
+      - { answer: "None of these", next: integrations.api.byo }
   - id: integrations.monitoring
     recipe: Monitoring install
     summary: A token-gated Nightwatch install with request sampling at 0.1, off in tests, checked by preflight. Queue dashboards and debug tooling belong here too.
@@ -44,23 +50,36 @@ nodes:
     keywords: [ai, llm, agent, model, openai, anthropic]
     status: gap
     evidence: { apps: 3, count: 4, prs: 4 }
-  - id: integrations.outbound
-    recipe: Provider client
-    summary: Use the official SDK behind an app contract with a fake for tests; verify inbound webhooks by signature.
+  - id: integrations.webhook
+    recipe: Inbound webhook
+    summary: "A signed inbound webhook on spatie/laravel-webhook-client: an HMAC signature over the raw body compared with hash_equals, with a timestamp tolerance (a bad or expired one is a 403); a profile that stores any signed event; a queued job idempotent by event id (a duplicate is answered 2xx and processed once) dispatching to a per-event handler map, where an unknown event is stored but not processed; a route outside the web group with its own rate limit. Never log the body or the secret."
     kit: []
-    checks: []
-    paths: []
-    keywords: [api, client, sdk, third party, http, webhook client]
-    status: gap
+    make: standards:make webhook --flavor=signed
+    checks: ['integrations']
+    paths: ['app/Webhooks/**', 'routes/webhooks.php']
+    keywords: [webhook, callback, inbound, signature, hmac, replay, idempotent]
+    status: ready
     evidence: { apps: 4, count: 15, prs: 15, past_apps: 12, past_count: 28 }
-  - id: integrations.webhooks
-    recipe: Inbound webhooks
-    summary: Receive signed webhooks without an official SDK.
+  - id: integrations.api-client
+    recipe: API client (official SDK)
+    summary: "The provider's official SDK behind an app contract: the contract, an SDK-backed client that turns SDK errors into one exception carrying no request data, a Fake bound in tests, config/services.php and .env.example keys, and a test against the Fake. The app never calls the SDK or Http:: directly."
     kit: []
-    checks: []
-    paths: []
-    keywords: [webhook, callback, inbound]
-    status: gap
+    make: standards:make api-client --flavor=sdk
+    checks: ['integrations']
+    paths: ['app/Services/**']
+    keywords: [api, client, sdk, third party, contract, fake]
+    status: ready
+    evidence: { apps: 4, count: 15, prs: 15, past_apps: 12, past_count: 28 }
+  - id: integrations.api-client.http
+    recipe: API client (HTTP)
+    summary: "With no official SDK, Laravel's Http behind an app contract: a macro with the base URL, token, a timeout and retries with backoff on a connection error or a 5xx; errors carry the status only; a Fake bound in tests, config and .env.example keys, and tests on the Fake and on faked HTTP that never reach the service."
+    kit: []
+    make: standards:make api-client --flavor=http
+    checks: ['integrations']
+    paths: ['app/Services/**']
+    keywords: [api, client, http, rest, retry, timeout, contract, fake]
+    status: ready
+    evidence: { apps: 4, count: 15, prs: 15, past_apps: 12, past_count: 28 }
   - id: integrations.byo
     recipe: Build your own
     summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
@@ -95,3 +114,11 @@ nodes:
     keywords: [search, full text, index, scout]
     status: gap
     evidence: { apps: 0, count: 0, prs: 0, past_apps: 1, past_count: 1 }
+  - id: integrations.api.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo

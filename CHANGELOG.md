@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Inbound webhooks (pattern `integrations.webhook`, ready).** `standards:make webhook <Provider>` writes a spatie/laravel-webhook-client receiver (run `composer require spatie/laravel-webhook-client` first):
+  - its `config/webhook-client.php` entry;
+  - a signature validator: HMAC-SHA256 over `<timestamp>.<raw body>` compared with `hash_equals`, and a ±300 s timestamp tolerance. A bad signature or an expired timestamp is a 403, nothing is stored, and the body and secret are never logged;
+  - a profile that stores any signed event with an id and type;
+  - a queued job whose `HANDLERS` map is the event allow-list. An unknown event is stored, not processed. The handler runs in the transaction that marks the call processed, so a failed handler retries with no double effect;
+  - an example handler, and a test proving all of the above against the app's test database.
+  - The first webhook adds the shared pieces:
+    - `App\Models\WebhookCall`, keyed by event id (unique per webhook name), so a duplicate delivery is answered 2xx and processed once;
+    - the `ReceiveWebhook` controller (404 for an unknown name, 403 for a bad signature);
+    - the migration;
+    - `routes/webhooks.php`, loaded by `WebhookServiceProvider` outside the web group (no session, cookies or CSRF) under its own `webhooks` rate limit.
+  - With spatie/laravel-multitenancy installed, the job is `NotTenantAware`: a webhook arrives with no tenant.
+- **API clients, SDK-first (patterns `integrations.api-client` and `integrations.api-client.http`, ready).** `standards:make api-client <Provider> [--sdk|--http]` writes:
+  - the contract the app depends on, and an exception (in `App\Exceptions`) that carries no request data;
+  - the real client: the official SDK behind the contract (`--sdk`), or Laravel's Http through a macro with base URL, token, timeout and up to three tries with backoff on a connection error or a 5xx (`--http`, the default);
+  - a Fake bound in tests, its provider, `config/services.php` keys and `.env.example` lines;
+  - tests on the Fake (`Http::preventStrayRequests()`) and, for `--http`, on faked HTTP. No test reaches the service.
+- **Tree:** `integrations.provider` now asks what you need (receive webhooks, or call the API). A new branch asks "Is there an official SDK, and a fake driver for tests?" and leads to the SDK or the HTTP client. Evidence: fleet 4 apps × 15, past 12 apps × 28.
+- **Rule `integrations`, advisory** (like `operator`, until listed in `Configuration::optionalRules`):
+  - a route whose URI mentions `webhook` must reach a handler that verifies its sender;
+  - an `Http::` call belongs in a class that implements a contract (a service provider, which defines macros, is exempt).
+
+### Changed
+
+- Generated PHP files have their import block sorted after rendering, so names taken from the unit's name still pass Pint's `ordered_imports`.
+- A provider added to a `bootstrap/providers.php` written with imports is imported and listed by its short name; a plain list keeps the full name.
+
 ## 0.11.5 - 2026-10-27
 
 ### Fixed

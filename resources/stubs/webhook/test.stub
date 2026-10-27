@@ -1,0 +1,103 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Webhooks\{{ name }}\Handlers\Handle{{ example_class }};
+use {{ namespace }}\Webhooks\{{ name }}\Process{{ name }}Webhook;
+use {{ namespace }}\Webhooks\{{ name }}\{{ name }}SignatureValidator;
+use {{ namespace }}\Models\WebhookCall;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Spatie\WebhookClient\WebhookConfigRepository;
+
+// The {{ title }} webhook end to end, on the app's test database (migrated here) with a test secret: a bad signature or an expired timestamp is a 403,
+// a duplicate delivery is processed once, an unknown event is stored but not processed, and a failed handler retries with no double effect. No real
+// request leaves the app.
+
+beforeEach(function () {
+    Artisan::call('migrate', ['--force' => true, '--no-interaction' => true]);
+    config(['queue.default' => 'sync', 'webhook-client.configs' => array_map(fn (array $config): array => $config['name'] === '{{ slug }}' ? [...$config, 'signing_secret' => 'test-secret'] : $config, config('webhook-client.configs'))]);
+    app()->forgetInstance(WebhookConfigRepository::class);
+    // The handler's effect, observable: one row per handled event.
+    Schema::create('{{ slug_snake }}_webhook_effects', fn (Blueprint $table) => $table->string('event_id'));
+    $this->handled = fn (): int => DB::table('{{ slug_snake }}_webhook_effects')->count();
+    app()->instance(Handle{{ example_class }}::class, new class
+    {
+        public function handle(array $payload): void
+        {
+            DB::table('{{ slug_snake }}_webhook_effects')->insert(['event_id' => $payload['id']]);
+        }
+    });
+    // Fresh event ids each run, so a persistent test database never sees one twice.
+    $this->event = fn (string $name): string => $name.'_'.bin2hex(random_bytes(6));
+    $this->deliver = function (array $event, ?string $secret = 'test-secret', ?int $timestamp = null) {
+        $body = json_encode($event, JSON_THROW_ON_ERROR);
+        $timestamp ??= time();
+
+        return $this->call('POST', '/webhooks/{{ slug }}', server: [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_'.strtoupper(str_replace('-', '_', '{{ signature_header }}')) => hash_hmac('sha256', $timestamp.'.'.$body, (string) $secret),
+            'HTTP_'.strtoupper(str_replace('-', '_', {{ name }}SignatureValidator::TIMESTAMP_HEADER)) => (string) $timestamp,
+        ], content: $body);
+    };
+});
+
+afterEach(function () {
+    Schema::dropIfExists('{{ slug_snake }}_webhook_effects');
+});
+
+it('refuses a bad signature or an expired timestamp with a 403, storing nothing', function () {
+    $id = ($this->event)('evt');
+    ($this->deliver)(['id' => $id, 'type' => '{{ example_event }}'], 'wrong-secret')->assertForbidden();
+    ($this->deliver)(['id' => $id, 'type' => '{{ example_event }}'], timestamp: time() - {{ name }}SignatureValidator::TOLERANCE_SECONDS - 60)->assertForbidden();
+
+    expect(WebhookCall::query()->where('event_id', $id)->count())->toBe(0)->and(($this->handled)())->toBe(0);
+});
+
+it('processes an event once, however many times it is delivered', function () {
+    $id = ($this->event)('evt');
+    ($this->deliver)(['id' => $id, 'type' => '{{ example_event }}'])->assertSuccessful();
+    ($this->deliver)(['id' => $id, 'type' => '{{ example_event }}'])->assertSuccessful();
+
+    expect(WebhookCall::query()->where('event_id', $id)->count())->toBe(1)
+        ->and(WebhookCall::query()->where('event_id', $id)->value('processed_at'))->not->toBeNull()
+        ->and(($this->handled)())->toBe(1);
+});
+
+it('stores an event with no handler but does not process it', function () {
+    $id = ($this->event)('evt');
+    ($this->deliver)(['id' => $id, 'type' => 'not.handled'])->assertSuccessful();
+
+    expect(WebhookCall::query()->where('event_id', $id)->exists())->toBeTrue()->and(($this->handled)())->toBe(0);
+});
+
+it('retries a failed handler without a double effect', function () {
+    $id = ($this->event)('evt');
+    app()->instance(Handle{{ example_class }}::class, new class
+    {
+        public function handle(array $payload): void
+        {
+            DB::table('{{ slug_snake }}_webhook_effects')->insert(['event_id' => $payload['id']]);
+            throw new RuntimeException('provider hiccup');
+        }
+    });
+    ($this->deliver)(['id' => $id, 'type' => '{{ example_event }}'])->assertServerError();
+    $call = WebhookCall::query()->where('event_id', $id)->firstOrFail();
+    expect($call->processed_at)->toBeNull()->and(($this->handled)())->toBe(0);
+
+    // The queue's retry, with the handler working again; a second retry finds it done.
+    app()->forgetInstance(Handle{{ example_class }}::class);
+    app()->instance(Handle{{ example_class }}::class, new class
+    {
+        public function handle(array $payload): void
+        {
+            DB::table('{{ slug_snake }}_webhook_effects')->insert(['event_id' => $payload['id']]);
+        }
+    });
+    (new Process{{ name }}Webhook($call))->handle();
+    (new Process{{ name }}Webhook($call))->handle();
+
+    expect(($this->handled)())->toBe(1)->and($call->fresh()->processed_at)->not->toBeNull();
+});

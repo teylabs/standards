@@ -1,0 +1,29 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Services\{{ name }};
+
+use {{ namespace }}\Exceptions\{{ name }}Exception;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Http;
+
+/**
+ * {{ title }} over HTTP, with no official SDK. Every request goes through the `{{ macro }}` Http macro ({{ name }}ServiceProvider): the base URL and
+ * token from config/services.php, a timeout, and retries with backoff on a connection error or a 5xx. A refusal is a {{ name }}Exception carrying the
+ * status only: never the request, the token or the response body.
+ */
+final class Http{{ name }}Client implements {{ name }}Client
+{
+    public function find(string $id): array
+    {
+        try {
+            return (array) Http::{{ macro }}()->get('/records/'.rawurlencode($id))->throw()->json();
+        } catch (RequestException $error) {
+            throw new {{ name }}Exception('{{ slug }}: '.$error->response->status());
+        } catch (ConnectionException) {
+            throw new {{ name }}Exception('{{ slug }}: unreachable');
+        }
+    }
+}

@@ -1,0 +1,10 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Exceptions;
+
+use RuntimeException;
+
+/** {{ title }} refused or could not be reached. Its message is the status only: never a request body, a token or a payload. */
+final class {{ name }}Exception extends RuntimeException {}

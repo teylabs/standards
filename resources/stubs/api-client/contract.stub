@@ -1,0 +1,23 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Services\{{ name }};
+
+use {{ namespace }}\Exceptions\{{ name }}Exception;
+
+/**
+ * What the app needs from {{ title }}, and nothing else: the app depends on this, never on the SDK or on Http:: directly. {{ impl }} is the real one
+ * (bound in {{ name }}ServiceProvider), Fake{{ name }}Client stands in for it in tests. Add a method here, then to both.
+ */
+interface {{ name }}Client
+{
+    /**
+     * One record by its id.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws {{ name }}Exception when {{ title }} refuses or cannot be reached
+     */
+    public function find(string $id): array;
+}

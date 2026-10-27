@@ -1,0 +1,29 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Webhooks;
+
+use Illuminate\Http\Request;
+use Spatie\WebhookClient\Exceptions\InvalidWebhookSignature;
+use Spatie\WebhookClient\WebhookConfigRepository;
+use Spatie\WebhookClient\WebhookProcessor;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Receives every webhook route in routes/webhooks.php (outside the web group: no session or CSRF, its own `webhooks` rate limit). An unknown name
+ * is a 404; a signature or timestamp that does not verify is a 403, before anything is stored. The rest is spatie/laravel-webhook-client's: the
+ * profile, storing the call, queueing its job.
+ */
+final class ReceiveWebhook
+{
+    public function __invoke(Request $request, string $webhook): Response
+    {
+        $config = app(WebhookConfigRepository::class)->getConfig($webhook) ?? abort(404);
+        try {
+            return (new WebhookProcessor($request, $config))->process();
+        } catch (InvalidWebhookSignature) {
+            abort(403);
+        }
+    }
+}

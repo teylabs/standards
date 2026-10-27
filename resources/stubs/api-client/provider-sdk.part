@@ -1,0 +1,7 @@
+    /** The official SDK's client class: install it with composer, then name it here. */
+    public const SDK = '{{ sdk_class }}';
+
+    public function register(): void
+    {
+        $this->app->singleton({{ name }}Client::class, fn (): {{ name }}Client => new {{ impl }}(new (self::SDK)((string) config('services.{{ slug }}.key'))));
+    }

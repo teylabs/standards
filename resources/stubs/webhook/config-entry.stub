@@ -1,0 +1,12 @@
+        // standards-pattern: {{ leaf }}
+        [
+            'name' => '{{ slug }}',
+            'signing_secret' => env('{{ env_prefix }}_WEBHOOK_SECRET', ''),
+            'signature_header_name' => '{{ signature_header }}',
+            'signature_validator' => {{ name }}SignatureValidator::class,
+            'webhook_profile' => {{ name }}WebhookProfile::class,
+            'webhook_model' => WebhookCall::class,
+            'store_headers' => ['{{ signature_header }}', '{{ timestamp_header }}'],
+            'store_attachments' => false,
+            'process_webhook_job' => Process{{ name }}Webhook::class,
+        ],

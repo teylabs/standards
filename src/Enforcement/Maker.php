@@ -82,6 +82,14 @@ final class Maker
         if ($unit === 'crud') {
             return $this->crud($name, $options);
         }
+
+        if ($unit === 'webhook') {
+            return $this->webhook($name, $leaf);
+        }
+
+        if ($unit === 'api-client') {
+            return $this->apiClient($name, $flavor, $leaf);
+        }
         $app = $this->paths['app'] ?? 'app';
         $pages = $this->paths['pages'] ?? 'resources/js/pages';
         $tests = $this->paths['tests'] ?? 'tests/Feature';
@@ -164,7 +172,9 @@ final class Maker
         foreach ($files as $target => $stub) {
             [$stub, $overrides] = is_array($stub) ? $stub : [$stub, []];
             $contents = $this->render($stub, [...$values, ...$overrides]);
-            $this->write($target, str_ends_with($target, 'Test.php') ? $this->covered($target, $contents) : $contents);
+            $contents = str_ends_with($target, 'Test.php') ? $this->covered($target, $contents) : $contents;
+            // Names that come from the unit's name sort differently per name, so the import block is sorted after rendering.
+            $this->write($target, str_ends_with($target, '.php') ? self::imports($contents) : $contents);
             $written[] = $target;
         }
 
@@ -254,18 +264,199 @@ final class Maker
         $values['route_uses'] = implode('', array_map(fn (string $class): string => "use {$class};\n", $uses));
         $written = $this->emit($files, $values);
 
-        $providers = 'bootstrap/providers.php';
-        $file = $this->base.'/'.$providers;
-        $line = "    // standards-pattern: ui-page.crud-resource\n    \\{$namespace}\\Providers\\{$name}ServiceProvider::class,\n";
-        $current = is_file($file) ? (string) file_get_contents($file) : "<?php\n\nreturn [\n];\n";
-        $at = strrpos($current, '];');
-        if ($at === false) {
-            throw new InvalidArgumentException("{$providers} does not return a list; add \\{$namespace}\\Providers\\{$name}ServiceProvider::class to it yourself.");
-        }
-        $this->write($providers, substr($current, 0, $at).$line.substr($current, $at));
-        $written[] = $providers;
+        $written[] = $this->provide("{$namespace}\\Providers\\{$name}ServiceProvider", 'ui-page.crud-resource');
 
         return $written;
+    }
+
+    /**
+     * The file with its top-level `use` block holding the given classes too, sorted as Pint's ordered_imports wants and followed by one blank line.
+     * A file with no block gets one after its opening comment.
+     *
+     * @param  list<string>  $classes
+     */
+    private static function imports(string $contents, array $classes = []): string
+    {
+        if (preg_match('/^((?:use [^;\n]+;\n)+)/m', $contents, $block, PREG_OFFSET_CAPTURE) === 1) {
+            [$lines, $at] = $block[1];
+        } else {
+            $lines = '';
+            $at = preg_match('/\A<\?php\n(?:\n?(?:\/\/[^\n]*\n)+)?\n?/', $contents, $head) === 1 ? strlen($head[0]) : 0;
+            if ($classes === []) {
+                return $contents;
+            }
+        }
+        $imports = array_values(array_unique([...array_filter(explode("\n", $lines)), ...array_map(fn (string $class): string => 'use '.$class.';', $classes)]));
+        usort($imports, fn (string $a, string $b): int => strcasecmp(str_replace('\\', ' ', $a), str_replace('\\', ' ', $b)));
+        $rest = ltrim(substr($contents, $at + strlen($lines)), "\n");
+
+        return rtrim(substr($contents, 0, $at), "\n").($at > 0 ? "\n\n" : '').implode("\n", $imports)."\n\n".$rest;
+    }
+
+    /** Adds a provider to bootstrap/providers.php, stamped; one already listed is left as it is. */
+    private function provide(string $class, string $leaf): string
+    {
+        $providers = 'bootstrap/providers.php';
+        $file = $this->base.'/'.$providers;
+        $current = is_file($file) ? (string) file_get_contents($file) : "<?php\n\nreturn [\n];\n";
+        if (str_contains($current, $class.'::class')) {
+            return $providers;
+        }
+        $at = strrpos($current, '];');
+        if ($at === false) {
+            throw new InvalidArgumentException("{$providers} does not return a list; add \\{$class}::class to it yourself.");
+        }
+        // A list written with imports gets an import and the short name, as Pint wants; otherwise the full name.
+        $imported = preg_match('/^use [^;\n]+;$/m', $current) === 1;
+        $entry = "    // standards-pattern: {$leaf}\n    ".($imported ? class_basename($class) : '\\'.$class)."::class,\n";
+        $updated = substr($current, 0, $at).$entry.substr($current, $at);
+        $this->write($providers, $imported ? self::imports($updated, [$class]) : $updated);
+
+        return $providers;
+    }
+
+    /**
+     * An inbound webhook from a provider on spatie/laravel-webhook-client: its config entry, signature validator (HMAC over the raw body, constant-time,
+     * a timestamp tolerance), profile, queued job with a per-event handler map (idempotent by event id) and an example handler, the route, and the test
+     * that proves it. The first webhook also adds what every webhook shares: the stored-call model with its unique event id, the receiving
+     * controller (403 on a bad signature), the migration, routes/webhooks.php and the provider that loads it outside the web group under its own rate
+     * limit.
+     *
+     * @return list<string>
+     */
+    private function webhook(string $name, string $leaf): array
+    {
+        if (! class_exists('Spatie\\WebhookClient\\WebhookProcessor') && ! is_dir($this->base.'/vendor/spatie/laravel-webhook-client')) {
+            throw new InvalidArgumentException('Webhooks are received with spatie/laravel-webhook-client: composer require spatie/laravel-webhook-client, then run this again.');
+        }
+        $app = $this->paths['app'] ?? 'app';
+        $tests = $this->paths['tests'] ?? 'tests/Feature';
+        $namespace = $this->paths['namespace'] ?? 'App';
+        $slug = Str::kebab($name);
+        $values = [
+            'namespace' => $namespace, 'name' => $name, 'slug' => $slug, 'slug_snake' => Str::snake($name), 'title' => Str::headline($name), 'leaf' => $leaf,
+            'env_prefix' => strtoupper(Str::snake($name)), 'signature_header' => 'X-'.$name.'-Signature', 'timestamp_header' => 'X-'.$name.'-Timestamp',
+            'example_event' => $slug.'.updated', 'example_class' => $name.'Updated',
+        ];
+        // A webhook arrives with no tenant: in a multitenant app its job must not wait for one (the handler finds the tenant from the payload).
+        $tenancy = interface_exists('Spatie\\Multitenancy\\Jobs\\NotTenantAware') || is_dir($this->base.'/vendor/spatie/laravel-multitenancy');
+        $values += $tenancy
+            ? ['tenant_use' => "use Spatie\\Multitenancy\\Jobs\\NotTenantAware;\n", 'tenant_implements' => ' implements NotTenantAware', 'tenant_note' => "\n *\n * Not tenant-aware: a webhook arrives with no tenant, so a handler that needs one finds it from the payload and runs inside it."]
+            : ['tenant_use' => '', 'tenant_implements' => '', 'tenant_note' => ''];
+        $config = $this->base.'/config/webhook-client.php';
+        if (is_file($config) && preg_match("/'name'\\s*=>\\s*'".preg_quote($slug, '/')."'/", (string) file_get_contents($config)) === 1) {
+            throw new InvalidArgumentException("config/webhook-client.php already has a {$slug} webhook; standards:make never overwrites.");
+        }
+        $files = [
+            "{$app}/Webhooks/{$name}/{$name}SignatureValidator.php" => 'webhook/signature-validator.stub',
+            "{$app}/Webhooks/{$name}/{$name}WebhookProfile.php" => 'webhook/profile.stub',
+            "{$app}/Webhooks/{$name}/Process{$name}Webhook.php" => 'webhook/job.stub',
+            "{$app}/Webhooks/{$name}/Handlers/Handle{$name}Updated.php" => 'webhook/handler.stub',
+            "{$tests}/Webhooks/{$name}WebhookTest.php" => 'webhook/test.stub',
+        ];
+        $shared = [
+            "{$app}/Models/WebhookCall.php" => 'webhook/webhook-call.stub',
+            "{$app}/Webhooks/ReceiveWebhook.php" => 'webhook/controller.stub',
+            "{$app}/Providers/WebhookServiceProvider.php" => 'webhook/provider.stub',
+            'routes/webhooks.php' => 'webhook/routes.stub',
+        ];
+        if (glob($this->base.'/database/migrations/*_add_event_id_to_webhook_calls_table.php') === []) {
+            $shared['database/migrations/'.date('Y_m_d_His').'_add_event_id_to_webhook_calls_table.php'] = 'webhook/migration.stub';
+        }
+        $written = $this->emit($files + array_filter($shared, fn (string $stub, string $target): bool => ! is_file($this->base.'/'.$target), ARRAY_FILTER_USE_BOTH), $values);
+
+        $current = is_file($config) ? (string) file_get_contents($config) : $this->render('webhook/config.stub', $values);
+        $at = strpos($current, "'configs' => [");
+        if ($at === false) {
+            throw new InvalidArgumentException("config/webhook-client.php has no 'configs' => [ list; add the {$slug} entry yourself.");
+        }
+        $at += strlen("'configs' => [");
+        $merged = substr($current, 0, $at)."\n".rtrim($this->render('webhook/config-entry.stub', $values), "\n").substr($current, $at);
+        $this->write('config/webhook-client.php', self::imports($merged, ["{$namespace}\\Models\\WebhookCall", "{$namespace}\\Webhooks\\{$name}\\{$name}SignatureValidator", "{$namespace}\\Webhooks\\{$name}\\{$name}WebhookProfile", "{$namespace}\\Webhooks\\{$name}\\Process{$name}Webhook"]));
+        $written[] = 'config/webhook-client.php';
+        $routes = (string) file_get_contents($this->base.'/routes/webhooks.php');
+        $this->write('routes/webhooks.php', rtrim($routes)."\n\n// standards-pattern: {$leaf}\nRoute::post('webhooks/{$slug}', ReceiveWebhook::class)->defaults('webhook', '{$slug}')->name('webhooks.{$slug}');\n");
+        $written[] = 'routes/webhooks.php';
+        $written[] = $this->env(["{$values['env_prefix']}_WEBHOOK_SECRET="], $leaf);
+        $written[] = $this->provide("{$namespace}\\Providers\\WebhookServiceProvider", $leaf);
+
+        return array_values(array_unique($written));
+    }
+
+    /**
+     * A client for another service's API, SDK-first: the contract the app depends on, the real client (the official SDK behind it for `sdk`, Laravel's
+     * Http with a timeout, retries and backoff through a macro for `http`), a Fake for tests, its provider, config/services.php keys and .env.example
+     * lines, and tests that never reach the service.
+     *
+     * @return list<string>
+     */
+    private function apiClient(string $name, string $flavor, string $leaf): array
+    {
+        $app = $this->paths['app'] ?? 'app';
+        $tests = $this->paths['tests'] ?? 'tests/Feature';
+        $namespace = $this->paths['namespace'] ?? 'App';
+        $slug = Str::snake($name);
+        $prefix = strtoupper($slug);
+        $impl = ($flavor === 'sdk' ? 'Sdk' : 'Http').$name.'Client';
+        $values = [
+            'namespace' => $namespace, 'name' => $name, 'slug' => $slug, 'title' => Str::headline($name), 'leaf' => $leaf, 'impl' => $impl, 'macro' => Str::camel($name),
+            'sdk_class' => 'Vendor\\'.$name.'\\Client', 'provider_note' => $flavor === 'sdk' ? ', its official SDK' : ', over HTTP through the `'.Str::camel($name).'` macro',
+        ];
+        $values['provider_uses'] = implode("\n", $flavor === 'sdk'
+            ? ["use {$namespace}\\Services\\{$name}\\{$name}Client;", "use {$namespace}\\Services\\{$name}\\{$impl};", 'use Illuminate\\Support\\ServiceProvider;']
+            : ["use {$namespace}\\Services\\{$name}\\{$name}Client;", "use {$namespace}\\Services\\{$name}\\{$impl};", 'use Illuminate\\Http\\Client\\ConnectionException;', 'use Illuminate\\Http\\Client\\RequestException;', 'use Illuminate\\Support\\Facades\\Http;', 'use Illuminate\\Support\\ServiceProvider;', 'use Throwable;'])."\n";
+        $values['provider_body'] = rtrim($this->render('api-client/provider-'.$flavor.'.part', $values), "\n");
+        $files = [
+            "{$app}/Services/{$name}/{$name}Client.php" => 'api-client/contract.stub',
+            "{$app}/Exceptions/{$name}Exception.php" => 'api-client/exception.stub',
+            "{$app}/Services/{$name}/{$impl}.php" => 'api-client/'.$flavor.'-client.stub',
+            "{$app}/Services/{$name}/Fake{$name}Client.php" => 'api-client/fake.stub',
+            "{$app}/Providers/{$name}ServiceProvider.php" => 'api-client/provider.stub',
+            "{$tests}/Services/{$name}ClientTest.php" => 'api-client/test.stub',
+        ];
+        if ($flavor === 'http') {
+            $files["{$tests}/Services/Http{$name}ClientTest.php"] = 'api-client/http.test.stub';
+        }
+        $written = $this->emit($files, $values);
+        $keys = $flavor === 'sdk'
+            ? ["'key' => env('{$prefix}_KEY')"]
+            : ["'base_url' => env('{$prefix}_BASE_URL')", "'token' => env('{$prefix}_TOKEN')", "'timeout' => (int) env('{$prefix}_TIMEOUT', 10)"];
+        $written[] = $this->services($slug, $keys, $leaf);
+        $written[] = $this->env($flavor === 'sdk' ? ["{$prefix}_KEY="] : ["{$prefix}_BASE_URL=", "{$prefix}_TOKEN=", "{$prefix}_TIMEOUT=10"], $leaf);
+        $written[] = $this->provide("{$namespace}\\Providers\\{$name}ServiceProvider", $leaf);
+
+        return array_values(array_unique($written));
+    }
+
+    /** Adds a `services.<slug>` entry to config/services.php (made if missing); an existing entry is refused, never overwritten. @param list<string> $keys */
+    private function services(string $slug, array $keys, string $leaf): string
+    {
+        $file = $this->base.'/config/services.php';
+        $current = is_file($file) ? (string) file_get_contents($file) : "<?php\n\nreturn [\n];\n";
+        if (preg_match("/^\\s*'".preg_quote($slug, '/')."'\\s*=>/m", $current) === 1) {
+            throw new InvalidArgumentException("config/services.php already has a {$slug} entry; standards:make never overwrites.");
+        }
+        $at = strrpos($current, '];');
+        if ($at === false) {
+            throw new InvalidArgumentException("config/services.php does not return an array; add the {$slug} keys yourself.");
+        }
+        $entry = "\n    // standards-pattern: {$leaf}\n    '{$slug}' => [\n".implode('', array_map(fn (string $key): string => "        {$key},\n", $keys))."    ],\n";
+        $this->write('config/services.php', rtrim(substr($current, 0, $at))."\n".$entry.substr($current, $at));
+
+        return 'config/services.php';
+    }
+
+    /** Adds missing keys to .env.example, never a value: the secret goes in each environment. @param list<string> $lines */
+    private function env(array $lines, string $leaf): string
+    {
+        $file = $this->base.'/.env.example';
+        $current = is_file($file) ? (string) file_get_contents($file) : '';
+        $missing = array_filter($lines, fn (string $line): bool => preg_match('/^'.preg_quote(strtok($line, '='), '/').'=/m', $current) !== 1);
+        if ($missing !== []) {
+            $this->write('.env.example', ltrim(rtrim($current)."\n\n# standards-pattern: {$leaf}\n".implode("\n", $missing)."\n", "\n"));
+        }
+
+        return '.env.example';
     }
 
     /**

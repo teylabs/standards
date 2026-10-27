@@ -1,0 +1,40 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+// spatie/laravel-webhook-client's calls table, with the sender's event id (unique per webhook, so a duplicate delivery is stored once) and when the
+// call was processed (set in the same transaction as its handler, so a retry never runs it twice).
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (! Schema::hasTable('webhook_calls')) {
+            Schema::create('webhook_calls', function (Blueprint $table): void {
+                $table->bigIncrements('id');
+                $table->string('name');
+                $table->string('url', 512);
+                $table->json('headers')->nullable();
+                $table->json('payload')->nullable();
+                $table->text('exception')->nullable();
+                $table->timestamps();
+            });
+        }
+        Schema::table('webhook_calls', function (Blueprint $table): void {
+            $table->string('event_id', 191)->nullable()->after('name');
+            $table->timestamp('processed_at')->nullable();
+            $table->unique(['name', 'event_id']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('webhook_calls', function (Blueprint $table): void {
+            $table->dropUnique(['name', 'event_id']);
+            $table->dropColumn(['event_id', 'processed_at']);
+        });
+    }
+};

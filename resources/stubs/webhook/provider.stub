@@ -1,0 +1,24 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Providers;
+
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
+
+/**
+ * Inbound webhooks: routes/webhooks.php, outside the web group (no session, cookies or CSRF: there is no browser), under its own `webhooks` rate
+ * limit, per sender address and webhook.
+ */
+final class WebhookServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        RateLimiter::for('webhooks', fn (Request $request): Limit => Limit::perMinute(120)->by($request->ip().'|'.(string) $request->route('webhook')));
+        Route::middleware('throttle:webhooks')->group(base_path('routes/webhooks.php'));
+    }
+}

@@ -1,0 +1,47 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Webhooks\{{ name }};
+
+use {{ namespace }}\Models\WebhookCall;
+use Illuminate\Support\Facades\DB;
+use Spatie\WebhookClient\Jobs\ProcessWebhookJob;
+{{ tenant_use }}
+/**
+ * Processes one stored {{ title }} webhook, once. HANDLERS is the allow-list: an event type maps to its handler, and any other type is marked done
+ * without running anything. The handler runs inside a transaction that also marks the call processed, so a handler that throws rolls both back and
+ * the queue retries it with no double effect. A duplicate delivery (the same event id) reuses the stored call, which is already processed.{{ tenant_note }}
+ */
+final class Process{{ name }}Webhook extends ProcessWebhookJob{{ tenant_implements }}
+{
+    /** Where the event's id and type are in the payload. */
+    public const EVENT_ID = 'id';
+
+    public const EVENT_TYPE = 'type';
+
+    /** Event type => its handler class, which has handle(array $payload): void. */
+    public const HANDLERS = [
+        '{{ example_event }}' => Handlers\Handle{{ example_class }}::class,
+    ];
+
+    public int $tries = 5;
+
+    /** @var list<int> */
+    public array $backoff = [10, 60, 300];
+
+    public function handle(): void
+    {
+        DB::transaction(function (): void {
+            $call = WebhookCall::query()->whereKey($this->webhookCall->getKey())->lockForUpdate()->firstOrFail();
+            if ($call->processed_at !== null) {
+                return;
+            }
+            $handler = self::HANDLERS[(string) data_get($call->payload, self::EVENT_TYPE)] ?? null;
+            if ($handler !== null) {
+                app($handler)->handle((array) $call->payload);
+            }
+            $call->forceFill(['processed_at' => now()])->save();
+        });
+    }
+}
