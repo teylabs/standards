@@ -8,22 +8,24 @@ use Tey\Kit\Features\Core\Principal;
 use Tey\Kit\Features\Mcp\Capability;
 use Tey\Kit\Features\Mcp\CapabilityTool;
 
-#[Capability('{{ capability_group }}')]
+#[Capability('{{ capability }}')]
 final class {{ name }}Tool extends CapabilityTool
 {
-    public const CAPABILITY = '{{ capability }}';
-
-    public const ABILITY = '{{ ability }}';
-{{ writes }}
     protected string $description = '{{ title }}.';
 
+    /** @return array<string, mixed> the accepted arguments' rules; the kit refuses any other argument */
+    protected function rules(): array
+    {
+        return [{{ tool_rules }}];
+    }
+
     /**
-     * @param  array<string, mixed>  $arguments
+     * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
-    protected function call(Principal $principal, int $workspace, array $arguments): array
+    protected function call(Principal $principal, int $workspace, array $validated): array
     {
-        // Reuse the operation the UI uses; never duplicate the business logic here.
+        // Call the operation the UI uses; it authorizes the principal. Never duplicate the business logic here.
         return [];
     }
 }

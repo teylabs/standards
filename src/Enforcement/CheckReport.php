@@ -25,7 +25,7 @@ final class CheckReport
      * @param  list<string>|null  $paths
      * @return array<string, mixed>
      */
-    public static function build(string $base, string $configurationFile, ?array $paths, string $scope, DateTimeImmutable $today, PatternCatalog $catalog, int $expiringDays = 14, ?string $sha = null): array
+    public static function build(string $base, string $configurationFile, ?array $paths, string $scope, DateTimeImmutable $today, PatternCatalog $catalog, int $expiringDays = 14, ?string $sha = null, ?string $autoload = null): array
     {
         $allowlist = ['count' => 0, 'expiring' => [], 'expired' => []];
         $skipped = [];
@@ -35,7 +35,7 @@ final class CheckReport
         } else {
             try {
                 $configuration = self::configuration($base, $configurationFile);
-                $result = (new Gate($configuration, $today, $catalog, $expiringDays))->run($paths);
+                $result = (new Gate($configuration, $today, $catalog, $expiringDays, $autoload ?? $base.'/vendor/autoload.php'))->run($paths);
                 ['violations' => $violations, 'allowlist' => $allowlist, 'skipped' => $skipped] = $result;
             } catch (Throwable $error) {
                 $violations = [['rule' => 'standards', 'kind' => 'error', 'target' => $configurationFile, 'check' => $error->getMessage(), 'hint' => 'Create '.$configurationFile.' returning the app\'s Tey\Standards\Configuration, or set standards.configuration. The gate fails closed until it can run.']];

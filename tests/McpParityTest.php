@@ -14,6 +14,13 @@ beforeEach(function () {
 });
 
 afterEach(function () {
+    // Windows cannot recurse through a directory symlink, so unlink links first or the run folder is left behind.
+    foreach (['src/Linked', 'src/UI/Linked.php', 'docs/mcp-capabilities.json'] as $link) {
+        if (is_link($this->base.'/'.$link)) {
+            is_dir($this->base.'/'.$link) && PHP_OS_FAMILY === 'Windows' ? @rmdir($this->base.'/'.$link) : @unlink($this->base.'/'.$link);
+        }
+    }
+
     $this->files->deleteDirectory($this->base);
 });
 

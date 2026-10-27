@@ -10,7 +10,7 @@ nodes:
       - { answer: "None of these", next: mcp.byo }
   - id: mcp.tool
     question: Does the tool change data?
-    why: Writing tools declare WRITES and confirmation; read tools stay side-effect free.
+    why: Writing tools reuse the UI's Action and mark destructive calls for confirmation; read tools stay side-effect free.
     options:
       - { answer: "It only reads", next: mcp.read }
       - { answer: "It creates, changes or deletes data", next: mcp.write }
@@ -18,7 +18,7 @@ nodes:
       - { answer: "None of these", next: mcp.tool.byo }
   - id: mcp.read
     recipe: Read capability tool
-    summary: A kit CapabilityTool with a #[Capability] attribute, an ABILITY and a call() that reuses the page's shared operation.
+    summary: A kit CapabilityTool with a #[Capability] attribute, rules() for its arguments and call() that reuses the page's shared operation.
     kit: ['Tey\Kit\Features\Mcp\CapabilityTool', 'Tey\Kit\Features\Mcp\Capability']
     make: standards:make capability-tool --flavor=read
     checks: ['55']
@@ -28,7 +28,7 @@ nodes:
     evidence: { apps: 9, count: 27, prs: 27, past_apps: 0, past_count: 0 }
   - id: mcp.write
     recipe: mcp-parity
-    summary: A CapabilityTool with WRITES = true that calls the same Action as the UI, declared in the MCP capability manifest with its parity test.
+    summary: A CapabilityTool whose call() runs the same Action as the UI (destructive in its #[Capability] attribute when the person must confirm), declared in the MCP capability manifest with its parity test.
     kit: ['Tey\Kit\Features\Mcp\CapabilityTool', 'Tey\Kit\Features\Mcp\Capability']
     make: standards:make capability-tool --flavor=write
     recipe_make: "mod:butter/mcp-parity {Name}"

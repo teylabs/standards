@@ -111,5 +111,7 @@ final readonly class Configuration
         public array $uiExternalLabelComponents = [],
         public array $uiToastRenderers = [],
         public array $controllerNonOperationNamespaces = ['Data'],
+        /** @var list<string> classes that fail to load; set by the gate's load probe and skipped by the checks */
+        public array $unloadable = [],
     ) {}
 }

@@ -73,8 +73,7 @@ final class Maker
             'test_suffix' => '',
             'capability' => str_replace('-', '_', $slug).'.'.($flavor === 'write' ? 'update' : 'read'),
             'capability_group' => str_replace('-', '_', $slug),
-            'ability' => str_replace('-', '_', $slug).'.'.($flavor === 'write' ? 'update' : 'read'),
-            'writes' => $flavor === 'write' ? "\n    public const WRITES = true;\n" : '',
+            'tool_rules' => $flavor === 'write' ? "'id' => ['required', 'integer'], 'intent_key' => ['sometimes', 'string', 'max:120']" : '',
             'rules' => $flavor === 'toggles' ? "'updates' => ['sometimes', 'boolean']" : "'name' => ['required', 'string', 'max:255']",
         ];
 

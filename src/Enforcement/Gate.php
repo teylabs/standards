@@ -11,6 +11,7 @@ use Tey\Standards\Conformance;
 use Tey\Standards\Patterns\PatternCatalog;
 use ReflectionProperty;
 use Tey\Standards\Ratchet;
+use Tey\Standards\Source;
 use Throwable;
 
 /**
@@ -28,6 +29,7 @@ final class Gate
         private readonly DateTimeImmutable $today,
         private readonly ?PatternCatalog $patterns = null,
         private readonly int $warnDays = 14,
+        private readonly ?string $autoload = null,
     ) {}
 
     /**
@@ -39,13 +41,37 @@ final class Gate
         $ratchet = new Ratchet($this->config->allowlist);
         $violations = [];
         $skipped = [];
+        $config = $this->config;
+
+        // Load every class in a separate process first: a class that fatals on load becomes a
+        // [load] finding and is skipped here, instead of killing this process with exit 255.
+        if ($this->autoload !== null && is_file($this->autoload)) {
+            try {
+                $declared = (new Source($config))->declared();
+            } catch (Throwable) {
+                $declared = [];
+            }
+
+            $unloadable = LoadProbe::failures($config->base, $this->autoload, array_keys($declared));
+
+            foreach ($unloadable as $class => $reason) {
+                if ($this->inScope($declared[$class], $paths)) {
+                    $violations[] = $this->finding('load', 'error', $declared[$class], $class.': '.$reason, 'The class does not load, so no rule can check it. Fix the declaration (for example, implement every abstract method of its parent) and run the check again.');
+                }
+            }
+
+            if ($unloadable !== []) {
+                $config = new Configuration(...array_replace(get_object_vars($config), ['unloadable' => array_keys($unloadable)]));
+                self::fence(array_keys($unloadable));
+            }
+        }
 
         // Placement and preset rules read Pest's suite root; outside a Pest run it is the app.
         if (class_exists(TestSuite::class) && ! (new ReflectionProperty(TestSuite::class, 'instance'))->getValue() instanceof TestSuite) {
             TestSuite::getInstance($this->config->base, 'tests');
         }
 
-        $conformance = new Conformance($this->config);
+        $conformance = new Conformance($config);
 
         foreach (array_keys(Conformance::TESTS) as $rule) {
             $rule = (string) $rule;
@@ -113,6 +139,23 @@ final class Gate
             'allowlist' => ['count' => count($ratchet->entries()), 'expiring' => $expiring, 'expired' => $expired],
             'skipped' => $skipped,
         ];
+    }
+
+    /**
+     * Stands an empty class in for each unloadable one, ahead of Composer, so
+     * a rule that reaches it by namespace scanning cannot trigger the fatal.
+     *
+     * @param  list<string>  $classes
+     */
+    private static function fence(array $classes): void
+    {
+        spl_autoload_register(function (string $class) use ($classes): void {
+            if (in_array($class, $classes, true) && ! class_exists($class, false)) {
+                $position = strrpos($class, '\\');
+                $namespace = $position === false ? '' : 'namespace '.substr($class, 0, $position).'; ';
+                eval($namespace.'final class '.substr($class, $position === false ? 0 : $position + 1).' {}');
+            }
+        }, prepend: true);
     }
 
     /** @param list<string>|null $paths */

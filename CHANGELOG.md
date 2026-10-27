@@ -9,7 +9,7 @@
 
 ### Added
 
-- `standards:check [--changed] [--file=…] [--json]` runs every conformance rule outside Pest, applies the allowlist with expiries, and exits 1 on drift. JSON schema 1 carries app, sha, violations, allowlist count and expiries, and pattern gaps.
+- `standards:check [--changed] [--file=…] [--json]` runs every conformance rule outside Pest, applies the allowlist with expiries, and exits 1 on drift. A class that fails to load is a `load` finding, never a crash. JSON schema 1 carries app, sha, violations, allowlist count and expiries, and pattern gaps.
 - A reusable `.github/workflows/standards.yml` workflow to make a required check.
 - `standards:install` writes the generated AGENTS.md pattern index, one Boost skill per recipe, path-scoped Claude skills, and merged `.claude/settings.json` hooks. Stop and `git commit` block on drift. New files get an advisory lookup plus a one-time stamp request. Edits get an advisory `--file` check. Every hook is a no-op outside an app that requires tey/standards. It also installs a pre-push hook.
 - Pattern lookup in three levels: features (plans composed of unit leaves), the unit decision tree, and kit components per leaf, validated against the kit's `@kit/ui` exports. `Lookup::find(intent|path|answers)` and `recipe(id)` answer with the frozen pattern contract 1 (`docs/pattern-contract.md`), which the hosted recipe MCP builds on. `standards:pattern` is the offline CLI. Every question has a build-your-own exit. Byo and gap leaves return their nearest recipes, conventions and an anonymised demand record, and `standards:check --json` and the drift report count that demand. Leaves carry optional `recipe_make` and count-only `evidence`, and `--gaps` sorts by fleet plus past demand.

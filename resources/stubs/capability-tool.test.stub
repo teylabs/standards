@@ -3,7 +3,8 @@
 // standards-pattern: {{ leaf }}
 
 use {{ namespace }}\Mcp\Tools\{{ name }}Tool;
+use Tey\Kit\Features\Mcp\Capability;
 
 it('declares the {{ capability }} capability', function () {
-    expect({{ name }}Tool::CAPABILITY)->toBe('{{ capability }}');
+    expect(Capability::of({{ name }}Tool::class)?->capability)->toBe('{{ capability }}');
 });

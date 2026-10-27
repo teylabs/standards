@@ -1701,7 +1701,7 @@
         "mcp.tool": {
             "id": "mcp.tool",
             "question": "Does the tool change data?",
-            "why": "Writing tools declare WRITES and confirmation; read tools stay side-effect free.",
+            "why": "Writing tools reuse the UI's Action and mark destructive calls for confirmation; read tools stay side-effect free.",
             "options": [
                 {
                     "answer": "It only reads",
@@ -1756,7 +1756,7 @@
         "mcp.write": {
             "id": "mcp.write",
             "recipe": "mcp-parity",
-            "summary": "A CapabilityTool with WRITES = true that calls the same Action as the UI, declared in the MCP capability manifest with its parity test.",
+            "summary": "A CapabilityTool whose call() runs the same Action as the UI (destructive in its",
             "kit": [
                 "Tey\\Kit\\Features\\Mcp\\CapabilityTool",
                 "Tey\\Kit\\Features\\Mcp\\Capability"

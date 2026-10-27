@@ -74,6 +74,10 @@ function fixtureApp(): string
 {
     $base = sys_get_temp_dir().'/standards-app-'.bin2hex(random_bytes(6));
     (new Filesystem)->copyDirectory(dirname(__DIR__).'/fixtures/App', $base);
+    // The app's own vendor/autoload.php, as the gate's load probe expects: the package's
+    // autoloader (with the real tey/kit), the framework doubles and the app's PSR-4 root.
+    mkdir($base.'/vendor');
+    file_put_contents($base.'/vendor/autoload.php', '<?php require '.var_export(dirname(__DIR__).'/vendor/autoload.php', true).'; require __DIR__.\'/../tests/Support/framework.php\'; spl_autoload_register(function (string $class): void { $file = dirname(__DIR__).\'/app/\'.str_replace(\'\\\\\', \'/\', substr($class, 4)).\'.php\'; if (str_starts_with($class, \'App\\\\\') && is_file($file)) { require $file; } });');
     require_once $base.'/tests/Support/framework.php';
     spl_autoload_register(function (string $class) use ($base): void {
         $file = $base.'/app/'.str_replace('\\', '/', substr($class, 4)).'.php';
@@ -494,5 +498,33 @@ test('the kit export snapshot refreshes from a kit checkout and an installed kit
         expect(KitExports::snapshot())->toBe(json_decode(file_get_contents(patternSources().'/kit-exports.json'), true)['components']);
     } finally {
         (new Filesystem)->deleteDirectory($kit);
+    }
+});
+
+test('a class that fatals on load is a [load] finding with exit 1, not a crash, and the other rules still run', function () {
+    $base = fixtureApp();
+
+    try {
+        (new Maker($base, TreeCatalog::shipped()))->make('capability-tool', 'ArchiveWidget', 'write');
+        $tool = $base.'/app/Mcp/Tools/ArchiveWidgetTool.php';
+        // The starter's crash: a CapabilityTool that does not implement the kit's abstract rules().
+        file_put_contents($tool, preg_replace('/    \/\*\* @return array<string, mixed> the accepted.*?\n    }\n\n/s', '', file_get_contents($tool)));
+        expect(file_get_contents($tool))->not->toContain('function rules');
+        mkdir($base.'/app/Broken');
+        file_put_contents($base.'/app/Broken/Orphan.php', "<?php\n\nnamespace App\\Broken;\n\nfinal class Orphan extends \\Missing\\ParentClass {}\n");
+
+        $report = CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped());
+        $load = array_values(array_filter($report['violations'], fn (array $v): bool => $v['rule'] === 'load'));
+
+        expect($report['exit_code'])->toBe(1)
+            ->and(array_column($load, 'target'))->toEqualCanonicalizing(['app/Mcp/Tools/ArchiveWidgetTool.php', 'app/Broken/Orphan.php'])
+            ->and($load[0]['kind'])->toBe('error')
+            ->and(implode("\n", array_column($load, 'check')))->toContain('abstract method')->toContain('Missing\ParentClass')->not->toContain($base)
+            ->and(array_filter($report['violations'], fn (array $v): bool => $v['rule'] !== 'load'))->toBe([]);
+
+        $scoped = CheckReport::build($base, 'tests/Arch/configuration.php', ['app/Broken/Orphan.php'], 'changed', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped());
+        expect(array_column($scoped['violations'], 'target'))->toBe(['app/Broken/Orphan.php']);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
     }
 });

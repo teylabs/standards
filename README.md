@@ -398,7 +398,8 @@ The gate reads `tests/Arch/configuration.php`, a file that returns the app's `Co
 - a stale allowlist entry;
 - an allowlist entry without `expires`. Every entry needs `rule`, `target`, `check`, `reason`, `date` and `expires`, all real `Y-m-d` dates. Pest ratchets still accept entries without `expires`; the gate does not;
 - an expired entry;
-- a rule that cannot run, such as a missing configuration, missing dev tools or a crash. The gate fails closed.
+- a rule that cannot run, such as a missing configuration, missing dev tools or a crash. The gate fails closed;
+- a class that doesn't load (rule `load`). Before any rule runs, a separate PHP process loads every class in the class roots, so a fatal error (a missing abstract method, an unknown parent) becomes a finding with exit 1 instead of a crash. The other rules still run and skip that class.
 
 Entries expiring within `standards.expiring_days` (14) are listed but don't fail. `--changed` and `--file` keep findings whose target is one of those files. Class targets map to files through `classRoots`. Expiry findings are always reported.
 
@@ -470,7 +471,7 @@ Every path ends in a leaf. Gap and byo leaves return their nearest recipes, the 
 | Unit | Flavors | Writes |
 | ---- | ------- | ------ |
 | `page` | `index`, `show`, `form` | controller, `Page.vue` built from `@kit/ui` exports, `Route::controller()` group, Pest test; `form` adds a FormRequest and an Action |
-| `capability-tool` | `read`, `write` | kit `CapabilityTool` with `#[Capability]`, `CAPABILITY`, `ABILITY` (and `WRITES`), Pest test |
+| `capability-tool` | `read`, `write` | tey/kit `CapabilityTool` with `#[Capability]`, `rules()` and `call(Principal, int, array $validated)`, matching the kit's abstract methods, plus a Pest test |
 | `settings-section` | `form`, `toggles` | settings controller, FormRequest, Action, `pages/settings/<Name>/Page.vue`, routes, test |
 | `action` | `plain` | Action class and test |
 
@@ -490,7 +491,7 @@ Every path ends in a leaf. Gap and byo leaves return their nearest recipes, the 
 
 `vendor/bin/standards report <reports or dirs> [--previous=last.json] [--json] [--strict]` aggregates several apps' reports. For each app it counts violations, allowlisted entries, expiring and expired entries, flagged gaps and gap-demand lookups, and lists regressions and fixes against the previous aggregate. Totals cover them all. `--strict` exits 1 on any regression. Delivery stays outside the package. A nightly fleet job can run each app's reusable workflow, or `standards:check --json` in each checkout, then collect the files and run `standards report reports/ --previous=state/last.json --json > state/today.json`. It posts the text form wherever the fleet reads, and keeps `today.json` as the next run's `--previous`.
 
-**Coverage and limits.** These are static checks and generated scaffolds. The hooks rely on Claude Code's hook contract. Other agents get AGENTS.md and the Boost skills only. `--changed` needs a fetched base ref. Without a merge base it checks working-tree changes and says so. Generated pages target Inertia and kit components that the package does not install, and its fixture app uses stand-in classes for them. The generators don't run `mod:*` commands. They emit from recipe stubs that an app or kit can override.
+**Coverage and limits.** These are static checks and generated scaffolds. The hooks rely on Claude Code's hook contract. Other agents get AGENTS.md and the Boost skills only. `--changed` needs a fetched base ref. Without a merge base it checks working-tree changes and says so. The package's suite requires the real tey/kit (^0.4.4) and laravel/mcp as dev dependencies, so generated kit classes are proven against the kit's actual signatures. The generators don't run `mod:*` commands. They emit from recipe stubs that an app or kit can override.
 
 ## Agent guidance
 

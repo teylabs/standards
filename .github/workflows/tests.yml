@@ -55,7 +55,8 @@ jobs:
           production=$(mktemp -d)
           trap 'rm -rf "$production"' EXIT
           mkdir "$production/package"
-          tar --exclude=vendor --exclude=.git --exclude=composer.lock -cf - . | tar -xf - -C "$production/package"
+          # McpRun* folders are per-test temporary copies; never package them.
+          tar --exclude=vendor --exclude=.git --exclude=composer.lock --exclude='fixtures/McpRun*' -cf - . | tar -xf - -C "$production/package"
           cat > "$production/composer.json" <<JSON
           {
               "repositories": [{ "type": "path", "url": "./package", "options": { "symlink": false } }],
