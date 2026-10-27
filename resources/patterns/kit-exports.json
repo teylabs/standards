@@ -1,5 +1,5 @@
 {
-    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.4.8",
+    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.4.10",
     "module": "@kit/ui",
     "components": [
         "ActionBar",
@@ -54,6 +54,7 @@
         "Modal",
         "NumberInput",
         "Page",
+        "PageEnd",
         "PaneScroll",
         "PaneTabs",
         "PaneToggle",
@@ -63,6 +64,7 @@
         "Repeater",
         "RowActions",
         "ScrollList",
+        "SearchBox",
         "Section",
         "SectionHeader",
         "SectionIcon",
@@ -74,6 +76,7 @@
         "SheetTitle",
         "SheetTrigger",
         "SplitPane",
+        "StickyBar",
         "Textarea",
         "TimezoneSelect",
         "Toaster",
