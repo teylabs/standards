@@ -9,9 +9,12 @@ use {{ namespace }}\Http\Requests\Save{{ name }}Request;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
+use Tey\Kit\Features\Core\Concerns\Toastable;
 
 final class {{ name }}Controller
 {
+    use Toastable;
+
     public function create(): Response
     {
         return Inertia::render('{{ name }}/Form/Page');
@@ -21,6 +24,8 @@ final class {{ name }}Controller
     {
         $save->handle($request->validated());
 
-        return to_route('{{ slug }}.create')->toastSuccess('Saved.');
+        $this->toast('Saved.')->from('save');
+
+        return to_route('{{ slug }}.create');
     }
 }

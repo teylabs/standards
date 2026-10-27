@@ -602,3 +602,20 @@ test('a generated test binds the application test case, never a browser case, re
     'aliased import' => ["<?php\n\nuse Acme\\Testing\\Base as Base;\n\nuses(Base::class)->in('Unit');\n", 'Acme\Testing\Base'],
     'only a browser case: fall back to Tests\TestCase' => ["<?php\n\npest()->extend(BrowserCase::class)->in('Browser');\n", 'Tests\TestCase'],
 ]);
+
+test('the toast leaf carries the kit 0.4.6 toast contract and joins the save-bearing feature plans', function () {
+    $lookup = new Lookup(TreeCatalog::shipped());
+    $leaf = $lookup->recipe('ui-page.toast');
+
+    expect($leaf)->toMatchArray(['type' => 'leaf', 'id' => 'ui-page.toast', 'status' => 'ready'])
+        ->and($leaf['kit'])->toBe(['@kit/ui Toaster', 'Tey\\Kit\\Features\\Core\\Toast', 'Tey\\Kit\\Features\\Core\\Concerns\\Toastable'])
+        ->and($leaf['summary'])->toContain('never a toast alone', 'navigation is never toasted', "->from('<action id>')", 'anchored for table row actions', 'fly-out only by choice', 'plain for background results',
+            'kit.toasts.position', 'never per page', 'auto, top-center, top-right, bottom-right, bottom-center', 'otherwise bottom-right', 'At most one action', 'never destructive');
+
+    $unit = $lookup->find(['intent' => 'toast after saving']);
+    expect($unit['type'] === 'leaf' ? [$unit['id']] : array_column($unit['candidates'], 'id'))->toContain('ui-page.toast');
+
+    foreach (['manage-records', 'workspace-settings'] as $feature) {
+        expect(array_column($lookup->find(['intent' => $feature])['units'], 'leaf'))->toContain('ui-page.toast');
+    }
+});

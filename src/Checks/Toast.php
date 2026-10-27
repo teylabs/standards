@@ -47,6 +47,10 @@ final class Toast
                     if (! $method->isPublic() || (! in_array($name, ['store', 'update', 'destroy'], true) && ! ($name === '__invoke' && isset($class->namespacedName) && in_array($class->namespacedName->toString(), $invokables, true)))) {
                         continue;
                     }
+                    // kit 0.4.6+ headless toasts flash before the return: $this->toast(...) (Toastable) or Toast::success(...).
+                    if ($this->flashesKitToast($method->stmts ?? [])) {
+                        continue;
+                    }
                     foreach ($this->returns($method->stmts ?? []) as $return) {
                         if ($return->expr !== null && $this->redirectWithoutToast($return->expr)) {
                             $violations[] = ['target' => $path, 'check' => $class->name.'::'.$name.' redirect must chain ->toast*()'];
@@ -85,6 +89,32 @@ final class Toast
         }
 
         return $returns;
+    }
+
+    /** @param array<Node> $nodes */
+    private function flashesKitToast(array $nodes): bool
+    {
+        foreach ($nodes as $node) {
+            if ($node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction || $node instanceof Node\Stmt\ClassLike || $node instanceof Node\Stmt\Function_) {
+                continue;
+            }
+            if ($node instanceof Node\Expr\MethodCall && $node->var instanceof Node\Expr\Variable && $node->var->name === 'this'
+                && $node->name instanceof Node\Identifier && $node->name->toString() === 'toast') {
+                return true;
+            }
+            if ($node instanceof Node\Expr\StaticCall && $node->class instanceof Node\Name && $node->class->toString() === 'Tey\Kit\Features\Core\Toast'
+                && $node->name instanceof Node\Identifier && in_array(strtolower($node->name->toString()), ['success', 'info', 'warning', 'error'], true)) {
+                return true;
+            }
+            foreach ($node->getSubNodeNames() as $key) {
+                $child = $node->$key;
+                if (($child instanceof Node && $this->flashesKitToast([$child])) || (is_array($child) && $this->flashesKitToast(array_filter($child, fn ($item): bool => $item instanceof Node)))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function redirectWithoutToast(Node\Expr $expression): bool

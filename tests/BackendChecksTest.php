@@ -62,6 +62,18 @@ test('toast checks each literal redirect branch and accepts all toast macro form
     ['response()->json([])', false],
 ]);
 
+test('toast accepts kit headless toasts flashed before the redirect, but not inside a closure or from another class', function (string $body, bool $fails) {
+    $source = 'namespace App; use Tey\\Kit\\Features\\Core\\Toast; class PostsController { public function update() { '.$body.' } }';
+    expect(($this->backend)('toast', $source))->toHaveCount($fails ? 1 : 0);
+})->with([
+    'Toastable' => ['$this->toast("Changes saved")->from("save"); return back();', false],
+    'Toast facade' => ['Toast::info("Import queued"); return to_route("posts.index");', false],
+    'on one branch' => ['if ($ok) { $this->toast("Saved"); } return back();', false],
+    'inside a closure' => ['$f = function () { $this->toast("Saved"); }; return back();', true],
+    'another Toast class' => ['\\Other\\Toast::success("Saved"); return back();', true],
+    'another object' => ['$other->toast("Saved"); return back();', true],
+]);
+
 test('toast confines return checks to the controller action and literal chains', function () {
     expect(($this->backend)('toast', <<<'SOURCE'
     namespace App;

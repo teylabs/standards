@@ -5,3 +5,4 @@ composition:
   - { unit_leaf_id: settings.workspace, role: settings section }
   - { unit_leaf_id: access-tenancy.capability, role: who may edit }
   - { unit_leaf_id: data-actions.action, role: save }
+  - { unit_leaf_id: ui-page.toast, role: save confirmation }
