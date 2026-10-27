@@ -641,7 +641,8 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
             ->and(file_get_contents($base.'/routes/invoices.php'))->toContain("use App\\Http\\Controllers\\InvoiceSelectionController;\n")->toContain("prefix('invoices/selection')")
             ->and(file_get_contents($base.'/app/Mcp/Tools/UpdateInvoiceTool.php'))->toContain("#[Capability('invoices.write', scope: 'invoices.write')]")
             ->and(file_get_contents($base.'/bootstrap/providers.php'))->toContain("    // standards-pattern: ui-page.crud-resource\n    \\App\\Providers\\InvoiceServiceProvider::class,\n];")
-            ->and(file_get_contents($base.'/tests/Feature/Invoices/InvoiceTest.php'))->toContain('deletes a selection only when every row is in the workspace');
+            ->and(file_get_contents($base.'/tests/Feature/Invoices/InvoiceTest.php'))->toContain('deletes a selection only when every row is in the workspace')
+            ->not->toContain('markTestSkipped')->not->toContain('->skip(')->not->toContain('fixture.php');
         expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped())['violations'])->toBe([]);
 
         $plain = (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Ledger', 'resource');

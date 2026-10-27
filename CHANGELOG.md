@@ -16,7 +16,7 @@
   - CRUDDY controllers and `WorkspaceRoutes` routes, form requests, and one Action per write (principal first; an update with a stale `lock_version` is refused with a validation error and the newer record kept);
   - typed ViewModels, placed in the app's first ViewModel root outside its UI roots and extending its configured typed base;
   - Index (DataTable on a TableQuery), Form and Show pages, and server toasts on save;
-  - feature tests that run on the app's synthetic fixture (`database/fixture.php`) and say so when it is missing.
+  - self-contained feature tests that never skip: each migrates the app's test database (SQLite memory by default) and creates its own two workspaces, owners, a viewer and a non-member, and covers owner access, non-member and cross-workspace refusal, viewer read-only, the capability-off 404 and the stale-save refusal.
   - `--bulk` adds selectable rows and a bulk delete whose handler resolves ids with `TableSelection`; `--mcp` adds read and write capability tools; `--soft-deletes` adds soft deletes and a restoration resource.
 - `ui-page.data-table` and `ui-page.crud-resource` are ready. `ui-page.index` and `ui-page.data-table` name `IndexToolbar` and `BulkBar`, and `manage-records` starts from `ui-page.crud-resource`.
 - `kit-exports.json` is refreshed from tey/kit 0.4.8.
