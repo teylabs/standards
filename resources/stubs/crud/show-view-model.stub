@@ -1,0 +1,41 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ vm_namespace }};
+
+use {{ namespace }}\Models\{{ name }};
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\Gate;
+use Tey\Kit\Features\Core\Data\Action;
+use Tey\Kit\Features\Workspaces\WorkspaceUrl;
+use {{ view_model }};
+
+/** One {{ title_lower }}: its fields and the actions this viewer may take on it. */
+final class {{ name }}ShowViewModel extends {{ view_model_base }}
+{
+    public function __construct(private readonly int $workspace, private readonly {{ name }} ${{ var }}, private readonly Authenticatable $user) {}
+
+    public function title(): string
+    {
+        return $this->{{ var }}->name;
+    }
+
+    /** @return array{id: int, name: string, updated_at: string|null} */
+    public function record(): array
+    {
+        return ['id' => (int) $this->{{ var }}->getKey(), 'name' => $this->{{ var }}->name, 'updated_at' => $this->{{ var }}->updated_at?->toIso8601String()];
+    }
+
+    /** @return list<Action> */
+    public function actions(): array
+    {
+        $gate = Gate::forUser($this->user);
+        $url = WorkspaceUrl::to($this->workspace, '{{ slug }}/'.$this->{{ var }}->getKey());
+
+        return array_values(array_filter([
+            $gate->allows('update', $this->{{ var }}) ? new Action('Edit', $url.'/edit', 'get', key: 'edit') : null,
+            $gate->allows('delete', $this->{{ var }}) ? new Action('Delete', $url, 'delete', confirm: ['title' => 'Delete this {{ title_lower }}?', 'description' => '“'.$this->{{ var }}->name.'” will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true, menu: true) : null,
+        ]));
+    }
+}

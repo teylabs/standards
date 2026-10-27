@@ -1,0 +1,31 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Http\Controllers;
+
+use {{ namespace }}\Actions\Restore{{ name }};
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Tey\Kit\Features\Core\Concerns\Toastable;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Core\Users;
+use Tey\Kit\Features\Workspaces\TenantBoundary;
+use Tey\Kit\Features\Workspaces\WorkspaceUrl;
+
+/** Bringing back a deleted {{ title_lower }}: a restoration is its own resource, so the controller stays CRUDDY. */
+final class {{ name }}RestorationController
+{
+    use Toastable;
+
+    public function store(Request $request, int $workspace, int $id, Restore{{ name }} $restore): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless(Users::is($user), 401);
+        app(TenantBoundary::class)->run($workspace, fn () => $restore->handle(new Principal((int) $user->getAuthIdentifier()), $workspace, $id));
+
+        $this->toast('{{ title }} restored.');
+
+        return redirect(WorkspaceUrl::to($workspace, '{{ slug }}/'.$id));
+    }
+}

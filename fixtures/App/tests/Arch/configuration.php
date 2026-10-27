@@ -16,7 +16,7 @@ return new Configuration(
     routeRoots: ['routes'],
     controllerSuffix: 'Controller',
     routeDirectory: 'routes',
-    viewModelRoots: ['app/UI'],
+    viewModelRoots: ['app/UI', 'app/ViewModels*'],
     viewModelBases: ['App\\UI\\ViewModel'],
     typedViewModel: 'App\\UI\\ViewModel',
     viewModelSuffix: 'ViewModel',

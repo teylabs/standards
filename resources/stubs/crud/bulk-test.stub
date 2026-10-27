@@ -1,0 +1,12 @@
+
+it('deletes a selection only when every row is in the workspace', function () {
+    {{ var }}SignIn(1);
+    $mine = [{{ var }}Make(1, 'One')->id, {{ var }}Make(1, 'Two')->id];
+    $foreign = {{ var }}Make(2, 'Elsewhere')->id;
+
+    $this->deleteJson('/@alpha/{{ slug }}/selection', ['ids' => [...$mine, $foreign]])->assertUnprocessable();
+    expect({{ name }}::query()->count())->toBe(3);
+
+    $this->delete('/@alpha/{{ slug }}/selection', ['ids' => $mine])->assertRedirect();
+    expect({{ name }}::query()->pluck('id')->all())->toBe([$foreign]);
+});

@@ -1,0 +1,24 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+import { Form } from '@inertiajs/vue3';
+import { Field, FormCard, Input, Page } from '@kit/ui';
+
+// `lock_version` goes back with the save: a stale edit is refused with an error on it, never saved over someone else's change.
+defineProps<{ title: string; values: { name: string; lock_version: number | null }; submit: { label: string; url: string; method: string; key?: string | null }; cancelUrl: string }>();
+</script>
+
+<template>
+    <Page :title="title" md>
+        <Form :action="submit.url" :method="submit.method as never" :options="{ preserveScroll: true }">
+            <template #default="{ errors }">
+                <FormCard :title="title" :submit="submit" :cancel-url="cancelUrl" busy-label="Saving…">
+                    <Input v-if="values.lock_version !== null" type="hidden" name="lock_version" :model-value="String(values.lock_version)" />
+                    <p v-if="errors.lock_version" class="col-span-6 text-sm text-destructive" role="alert">{{ errors.lock_version }}</p>
+                    <Field id="{{ var }}-name" name="name" label="Name" :span="4">
+                        <Input id="{{ var }}-name" name="name" :model-value="values.name" required maxlength="255" aria-describedby="{{ var }}-name-error" />
+                    </Field>
+                </FormCard>
+            </template>
+        </Form>
+    </Page>
+</template>

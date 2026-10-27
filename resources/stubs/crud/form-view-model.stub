@@ -1,0 +1,39 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ vm_namespace }};
+
+use {{ namespace }}\Models\{{ name }};
+use Tey\Kit\Features\Core\Data\Action;
+use Tey\Kit\Features\Workspaces\WorkspaceUrl;
+use {{ view_model }};
+
+/** The create and edit form: the values to start from, the `lock_version` the save must send back, and where it saves. */
+final class {{ name }}FormViewModel extends {{ view_model_base }}
+{
+    public function __construct(private readonly int $workspace, private readonly ?{{ name }} ${{ var }}) {}
+
+    public function title(): string
+    {
+        return $this->{{ var }} === null ? 'New {{ title_lower }}' : 'Edit {{ title_lower }}';
+    }
+
+    /** @return array{name: string, lock_version: int|null} */
+    public function values(): array
+    {
+        return ['name' => (string) $this->{{ var }}?->name, 'lock_version' => $this->{{ var }}?->lock_version];
+    }
+
+    public function submit(): Action
+    {
+        return $this->{{ var }} === null
+            ? new Action('Create', WorkspaceUrl::to($this->workspace, '{{ slug }}'), 'post', key: 'save')
+            : new Action('Save', WorkspaceUrl::to($this->workspace, '{{ slug }}/'.$this->{{ var }}->getKey()), 'put', key: 'save');
+    }
+
+    public function cancelUrl(): string
+    {
+        return WorkspaceUrl::to($this->workspace, $this->{{ var }} === null ? '{{ slug }}' : '{{ slug }}/'.$this->{{ var }}->getKey());
+    }
+}

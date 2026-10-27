@@ -1,5 +1,5 @@
 {
-    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.4.6",
+    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.4.8",
     "module": "@kit/ui",
     "components": [
         "ActionBar",
@@ -9,6 +9,7 @@
         "AppearanceToggle",
         "Avatar",
         "BlockStack",
+        "BulkBar",
         "BulkDrop",
         "Button",
         "ButtonDropdown",
@@ -44,6 +45,7 @@
         "FormActions",
         "FormCard",
         "FormFieldset",
+        "IndexToolbar",
         "Input",
         "InputCheckbox",
         "InputNumber",

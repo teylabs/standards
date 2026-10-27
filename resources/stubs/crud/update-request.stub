@@ -1,0 +1,20 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+/** The edit form sends back the `lock_version` it loaded; Update{{ name }} refuses the write when the record has moved on since. */
+final class Update{{ name }}Request extends FormRequest
+{
+    /** @return array<string, list<string>> */
+    public function rules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'lock_version' => ['required', 'integer', 'min:1'],
+        ];
+    }
+}

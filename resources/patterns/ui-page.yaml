@@ -66,18 +66,17 @@ nodes:
       - { answer: "None of these", next: ui-page.public.byo }
   - id: ui-page.index
     recipe: Inertia index page
-    summary: A CRUDDY index controller passes a typed ViewModel to resources/js/pages/<Area>/Index/Page.vue.
-    kit: ['@kit/ui Page', '@kit/ui SectionHeader', '@kit/ui DataTable', '@kit/ui Placeholder']
+    summary: A CRUDDY index controller passes a typed ViewModel to resources/js/pages/<Area>/Index/Page.vue; its table is a TableQuery (search, declared filters and sorts from the URL, an unknown one a 400) with each row's actions decided on the server.
+    kit: ['@kit/ui Page', '@kit/ui SectionHeader', '@kit/ui DataTable', '@kit/ui IndexToolbar', '@kit/ui RowActions']
     components:
       - { name: "page shell", kit_component: Page, use: "Wraps the whole page with title and breadcrumbs", props_hint: "title" }
       - { name: "header", kit_component: SectionHeader, use: "Title plus the primary add action", props_hint: "title, actions slot" }
-      - { name: "filters", kit_component: Toolbar, use: "Search and filters above the table", props_hint: "v-model filters" }
-      - { name: "rows", kit_component: DataTable, use: "The record list", props_hint: "rows, columns" }
-      - { name: "row menu", kit_component: RowActions, use: "Per-row actions, never navigation", props_hint: "actions descriptors" }
-      - { name: "empty state", kit_component: Placeholder, use: "Shown when there are no rows", props_hint: "title, description" }
-    make: standards:make page --flavor=index
+      - { name: "rows", kit_component: DataTable, use: "The record list, server-driven: rows, URL state, empty states", props_hint: "table (TableData)" }
+      - { name: "filters", kit_component: IndexToolbar, use: "Search and the server's filter choices (DataTable renders it)", props_hint: "table.choices" }
+      - { name: "row menu", kit_component: RowActions, use: "Per-row actions from the server (DataTable renders it)", props_hint: "row.actions descriptors" }
+    make: standards:make crud --flavor=resource
     checks: ['20', '21', 'descriptors', 'js-imports']
-    paths: ['app/**/Http/Controllers/**', 'resources/js/pages/**/Index/Page.vue']
+    paths: ['app/**/Http/Controllers/**', 'app/**/ViewModels/**', 'resources/js/pages/**/Index/Page.vue']
     keywords: [list, index, table, browse, overview]
     status: ready
   - id: ui-page.show
@@ -90,14 +89,14 @@ nodes:
       - { name: "details", kit_component: Section, use: "Groups the record fields", props_hint: "title" }
       - { name: "actions", kit_component: ActionBar, use: "Record actions placed by the kit", props_hint: "actions descriptors" }
       - { name: "button set", kit_component: ButtonGroup, use: "Related buttons side by side", props_hint: "default slot" }
-    make: standards:make page --flavor=show
+    make: standards:make crud --flavor=resource
     checks: ['20', '21', 'descriptors', 'js-imports']
     paths: ['app/**/Http/Controllers/**', 'resources/js/pages/**/Show/Page.vue']
     keywords: [show, detail, view, record, relative time, date]
     status: ready
   - id: ui-page.form
     recipe: Inertia form page
-    summary: create/store or edit/update methods, a FormRequest, an Action for the write and a toast on the redirect.
+    summary: create/store or edit/update methods, a FormRequest, an Action for the write (principal first; an edit sends back its lock_version and a stale save is refused) and a toast on the redirect.
     kit: ['@kit/ui FormCard', '@kit/ui Field', '@kit/ui FormActions']
     components:
       - { name: "page shell", kit_component: Page, use: "Wraps the form page", props_hint: "title" }
@@ -105,7 +104,7 @@ nodes:
       - { name: "field", kit_component: Field, use: "Label, input slot and error", props_hint: "label, error" }
       - { name: "input", kit_component: Input, use: "Text input inside a Field", props_hint: "v-model, name" }
       - { name: "submit", kit_component: FormActions, use: "Submit and cancel buttons", props_hint: "processing" }
-    make: standards:make page --flavor=form
+    make: standards:make crud --flavor=resource
     checks: ['20', '21', 'toast', 'actions', 'descriptors']
     paths: ['app/**/Http/Requests/**', 'resources/js/pages/**/Form/Page.vue']
     keywords: [form, create, edit, store, update, save, toast, feedback]
@@ -184,26 +183,36 @@ nodes:
     status: ready
   - id: ui-page.data-table
     recipe: Data table list
-    summary: Sorting, filters, row actions with confirmation and reordering through the kit DataTable and toolbar, not a hand-rolled table.
-    kit: ['@kit/ui DataTable', '@kit/ui Toolbar', '@kit/ui RowActions']
+    summary: >-
+      Sorting, search, filters, row actions with confirmation, selection and bulk actions through the kit DataTable (tey/kit 0.4.8+), not a hand-rolled table.
+      The server declares everything with TableQuery: columns and their sorts, labelled filters with their options (`choices`; any other value is a 400) and
+      bulk Actions (`bulk`), which make rows selectable. BulkBar floats over the page while rows are selected (registered with useStickyBars) and posts `ids[]`;
+      the handler resolves them with TableSelection inside its own scope, which refuses the whole request (422) if any id is not there. Reordering is not covered yet.
+    kit: ['@kit/ui DataTable', '@kit/ui IndexToolbar', '@kit/ui BulkBar', '@kit/ui RowActions']
     components:
-      - { name: "rows", kit_component: DataTable, use: "Sortable rows", props_hint: "rows, columns, sort" }
-      - { name: "filters", kit_component: Toolbar, use: "Filters and search", props_hint: "v-model filters" }
-      - { name: "bulk bar", kit_component: FloatingToolbar, use: "Bulk actions on the selection", props_hint: "selection" }
+      - { name: "rows", kit_component: DataTable, use: "Sortable, selectable rows from TableData", props_hint: "table" }
+      - { name: "filters", kit_component: IndexToolbar, use: "Search and the server's filter choices", props_hint: "table.choices" }
+      - { name: "bulk bar", kit_component: BulkBar, use: "Bulk actions on the selection, floating with the count and Clear", props_hint: "table.bulkActions" }
       - { name: "row menu", kit_component: RowActions, use: "Per-row actions", props_hint: "actions descriptors" }
-    checks: ['js-imports']
-    paths: []
-    keywords: [sort, filter, toolbar, reorder, row action, confirm, data table]
-    status: gap
+    make: standards:make crud --flavor=resource
+    checks: ['21', 'descriptors', 'js-imports']
+    paths: ['app/**/Http/Controllers/**SelectionController.php', 'resources/js/pages/**/Index/Page.vue']
+    keywords: [sort, filter, toolbar, reorder, row action, confirm, data table, bulk, selection]
+    status: ready
     evidence: { apps: 5, count: 6, prs: 6, past_apps: 6, past_count: 33 }
   - id: ui-page.crud-resource
     recipe: CRUD resource screens
-    summary: One generator for a record type's controller, request, ViewModel and index, form and show pages.
-    kit: ['@kit/ui FormCard', '@kit/ui DataTable']
-    checks: ['20', '21']
-    paths: []
-    keywords: [crud, resource, scaffold, index form show]
-    status: gap
+    summary: >-
+      `standards:make crud <Record>` emits a whole workspace-owned resource: model and migration (with lock_version), a policy gated by the record's capability
+      then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first,
+      stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture.
+      `--bulk` adds selection and a bulk delete, `--mcp` read and write capability tools, `--soft-deletes` soft deletes and a restoration.
+    kit: ['@kit/ui DataTable', '@kit/ui FormCard', '@kit/ui SectionHeader', '@kit/ui Dialog']
+    make: standards:make crud --flavor=resource
+    checks: ['20', '21', 'actions', 'descriptors', 'toast', 'js-imports']
+    paths: ['app/Models/**', 'app/Policies/**', 'app/Providers/**ServiceProvider.php', 'routes/**']
+    keywords: [crud, resource, scaffold, index form show, record type, manage records]
+    status: ready
     evidence: { apps: 7, count: 15, prs: 15, past_apps: 33, past_count: 312 }
   - id: ui-page.workbench
     recipe: Workflow page

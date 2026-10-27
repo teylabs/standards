@@ -400,9 +400,10 @@ test('gap leaves carry count-only evidence and --gaps sorts them by apps × coun
     rsort($sorted);
 
     expect($weights)->toBe($sorted)
-        ->and($gaps[0]['id'])->toBe('ui-page.crud-resource')
-        ->and($gaps[0]['weight'])->toBe(7 * 15 + 33 * 312)
+        ->and(array_column($gaps, 'id'))->not->toContain('ui-page.crud-resource', 'ui-page.data-table')
+        ->and($gaps[0]['weight'])->toBe(max($weights))
         ->and(end($gaps)['weight'])->toBe(0);
+    expect(TreeCatalog::shipped()->node('ui-page.crud-resource')->weight())->toBe(7 * 15 + 33 * 312);
 
     $imports = array_values(array_filter($gaps, fn (array $gap): bool => ($gap['evidence']['apps'] ?? 1) === 0));
     expect($imports[0]['id'])->toBe('data-actions.file-import');
@@ -432,10 +433,10 @@ test('components name only what the kit exports, and recipe() returns them', fun
     $exports = json_decode(file_get_contents(patternSources().'/kit-exports.json'), true)['components'];
     $recipe = (new Lookup(TreeCatalog::shipped()))->recipe('ui-page.index');
 
-    expect(array_column($recipe['components'], 'kit_component'))->toContain('DataTable', 'Toolbar', 'RowActions')
+    expect(array_column($recipe['components'], 'kit_component'))->toContain('DataTable', 'IndexToolbar', 'RowActions')
         ->and(array_keys($recipe['components'][0]))->toBe(['name', 'kit_component', 'use', 'props_hint']);
 
-    foreach (glob(dirname(__DIR__).'/resources/stubs/*.vue.stub') as $stub) {
+    foreach ([...glob(dirname(__DIR__).'/resources/stubs/*.vue.stub'), ...glob(dirname(__DIR__).'/resources/stubs/crud/*.vue.stub')] as $stub) {
         preg_match_all("/import \{([^}]*)\} from '@kit\/ui'/", file_get_contents($stub), $imports);
 
         foreach (array_map('trim', explode(',', implode(',', $imports[1]))) as $name) {
@@ -444,11 +445,11 @@ test('components name only what the kit exports, and recipe() returns them', fun
     }
 
     $directory = mutatedPatterns('ui-page', function (array $source): array {
-        $source['nodes'][nodeAt($source, 'ui-page.index')]['components'][] = ['name' => 'toolbar', 'kit_component' => 'IndexToolbar', 'use' => 'x', 'props_hint' => 'x'];
+        $source['nodes'][nodeAt($source, 'ui-page.index')]['components'][] = ['name' => 'board', 'kit_component' => 'KanbanBoard', 'use' => 'x', 'props_hint' => 'x'];
 
         return $source;
     });
-    expect(fn () => Compiler::compile($directory))->toThrow(InvalidArgumentException::class, 'component [IndexToolbar] is not exported by the kit');
+    expect(fn () => Compiler::compile($directory))->toThrow(InvalidArgumentException::class, 'component [KanbanBoard] is not exported by the kit');
 });
 
 test('mod-generated units delegate to tey/mod and get stamped; stub units never delegate; no mod means a clear error', function () {
@@ -617,5 +618,42 @@ test('the toast leaf carries the kit 0.4.6 toast contract and joins the save-bea
 
     foreach (['manage-records', 'workspace-settings'] as $feature) {
         expect(array_column($lookup->find(['intent' => $feature])['units'], 'leaf'))->toContain('ui-page.toast');
+    }
+});
+
+test('make crud emits a whole resource, its flags add to it, and the result passes standards:check', function () {
+    $base = fixtureApp();
+
+    try {
+        $files = (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Invoice', 'resource', null, ['bulk', 'mcp', 'soft-deletes']);
+
+        expect($files)->toContain(
+            'app/Models/Invoice.php', 'app/Policies/InvoicePolicy.php', 'app/Providers/InvoiceServiceProvider.php', 'routes/invoices.php',
+            'app/Http/Controllers/InvoiceController.php', 'app/Http/Controllers/InvoiceSelectionController.php', 'app/Http/Controllers/InvoiceRestorationController.php',
+            'app/Actions/CreateInvoice.php', 'app/Actions/UpdateInvoice.php', 'app/Actions/DeleteInvoice.php', 'app/Actions/RestoreInvoice.php',
+            'app/ViewModels/Invoices/InvoiceIndexViewModel.php', 'resources/js/pages/Invoices/Index/Page.vue', 'resources/js/pages/Invoices/Form/Page.vue',
+            'resources/js/pages/Invoices/Show/Page.vue', 'tests/Feature/Invoices/InvoiceTest.php', 'app/Mcp/Tools/ReadInvoicesTool.php', 'app/Mcp/Tools/UpdateInvoiceTool.php',
+            'bootstrap/providers.php',
+        );
+        expect(file_get_contents($base.'/app/ViewModels/Invoices/InvoiceIndexViewModel.php'))->toContain('standards-pattern: ui-page.index')->toContain('extends ViewModel')->toContain("->bulk(new Action('Delete'")
+            ->and(file_get_contents($base.'/app/Actions/UpdateInvoice.php'))->toContain("->where('lock_version', \$version)")
+            ->and(file_get_contents($base.'/app/Models/Invoice.php'))->toContain('use SoftDeletes;')
+            ->and(file_get_contents($base.'/routes/invoices.php'))->toContain("use App\\Http\\Controllers\\InvoiceSelectionController;\n")->toContain("prefix('invoices/selection')")
+            ->and(file_get_contents($base.'/app/Mcp/Tools/UpdateInvoiceTool.php'))->toContain("#[Capability('invoices.write', scope: 'invoices.write')]")
+            ->and(file_get_contents($base.'/bootstrap/providers.php'))->toContain("    // standards-pattern: ui-page.crud-resource\n    \\App\\Providers\\InvoiceServiceProvider::class,\n];")
+            ->and(file_get_contents($base.'/tests/Feature/Invoices/InvoiceTest.php'))->toContain('deletes a selection only when every row is in the workspace');
+        expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped())['violations'])->toBe([]);
+
+        $plain = (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Ledger', 'resource');
+        expect($plain)->not->toContain('app/Http/Controllers/LedgerSelectionController.php')
+            ->and(file_get_contents($base.'/app/Models/Ledger.php'))->not->toContain('SoftDeletes')
+            ->and(file_get_contents($base.'/app/ViewModels/Ledgers/LedgerIndexViewModel.php'))->not->toContain('->bulk(')
+            ->and(file_get_contents($base.'/bootstrap/providers.php'))->toContain('InvoiceServiceProvider::class')->toContain('LedgerServiceProvider::class');
+
+        expect(fn () => (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Invoice', 'resource'))->toThrow(InvalidArgumentException::class, 'never overwrites')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Other', 'resource', null, ['archive']))->toThrow(InvalidArgumentException::class, 'Unknown option --archive')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('page', 'Other', 'index', null, ['bulk']))->toThrow(InvalidArgumentException::class, 'Unknown option --bulk');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
     }
 });

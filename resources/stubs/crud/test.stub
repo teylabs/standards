@@ -1,0 +1,98 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Models\{{ name }};
+use {{ namespace }}\Models\User;
+use {{ namespace }}\Policies\{{ name }}Policy;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Tey\Kit\Features\Access\Capabilities;
+use Tey\Kit\Features\SessionUi\Http\Middleware\HandleInertiaRequests;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+use Tey\Kit\Features\Workspaces\TenantBoundary;
+
+// {{ titles }} over HTTP, on the app's synthetic fixture (database/fixture.php: workspace 1 with owner 1 and viewer 3, workspace 2 with owner 2) in SQLite memory.
+// No fixture, no run: the skip says so rather than passing.
+
+beforeEach(function () {
+    if (! is_file(database_path('fixture.php'))) {
+        $this->markTestSkipped('needs the synthetic fixture at database/fixture.php');
+    }
+    require database_path('fixture.php');
+    (require database_path('migrations/{{ migration }}'))->up();
+    foreach ([1, 2] as $workspace) {
+        app(TenantBoundary::class)->run($workspace, fn () => app(Capabilities::class)->setForWorkspace({{ name }}Policy::CAPABILITY, Workspace::query()->findOrFail($workspace), true));
+    }
+});
+
+function {{ var }}SignIn(int $id): void
+{
+    Auth::forgetGuards();
+    $password = Str::random(40);
+    User::query()->findOrFail($id)->update(['password' => Hash::make($password)]);
+    test()->postJson('/login', ['email' => 'actor'.$id.'@example.test', 'password' => $password])->assertOk();
+    test()->withCookie(config('session.cookie'), app('session')->getId());
+    Auth::forgetGuards();
+}
+
+/** @return array<string, string> the headers of an Inertia visit, so a page answers with its props */
+function {{ var }}Inertia(): array
+{
+    return ['X-Inertia' => 'true', 'Accept' => 'text/html', 'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')) ?? ''];
+}
+
+function {{ var }}Make(int $workspace, string $name): {{ name }}
+{
+    return {{ name }}::query()->create(['workspace_id' => $workspace, 'name' => $name, 'lock_version' => 1]);
+}
+
+it('lists, creates, shows and edits {{ titles_lower }} for an owner', function () {
+    {{ var }}SignIn(1);
+    {{ var }}Make(1, 'Bravo');
+    {{ var }}Make(2, 'Elsewhere');
+
+    $this->get('/@alpha/{{ slug }}', {{ var }}Inertia())->assertOk()->assertJsonPath('component', '{{ plural }}/Index/Page')->assertJsonPath('props.table.rows.0.name', 'Bravo')->assertJsonCount(1, 'props.table.rows');
+    $this->getJson('/@alpha/{{ slug }}?sort=secret')->assertStatus(400);
+    $this->post('/@alpha/{{ slug }}', ['name' => 'Alpha'])->assertRedirect();
+    $created = {{ name }}::query()->where('name', 'Alpha')->firstOrFail();
+    expect($created->workspace_id)->toBe(1)->and($created->lock_version)->toBe(1);
+    $this->get('/@alpha/{{ slug }}/'.$created->id, {{ var }}Inertia())->assertOk()->assertJsonPath('props.record.name', 'Alpha');
+    $this->get('/@alpha/{{ slug }}/'.$created->id.'/edit', {{ var }}Inertia())->assertOk()->assertJsonPath('props.values.lock_version', 1);
+});
+
+it('refuses a stale save and keeps the newer one', function () {
+    {{ var }}SignIn(1);
+    ${{ var }} = {{ var }}Make(1, 'First');
+
+    $this->put('/@alpha/{{ slug }}/'.${{ var }}->id, ['name' => 'Second', 'lock_version' => 1])->assertRedirect()->assertSessionHasNoErrors();
+    $this->put('/@alpha/{{ slug }}/'.${{ var }}->id, ['name' => 'Stale', 'lock_version' => 1])->assertSessionHasErrors('lock_version');
+
+    expect(${{ var }}->fresh()->name)->toBe('Second')->and(${{ var }}->fresh()->lock_version)->toBe(2);
+});
+
+it('keeps {{ titles_lower }} inside their workspace', function () {
+    {{ var }}SignIn(1);
+    $foreign = {{ var }}Make(2, 'Elsewhere');
+
+    $this->get('/@alpha/{{ slug }}/'.$foreign->id, {{ var }}Inertia())->assertNotFound();
+    $this->putJson('/@alpha/{{ slug }}/'.$foreign->id, ['name' => 'Moved', 'lock_version' => 1])->assertNotFound();
+    $this->deleteJson('/@alpha/{{ slug }}/'.$foreign->id)->assertNotFound();
+    expect($foreign->fresh()->name)->toBe('Elsewhere');
+});
+
+it('lets a viewer read but not write, and hides everything while the capability is off', function () {
+    ${{ var }} = {{ var }}Make(1, 'Bravo');
+    {{ var }}SignIn(3);
+
+    $this->get('/@alpha/{{ slug }}', {{ var }}Inertia())->assertOk()->assertJsonPath('props.create', null)->assertJsonPath('props.table.rows.0.actions.0.key', 'open')->assertJsonCount(1, 'props.table.rows.0.actions');
+    $this->postJson('/@alpha/{{ slug }}', ['name' => 'Nope'])->assertForbidden();
+    $this->deleteJson('/@alpha/{{ slug }}/'.${{ var }}->id)->assertForbidden();
+
+    app(TenantBoundary::class)->run(1, fn () => app(Capabilities::class)->setForWorkspace({{ name }}Policy::CAPABILITY, Workspace::query()->findOrFail(1), false));
+    $this->get('/@alpha/{{ slug }}', {{ var }}Inertia())->assertNotFound();
+    expect(${{ var }}->fresh())->not->toBeNull();
+});
+{{ bulk_test }}

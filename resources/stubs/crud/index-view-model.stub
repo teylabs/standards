@@ -1,0 +1,61 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ vm_namespace }};
+
+use {{ namespace }}\Models\{{ name }};
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Tey\Kit\Features\Core\Data\Action;
+use Tey\Kit\Features\Core\Data\TableData;
+use Tey\Kit\Features\Core\Tables\TableQuery;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+use Tey\Kit\Features\Workspaces\WorkspaceUrl;
+use {{ view_model }};
+
+/** The {{ titles_lower }} index: the table (search, sort and pages from the URL; an unknown sort or filter is a 400) and the actions this viewer may take. */
+final class {{ name }}IndexViewModel extends {{ view_model_base }}
+{
+    public function __construct(private readonly Request $request, private readonly int $workspace, private readonly Authenticatable $user) {}
+
+    public function title(): string
+    {
+        return '{{ titles }}';
+    }
+
+    public function create(): ?Action
+    {
+        return Gate::forUser($this->user)->allows('create', [{{ name }}::class, Workspace::required()]) ? new Action('New {{ title_lower }}', WorkspaceUrl::to($this->workspace, '{{ slug }}/create'), 'get', key: 'create') : null;
+    }
+
+    public function table(): TableData
+    {
+        return TableQuery::for({{ name }}::query()->where('workspace_id', $this->workspace), $this->request)
+            ->column('name', 'Name', 'name')
+            ->column('updated_at', 'Updated', 'updated_at', hideable: true)
+            ->column('actions', 'Actions', align: 'end', srOnlyLabel: true)
+            ->search(fn ($query, string $value) => $query->where('name', 'like', '%'.addcslashes($value, '%_\\').'%'))
+{{ bulk_table }}            ->defaultSort('name')
+            ->build(fn ({{ name }} ${{ var }}): array => [
+                'id' => ${{ var }}->getKey(),
+                'name' => ${{ var }}->name,
+                'updated_at' => ${{ var }}->updated_at?->toIso8601String(),
+                'actions' => $this->actions(${{ var }}),
+            ]);
+    }
+
+    /** @return list<Action> */
+    private function actions({{ name }} ${{ var }}): array
+    {
+        $gate = Gate::forUser($this->user);
+        $url = WorkspaceUrl::to($this->workspace, '{{ slug }}/'.${{ var }}->getKey());
+
+        return array_values(array_filter([
+            $gate->allows('view', ${{ var }}) ? new Action('Open', $url, 'get', key: 'open') : null,
+            $gate->allows('update', ${{ var }}) ? new Action('Edit', $url.'/edit', 'get', key: 'edit') : null,
+            $gate->allows('delete', ${{ var }}) ? new Action('Delete', $url, 'delete', confirm: ['title' => 'Delete this {{ title_lower }}?', 'description' => '“'.${{ var }}->name.'” will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true) : null,
+        ]));
+    }
+}

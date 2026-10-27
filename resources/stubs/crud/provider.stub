@@ -1,0 +1,31 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Providers;
+
+use {{ namespace }}\Models\{{ name }};
+use {{ namespace }}\Policies\{{ name }}Policy;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\ServiceProvider;
+use Tey\Kit\Features\Core\Registry;
+
+/**
+ * Wires {{ titles_lower }} into the kit: the policy, the `{{ perm }}` capability (off until switched on, in `kit.capabilities` or per workspace), one permission
+ * per operation granted to roles, the routes and the navigation entry. Capability, entitlement and permission stay separate; the policy checks all of them.
+ */
+final class {{ name }}ServiceProvider extends ServiceProvider
+{
+    public function boot(Registry $registry): void
+    {
+        Gate::policy({{ name }}::class, {{ name }}Policy::class);
+        $registry->capabilities([{{ name }}Policy::CAPABILITY])
+            ->permission('{{ perm }}.view', ['owner', 'admin', 'viewer'], {{ name }}Policy::CAPABILITY, ['{{ perm }}.read'])
+            ->permission('{{ perm }}.create', ['owner', 'admin'], {{ name }}Policy::CAPABILITY)
+            ->permission('{{ perm }}.update', ['owner', 'admin'], {{ name }}Policy::CAPABILITY, ['{{ perm }}.write'])
+            ->permission('{{ perm }}.delete', ['owner', 'admin'], {{ name }}Policy::CAPABILITY)
+            ->abilities(['{{ perm }}.read' => {{ name }}Policy::CAPABILITY])
+            ->routes(base_path('routes/{{ slug }}.php'))
+            ->navigation('{{ perm }}.read', '{{ titles }}', '{{ slug }}', active: '{{ slug }}');
+    }
+}

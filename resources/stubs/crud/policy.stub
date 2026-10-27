@@ -1,0 +1,65 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Policies;
+
+use {{ namespace }}\Models\{{ name }};
+use Illuminate\Auth\Access\Response;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Tey\Kit\Features\Access\Capabilities;
+use Tey\Kit\Features\Access\Entitlements;
+use Tey\Kit\Features\Access\Permissions;
+use Tey\Kit\Features\Core\Users;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+
+/**
+ * Who may do what with {{ titles_lower }}. The `{{ perm }}` capability gates first: while it is off or out of the plan every answer is a 404, so the
+ * screens, links and tools are absent. Then the member's permission in the record's workspace decides. Capability, entitlement and permission stay separate.
+ */
+final class {{ name }}Policy
+{
+    public const CAPABILITY = '{{ perm }}';
+
+    public function viewAny(Authenticatable $user, Workspace $workspace): Response|bool
+    {
+        return $this->allows($user, '{{ perm }}.view', $workspace);
+    }
+
+    public function view(Authenticatable $user, {{ name }} ${{ var }}): Response|bool
+    {
+        return $this->allows($user, '{{ perm }}.view', ${{ var }}->workspace);
+    }
+
+    public function create(Authenticatable $user, Workspace $workspace): Response|bool
+    {
+        return $this->allows($user, '{{ perm }}.create', $workspace);
+    }
+
+    public function update(Authenticatable $user, {{ name }} ${{ var }}): Response|bool
+    {
+        return $this->allows($user, '{{ perm }}.update', ${{ var }}->workspace);
+    }
+
+    public function delete(Authenticatable $user, {{ name }} ${{ var }}): Response|bool
+    {
+        return $this->allows($user, '{{ perm }}.delete', ${{ var }}->workspace);
+    }
+
+    public function restore(Authenticatable $user, {{ name }} ${{ var }}): Response|bool
+    {
+        return $this->allows($user, '{{ perm }}.delete', ${{ var }}->workspace);
+    }
+
+    private function allows(Authenticatable $user, string $permission, ?Workspace $workspace): Response|bool
+    {
+        if ($workspace === null || ! Users::is($user)) {
+            return Response::denyAsNotFound();
+        }
+        if (! app(Capabilities::class)->active(self::CAPABILITY, $workspace, $user) || ! app(Entitlements::class)->included(self::CAPABILITY, $workspace)) {
+            return Response::denyAsNotFound();
+        }
+
+        return app(Permissions::class)->allows($user, $permission, $workspace);
+    }
+}

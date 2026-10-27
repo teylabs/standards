@@ -463,11 +463,11 @@ test('the artisan commands are registered and print the lookup, gaps and a fail-
             ->and($artisan->output())->toContain('■ mcp.write [ready] mcp-parity')->toContain('make (tey/standards): php artisan standards:make capability-tool --flavor=write <Name>')
             ->toContain('with the Bakery installed: php artisan mod:butter/mcp-parity <Name>');
         expect($artisan->call('standards:pattern', ['query' => 'manage records with bulk actions']))->toBe(0)
-            ->and($artisan->output())->toContain('Plan: manage-records')->toContain('bulk actions (when bulk=yes): ui-page.data-table [gap]');
+            ->and($artisan->output())->toContain('Plan: manage-records')->toContain('bulk actions (when bulk=yes): ui-page.data-table [ready]');
         expect($artisan->call('standards:pattern', ['--recipe' => 'ui-page.index']))->toBe(0)
             ->and($artisan->output())->toContain('- DataTable (rows)');
         expect($artisan->call('standards:pattern', ['--gaps' => true]))->toBe(0)
-            ->and($artisan->output())->toContain('- ui-page.crud-resource (fleet 7 apps × 15, past 33 apps × 312)');
+            ->and($artisan->output())->toContain('- data-actions.tenant-model (fleet 4 apps × 11, past 17 apps × 190)')->not->toContain('- ui-page.crud-resource (');
         expect(is_file($base.'/'.Tey\Standards\Enforcement\GapDemand::FILE))->toBeFalse();
         expect($artisan->call('standards:pattern', ['--answer' => ['3', 'None of these']]))->toBe(0)
             ->and($artisan->output())->toContain('No recipe fits. Proceed');
