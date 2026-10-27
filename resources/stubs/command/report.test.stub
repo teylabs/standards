@@ -1,0 +1,28 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Console\Commands\{{ name }};
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+// The operator contract for app:{{ slug }}: read-only, so it runs anywhere (production included), counts, and writes nothing.
+beforeEach(function () {
+    if (! Schema::hasTable({{ name }}::TABLE)) {
+        Schema::create({{ name }}::TABLE, function (Blueprint $table): void {
+            $table->id();
+            $table->timestamp({{ name }}::COLUMN)->nullable();
+        });
+    }
+    DB::table({{ name }}::TABLE)->insert([[{{ name }}::COLUMN => null], [{{ name }}::COLUMN => now()]]);
+});
+
+it('reports without writing, in production too', function () {
+    $this->app['env'] = 'production';
+    $before = DB::table({{ name }}::TABLE)->orderBy('id')->get()->toArray();
+
+    $this->artisan('app:{{ slug }}')->expectsOutputToContain('skipped 1: not set')->assertExitCode(0);
+
+    expect(DB::table({{ name }}::TABLE)->orderBy('id')->get()->toArray())->toEqual($before);
+});

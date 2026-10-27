@@ -29,6 +29,7 @@ final class CheckReport
     {
         $allowlist = ['count' => 0, 'expiring' => [], 'expired' => []];
         $skipped = [];
+        $advisories = [];
 
         if ($paths === []) {
             $violations = [];
@@ -37,6 +38,7 @@ final class CheckReport
                 $configuration = self::configuration($base, $configurationFile);
                 $result = (new Gate($configuration, $today, $catalog, $expiringDays, $autoload ?? $base.'/vendor/autoload.php'))->run($paths);
                 ['violations' => $violations, 'allowlist' => $allowlist, 'skipped' => $skipped] = $result;
+                $advisories = $result['advisories'] ?? [];
             } catch (Throwable $error) {
                 $violations = [['rule' => 'standards', 'kind' => 'error', 'target' => $configurationFile, 'check' => $error->getMessage(), 'hint' => 'Create '.$configurationFile.' returning the app\'s Tey\Standards\Configuration, or set standards.configuration. The gate fails closed until it can run.']];
             }
@@ -52,6 +54,8 @@ final class CheckReport
             'violations' => $violations,
             'allowlist' => $allowlist,
             'skipped' => $skipped,
+            // Advisory rules' findings (Gate::ADVISORY, not opted in): reported, never drift.
+            'advisories' => $advisories,
             'gaps' => [
                 'catalog' => count($gapLeaves = array_filter($catalog->leaves(), fn (Leaf $leaf): bool => $leaf->status === 'gap')),
                 'evidenced' => count(array_filter($gapLeaves, fn (Leaf $leaf): bool => $leaf->evidence !== null)),

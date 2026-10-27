@@ -1,0 +1,43 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Console\Commands\{{ name }};
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+// The operator contract for app:{{ slug }}: a dry run deletes nothing, --apply is idempotent, and production refuses unless forced and confirmed.
+beforeEach(function () {
+    if (! Schema::hasTable({{ name }}::TABLE)) {
+        Schema::create({{ name }}::TABLE, function (Blueprint $table): void {
+            $table->id();
+            $table->timestamp({{ name }}::COLUMN)->nullable();
+        });
+    }
+    DB::table({{ name }}::TABLE)->insert([[{{ name }}::COLUMN => now()->subDays(90)], [{{ name }}::COLUMN => now()->subDays(60)], [{{ name }}::COLUMN => now()]]);
+});
+
+$rows = fn (): int => DB::table({{ name }}::TABLE)->count();
+
+it('deletes nothing in a dry run', function () use ($rows) {
+    $this->artisan('app:{{ slug }}')->expectsOutputToContain('Dry run: nothing was written')->assertExitCode(0);
+
+    expect($rows())->toBe(3);
+});
+
+it('applies once, and a re-run is already done', function () use ($rows) {
+    $this->artisan('app:{{ slug }}', ['--apply' => true])->assertExitCode(0);
+    expect($rows())->toBe(1);
+
+    $this->artisan('app:{{ slug }}', ['--apply' => true])->expectsOutputToContain('Already done: nothing to change.')->assertExitCode(0);
+    expect($rows())->toBe(1);
+});
+
+it('refuses to apply in production unless forced and confirmed', function () use ($rows) {
+    $this->app['env'] = 'production';
+
+    $this->artisan('app:{{ slug }}', ['--apply' => true])->assertExitCode(2);
+    $this->artisan('app:{{ slug }}', ['--apply' => true, '--force' => true])->expectsQuestion('Type the command name (app:{{ slug }}) to run it in production', 'no')->assertExitCode(2);
+    expect($rows())->toBe(3);
+});

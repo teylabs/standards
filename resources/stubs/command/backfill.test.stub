@@ -1,0 +1,46 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Console\Commands\{{ name }};
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+// The operator contract for app:{{ slug }}: a dry run writes nothing, --apply is idempotent, and production refuses unless forced and confirmed.
+beforeEach(function () {
+    if (! Schema::hasTable({{ name }}::TABLE)) {
+        Schema::create({{ name }}::TABLE, function (Blueprint $table): void {
+            $table->id();
+            $table->timestamp({{ name }}::COLUMN)->nullable();
+        });
+    }
+    DB::table({{ name }}::TABLE)->insert([[{{ name }}::COLUMN => null], [{{ name }}::COLUMN => null], [{{ name }}::COLUMN => now()]]);
+});
+
+$pending = fn (): int => DB::table({{ name }}::TABLE)->whereNull({{ name }}::COLUMN)->count();
+
+it('writes nothing in a dry run', function () use ($pending) {
+    $this->artisan('app:{{ slug }}')->expectsOutputToContain('Dry run: nothing was written')->assertExitCode(0);
+
+    expect($pending())->toBe(2);
+});
+
+it('applies once, and a re-run is already done', function () use ($pending) {
+    $this->artisan('app:{{ slug }}', ['--apply' => true])->assertExitCode(0);
+    expect($pending())->toBe(0);
+
+    $this->artisan('app:{{ slug }}', ['--apply' => true])->expectsOutputToContain('Already done: nothing to change.')->expectsOutputToContain('skipped 3: already done')->assertExitCode(0);
+    expect($pending())->toBe(0);
+});
+
+it('refuses to apply in production unless forced and confirmed', function () use ($pending) {
+    $this->app['env'] = 'production';
+
+    $this->artisan('app:{{ slug }}', ['--apply' => true])->assertExitCode(2);
+    $this->artisan('app:{{ slug }}', ['--apply' => true, '--force' => true])->expectsQuestion('Type the command name (app:{{ slug }}) to run it in production', 'no')->assertExitCode(2);
+    expect($pending())->toBe(2);
+
+    $this->artisan('app:{{ slug }}', ['--apply' => true, '--force' => true])->expectsQuestion('Type the command name (app:{{ slug }}) to run it in production', 'app:{{ slug }}')->assertExitCode(0);
+    expect($pending())->toBe(0);
+});

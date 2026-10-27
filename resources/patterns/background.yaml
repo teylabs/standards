@@ -28,12 +28,13 @@ nodes:
     evidence: { apps: 4, count: 21, prs: 21, past_apps: 7, past_count: 22 }
   - id: background.command
     recipe: Operator command
-    summary: An artisan command that is idempotent, supports --dry-run and refuses to run in production unless forced.
+    summary: "An artisan command whose work runs through Tey\\Standards\\Operator\\Operator::run: a dry run unless --apply, idempotent (a re-run reports already done), refused in production unless allow-listed or --force with the name typed back, locked to one run at a time, and ending in a summary table (processed, changed, skipped, failed) that exits non-zero on failure and never prints record data. --backfill fills a column, --maintenance deletes stale rows, --report counts read-only."
     kit: []
-    checks: []
-    paths: []
-    keywords: [command, artisan, operator, backfill, dry run]
-    status: gap
+    make: standards:make command --flavor=backfill
+    checks: ['operator']
+    paths: ['app/Console/**']
+    keywords: [command, artisan, operator, backfill, maintenance, report, dry run, apply, idempotent]
+    status: ready
     evidence: { apps: 6, count: 11, prs: 11, past_apps: 18, past_count: 129 }
   - id: background.byo
     recipe: Build your own

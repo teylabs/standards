@@ -126,7 +126,7 @@ test('a missing configuration fails closed with schema-1 JSON', function () {
     $report = CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped(), sha: 'abc');
 
     expect($report)->toMatchArray(['schema' => 1, 'app' => 'acme/app', 'sha' => 'abc', 'scope' => 'full', 'exit_code' => 1])
-        ->and(array_keys($report))->toBe(['schema', 'app', 'sha', 'generated_at', 'scope', 'paths', 'violations', 'allowlist', 'skipped', 'gaps', 'exit_code'])
+        ->and(array_keys($report))->toBe(['schema', 'app', 'sha', 'generated_at', 'scope', 'paths', 'violations', 'allowlist', 'skipped', 'advisories', 'gaps', 'exit_code'])
         ->and($report['violations'][0])->toMatchArray(['rule' => 'standards', 'kind' => 'error'])
         ->and($report['gaps']['catalog'])->toBeGreaterThan(0);
 
@@ -480,6 +480,11 @@ test('the artisan commands are registered and print the lookup, gaps and a fail-
             ->and($check['gaps']['demand'])->toBe(['total' => 1, 'by_unit_type' => ['mcp' => 1]]);
         expect($artisan->call('standards:make', ['unit' => 'action', 'name' => 'Archive']))->toBe(0)
             ->and(file_get_contents($base.'/app/Actions/Archive.php'))->toContain('standards-pattern: data-actions.action');
+        expect($artisan->call('standards:make', ['unit' => 'command', 'name' => 'PruneVisits', '--maintenance' => true]))->toBe(0)
+            ->and(file_get_contents($base.'/app/Console/Commands/PruneVisits.php'))->toContain('standards-pattern: background.command')->toContain('{--days=30')
+            ->and(is_file($base.'/tests/Feature/Console/PruneVisitsTest.php'))->toBeTrue();
+        expect($artisan->call('standards:make', ['unit' => 'command', 'name' => 'Both', '--report' => true, '--backfill' => true]))->toBe(2)
+            ->and($artisan->call('standards:make', ['unit' => 'action', 'name' => 'Flagged', '--report' => true]))->toBe(2);
         expect($config->get('boost.mcp.tools.include'))->toBeNull();
     } finally {
         Illuminate\Container\Container::setInstance($previous);

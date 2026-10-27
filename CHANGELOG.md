@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Upgrading
+
+- `standards:make command` no longer delegates to tey/mod's `make:command`. It writes an operator command and its test from the package's stubs (flavors `backfill`, the default, `maintenance` and `report`). Use `php artisan make:command` for a plain command.
+- `standards:check --json` gains an `advisories` key (schema 1, additive). The text summary adds ", N advisories" when there are any.
+
+### Added
+
+- **Operator commands (pattern `background.command`, now ready):**
+  - `Tey\Standards\Operator\Operator::run()` runs a command's work as a dry run unless `--apply`. It's idempotent by contract, so a re-run reports already done, and it's refused in production unless allow-listed (`standards.operator.allow` or `STANDARDS_OPERATOR_ALLOW`) or run with `--force` and the name typed back.
+  - Commands are locked to one run at a time, and fail closed without a lock store.
+  - A summary table (processed, changed or would change, skipped, failed, by reason) exits 1 on failure and 2 when refused, and never prints record data or exception messages.
+  - `Operator::report()` is the read-only form.
+  - `standards:make command <Name> [--backfill|--maintenance|--report]` stamps the command and a test that proves the dry run writes nothing, `--apply` is idempotent, and production refuses.
+  - Evidence: fleet 6 apps × 11, past 18 apps × 129.
+- **Rule `operator`, advisory:** a command that writes must run through `Operator::run`, or have a dry-run option and a production check. The new `Gate::ADVISORY` reports its findings as advisories that never fail `standards:check`, until an app lists `operator` in `Configuration::optionalRules`.
+
 ## 0.11.3 - 2026-10-27
 
 ### Upgrading

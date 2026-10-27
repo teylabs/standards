@@ -379,6 +379,42 @@ Publish `config/preflight.php` with `php artisan vendor:publish --tag=standards-
 
 The preflight runs **before migrate** and sees the previous release's queue. A backlog warning means “jobs are waiting and nothing is draining them”, not “this deploy broke something”. It is a signal to investigate: a slow or overloaded worker can also cause an old backlog. Heartbeats are deferred; no hosting API or worker-process inspection is performed.
 
+## Operator commands
+
+An operator command is an artisan command that someone runs by hand to backfill, sweep or report: pattern `background.command`. `php artisan standards:make command <Name> [--backfill|--maintenance|--report]` writes `app/Console/Commands/<Name>.php` and `tests/Feature/Console/<Name>Test.php`, both stamped. `--backfill` is the default.
+
+The command's work runs through `Tey\Standards\Operator\Operator`. The package's own classes stay final with no protected methods, so this is composition, not a base class, and it works in any Laravel app, with or without tey/kit:
+
+```php
+public function handle(): int
+{
+    return Operator::run($this, function (OperatorRun $run): void {
+        $run->each($rows, function (object $row, OperatorRun $run): void {
+            if ($row->processed_at !== null) {
+                $run->skipped('already done');
+
+                return;
+            }
+            $run->write(fn () => DB::table('visits')->where('id', $row->id)->whereNull('processed_at')->update(['processed_at' => now()]));
+            $run->changed();
+        });
+    });
+}
+```
+
+- **Dry run by default.** Without `--apply` the work runs and counts, and `write()` does nothing. The summary ends "Dry run: nothing was written".
+- **Idempotent by contract.** The work skips what is already done. A re-run reports "Already done: nothing to change." with the skipped count.
+- **Refused in production.** `--apply` in production needs `--force` and the command's name typed back at the prompt. A non-interactive run is always refused. A command can be allow-listed instead, in `standards.operator.allow` or `STANDARDS_OPERATOR_ALLOW` (comma-separated names). A dry run is read-only, so production allows it.
+- **One at a time.** Each command takes a cache lock while it runs; a second run is refused. Without a cache store that supports locks, the command refuses rather than risk two runs at once.
+- **A summary.** The summary table shows mode, processed, changed (or "would change"), skipped and failed, with each reason's count. The exit code is 1 when anything failed and 2 when refused.
+- **No record data printed.** A reason is a short lowercase label, and anything else is refused. An item that throws counts as failed by its exception's class. The exception goes to the app's handler; its message is never printed.
+
+`Operator::report()` is the read-only form, used by `--report`: the same lock, counts and summary (the column reads "Matched"), with no `--apply`, `--force` or production refusal.
+
+The generated test proves the contract against a table it creates if it's missing: a dry run writes nothing, `--apply` is idempotent, and production refuses unless forced and confirmed. Edit the command's `TABLE`, `COLUMN` and its work for the real job; the test follows the constants.
+
+**Rule `operator` (advisory).** A command under the source roots (extending `Illuminate\Console\Command`) that writes needs a dry run and a production guard. It passes if its work runs through `Operator::run`, or if it hand-rolls both halves: an `--apply` or `--dry-run` option, and an `isProduction()` or `environment('production')` check. Writes are Eloquent and query-builder writes, `DB`/`Storage` writes, and file writes. Running writes through `Operator::report` is its own finding. The check is static, so a write made through another class is not seen, and a write-named call on something else (a cache `put`) is reported. That's why `standards:check` lists its findings as advisories (`~`, and an `advisories` key in `--json`) that never fail the check, until an app adds `operator` to `Configuration::optionalRules` to enforce it.
+
 ## Self-enforcing conformance
 
 One command drives four layers: gates, agent guardrails, pattern lookup and a drift report. Nobody has to remember to run the checks.
@@ -465,7 +501,7 @@ Every path ends in a leaf. Gap and byo leaves return their nearest recipes, the 
 
 **Generators.** `php artisan standards:make <unit> <Name> --flavor=<flavor>` is the offline, deterministic generator, and `bakery.scaffold` returns its command. Every file it writes carries the leaf's pattern stamp, and it never overwrites. When several leaves share a make command, `--leaf=<id>` picks the stamp; the lookup's `preferred_make` includes it. A generated test that lands outside the folders `tests/Pest.php` covers with `->in()` binds the app's TestCase itself (`pest()->extend(...)`), so `$this->get()` and the container work. There are two paths:
 
-- **Delegated to tey/mod.** `model`, `policy`, `job`, `command` and `notification` (flavor `plain`) run tey/mod's `make:*` generator, then stamp each PHP file it created. Without tey/mod they stop with an install hint.
+- **Delegated to tey/mod.** `model`, `policy`, `job` and `notification` (flavor `plain`) run tey/mod's `make:*` generator, then stamp each PHP file it created. Without tey/mod they stop with an install hint.
 - **Recipe stubs.** Units with no mod generator use the package's stubs. Point `standards.make.stubs` at your own copies to override them.
 
 | Unit | Flavors | Writes |
