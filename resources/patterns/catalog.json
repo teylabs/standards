@@ -1288,8 +1288,8 @@
         },
         "ui-page.activity-feed": {
             "id": "ui-page.activity-feed",
-            "recipe": "Activity stream",
-            "summary": "A social-style activity stream page.",
+            "recipe": "activity-stream adoption",
+            "summary": "Publish activity through the activity-stream service's verb guide and authoriser, and render its feed; never a hand-built activity table.",
             "kit": [],
             "make": null,
             "checks": [],
@@ -1298,13 +1298,14 @@
                 "activity",
                 "feed",
                 "stream",
-                "timeline"
+                "timeline",
+                "publish activity"
             ],
-            "status": "gap",
+            "status": "draft",
             "evidence": {
-                "apps": 0,
-                "count": 0,
-                "prs": 0,
+                "apps": 4,
+                "count": 11,
+                "prs": 11,
                 "past_apps": 1,
                 "past_count": 1
             }
@@ -1352,7 +1353,7 @@
                     "next": "data-actions.ledger"
                 },
                 {
-                    "answer": "It needs file attachments or edit locks",
+                    "answer": "It needs file or photo attachments",
                     "next": "data-actions.record-extras"
                 },
                 {
@@ -1388,12 +1389,8 @@
             "question": "Which addition?",
             "options": [
                 {
-                    "answer": "Per-record files and photos on object storage",
-                    "next": "data-actions.attachments"
-                },
-                {
-                    "answer": "A lock against concurrent edits",
-                    "next": "data-actions.edit-locks"
+                    "answer": "Per-record files and photos (media library)",
+                    "next": "data-actions.media-library"
                 },
                 {
                     "answer": "None of these",
@@ -1404,7 +1401,7 @@
         "data-actions.action": {
             "id": "data-actions.action",
             "recipe": "Domain action",
-            "summary": "One principal-first Action owns the write, checks for stale writes, and is shared by controllers, jobs and MCP tools.",
+            "summary": "One principal-first Action owns the write. It checks lock_version against stale writes, which also stops concurrent edits, and is shared by controllers, jobs and MCP tools.",
             "kit": [],
             "make": "standards:make action --flavor=plain",
             "checks": [
@@ -1443,7 +1440,9 @@
                 "tenant",
                 "workspace",
                 "lock_version",
-                "composite key"
+                "composite key",
+                "concurrent edit",
+                "edit lock"
             ],
             "status": "gap",
             "evidence": {
@@ -1628,51 +1627,43 @@
                 "past_count": 10
             }
         },
-        "data-actions.attachments": {
-            "id": "data-actions.attachments",
-            "recipe": "Record attachments",
-            "summary": "Per-record files and photos stored on an object storage disk.",
-            "kit": [],
+        "data-actions.media-library": {
+            "id": "data-actions.media-library",
+            "recipe": "media-library",
+            "summary": "Per-record files and photos through spatie/laravel-medialibrary as the kit wires it. Follow the kit's avatar upload (SessionUi Avatars and StoreAvatar) and the medialibrary Boost skill. There is no scaffold yet.",
+            "kit": [
+                "@kit/ui FileInput"
+            ],
             "make": null,
-            "checks": [],
+            "checks": [
+                "19",
+                "ui dropzone"
+            ],
             "paths": [],
             "keywords": [
                 "attachment",
                 "photo",
                 "file storage",
-                "s3",
-                "disk"
+                "media",
+                "medialibrary",
+                "upload to record"
             ],
-            "status": "gap",
+            "status": "draft",
             "evidence": {
                 "apps": 0,
                 "count": 0,
                 "prs": 0,
                 "past_apps": 2,
                 "past_count": 4
-            }
-        },
-        "data-actions.edit-locks": {
-            "id": "data-actions.edit-locks",
-            "recipe": "Edit locks",
-            "summary": "Record locks that stop two people editing at once.",
-            "kit": [],
-            "make": null,
-            "checks": [],
-            "paths": [],
-            "keywords": [
-                "lock",
-                "concurrent edit",
-                "editing lock"
-            ],
-            "status": "gap",
-            "evidence": {
-                "apps": 0,
-                "count": 0,
-                "prs": 0,
-                "past_apps": 1,
-                "past_count": 1
-            }
+            },
+            "components": [
+                {
+                    "name": "file field",
+                    "kit_component": "FileInput",
+                    "use": "Uploads the record's file or photo",
+                    "props_hint": "v-model, accept"
+                }
+            ]
         },
         "data-actions.record-extras.byo": {
             "id": "data-actions.record-extras.byo",
@@ -2317,6 +2308,10 @@
                     "next": "mail-notifications.digest"
                 },
                 {
+                    "answer": "The brand header, footer or preheader every mail shares",
+                    "next": "mail-notifications.branded-layout"
+                },
+                {
                     "answer": "None of these",
                     "next": "mail-notifications.mail.byo"
                 }
@@ -2425,6 +2420,35 @@
             "paths": [],
             "keywords": [],
             "status": "byo"
+        },
+        "mail-notifications.branded-layout": {
+            "id": "mail-notifications.branded-layout",
+            "recipe": "branded-mail",
+            "summary": "Every notification renders through the configured mail composer's branded layout, with the header, footer and preheader set once; no per-mail Blade copies.",
+            "kit": [],
+            "make": "standards:make notification --flavor=plain",
+            "checks": [
+                "mail"
+            ],
+            "paths": [
+                "app/**/Notifications/**"
+            ],
+            "keywords": [
+                "brand",
+                "mail layout",
+                "footer",
+                "header",
+                "preheader",
+                "email template"
+            ],
+            "status": "ready",
+            "evidence": {
+                "apps": 5,
+                "count": 9,
+                "prs": 9,
+                "past_apps": 2,
+                "past_count": 10
+            }
         },
         "background": {
             "id": "background",
@@ -2546,8 +2570,8 @@
             "why": "Capabilities, entitlements, membership and admission stay distinct.",
             "options": [
                 {
-                    "answer": "A capability or policy",
-                    "next": "access-tenancy.capability"
+                    "answer": "A role permission or a record policy",
+                    "next": "access-tenancy.authorization"
                 },
                 {
                     "answer": "A purchase or plan (entitlement)",
@@ -2564,6 +2588,25 @@
                 {
                     "answer": "None of these",
                     "next": "access-tenancy.user.byo"
+                }
+            ]
+        },
+        "access-tenancy.authorization": {
+            "id": "access-tenancy.authorization",
+            "question": "Is it a role permission, or authorization on a record?",
+            "why": "Permissions, capabilities, entitlements and membership stay distinct.",
+            "options": [
+                {
+                    "answer": "A role permission",
+                    "next": "access-tenancy.permissions"
+                },
+                {
+                    "answer": "A policy on a record",
+                    "next": "access-tenancy.capability"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "access-tenancy.authorization.byo"
                 }
             ]
         },
@@ -2754,6 +2797,45 @@
             "keywords": [],
             "status": "byo"
         },
+        "access-tenancy.permissions": {
+            "id": "access-tenancy.permissions",
+            "recipe": "kit-permissions",
+            "summary": "Register the permission with Registry::permission() and run php artisan kit:permissions:sync; check it through a policy, never a role name in code.",
+            "kit": [],
+            "make": "standards:make policy --flavor=plain",
+            "checks": [
+                "32",
+                "descriptors"
+            ],
+            "paths": [
+                "app/**/Policies/**"
+            ],
+            "keywords": [
+                "permission",
+                "role",
+                "sync permissions",
+                "registry"
+            ],
+            "status": "ready",
+            "evidence": {
+                "apps": 2,
+                "count": 2,
+                "prs": 2,
+                "past_apps": 13,
+                "past_count": 26
+            }
+        },
+        "access-tenancy.authorization.byo": {
+            "id": "access-tenancy.authorization.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
         "integrations": {
             "id": "integrations",
             "question": "Which service?",
@@ -2825,8 +2907,8 @@
                 "apps": 8,
                 "count": 8,
                 "prs": 8,
-                "past_apps": 8,
-                "past_count": 17
+                "past_apps": 9,
+                "past_count": 20
             }
         },
         "integrations.billing": {

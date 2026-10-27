@@ -7,6 +7,7 @@ namespace Tey\Standards\Enforcement;
 use DateTimeImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
+use Tey\Standards\Patterns\KitExports;
 use Tey\Standards\Patterns\TreeCatalog;
 
 final class CheckCommand extends Command
@@ -18,6 +19,10 @@ final class CheckCommand extends Command
     public function handle(Repository $config): int
     {
         $base = $this->laravel->basePath();
+
+        if (($warning = KitExports::mismatch($base)) !== null) {
+            fwrite(STDERR, 'Warning: '.$warning.PHP_EOL);
+        }
         $files = array_values(array_filter((array) $this->option('file'), fn (mixed $file): bool => is_string($file) && $file !== ''));
 
         if ($files !== []) {

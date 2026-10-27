@@ -16,6 +16,24 @@ namespace Illuminate\Foundation\Http {
     }
 }
 
+namespace Illuminate\Notifications {
+    if (! class_exists(Notification::class)) {
+        class Notification {}
+    }
+}
+
+namespace Illuminate\Notifications\Messages {
+    if (! class_exists(MailMessage::class)) {
+        class MailMessage
+        {
+            public function line(string $line): static
+            {
+                return $this;
+            }
+        }
+    }
+}
+
 namespace Tey\Kit\Features\Core {
     if (! class_exists(Principal::class)) {
         final class Principal {}

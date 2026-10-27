@@ -6,6 +6,7 @@ namespace Tey\Standards\Enforcement;
 
 use Composer\InstalledVersions;
 use Illuminate\Console\Command;
+use Tey\Standards\Patterns\KitExports;
 use Tey\Standards\Patterns\Lookup;
 use Tey\Standards\Patterns\TreeCatalog;
 
@@ -18,6 +19,10 @@ final class PatternCommand extends Command
 
     public function handle(): int
     {
+        if (($warning = KitExports::mismatch($this->laravel->basePath())) !== null) {
+            fwrite(STDERR, 'Warning: '.$warning.PHP_EOL);
+        }
+
         $lookup = new Lookup(TreeCatalog::shipped(), InstalledVersions::isInstalled(Lookup::RECIPE_PACKAGE));
         $query = $this->argument('query');
         $answers = (array) $this->option('answer');

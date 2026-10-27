@@ -334,11 +334,11 @@ nodes:
     status: gap
     evidence: { apps: 0, count: 0, prs: 0, past_apps: 1, past_count: 1 }
   - id: ui-page.activity-feed
-    recipe: Activity stream
-    summary: A social-style activity stream page.
+    recipe: activity-stream adoption
+    summary: Publish activity through the activity-stream service's verb guide and authoriser, and render its feed; never a hand-built activity table.
     kit: []
     checks: []
     paths: []
-    keywords: [activity, feed, stream, timeline]
-    status: gap
-    evidence: { apps: 0, count: 0, prs: 0, past_apps: 1, past_count: 1 }
+    keywords: [activity, feed, stream, timeline, publish activity]
+    status: draft
+    evidence: { apps: 4, count: 11, prs: 11, past_apps: 1, past_count: 1 }

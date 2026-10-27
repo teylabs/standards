@@ -4,22 +4,43 @@ declare(strict_types=1);
 
 namespace Tey\Standards\Enforcement;
 
+use Closure;
 use InvalidArgumentException;
 use Tey\Standards\Patterns\Compiler;
 use Tey\Standards\Patterns\Leaf;
 use Tey\Standards\Patterns\PatternCatalog;
 
 /**
- * Emits conformant code for a pattern leaf from recipe stubs. An app or kit
- * can point standards.make.stubs at its own copies. Every file carries the
- * leaf's pattern stamp; existing files are never overwritten.
+ * Emits conformant code for a pattern leaf. Units tey/mod generates (model,
+ * policy, job, command, notification) run its make:* command and then get the
+ * standards stamp; units with no mod generator (page, action, capability-tool,
+ * settings-section) come from recipe stubs, which an app or kit can override
+ * with standards.make.stubs. Every file carries the leaf's pattern stamp;
+ * existing files are never overwritten.
  */
 final class Maker
 {
+    /** Unit => the tey/mod generator it delegates to. */
+    public const DELEGATED = [
+        'model' => 'make:model',
+        'policy' => 'make:policy',
+        'job' => 'make:job',
+        'command' => 'make:command',
+        'notification' => 'make:notification',
+    ];
+
     /**
      * @param  array{namespace?: string, app?: string, pages?: string, routes?: string, tests?: string, stubs?: ?string}  $paths
+     * @param  list<string>  $generators  make:* commands available through tey/mod; empty when it is not installed
+     * @param  (Closure(string, array<string, mixed>): int)|null  $run  runs an artisan command
      */
-    public function __construct(private readonly string $base, private readonly PatternCatalog $catalog, private readonly array $paths = []) {}
+    public function __construct(
+        private readonly string $base,
+        private readonly PatternCatalog $catalog,
+        private readonly array $paths = [],
+        private readonly array $generators = [],
+        private readonly ?Closure $run = null,
+    ) {}
 
     /** @return list<string> the project-relative files written or changed */
     public function make(string $unit, string $name, string $flavor): array
@@ -33,6 +54,10 @@ final class Maker
         }
 
         $leaf = $this->leaf($unit, $flavor);
+
+        if (isset(self::DELEGATED[$unit])) {
+            return $this->delegate(self::DELEGATED[$unit], $name, $leaf);
+        }
         $app = $this->paths['app'] ?? 'app';
         $pages = $this->paths['pages'] ?? 'resources/js/pages';
         $tests = $this->paths['tests'] ?? 'tests/Feature';
@@ -132,6 +157,62 @@ final class Maker
     private static function group(string $controller, array $routes): string
     {
         return "Route::controller(\\{$controller}::class)->group(function () {\n".implode("\n", array_map(fn (string $route): string => '    '.$route, $routes))."\n});";
+    }
+
+    /**
+     * Runs the mod generator, then stamps every PHP file it created. The
+     * generator's own output decides the paths, so both runs stay
+     * deterministic for the same app layout.
+     *
+     * @return list<string>
+     */
+    private function delegate(string $generator, string $name, string $leaf): array
+    {
+        if (! in_array($generator, $this->generators, true) || $this->run === null) {
+            throw new InvalidArgumentException("This unit delegates to tey/mod's {$generator}; install tey/mod (composer require tey/mod) and try again.");
+        }
+
+        $before = $this->files();
+        $exit = ($this->run)($generator, ['name' => $name, '--no-interaction' => true]);
+
+        if ($exit !== 0) {
+            throw new InvalidArgumentException("{$generator} {$name} failed with exit code {$exit}.");
+        }
+
+        $created = array_values(array_diff($this->files(), $before));
+        sort($created);
+
+        foreach ($created as $file) {
+            $contents = (string) file_get_contents($this->base.'/'.$file);
+
+            if (str_ends_with($file, '.php') && str_starts_with($contents, '<?php') && ! str_contains($contents, Hook::STAMP)) {
+                file_put_contents($this->base.'/'.$file, (string) preg_replace('/^<\?php\R/', "<?php\n\n// ".Hook::STAMP." {$leaf}\n", $contents, 1));
+            }
+        }
+
+        if ($created === []) {
+            throw new InvalidArgumentException("{$generator} {$name} created no files; nothing to stamp.");
+        }
+
+        return $created;
+    }
+
+    /** @return list<string> project-relative files under the roots generators write to */
+    private function files(): array
+    {
+        $files = [];
+
+        foreach (['app', 'database', 'tests', 'src', 'modules'] as $root) {
+            if (! is_dir($this->base.'/'.$root)) {
+                continue;
+            }
+
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->base.'/'.$root, \FilesystemIterator::SKIP_DOTS)) as $file) {
+                $files[] = str_replace('\\', '/', substr($file->getPathname(), strlen($this->base) + 1));
+            }
+        }
+
+        return $files;
     }
 
     private function leaf(string $unit, string $flavor): string

@@ -11,11 +11,18 @@ nodes:
     question: What decides access?
     why: Capabilities, entitlements, membership and admission stay distinct.
     options:
-      - { answer: "A capability or policy", next: access-tenancy.capability }
+      - { answer: "A role permission or a record policy", next: access-tenancy.authorization }
       - { answer: "A purchase or plan (entitlement)", next: access-tenancy.entitlements }
       - { answer: "Workspace membership", next: access-tenancy.membership }
       - { answer: "Login or request hardening", next: access-tenancy.hardening }
       - { answer: "None of these", next: access-tenancy.user.byo }
+  - id: access-tenancy.authorization
+    question: Is it a role permission, or authorization on a record?
+    why: Permissions, capabilities, entitlements and membership stay distinct.
+    options:
+      - { answer: "A role permission", next: access-tenancy.permissions }
+      - { answer: "A policy on a record", next: access-tenancy.capability }
+      - { answer: "None of these", next: access-tenancy.authorization.byo }
   - id: access-tenancy.hardening
     question: Which hardening?
     options:
@@ -93,6 +100,24 @@ nodes:
     keywords: []
     status: byo
   - id: access-tenancy.hardening.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: access-tenancy.permissions
+    recipe: kit-permissions
+    summary: Register the permission with Registry::permission() and run php artisan kit:permissions:sync; check it through a policy, never a role name in code.
+    kit: []
+    make: standards:make policy --flavor=plain
+    checks: ['32', 'descriptors']
+    paths: ['app/**/Policies/**']
+    keywords: [permission, role, sync permissions, registry]
+    status: ready
+    evidence: { apps: 2, count: 2, prs: 2, past_apps: 13, past_count: 26 }
+  - id: access-tenancy.authorization.byo
     recipe: Build your own
     summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
     kit: []

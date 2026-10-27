@@ -12,6 +12,7 @@ Usage: standards ci [--strict] [--json] [--base=<dir>]
        standards report <report.json|dir>... [--previous=<aggregate.json>] [--json] [--strict]
        standards hook <stop|pre-commit|pre-write|post-edit>
        standards patterns:compile [--check]
+       standards kit-exports --refresh --from=<tey/kit checkout>
        standards [--help]
 
 Inspect .github/workflows offline, without booting Laravel.
@@ -52,7 +53,7 @@ $locate = function (): void {
     require_once $autoload;
 };
 
-if (in_array($arguments[0], ['hook', 'report', 'patterns:compile'], true)) {
+if (in_array($arguments[0], ['hook', 'report', 'patterns:compile', 'kit-exports'], true)) {
     $command = array_shift($arguments);
 
     if ($command === 'hook') {
@@ -79,11 +80,35 @@ if (in_array($arguments[0], ['hook', 'report', 'patterns:compile'], true)) {
 
     $locate();
 
+    if ($command === 'kit-exports') {
+        $from = null;
+
+        foreach ($arguments as $argument) {
+            if (str_starts_with($argument, '--from=')) {
+                $from = substr($argument, 7);
+            }
+        }
+
+        if (! in_array('--refresh', $arguments, true) || $from === null) {
+            fwrite(STDERR, 'Usage: standards kit-exports --refresh --from=<tey/kit checkout>'.PHP_EOL);
+            exit(2);
+        }
+
+        try {
+            echo 'Wrote resources/patterns/kit-exports.json: '.Tey\Standards\Patterns\KitExports::refresh($from).'. Run standards patterns:compile next.'.PHP_EOL;
+        } catch (InvalidArgumentException $error) {
+            fwrite(STDERR, 'standards kit-exports: '.$error->getMessage().PHP_EOL);
+            exit(2);
+        }
+
+        exit(0);
+    }
+
     if ($command === 'patterns:compile') {
         $directory = dirname(__DIR__).'/resources/patterns';
 
         try {
-            $json = json_encode(Tey\Standards\Patterns\Compiler::compile($directory), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR).PHP_EOL;
+            $json = json_encode(Tey\Standards\Patterns\Compiler::compile($directory), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n";
         } catch (InvalidArgumentException $error) {
             fwrite(STDERR, 'standards patterns:compile: '.$error->getMessage().PHP_EOL);
             exit(1);

@@ -8,6 +8,7 @@ use Tey\Standards\Enforcement\CheckReport;
 use Tey\Standards\Enforcement\Maker;
 use Tey\Standards\Patterns\Branch;
 use Tey\Standards\Patterns\Compiler;
+use Tey\Standards\Patterns\KitExports;
 use Tey\Standards\Patterns\Leaf;
 use Tey\Standards\Patterns\Lookup;
 use Tey\Standards\Patterns\TreeCatalog;
@@ -45,6 +46,29 @@ function nodeAt(array $source, string $id): int
     return (int) array_search($id, array_column($source['nodes'], 'id'), true);
 }
 
+/**
+ * Stands in for tey/mod's make:* generators in the fixture app: writes what
+ * Laravel's stock stubs would, so the delegated path is exercised offline.
+ *
+ * @param  list<array{0: string, 1: array<string, mixed>}>  $calls
+ */
+function fakeModGenerator(string $base, array &$calls): Closure
+{
+    return function (string $command, array $arguments) use ($base, &$calls): int {
+        $calls[] = [$command, $arguments];
+        $name = $arguments['name'];
+        [$path, $body] = match ($command) {
+            'make:policy' => ["app/Policies/{$name}.php", "namespace App\\Policies;\n\nfinal class {$name}\n{\n}\n"],
+            'make:notification' => ["app/Notifications/{$name}.php", "namespace App\\Notifications;\n\nuse Illuminate\\Notifications\\Messages\\MailMessage;\nuse Illuminate\\Notifications\\Notification;\n\nfinal class {$name} extends Notification\n{\n    public function toMail(object \$notifiable): MailMessage\n    {\n        return (new MailMessage)->line('Hello.');\n    }\n}\n"],
+            default => ["app/Support/{$name}.php", "namespace App\\Support;\n\nfinal class {$name}\n{\n}\n"],
+        };
+        @mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, "<?php\n\n".$body);
+
+        return 0;
+    };
+}
+
 /** A temporary copy of the fixture app whose classes autoload. */
 function fixtureApp(): string
 {
@@ -63,7 +87,7 @@ function fixtureApp(): string
 }
 
 test('the shipped catalog.json is the compiled YAML', function () {
-    $compiled = json_encode(Compiler::compile(patternSources()), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR).PHP_EOL;
+    $compiled = json_encode(Compiler::compile(patternSources()), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n";
 
     expect(file_get_contents(patternSources().'/catalog.json'))->toBe($compiled, 'Run php bin/standards patterns:compile.');
 });
@@ -103,7 +127,7 @@ test('every next resolves, branches below the root have 2–5 options and every 
     expect(array_keys($reached))->toEqualCanonicalizing(array_keys($json['nodes']));
 });
 
-test('ui-page, mcp and settings are populated with ready leaves; the other branches are draft or gap stubs', function () {
+test('every branch has leaves, and ui-page, mcp and settings are populated with ready ones', function () {
     $catalog = TreeCatalog::shipped();
 
     foreach (Compiler::BRANCHES as $branch) {
@@ -111,9 +135,9 @@ test('ui-page, mcp and settings are populated with ready leaves; the other branc
         $ready = array_filter($leaves, fn (Leaf $leaf): bool => $leaf->status === 'ready');
 
         expect($leaves)->not->toBeEmpty();
-        in_array($branch, ['ui-page', 'mcp', 'settings'], true)
-            ? expect(count($ready))->toBeGreaterThanOrEqual(2)
-            : expect($ready)->toBe([]);
+        if (in_array($branch, ['ui-page', 'mcp', 'settings'], true)) {
+            expect(count($ready))->toBeGreaterThanOrEqual(2);
+        }
     }
 });
 
@@ -285,7 +309,10 @@ test('every ready leaf\'s make command emits code that passes standards:check in
     $base = fixtureApp();
 
     try {
-        $files = (new Maker($base, $catalog))->make($make[1], 'Ledger'.ucfirst(str_replace(['.', '-'], '', $id)), $make[2]);
+        $calls = [];
+        $files = (new Maker($base, $catalog, generators: array_values(Maker::DELEGATED), run: fakeModGenerator($base, $calls)))
+            ->make($make[1], 'Ledger'.ucfirst(str_replace(['.', '-'], '', $id)), $make[2]);
+        expect(array_column($calls, 0))->toBe(isset(Maker::DELEGATED[$make[1]]) ? [Maker::DELEGATED[$make[1]]] : []);
         $report = CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), $catalog);
 
         expect($files)->not->toBeEmpty()
@@ -418,4 +445,54 @@ test('components name only what the kit exports, and recipe() returns them', fun
         return $source;
     });
     expect(fn () => Compiler::compile($directory))->toThrow(InvalidArgumentException::class, 'component [IndexToolbar] is not exported by the kit');
+});
+
+test('mod-generated units delegate to tey/mod and get stamped; stub units never delegate; no mod means a clear error', function () {
+    $base = fixtureApp();
+
+    try {
+        $calls = [];
+        $maker = new Maker($base, TreeCatalog::shipped(), generators: ['make:policy', 'make:notification'], run: fakeModGenerator($base, $calls));
+
+        expect($maker->make('policy', 'InvoicePolicy', 'plain'))->toBe(['app/Policies/InvoicePolicy.php'])
+            ->and(file_get_contents($base.'/app/Policies/InvoicePolicy.php'))->toStartWith("<?php\n\n// standards-pattern: access-tenancy.permissions\n");
+        expect($calls)->toBe([['make:policy', ['name' => 'InvoicePolicy', '--no-interaction' => true]]]);
+
+        $maker->make('action', 'ArchiveInvoice', 'plain');
+        expect($calls)->toHaveCount(1);
+
+        expect(fn () => (new Maker($base, TreeCatalog::shipped()))->make('policy', 'OtherPolicy', 'plain'))
+            ->toThrow(InvalidArgumentException::class, "delegates to tey/mod's make:policy");
+        expect(fn () => (new Maker($base, TreeCatalog::shipped(), generators: ['make:job'], run: fn (): int => 0))->make('job', 'Quiet', 'plain'))
+            ->toThrow(InvalidArgumentException::class, 'created no files');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('the kit export snapshot refreshes from a kit checkout and an installed kit that differs only warns', function () {
+    $kit = sys_get_temp_dir().'/standards-kit-'.bin2hex(random_bytes(6));
+    $barrel = "export { default as Button } from './Button.vue';\nexport { default as DataTable, helper } from './DataTable.vue';\nexport { Sheet, SheetContent } from './Sheet';\nexport { useThing } from './x';\nexport { default as Zebra } from './Zebra.vue';\n";
+
+    try {
+        mkdir(dirname($kit.'/'.KitExports::BARREL), 0777, true);
+        file_put_contents($kit.'/'.KitExports::BARREL, $barrel);
+        file_put_contents($kit.'/CHANGELOG.md', "# Changelog\n\n## v9.1.0\n");
+
+        expect(KitExports::parse($barrel))->toBe(['Button', 'DataTable', 'Sheet', 'SheetContent', 'Zebra']);
+        expect(KitExports::refresh($kit, $kit.'/snapshot.json'))->toContain('5 components')
+            ->and(json_decode(file_get_contents($kit.'/snapshot.json'), true)['source'])->toEndWith('v9.1.0');
+
+        expect(KitExports::mismatch($kit))->toBeNull();
+        mkdir(dirname($kit.'/vendor/tey/kit/'.KitExports::BARREL), 0777, true);
+        file_put_contents($kit.'/vendor/tey/kit/'.KitExports::BARREL, $barrel);
+        expect(KitExports::mismatch($kit))->toContain('missing: ActionBar')->toContain('not in the snapshot: Zebra')->not->toContain('DataTable,');
+
+        $same = implode("\n", array_map(fn (string $name): string => "export { default as {$name} } from './{$name}.vue';", KitExports::snapshot()));
+        file_put_contents($kit.'/vendor/tey/kit/'.KitExports::BARREL, $same);
+        expect(KitExports::mismatch($kit))->toBeNull();
+        expect(KitExports::snapshot())->toBe(json_decode(file_get_contents(patternSources().'/kit-exports.json'), true)['components']);
+    } finally {
+        (new Filesystem)->deleteDirectory($kit);
+    }
 });

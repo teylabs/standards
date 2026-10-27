@@ -25,7 +25,7 @@ nodes:
     paths: []
     keywords: [monitoring, nightwatch, apm, errors]
     status: gap
-    evidence: { apps: 8, count: 8, prs: 8, past_apps: 8, past_count: 17 }
+    evidence: { apps: 8, count: 8, prs: 8, past_apps: 9, past_count: 20 }
   - id: integrations.billing
     recipe: Billing
     summary: Guarded Stripe Checkout, a signed webhook, a shared-account guard and the catalogue as code.

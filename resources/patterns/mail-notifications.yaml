@@ -13,6 +13,7 @@ nodes:
       - { answer: "A message about the person's account", next: mail-notifications.notification }
       - { answer: "A document or signed link, with a send record", next: mail-notifications.document-delivery }
       - { answer: "A digest for many users", next: mail-notifications.digest }
+      - { answer: "The brand header, footer or preheader every mail shares", next: mail-notifications.branded-layout }
       - { answer: "None of these", next: mail-notifications.mail.byo }
   - id: mail-notifications.notification
     recipe: Account notification
@@ -65,3 +66,13 @@ nodes:
     paths: []
     keywords: []
     status: byo
+  - id: mail-notifications.branded-layout
+    recipe: branded-mail
+    summary: Every notification renders through the configured mail composer's branded layout, with the header, footer and preheader set once; no per-mail Blade copies.
+    kit: []
+    make: standards:make notification --flavor=plain
+    checks: ['mail']
+    paths: ['app/**/Notifications/**']
+    keywords: [brand, mail layout, footer, header, preheader, email template]
+    status: ready
+    evidence: { apps: 5, count: 9, prs: 9, past_apps: 2, past_count: 10 }

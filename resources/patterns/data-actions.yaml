@@ -15,7 +15,7 @@ nodes:
       - { answer: "Yes, it is workspace-scoped", next: data-actions.tenant-model }
       - { answer: "No; it needs enum and check-constraint conventions", next: data-actions.constraints }
       - { answer: "Its history must be append-only", next: data-actions.ledger }
-      - { answer: "It needs file attachments or edit locks", next: data-actions.record-extras }
+      - { answer: "It needs file or photo attachments", next: data-actions.record-extras }
       - { answer: "None of these", next: data-actions.model.byo }
   - id: data-actions.output
     question: Which output?
@@ -27,12 +27,11 @@ nodes:
   - id: data-actions.record-extras
     question: Which addition?
     options:
-      - { answer: "Per-record files and photos on object storage", next: data-actions.attachments }
-      - { answer: "A lock against concurrent edits", next: data-actions.edit-locks }
+      - { answer: "Per-record files and photos (media library)", next: data-actions.media-library }
       - { answer: "None of these", next: data-actions.record-extras.byo }
   - id: data-actions.action
     recipe: Domain action
-    summary: One principal-first Action owns the write, checks for stale writes, and is shared by controllers, jobs and MCP tools.
+    summary: One principal-first Action owns the write. It checks lock_version against stale writes, which also stops concurrent edits, and is shared by controllers, jobs and MCP tools.
     kit: []
     make: standards:make action --flavor=plain
     checks: ['actions', '21']
@@ -46,7 +45,7 @@ nodes:
     kit: []
     checks: []
     paths: []
-    keywords: [model, tenant, workspace, lock_version, composite key]
+    keywords: [model, tenant, workspace, lock_version, composite key, concurrent edit, edit lock]
     status: gap
     evidence: { apps: 4, count: 11, prs: 11, past_apps: 17, past_count: 190 }
   - id: data-actions.constraints
@@ -128,24 +127,17 @@ nodes:
     keywords: [report, aggregate, export, monthly, performance]
     status: gap
     evidence: { apps: 0, count: 0, prs: 0, past_apps: 1, past_count: 10 }
-  - id: data-actions.attachments
-    recipe: Record attachments
-    summary: Per-record files and photos stored on an object storage disk.
-    kit: []
-    checks: []
+  - id: data-actions.media-library
+    recipe: media-library
+    summary: Per-record files and photos through spatie/laravel-medialibrary as the kit wires it. Follow the kit's avatar upload (SessionUi Avatars and StoreAvatar) and the medialibrary Boost skill. There is no scaffold yet.
+    kit: ['@kit/ui FileInput']
+    components:
+      - { name: "file field", kit_component: FileInput, use: "Uploads the record's file or photo", props_hint: "v-model, accept" }
+    checks: ['19', 'ui dropzone']
     paths: []
-    keywords: [attachment, photo, file storage, s3, disk]
-    status: gap
+    keywords: [attachment, photo, file storage, media, medialibrary, upload to record]
+    status: draft
     evidence: { apps: 0, count: 0, prs: 0, past_apps: 2, past_count: 4 }
-  - id: data-actions.edit-locks
-    recipe: Edit locks
-    summary: Record locks that stop two people editing at once.
-    kit: []
-    checks: []
-    paths: []
-    keywords: [lock, concurrent edit, editing lock]
-    status: gap
-    evidence: { apps: 0, count: 0, prs: 0, past_apps: 1, past_count: 1 }
   - id: data-actions.record-extras.byo
     recipe: Build your own
     summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."

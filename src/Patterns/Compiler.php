@@ -28,7 +28,18 @@ final class Compiler
 
     public const BRANCHES = ['ui-page', 'data-actions', 'mcp', 'settings', 'mail-notifications', 'background', 'access-tenancy', 'integrations'];
 
-    public const UNITS = ['page' => ['index', 'show', 'form'], 'action' => ['plain'], 'capability-tool' => ['read', 'write'], 'settings-section' => ['form', 'toggles']];
+    public const UNITS = [
+        'page' => ['index', 'show', 'form'],
+        'action' => ['plain'],
+        'capability-tool' => ['read', 'write'],
+        'settings-section' => ['form', 'toggles'],
+        // Delegated to tey/mod's make:* generators; standards stamps the result.
+        'model' => ['plain'],
+        'policy' => ['plain'],
+        'job' => ['plain'],
+        'command' => ['plain'],
+        'notification' => ['plain'],
+    ];
 
     /** @return array{schema: int, root: string, nodes: array<string, array<string, mixed>>} */
     public static function compile(string $directory): array

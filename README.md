@@ -462,14 +462,19 @@ php artisan standards:pattern --gaps                                 # gap leave
 
 Every path ends in a leaf. Gap and byo leaves return their nearest recipes, the general conventions (rules and notes) and a note to proceed. A gap says "No recipe yet. Build to the nearest sibling `<id>` and flag it." A traversal or search that ends on one appends an anonymised demand record to `storage/standards/gap-demand.jsonl`: answers, catalog-keyword criteria, unit type and timestamp, with no code, names or paths. With `butter/bakery` installed, `recipe_make` becomes the preferred, labelled make command. Callers depend on `PatternCatalog` and the contract, not on the file format. Leaf `evidence` is counts only (`apps`, `count`, `prs`, optional `past_apps` and `past_count`). App names and change references never ship.
 
-**Generators.** `php artisan standards:make <unit> <Name> --flavor=<flavor>` writes stamped, conformant files and never overwrites. Set `standards.make.stubs` to use your own copies of the stubs.
+**Generators.** `php artisan standards:make <unit> <Name> --flavor=<flavor>` is the offline, deterministic generator, and `bakery.scaffold` returns its command. Every file it writes carries the leaf's pattern stamp, and it never overwrites. There are two paths:
+
+- **Delegated to tey/mod.** `model`, `policy`, `job`, `command` and `notification` (flavor `plain`) run tey/mod's `make:*` generator, then stamp each PHP file it created. Without tey/mod they stop with an install hint.
+- **Recipe stubs.** Units with no mod generator use the package's stubs. Point `standards.make.stubs` at your own copies to override them.
 
 | Unit | Flavors | Writes |
 | ---- | ------- | ------ |
-| `page` | `index`, `show`, `form` | controller, `Page.vue`, `Route::controller()` group, Pest test; `form` adds a FormRequest and an Action |
+| `page` | `index`, `show`, `form` | controller, `Page.vue` built from `@kit/ui` exports, `Route::controller()` group, Pest test; `form` adds a FormRequest and an Action |
 | `capability-tool` | `read`, `write` | kit `CapabilityTool` with `#[Capability]`, `CAPABILITY`, `ABILITY` (and `WRITES`), Pest test |
 | `settings-section` | `form`, `toggles` | settings controller, FormRequest, Action, `pages/settings/<Name>/Page.vue`, routes, test |
 | `action` | `plain` | Action class and test |
+
+**Kit exports.** Validation reads only the shipped snapshot, `resources/patterns/kit-exports.json`, so CI is deterministic. When an app has tey/kit installed, `standards:pattern` and `standards:check` compare its `@kit/ui` barrel with the snapshot. A mismatch prints a warning and never fails. To regenerate the snapshot from a kit checkout, run `php bin/standards kit-exports --refresh --from=../kit`, then `php bin/standards patterns:compile`.
 
 ### 4. Drift report
 
