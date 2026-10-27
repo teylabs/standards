@@ -60,11 +60,17 @@ test('standards:make webhook writes the provider files, the shared ones once, an
     try {
         $maker = new Maker($base, TreeCatalog::shipped());
         $first = $maker->make('webhook', 'Acme', 'signed');
+        mkdir($base.'/vendor/spatie/laravel-multitenancy', 0777, true);
         $second = $maker->make('webhook', 'Globex', 'signed');
+        expect(file_get_contents($base.'/app/Webhooks/Globex/ProcessGlobexWebhook.php'))->toContain('extends ProcessWebhookJob implements NotTenantAware')->toContain('use Spatie\Multitenancy\Jobs\NotTenantAware;');
+        (new Filesystem)->deleteDirectory($base.'/vendor/spatie/laravel-multitenancy');
+        // The folder only marked the package present; the interface itself is not installed here, so the check below reads the job without it.
+        $job = $base.'/app/Webhooks/Globex/ProcessGlobexWebhook.php';
+        file_put_contents($job, str_replace([' implements NotTenantAware', "use Spatie\\Multitenancy\\Jobs\\NotTenantAware;\n"], '', file_get_contents($job)));
 
-        expect($first)->toContain('app/Webhooks/Acme/AcmeSignatureValidator.php', 'app/Webhooks/Acme/AcmeWebhookProfile.php', 'app/Webhooks/Acme/ProcessAcmeWebhook.php', 'app/Webhooks/Acme/Handlers/HandleAcmeUpdated.php', 'tests/Feature/Webhooks/AcmeWebhookTest.php', 'app/Webhooks/WebhookCall.php', 'app/Webhooks/ReceiveWebhook.php', 'app/Providers/WebhookServiceProvider.php', 'routes/webhooks.php', 'config/webhook-client.php', '.env.example', 'bootstrap/providers.php')
+        expect($first)->toContain('app/Webhooks/Acme/AcmeSignatureValidator.php', 'app/Webhooks/Acme/AcmeWebhookProfile.php', 'app/Webhooks/Acme/ProcessAcmeWebhook.php', 'app/Webhooks/Acme/Handlers/HandleAcmeUpdated.php', 'tests/Feature/Webhooks/AcmeWebhookTest.php', 'app/Models/WebhookCall.php', 'app/Webhooks/ReceiveWebhook.php', 'app/Providers/WebhookServiceProvider.php', 'routes/webhooks.php', 'config/webhook-client.php', '.env.example', 'bootstrap/providers.php')
             ->and(array_filter($first, fn (string $file): bool => str_contains($file, '_add_event_id_to_webhook_calls_table')))->toHaveCount(1)
-            ->and($second)->not->toContain('app/Webhooks/WebhookCall.php', 'app/Providers/WebhookServiceProvider.php')
+            ->and($second)->not->toContain('app/Models/WebhookCall.php', 'app/Providers/WebhookServiceProvider.php')
             ->and(array_filter($second, fn (string $file): bool => str_contains($file, 'webhook_calls')))->toBe([]);
 
         $config = (static fn (string $file): array => require $file)($base.'/config/webhook-client.php');
@@ -75,6 +81,8 @@ test('standards:make webhook writes the provider files, the shared ones once, an
             ->and(file_get_contents($base.'/.env.example'))->toContain("ACME_WEBHOOK_SECRET=\n")->toContain('GLOBEX_WEBHOOK_SECRET=')
             ->and(file_get_contents($base.'/app/Webhooks/Acme/AcmeSignatureValidator.php'))->toContain('hash_equals(')->toContain('TOLERANCE_SECONDS')
             ->and(file_get_contents($base.'/app/Providers/WebhookServiceProvider.php'))->toContain("RateLimiter::for('webhooks'")->toContain("Route::middleware('throttle:webhooks')");
+        // Without spatie/laravel-multitenancy the job is a plain one; with it (as Globex's app gets below), it is not tenant-aware.
+        expect(file_get_contents($base.'/app/Webhooks/Acme/ProcessAcmeWebhook.php'))->toContain('final class ProcessAcmeWebhook extends ProcessWebhookJob' . "\n")->not->toContain('NotTenantAware');
 
         expect(fn () => $maker->make('webhook', 'Acme', 'signed'))->toThrow(InvalidArgumentException::class, 'already has a acme webhook');
         $report = CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped());
@@ -92,7 +100,7 @@ test('standards:make api-client writes the contract, the real client per flavor,
         $http = $maker->make('api-client', 'Acme', 'http');
         $sdk = $maker->make('api-client', 'Globex', 'sdk');
 
-        expect($http)->toContain('app/Services/Acme/AcmeClient.php', 'app/Services/Acme/HttpAcmeClient.php', 'app/Services/Acme/FakeAcmeClient.php', 'app/Services/Acme/AcmeException.php', 'app/Providers/AcmeServiceProvider.php', 'tests/Feature/Services/AcmeClientTest.php', 'tests/Feature/Services/HttpAcmeClientTest.php', 'config/services.php', '.env.example', 'bootstrap/providers.php')
+        expect($http)->toContain('app/Services/Acme/AcmeClient.php', 'app/Services/Acme/HttpAcmeClient.php', 'app/Services/Acme/FakeAcmeClient.php', 'app/Exceptions/AcmeException.php', 'app/Providers/AcmeServiceProvider.php', 'tests/Feature/Services/AcmeClientTest.php', 'tests/Feature/Services/HttpAcmeClientTest.php', 'config/services.php', '.env.example', 'bootstrap/providers.php')
             ->and($sdk)->toContain('app/Services/Globex/SdkGlobexClient.php')->not->toContain('tests/Feature/Services/HttpGlobexClientTest.php')
             ->and(file_get_contents($base.'/app/Services/Acme/AcmeClient.php'))->toContain('standards-pattern: integrations.api-client.http')
             ->and(file_get_contents($base.'/app/Services/Globex/GlobexClient.php'))->toContain('standards-pattern: integrations.api-client')
@@ -106,6 +114,20 @@ test('standards:make api-client writes the contract, the real client per flavor,
 
         $report = CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped());
         expect($report['violations'])->toBe([])->and($report['advisories'])->toBe([]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('a provider list written with imports gets an import and the short name', function () {
+    $base = fixtureApp();
+
+    try {
+        @mkdir($base.'/bootstrap', 0777, true);
+        file_put_contents($base.'/bootstrap/providers.php', "<?php\n\nuse App\\Providers\\AppServiceProvider;\n\nreturn [\n    AppServiceProvider::class,\n];\n");
+        (new Maker($base, TreeCatalog::shipped()))->make('api-client', 'Acme', 'http');
+
+        expect(file_get_contents($base.'/bootstrap/providers.php'))->toBe("<?php\n\nuse App\\Providers\\AcmeServiceProvider;\nuse App\\Providers\\AppServiceProvider;\n\nreturn [\n    AppServiceProvider::class,\n    // standards-pattern: integrations.api-client.http\n    AcmeServiceProvider::class,\n];\n");
     } finally {
         (new Filesystem)->deleteDirectory($base);
     }

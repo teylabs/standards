@@ -3,7 +3,7 @@
 // standards-pattern: {{ leaf }}
 
 use {{ namespace }}\Services\{{ name }}\{{ name }}Client;
-use {{ namespace }}\Services\{{ name }}\{{ name }}Exception;
+use {{ namespace }}\Exceptions\{{ name }}Exception;
 use {{ namespace }}\Services\{{ name }}\Fake{{ name }}Client;
 use Illuminate\Support\Facades\Http;
 

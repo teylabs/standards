@@ -4,6 +4,7 @@
 
 namespace {{ namespace }}\Services\{{ name }};
 
+use {{ namespace }}\Exceptions\{{ name }}Exception;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;

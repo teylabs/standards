@@ -5,7 +5,7 @@
 use {{ namespace }}\Webhooks\{{ name }}\Handlers\Handle{{ example_class }};
 use {{ namespace }}\Webhooks\{{ name }}\Process{{ name }}Webhook;
 use {{ namespace }}\Webhooks\{{ name }}\{{ name }}SignatureValidator;
-use {{ namespace }}\Webhooks\WebhookCall;
+use {{ namespace }}\Models\WebhookCall;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;

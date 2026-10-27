@@ -2,7 +2,7 @@
 
 // standards-pattern: {{ leaf }}
 
-use {{ namespace }}\Services\{{ name }}\{{ name }}Exception;
+use {{ namespace }}\Exceptions\{{ name }}Exception;
 use {{ namespace }}\Services\{{ name }}\Http{{ name }}Client;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;

@@ -172,7 +172,9 @@ final class Maker
         foreach ($files as $target => $stub) {
             [$stub, $overrides] = is_array($stub) ? $stub : [$stub, []];
             $contents = $this->render($stub, [...$values, ...$overrides]);
-            $this->write($target, str_ends_with($target, 'Test.php') ? $this->covered($target, $contents) : $contents);
+            $contents = str_ends_with($target, 'Test.php') ? $this->covered($target, $contents) : $contents;
+            // Names that come from the unit's name sort differently per name, so the import block is sorted after rendering.
+            $this->write($target, str_ends_with($target, '.php') ? self::imports($contents) : $contents);
             $written[] = $target;
         }
 
@@ -267,6 +269,30 @@ final class Maker
         return $written;
     }
 
+    /**
+     * The file with its top-level `use` block holding the given classes too, sorted as Pint's ordered_imports wants and followed by one blank line.
+     * A file with no block gets one after its opening comment.
+     *
+     * @param  list<string>  $classes
+     */
+    private static function imports(string $contents, array $classes = []): string
+    {
+        if (preg_match('/^((?:use [^;\n]+;\n)+)/m', $contents, $block, PREG_OFFSET_CAPTURE) === 1) {
+            [$lines, $at] = $block[1];
+        } else {
+            $lines = '';
+            $at = preg_match('/\A<\?php\n(?:\n?(?:\/\/[^\n]*\n)+)?\n?/', $contents, $head) === 1 ? strlen($head[0]) : 0;
+            if ($classes === []) {
+                return $contents;
+            }
+        }
+        $imports = array_values(array_unique([...array_filter(explode("\n", $lines)), ...array_map(fn (string $class): string => 'use '.$class.';', $classes)]));
+        usort($imports, fn (string $a, string $b): int => strcasecmp(str_replace('\\', ' ', $a), str_replace('\\', ' ', $b)));
+        $rest = ltrim(substr($contents, $at + strlen($lines)), "\n");
+
+        return rtrim(substr($contents, 0, $at), "\n").($at > 0 ? "\n\n" : '').implode("\n", $imports)."\n\n".$rest;
+    }
+
     /** Adds a provider to bootstrap/providers.php, stamped; one already listed is left as it is. */
     private function provide(string $class, string $leaf): string
     {
@@ -280,7 +306,11 @@ final class Maker
         if ($at === false) {
             throw new InvalidArgumentException("{$providers} does not return a list; add \\{$class}::class to it yourself.");
         }
-        $this->write($providers, substr($current, 0, $at)."    // standards-pattern: {$leaf}\n    \\{$class}::class,\n".substr($current, $at));
+        // A list written with imports gets an import and the short name, as Pint wants; otherwise the full name.
+        $imported = preg_match('/^use [^;\n]+;$/m', $current) === 1;
+        $entry = "    // standards-pattern: {$leaf}\n    ".($imported ? class_basename($class) : '\\'.$class)."::class,\n";
+        $updated = substr($current, 0, $at).$entry.substr($current, $at);
+        $this->write($providers, $imported ? self::imports($updated, [$class]) : $updated);
 
         return $providers;
     }
@@ -308,6 +338,11 @@ final class Maker
             'env_prefix' => strtoupper(Str::snake($name)), 'signature_header' => 'X-'.$name.'-Signature', 'timestamp_header' => 'X-'.$name.'-Timestamp',
             'example_event' => $slug.'.updated', 'example_class' => $name.'Updated',
         ];
+        // A webhook arrives with no tenant: in a multitenant app its job must not wait for one (the handler finds the tenant from the payload).
+        $tenancy = interface_exists('Spatie\\Multitenancy\\Jobs\\NotTenantAware') || is_dir($this->base.'/vendor/spatie/laravel-multitenancy');
+        $values += $tenancy
+            ? ['tenant_use' => "use Spatie\\Multitenancy\\Jobs\\NotTenantAware;\n", 'tenant_implements' => ' implements NotTenantAware', 'tenant_note' => "\n *\n * Not tenant-aware: a webhook arrives with no tenant, so a handler that needs one finds it from the payload and runs inside it."]
+            : ['tenant_use' => '', 'tenant_implements' => '', 'tenant_note' => ''];
         $config = $this->base.'/config/webhook-client.php';
         if (is_file($config) && preg_match("/'name'\\s*=>\\s*'".preg_quote($slug, '/')."'/", (string) file_get_contents($config)) === 1) {
             throw new InvalidArgumentException("config/webhook-client.php already has a {$slug} webhook; standards:make never overwrites.");
@@ -320,7 +355,7 @@ final class Maker
             "{$tests}/Webhooks/{$name}WebhookTest.php" => 'webhook/test.stub',
         ];
         $shared = [
-            "{$app}/Webhooks/WebhookCall.php" => 'webhook/webhook-call.stub',
+            "{$app}/Models/WebhookCall.php" => 'webhook/webhook-call.stub',
             "{$app}/Webhooks/ReceiveWebhook.php" => 'webhook/controller.stub',
             "{$app}/Providers/WebhookServiceProvider.php" => 'webhook/provider.stub',
             'routes/webhooks.php' => 'webhook/routes.stub',
@@ -336,7 +371,8 @@ final class Maker
             throw new InvalidArgumentException("config/webhook-client.php has no 'configs' => [ list; add the {$slug} entry yourself.");
         }
         $at += strlen("'configs' => [");
-        $this->write('config/webhook-client.php', substr($current, 0, $at)."\n".rtrim($this->render('webhook/config-entry.stub', $values), "\n").substr($current, $at));
+        $merged = substr($current, 0, $at)."\n".rtrim($this->render('webhook/config-entry.stub', $values), "\n").substr($current, $at);
+        $this->write('config/webhook-client.php', self::imports($merged, ["{$namespace}\\Models\\WebhookCall", "{$namespace}\\Webhooks\\{$name}\\{$name}SignatureValidator", "{$namespace}\\Webhooks\\{$name}\\{$name}WebhookProfile", "{$namespace}\\Webhooks\\{$name}\\Process{$name}Webhook"]));
         $written[] = 'config/webhook-client.php';
         $routes = (string) file_get_contents($this->base.'/routes/webhooks.php');
         $this->write('routes/webhooks.php', rtrim($routes)."\n\n// standards-pattern: {$leaf}\nRoute::post('webhooks/{$slug}', ReceiveWebhook::class)->defaults('webhook', '{$slug}')->name('webhooks.{$slug}');\n");
@@ -372,7 +408,7 @@ final class Maker
         $values['provider_body'] = rtrim($this->render('api-client/provider-'.$flavor.'.part', $values), "\n");
         $files = [
             "{$app}/Services/{$name}/{$name}Client.php" => 'api-client/contract.stub',
-            "{$app}/Services/{$name}/{$name}Exception.php" => 'api-client/exception.stub',
+            "{$app}/Exceptions/{$name}Exception.php" => 'api-client/exception.stub',
             "{$app}/Services/{$name}/{$impl}.php" => 'api-client/'.$flavor.'-client.stub',
             "{$app}/Services/{$name}/Fake{$name}Client.php" => 'api-client/fake.stub',
             "{$app}/Providers/{$name}ServiceProvider.php" => 'api-client/provider.stub',

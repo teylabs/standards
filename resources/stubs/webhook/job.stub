@@ -4,23 +4,23 @@
 
 namespace {{ namespace }}\Webhooks\{{ name }};
 
-use {{ namespace }}\Webhooks\WebhookCall;
+use {{ namespace }}\Models\WebhookCall;
 use Illuminate\Support\Facades\DB;
 use Spatie\WebhookClient\Jobs\ProcessWebhookJob;
-
+{{ tenant_use }}
 /**
  * Processes one stored {{ title }} webhook, once. HANDLERS is the allow-list: an event type maps to its handler, and any other type is marked done
  * without running anything. The handler runs inside a transaction that also marks the call processed, so a handler that throws rolls both back and
- * the queue retries it with no double effect. A duplicate delivery (the same event id) reuses the stored call, which is already processed.
+ * the queue retries it with no double effect. A duplicate delivery (the same event id) reuses the stored call, which is already processed.{{ tenant_note }}
  */
-final class Process{{ name }}Webhook extends ProcessWebhookJob
+final class Process{{ name }}Webhook extends ProcessWebhookJob{{ tenant_implements }}
 {
     /** Where the event's id and type are in the payload. */
     public const EVENT_ID = 'id';
 
     public const EVENT_TYPE = 'type';
 
-    /** @var array<string, class-string> event type => handler with handle(array $payload): void */
+    /** Event type => its handler class, which has handle(array $payload): void. */
     public const HANDLERS = [
         '{{ example_event }}' => Handlers\Handle{{ example_class }}::class,
     ];

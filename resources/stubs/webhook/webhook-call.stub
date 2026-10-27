@@ -2,7 +2,7 @@
 
 // standards-pattern: {{ leaf }}
 
-namespace {{ namespace }}\Webhooks;
+namespace {{ namespace }}\Models;
 
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;

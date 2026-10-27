@@ -4,6 +4,7 @@
 
 namespace {{ namespace }}\Services\{{ name }};
 
+use {{ namespace }}\Exceptions\{{ name }}Exception;
 use Throwable;
 
 /**

@@ -4,6 +4,8 @@
 
 namespace {{ namespace }}\Services\{{ name }};
 
+use {{ namespace }}\Exceptions\{{ name }}Exception;
+
 /**
  * {{ title }} for tests: in memory, seeded with the records a test needs, recording each call. Bind it with
  * `$this->app->instance({{ name }}Client::class, new Fake{{ name }}Client([...]))`; a test never reaches the real service.

@@ -2,7 +2,7 @@
 
 // standards-pattern: {{ leaf }}
 
-namespace {{ namespace }}\Services\{{ name }};
+namespace {{ namespace }}\Exceptions;
 
 use RuntimeException;
 
