@@ -135,6 +135,10 @@
                     "role": "write"
                 },
                 {
+                    "unit_leaf_id": "ui-page.toast",
+                    "role": "save confirmation"
+                },
+                {
                     "unit_leaf_id": "ui-page.action-menu",
                     "role": "record actions"
                 },
@@ -290,6 +294,10 @@
                 {
                     "unit_leaf_id": "data-actions.action",
                     "role": "save"
+                },
+                {
+                    "unit_leaf_id": "ui-page.toast",
+                    "role": "save confirmation"
                 }
             ]
         }
@@ -380,6 +388,10 @@
                 {
                     "answer": "Several CRUD screens at once, or a bespoke workflow",
                     "next": "ui-page.larger"
+                },
+                {
+                    "answer": "Feedback after a save or a background result (a toast)",
+                    "next": "ui-page.toast"
                 },
                 {
                     "answer": "None of these",
@@ -718,6 +730,55 @@
                     "kit_component": "FormActions",
                     "use": "Submit and cancel buttons",
                     "props_hint": "processing"
+                }
+            ]
+        },
+        "ui-page.toast": {
+            "id": "ui-page.toast",
+            "recipe": "Toast feedback",
+            "summary": "Headless kit toasts (tey/kit 0.4.6+): the controller decides, through Toastable `$this->toast(...)` or `Toast::success|info|warning|error`, and the shell's one Toaster renders the flash; pages never call a useToast(). Toast saves and background or async results (Import finished, Export ready). Errors are validation or inline responses next to the field or row, never a toast alone; navigation is never toasted, the new page confirms it. Styles: pulse is the default for saves, with `->from('<action id>')` naming the descriptor key of the button that saved; anchored for table row actions and inline toggles; fly-out only by choice, when the movement should draw the eye; plain for background results and anything without a trigger (also the fallback when the trigger is missing or offscreen). Placement is shell-level `kit.toasts.position` (KIT_TOASTS_POSITION: auto, top-center, top-right, bottom-right, bottom-center), set per app and never per page. auto resolves as: under sm, bottom-center above sticky bars (for every position); sticky bottom bars plus right-aligned header actions, top-center; sticky bottom bars only, top-right; otherwise bottom-right. At most one action (label, href, optional get/post/put/patch), never destructive: a delete method or a delete/remove/discard/revoke label is refused, and a destructive step needs a confirmation instead.",
+            "kit": [
+                "@kit/ui Toaster",
+                "Tey\\Kit\\Features\\Core\\Toast",
+                "Tey\\Kit\\Features\\Core\\Concerns\\Toastable"
+            ],
+            "make": "standards:make page --flavor=form",
+            "checks": [
+                "toast",
+                "descriptors"
+            ],
+            "paths": [],
+            "keywords": [
+                "toast",
+                "toaster",
+                "notification",
+                "flash",
+                "feedback",
+                "saved",
+                "confirmation",
+                "snackbar",
+                "undo",
+                "toast position"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "toaster",
+                    "kit_component": "Toaster",
+                    "use": "The one shell mount (Workspace Layout, GuestShell, or a host's own focus shell); never mounted per page",
+                    "props_hint": "none; position comes from kitToasts"
+                },
+                {
+                    "name": "save trigger",
+                    "kit_component": "ActionBar",
+                    "use": "Descriptor buttons carry data-action, which ->from('<action id>') anchors the pulse or bubble to",
+                    "props_hint": "actions descriptors"
+                },
+                {
+                    "name": "row trigger",
+                    "kit_component": "RowActions",
+                    "use": "Row actions whose result shows as an anchored bubble on the right row",
+                    "props_hint": "actions descriptors"
                 }
             ]
         },

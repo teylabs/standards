@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased (0.11.2)
+
+### Added
+
+- A `ui-page.toast` leaf (under "A signed-in user of the app") for kit 0.4.6's headless toasts:
+  - Toast saves and background results. Errors stay validation or inline. Navigation is never toasted.
+  - Styles: pulse with `->from('<action id>')` is the default for saves, anchored is for row actions and inline toggles, fly-out is opt-in, and plain is for background results.
+  - Placement is shell-level `kit.toasts.position` with its `auto` resolution order, never set per page.
+  - At most one action, never destructive.
+  - Components: the shell `Toaster` plus the server `Toast` and `Toastable`.
+  - The `manage-records` and `workspace-settings` plans now include it as their save confirmation.
+- `kit-exports.json` is refreshed from tey/kit v0.4.6, which adds `Toaster`.
+
+### Changed
+
+- The `toast` rule also accepts a kit headless toast flashed in the method before the redirect: `$this->toast(...)` or `Toast::success|info|warning|error(...)`, outside closures. Chained `->toast*()` still passes, and the check text is unchanged, so allowlist entries keep matching.
+- The `page --flavor=form` and `settings-section --flavor=form` stubs use `Toastable`: `$this->toast('Saved.')->from('save')`, then a plain redirect. Generated controllers need tey/kit ^0.4.6. The previous `->toastSuccess()` chain was not a kit API.
+
 ## 0.11.1 - 2026-10-27
 
 ### Upgrading

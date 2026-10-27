@@ -10,6 +10,7 @@ composition:
   - { unit_leaf_id: ui-page.form, role: create and edit }
   - { unit_leaf_id: ui-page.show, role: detail }
   - { unit_leaf_id: data-actions.action, role: write }
+  - { unit_leaf_id: ui-page.toast, role: save confirmation }
   - { unit_leaf_id: ui-page.action-menu, role: record actions }
   - { unit_leaf_id: ui-page.data-table, role: bulk actions, when: bulk=yes }
   - { unit_leaf_id: mcp.write, role: assistant access, when: mcp=yes }
