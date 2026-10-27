@@ -2,8 +2,5 @@
 
 namespace App\UI;
 
-abstract class ViewModel
-{
-    /** @return array<string, mixed> */
-    abstract public function toArray(): array;
-}
+/** The app's typed ViewModel base, as a kit app has it: the kit's, whose public methods are the page's props. */
+abstract class ViewModel extends \Tey\Kit\Features\Core\ViewModels\ViewModel {}

@@ -1,0 +1,36 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+import { router } from '@inertiajs/vue3';
+import { Dialog, Page, Section, SectionHeader } from '@kit/ui';
+import { computed, ref } from 'vue';
+
+type Action = { label: string; url: string; method: string; key?: string | null; destructive?: boolean; confirm?: { title: string; description: string; label: string } | null };
+defineProps<{ title: string; record: { id: number; name: string; updated_at: string | null }; actions: Action[] }>();
+
+// SectionHeader's ActionBar navigates GETs itself and hands every other action back; one with `confirm` asks first.
+const asking = ref<Action | null>(null);
+const open = computed({ get: () => asking.value !== null, set: (value: boolean) => { if (!value) asking.value = null; } });
+function run(action: Action) {
+    router.visit(action.url, { method: action.method as never });
+}
+function perform(action: Action) {
+    if (action.confirm) {
+        asking.value = action;
+        return;
+    }
+    run(action);
+}
+</script>
+
+<template>
+    <Page :title="title" md>
+        <SectionHeader :title="title" :actions="actions" @action="perform" />
+        <Section title="Details">
+            <dl class="grid gap-2 text-sm sm:grid-cols-[10rem_1fr]">
+                <dt class="text-muted-foreground">Name</dt>
+                <dd>{{ record.name }}</dd>
+            </dl>
+        </Section>
+        <Dialog v-if="asking?.confirm" v-model:open="open" variant="danger" :title="asking.confirm.title" :description="asking.confirm.description" :confirm-label="asking.confirm.label" @confirm="asking && run(asking)" />
+    </Page>
+</template>

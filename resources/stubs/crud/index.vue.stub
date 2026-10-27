@@ -1,0 +1,18 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+import { DataTable, Page, SectionHeader } from '@kit/ui';
+
+// The server decides everything here: rows, URL state, filter choices, row and bulk actions, and whether "New" shows at all.
+defineProps<{ title: string; create: { label: string; url: string; method: string; key?: string | null } | null; table: object }>();
+</script>
+
+<template>
+    <Page :title="title">
+        <SectionHeader :title="title" :actions="create ? [create] : []" />
+        <DataTable :table="table as never" search-label="Search {{ titles_lower }}">
+            <template #empty-first-use>
+                <p class="text-sm text-muted-foreground">No {{ titles_lower }} yet.</p>
+            </template>
+        </DataTable>
+    </Page>
+</template>

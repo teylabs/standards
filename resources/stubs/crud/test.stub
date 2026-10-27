@@ -1,0 +1,129 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Models\{{ name }};
+use {{ namespace }}\Policies\{{ name }}Policy;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Tey\Concierge\Actions\AcceptInvitation;
+use Tey\Concierge\Actions\EstablishWorkspace;
+use Tey\Concierge\Actions\InviteMember;
+use Tey\Concierge\Support\GrantSet;
+use Tey\Kit\Features\Access\Capabilities;
+use Tey\Kit\Features\SessionUi\Http\Middleware\HandleInertiaRequests;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+use Tey\Kit\Features\Workspaces\TenantBoundary;
+
+// {{ titles }} over HTTP. Self-contained: each test migrates the app's empty test database (SQLite memory by default) and makes its own people. Two
+// workspaces, each with an owner; the first also has a viewer; and one signed-in person who belongs to neither. Nothing here reads a seeded fixture.
+
+beforeEach(function () {
+    // No provider side effects: the viewer's invitation is accepted in place, never delivered.
+    config(['concierge.invitations.deliver' => false]);
+    Artisan::call('migrate', ['--force' => true, '--no-interaction' => true]);
+    Artisan::call('concierge:sync-roles', ['--no-interaction' => true]);
+    Artisan::call('kit:permissions:sync', ['--no-interaction' => true]);
+    $person = fn (string $name): Authenticatable => config('auth.providers.users.model')::query()->forceCreate(['name' => $name, 'email' => strtolower($name).'@example.test', 'email_verified_at' => now(), 'password' => Hash::make(Str::random(40))]);
+    $this->owner = $person('Owner');
+    $this->otherOwner = $person('Other');
+    $this->viewer = $person('Viewer');
+    $this->stranger = $person('Stranger');
+    $open = function (string $name, Authenticatable $owner): int {
+        $workspace = Workspace::query()->create(['name' => $name, 'slug' => strtolower($name)]);
+        EstablishWorkspace::run($workspace, $owner);
+
+        return (int) $workspace->getKey();
+    };
+    $this->workspace = $open('Alpha', $this->owner);
+    $this->otherWorkspace = $open('Beta', $this->otherOwner);
+    AcceptInvitation::run($this->viewer, InviteMember::run($this->owner, Workspace::query()->findOrFail($this->workspace), $this->viewer->email, new GrantSet(['viewer']))->token);
+    foreach ([$this->workspace, $this->otherWorkspace] as $workspace) {
+        {{ var }}Capability($workspace, true);
+    }
+});
+
+function {{ var }}Capability(int $workspace, bool $on): void
+{
+    app(TenantBoundary::class)->run($workspace, fn () => app(Capabilities::class)->setForWorkspace({{ name }}Policy::CAPABILITY, Workspace::query()->findOrFail($workspace), $on));
+}
+
+/** The full-form URL of a page in a workspace: `/@<slug>/{{ slug }}...`. */
+function {{ var }}Url(int $workspace, string $path = ''): string
+{
+    // From the workspace's own slug, not the signed-in person's view of it: a non-member must be able to ask, and be refused.
+    return '/@'.Workspace::query()->findOrFail($workspace)->slug.'/{{ slug }}'.$path;
+}
+
+/** @return array<string, string> the headers of an Inertia visit, so a page answers with its props */
+function {{ var }}Inertia(): array
+{
+    return ['X-Inertia' => 'true', 'Accept' => 'text/html', 'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')) ?? ''];
+}
+
+function {{ var }}Make(int $workspace, string $name): {{ name }}
+{
+    return {{ name }}::query()->create(['workspace_id' => $workspace, 'name' => $name, 'lock_version' => 1]);
+}
+
+it('lists, creates, shows and edits {{ titles_lower }} for an owner', function () {
+    {{ var }}Make($this->workspace, 'Bravo');
+    {{ var }}Make($this->otherWorkspace, 'Elsewhere');
+    $this->actingAs($this->owner);
+
+    $this->get({{ var }}Url($this->workspace), {{ var }}Inertia())->assertOk()->assertJsonPath('component', '{{ plural }}/Index/Page')->assertJsonPath('props.table.rows.0.name', 'Bravo')->assertJsonCount(1, 'props.table.rows');
+    $this->getJson({{ var }}Url($this->workspace, '?sort=secret'))->assertStatus(400);
+    $this->post({{ var }}Url($this->workspace), ['name' => 'Alpha'])->assertRedirect()->assertSessionHasNoErrors();
+    $created = {{ name }}::query()->where('name', 'Alpha')->firstOrFail();
+    expect($created->workspace_id)->toBe($this->workspace)->and($created->lock_version)->toBe(1);
+    $this->get({{ var }}Url($this->workspace, '/'.$created->id), {{ var }}Inertia())->assertOk()->assertJsonPath('props.record.name', 'Alpha');
+    $this->get({{ var }}Url($this->workspace, '/'.$created->id.'/edit'), {{ var }}Inertia())->assertOk()->assertJsonPath('props.values.lock_version', 1);
+});
+
+it('refuses a stale save and keeps the newer one', function () {
+    ${{ var }} = {{ var }}Make($this->workspace, 'First');
+    $this->actingAs($this->owner);
+
+    $this->put({{ var }}Url($this->workspace, '/'.${{ var }}->id), ['name' => 'Second', 'lock_version' => 1])->assertRedirect()->assertSessionHasNoErrors();
+    $this->put({{ var }}Url($this->workspace, '/'.${{ var }}->id), ['name' => 'Stale', 'lock_version' => 1])->assertSessionHasErrors('lock_version');
+
+    expect(${{ var }}->fresh()->name)->toBe('Second')->and(${{ var }}->fresh()->lock_version)->toBe(2);
+});
+
+it('keeps {{ titles_lower }} inside their workspace', function () {
+    $foreign = {{ var }}Make($this->otherWorkspace, 'Elsewhere');
+    $this->actingAs($this->owner);
+
+    $this->get({{ var }}Url($this->workspace, '/'.$foreign->id), {{ var }}Inertia())->assertNotFound();
+    $this->putJson({{ var }}Url($this->workspace, '/'.$foreign->id), ['name' => 'Moved', 'lock_version' => 1])->assertNotFound();
+    $this->deleteJson({{ var }}Url($this->workspace, '/'.$foreign->id))->assertNotFound();
+    expect($foreign->fresh()->name)->toBe('Elsewhere');
+});
+
+it('refuses a signed-in person who is not a member of the workspace', function () {
+    ${{ var }} = {{ var }}Make($this->workspace, 'Bravo');
+    $this->actingAs($this->stranger);
+
+    expect($this->getJson({{ var }}Url($this->workspace))->status())->toBeIn([403, 404]);
+    expect($this->postJson({{ var }}Url($this->workspace), ['name' => 'Nope'])->status())->toBeIn([403, 404]);
+    expect($this->putJson({{ var }}Url($this->workspace, '/'.${{ var }}->id), ['name' => 'Nope', 'lock_version' => 1])->status())->toBeIn([403, 404]);
+    expect($this->deleteJson({{ var }}Url($this->workspace, '/'.${{ var }}->id))->status())->toBeIn([403, 404]);
+    expect({{ name }}::query()->count())->toBe(1)->and(${{ var }}->fresh()->name)->toBe('Bravo');
+});
+
+it('lets a viewer read but not write, and hides everything while the capability is off', function () {
+    ${{ var }} = {{ var }}Make($this->workspace, 'Bravo');
+    $this->actingAs($this->viewer);
+
+    $this->get({{ var }}Url($this->workspace), {{ var }}Inertia())->assertOk()->assertJsonPath('props.create', null)->assertJsonPath('props.table.rows.0.actions.0.key', 'open')->assertJsonCount(1, 'props.table.rows.0.actions');
+    $this->postJson({{ var }}Url($this->workspace), ['name' => 'Nope'])->assertForbidden();
+    $this->deleteJson({{ var }}Url($this->workspace, '/'.${{ var }}->id))->assertForbidden();
+
+    {{ var }}Capability($this->workspace, false);
+    $this->get({{ var }}Url($this->workspace), {{ var }}Inertia())->assertNotFound();
+    expect(${{ var }}->fresh())->not->toBeNull();
+});
+{{ bulk_test }}

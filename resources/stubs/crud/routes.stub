@@ -1,0 +1,20 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Http\Controllers\{{ name }}Controller;
+{{ route_uses }}use Illuminate\Support\Facades\Route;
+use Tey\Kit\Features\Workspaces\WorkspaceRoutes;
+
+// {{ titles }}: workspace pages, in the full (`/@{workspace}/{{ slug }}`) and short forms. Loaded through the kit Registry by {{ name }}ServiceProvider.
+WorkspaceRoutes::define(function (bool $full): void {
+{{ extra_routes }}    Route::controller({{ name }}Controller::class)->prefix('{{ slug }}')->group(function () use ($full): void {
+        WorkspaceRoutes::page(Route::get('', 'index'), $full, 'app', '{{ slug }}.index', '{{ titles }}');
+        WorkspaceRoutes::page(Route::get('create', 'create'), $full, 'app', '{{ slug }}.create', 'New {{ title_lower }}', ['app', '{{ slug }}.index']);
+        Route::post('', 'store');
+        WorkspaceRoutes::page(Route::get('{id}', 'show')->whereNumber('id'), $full, 'app', '{{ slug }}.show', '{{ title }}', ['app', '{{ slug }}.index']);
+        WorkspaceRoutes::page(Route::get('{id}/edit', 'edit')->whereNumber('id'), $full, 'app', '{{ slug }}.edit', 'Edit', ['app', '{{ slug }}.show']);
+        Route::put('{id}', 'update')->whereNumber('id');
+        Route::delete('{id}', 'destroy')->whereNumber('id');
+    });
+});

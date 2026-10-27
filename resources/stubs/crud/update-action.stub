@@ -1,0 +1,39 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Actions;
+
+use {{ namespace }}\Models\{{ name }};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
+use Tey\Kit\Features\Core\Audit;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Core\RequestMemo;
+
+/**
+ * The one place a {{ title_lower }} changes. A stale write fails closed: the update only lands while `lock_version` is still the one the editor loaded,
+ * and bumps it in the same statement, so two saves from the same version cannot both succeed.
+ */
+final class Update{{ name }}
+{
+    /** @param  array{name: string, lock_version: int}  $attributes */
+    public function handle(Principal $principal, int $workspace, int $id, array $attributes): {{ name }}
+    {
+        ${{ var }} = {{ name }}::query()->where('workspace_id', $workspace)->findOrFail($id);
+        Gate::forUser(RequestMemo::user($principal->actorId))->authorize('update', ${{ var }});
+
+        return DB::transaction(function () use ($principal, $workspace, $id, $attributes): {{ name }} {
+            $version = (int) $attributes['lock_version'];
+            $changed = {{ name }}::query()->where('workspace_id', $workspace)->whereKey($id)->where('lock_version', $version)
+                ->update(['name' => $attributes['name'], 'lock_version' => $version + 1]);
+            if ($changed !== 1) {
+                throw ValidationException::withMessages(['lock_version' => 'This {{ title_lower }} changed since you opened it. Reload to see the latest, then save again.']);
+            }
+            app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.update', ['id' => $id, 'lock_version' => $version + 1]);
+
+            return {{ name }}::query()->findOrFail($id);
+        });
+    }
+}

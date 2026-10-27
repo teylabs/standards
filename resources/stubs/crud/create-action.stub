@@ -1,0 +1,30 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Actions;
+
+use {{ namespace }}\Models\{{ name }};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Tey\Kit\Features\Core\Audit;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Core\RequestMemo;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+
+/** The one place a {{ title_lower }} is created; the controller and the MCP tool call it. It authorizes the principal itself. */
+final class Create{{ name }}
+{
+    /** @param  array{name: string}  $attributes */
+    public function handle(Principal $principal, int $workspace, array $attributes): {{ name }}
+    {
+        Gate::forUser(RequestMemo::user($principal->actorId))->authorize('create', [{{ name }}::class, Workspace::required()]);
+
+        return DB::transaction(function () use ($principal, $workspace, $attributes): {{ name }} {
+            ${{ var }} = {{ name }}::query()->create(['workspace_id' => $workspace, 'name' => $attributes['name'], 'lock_version' => 1]);
+            app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.create', ['id' => ${{ var }}->getKey()]);
+
+            return ${{ var }};
+        });
+    }
+}

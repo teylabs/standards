@@ -6,6 +6,7 @@ questions:
   - { id: mcp, question: "Should an AI assistant be able to read or change these records?", options: ["yes", "no"] }
   - { id: notify, question: "Should someone be told when a record changes?", options: ["yes", "no"] }
 composition:
+  - { unit_leaf_id: ui-page.crud-resource, role: "scaffold: standards:make crud, with --bulk and --mcp from the answers" }
   - { unit_leaf_id: ui-page.index, role: list }
   - { unit_leaf_id: ui-page.form, role: create and edit }
   - { unit_leaf_id: ui-page.show, role: detail }

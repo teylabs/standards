@@ -1,0 +1,39 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Actions;
+
+use {{ namespace }}\Models\{{ name }};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Tey\Kit\Features\Core\Audit;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Core\RequestMemo;
+
+/** The one place {{ titles_lower }} are deleted, one or a selection. Every record must be in the workspace and deletable by the principal, or nothing is deleted. */
+final class Delete{{ name }}
+{
+    /**
+     * @param  list<int|string>  $ids
+     * @return int how many were deleted
+     */
+    public function handle(Principal $principal, int $workspace, array $ids): int
+    {
+        $user = RequestMemo::user($principal->actorId);
+        $records = {{ name }}::query()->where('workspace_id', $workspace)->whereKey($ids)->get();
+        abort_if($records->count() !== count(array_unique($ids)), 404);
+        foreach ($records as ${{ var }}) {
+            Gate::forUser($user)->authorize('delete', ${{ var }});
+        }
+
+        return DB::transaction(function () use ($principal, $workspace, $records): int {
+            foreach ($records as ${{ var }}) {
+                ${{ var }}->delete();
+                app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.delete', ['id' => ${{ var }}->getKey()]);
+            }
+
+            return $records->count();
+        });
+    }
+}

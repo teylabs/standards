@@ -1,0 +1,29 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Actions;
+
+use {{ namespace }}\Models\{{ name }};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Tey\Kit\Features\Core\Audit;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Core\RequestMemo;
+
+/** The one place a deleted {{ title_lower }} comes back. */
+final class Restore{{ name }}
+{
+    public function handle(Principal $principal, int $workspace, int $id): {{ name }}
+    {
+        ${{ var }} = {{ name }}::onlyTrashed()->where('workspace_id', $workspace)->findOrFail($id);
+        Gate::forUser(RequestMemo::user($principal->actorId))->authorize('restore', ${{ var }});
+
+        return DB::transaction(function () use ($principal, $workspace, ${{ var }}): {{ name }} {
+            ${{ var }}->restore();
+            app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.restore', ['id' => ${{ var }}->getKey()]);
+
+            return ${{ var }};
+        });
+    }
+}

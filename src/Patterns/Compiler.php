@@ -33,6 +33,7 @@ final class Compiler
         'action' => ['plain'],
         'capability-tool' => ['read', 'write'],
         'settings-section' => ['form', 'toggles'],
+        'crud' => ['resource'],
         // Delegated to tey/mod's make:* generators; standards stamps the result.
         'model' => ['plain'],
         'policy' => ['plain'],

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tey\Standards\Enforcement;
 
 use Closure;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Tey\Standards\Configuration;
 use Tey\Standards\Patterns\Compiler;
 use Tey\Standards\Patterns\Leaf;
 use Tey\Standards\Patterns\PatternCatalog;
@@ -13,10 +15,11 @@ use Tey\Standards\Patterns\PatternCatalog;
 /**
  * Emits conformant code for a pattern leaf. Units tey/mod generates (model,
  * policy, job, command, notification) run its make:* command and then get the
- * standards stamp; units with no mod generator (page, action, capability-tool,
- * settings-section) come from recipe stubs, which an app or kit can override
- * with standards.make.stubs. Every file carries the leaf's pattern stamp;
- * existing files are never overwritten.
+ * standards stamp; units with no mod generator (crud, page, action,
+ * capability-tool, settings-section) come from recipe stubs, which an app or kit
+ * can override with standards.make.stubs. Every file carries the leaf's pattern
+ * stamp (a crud resource stamps each file with the leaf it implements); existing
+ * files are never overwritten.
  */
 final class Maker
 {
@@ -42,8 +45,14 @@ final class Maker
         private readonly ?Closure $run = null,
     ) {}
 
-    /** @return list<string> the project-relative files written or changed */
-    public function make(string $unit, string $name, string $flavor, ?string $leafId = null): array
+    /** crud options: the flags that add to the resource. */
+    public const CRUD_OPTIONS = ['bulk', 'mcp', 'soft-deletes'];
+
+    /**
+     * @param  list<string>  $options  crud only: any of CRUD_OPTIONS
+     * @return list<string> the project-relative files written or changed
+     */
+    public function make(string $unit, string $name, string $flavor, ?string $leafId = null, array $options = []): array
     {
         if (! in_array($flavor, Compiler::UNITS[$unit] ?? [], true)) {
             throw new InvalidArgumentException("Unknown unit or flavor {$unit} --flavor={$flavor}. Units: ".implode('; ', array_map(fn (string $u, array $f): string => $u.' ('.implode('|', $f).')', array_keys(Compiler::UNITS), Compiler::UNITS)).'.');
@@ -63,8 +72,16 @@ final class Maker
             }
         }
 
+        if (array_diff($options, $unit === 'crud' ? self::CRUD_OPTIONS : []) !== []) {
+            throw new InvalidArgumentException('Unknown option --'.implode(', --', array_diff($options, $unit === 'crud' ? self::CRUD_OPTIONS : [])).' for '.$unit.'.');
+        }
+
         if (isset(self::DELEGATED[$unit])) {
             return $this->delegate(self::DELEGATED[$unit], $name, $leaf);
+        }
+
+        if ($unit === 'crud') {
+            return $this->crud($name, $options);
         }
         $app = $this->paths['app'] ?? 'app';
         $pages = $this->paths['pages'] ?? 'resources/js/pages';
@@ -104,6 +121,28 @@ final class Maker
             ], self::group("{$values['namespace']}\\Http\\Controllers\\Settings\\{$name}Controller", ["Route::get('/settings/{$slug}', 'edit')->name('settings.{$slug}.edit');", "Route::patch('/settings/{$slug}', 'update')->name('settings.{$slug}.update');"])],
         };
 
+        $written = $this->emit($files, $values);
+
+        if ($route !== null) {
+            $routes = $this->paths['routes'] ?? 'routes/web.php';
+            $file = $this->base.'/'.$routes;
+            $current = is_file($file) ? (string) file_get_contents($file) : "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n";
+            $this->write($routes, rtrim($current)."\n\n// standards-pattern: {$leaf}\n{$route}\n");
+            $written[] = $routes;
+        }
+
+        return $written;
+    }
+
+    /**
+     * Refuses before writing anything if any target exists, then renders and writes each file.
+     *
+     * @param  array<string, string|array{0: string, 1: array<string, string>}>  $files
+     * @param  array<string, string>  $values
+     * @return list<string>
+     */
+    private function emit(array $files, array $values): array
+    {
         foreach ($files as $target => $stub) {
             if (is_file($this->base.'/'.$target)) {
                 throw new InvalidArgumentException("{$target} already exists; standards:make never overwrites.");
@@ -119,15 +158,126 @@ final class Maker
             $written[] = $target;
         }
 
-        if ($route !== null) {
-            $routes = $this->paths['routes'] ?? 'routes/web.php';
-            $file = $this->base.'/'.$routes;
-            $current = is_file($file) ? (string) file_get_contents($file) : "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n";
-            $this->write($routes, rtrim($current)."\n\n// standards-pattern: {$leaf}\n{$route}\n");
-            $written[] = $routes;
+        return $written;
+    }
+
+    /**
+     * A whole CRUD resource for one record type, owned by a workspace: model and migration, policy, the kit wiring (capability, permissions, routes,
+     * navigation), a CRUDDY controller, form requests, one Action per write (principal first, the update guarded by `lock_version`), typed ViewModels,
+     * the Index, Form and Show pages, and feature tests. Each file is stamped with the leaf it implements. `bulk` adds selectable rows and a bulk delete,
+     * `mcp` a read and a write capability tool, `soft-deletes` soft deletes and a restoration.
+     *
+     * @param  list<string>  $options
+     * @return list<string>
+     */
+    private function crud(string $name, array $options): array
+    {
+        $app = $this->paths['app'] ?? 'app';
+        $pages = $this->paths['pages'] ?? 'resources/js/pages';
+        $tests = $this->paths['tests'] ?? 'tests/Feature';
+        $namespace = $this->paths['namespace'] ?? 'App';
+        $plural = Str::plural($name);
+        $slug = Str::kebab($plural);
+        $table = Str::snake($plural);
+        $title = ucfirst(str_replace('-', ' ', Str::kebab($name)));
+        $titles = ucfirst(str_replace('-', ' ', $slug));
+        [$viewModel, $viewModels] = $this->viewModels($app, $namespace);
+        $migration = date('Y_m_d_His').'_create_'.$table.'_table.php';
+        $bulk = in_array('bulk', $options, true);
+        $soft = in_array('soft-deletes', $options, true);
+        $values = [
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'table' => $table, 'perm' => $table,
+            'var' => Str::camel($name), 'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'titles_lower' => strtolower($titles),
+            'view_model' => ltrim($viewModel, '\\'), 'view_model_base' => class_basename($viewModel), 'vm_namespace' => $viewModels[1].'\\'.$plural, 'migration' => $migration, 'leaf' => 'ui-page.crud-resource',
+            'soft_import' => $soft ? "\nuse Illuminate\\Database\\Eloquent\\SoftDeletes;" : '', 'soft_use' => $soft ? "\n    use SoftDeletes;\n" : '',
+            'soft_column' => $soft ? "\n            \$table->softDeletes();" : '',
+            'bulk_table' => $bulk ? "            ->bulk(new Action('Delete', WorkspaceUrl::to(\$this->workspace, '{$slug}/selection'), 'delete', confirm: ['title' => 'Delete the selected ".strtolower($titles)."?', 'description' => 'Every selected ".strtolower($title)." will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true))\n" : '',
+            'extra_routes' => '',
+            'bulk_test' => '',
+        ];
+        $uses = [];
+        if ($bulk) {
+            $uses[] = "{$namespace}\\Http\\Controllers\\{$name}SelectionController";
+            $values['extra_routes'] .= "    // Before `{id}`: the selection is its own resource.\n    Route::controller({$name}SelectionController::class)->prefix('{$slug}/selection')->group(function (): void {\n        Route::delete('', 'destroy');\n    });\n";
+            $values['bulk_test'] = $this->render('crud/bulk-test.stub', $values);
         }
+        if ($soft) {
+            $uses[] = "{$namespace}\\Http\\Controllers\\{$name}RestorationController";
+            $values['extra_routes'] .= "    Route::controller({$name}RestorationController::class)->prefix('{$slug}/{id}/restoration')->whereNumber('id')->group(function (): void {\n        Route::post('', 'store');\n    });\n";
+        }
+        $form = ['leaf' => 'ui-page.form'];
+        $files = [
+            "{$app}/Models/{$name}.php" => 'crud/model.stub',
+            "database/migrations/{$migration}" => 'crud/migration.stub',
+            "{$app}/Policies/{$name}Policy.php" => 'crud/policy.stub',
+            "{$app}/Providers/{$name}ServiceProvider.php" => 'crud/provider.stub',
+            "routes/{$slug}.php" => 'crud/routes.stub',
+            "{$app}/Http/Controllers/{$name}Controller.php" => 'crud/controller.stub',
+            "{$app}/Http/Requests/Store{$name}Request.php" => ['crud/store-request.stub', $form],
+            "{$app}/Http/Requests/Update{$name}Request.php" => ['crud/update-request.stub', $form],
+            "{$app}/Actions/Create{$name}.php" => ['crud/create-action.stub', ['leaf' => 'data-actions.action']],
+            "{$app}/Actions/Update{$name}.php" => ['crud/update-action.stub', ['leaf' => 'data-actions.action']],
+            "{$app}/Actions/Delete{$name}.php" => ['crud/delete-action.stub', ['leaf' => 'data-actions.action']],
+            "{$viewModels[0]}/{$plural}/{$name}IndexViewModel.php" => ['crud/index-view-model.stub', ['leaf' => 'ui-page.index']],
+            "{$viewModels[0]}/{$plural}/{$name}FormViewModel.php" => ['crud/form-view-model.stub', $form],
+            "{$viewModels[0]}/{$plural}/{$name}ShowViewModel.php" => ['crud/show-view-model.stub', ['leaf' => 'ui-page.show']],
+            "{$pages}/{$plural}/Index/Page.vue" => ['crud/index.vue.stub', ['leaf' => $bulk ? 'ui-page.data-table' : 'ui-page.index']],
+            "{$pages}/{$plural}/Form/Page.vue" => ['crud/form.vue.stub', $form],
+            "{$pages}/{$plural}/Show/Page.vue" => ['crud/show.vue.stub', ['leaf' => 'ui-page.show']],
+            "{$tests}/{$plural}/{$name}Test.php" => 'crud/test.stub',
+        ];
+        if ($bulk) {
+            $files["{$app}/Http/Controllers/{$name}SelectionController.php"] = ['crud/selection-controller.stub', ['leaf' => 'ui-page.data-table']];
+        }
+        if ($soft) {
+            $files["{$app}/Http/Controllers/{$name}RestorationController.php"] = 'crud/restoration-controller.stub';
+            $files["{$app}/Actions/Restore{$name}.php"] = ['crud/restore-action.stub', ['leaf' => 'data-actions.action']];
+        }
+        if (in_array('mcp', $options, true)) {
+            $tool = ['flavor' => 'read', 'tool_rules' => ''];
+            $files["{$app}/Mcp/Tools/Read{$plural}Tool.php"] = ['capability-tool.stub', [...$tool, 'name' => "Read{$plural}", 'title' => 'Read '.strtolower($titles), 'capability' => "{$table}.read", 'leaf' => 'mcp.read']];
+            $files["{$tests}/Mcp/Read{$plural}ToolTest.php"] = ['capability-tool.test.stub', [...$tool, 'name' => "Read{$plural}", 'capability' => "{$table}.read", 'leaf' => 'mcp.read']];
+            $write = ['flavor' => 'write', 'tool_rules' => "'id' => ['required', 'integer'], 'name' => ['required', 'string', 'max:255'], 'lock_version' => ['required', 'integer', 'min:1'], 'intent_key' => ['sometimes', 'string', 'max:120']"];
+            $files["{$app}/Mcp/Tools/Update{$name}Tool.php"] = ['capability-tool.stub', [...$write, 'name' => "Update{$name}", 'title' => 'Update a '.strtolower($title), 'capability' => "{$table}.write", 'leaf' => 'mcp.write']];
+            $files["{$tests}/Mcp/Update{$name}ToolTest.php"] = ['capability-tool.test.stub', [...$write, 'name' => "Update{$name}", 'capability' => "{$table}.write", 'leaf' => 'mcp.write']];
+        }
+        $values['route_uses'] = implode('', array_map(fn (string $class): string => "use {$class};\n", $uses));
+        $written = $this->emit($files, $values);
+
+        $providers = 'bootstrap/providers.php';
+        $file = $this->base.'/'.$providers;
+        $line = "    // standards-pattern: ui-page.crud-resource\n    \\{$namespace}\\Providers\\{$name}ServiceProvider::class,\n";
+        $current = is_file($file) ? (string) file_get_contents($file) : "<?php\n\nreturn [\n];\n";
+        $at = strrpos($current, '];');
+        if ($at === false) {
+            throw new InvalidArgumentException("{$providers} does not return a list; add \\{$namespace}\\Providers\\{$name}ServiceProvider::class to it yourself.");
+        }
+        $this->write($providers, substr($current, 0, $at).$line.substr($current, $at));
+        $written[] = $providers;
 
         return $written;
+    }
+
+    /**
+     * The typed ViewModel base and where ViewModels live, as the app's standards configuration places them (its typed base, its first ViewModel root
+     * outside the UI roots and that root's namespace), so generated ViewModels pass rule 20 wherever the app keeps them. standards.make `view_model` and `view_models` override it;
+     * without a configuration it is the kit's base in app/ViewModels.
+     *
+     * @return array{0: string, 1: array{0: string, 1: string}} the base class, and the folder and its namespace
+     */
+    private function viewModels(string $app, string $namespace): array
+    {
+        $file = $this->base.'/'.($this->paths['configuration'] ?? 'tests/Arch/configuration.php');
+        $config = is_file($file) ? (static fn (string $file): mixed => require $file)($file) : null;
+        $config = $config instanceof Configuration ? $config : null;
+        $base = $this->paths['view_model'] ?? $config?->typedViewModel ?? 'Tey\\Kit\\Features\\Core\\ViewModels\\ViewModel';
+        // A ViewModel reads the model, which the UI layer may not (rule 22): the first ViewModel root outside the UI roots.
+        $roots = array_values(array_filter($config->viewModelRoots ?? [], fn (string $root): bool => array_filter($config->uiRoots ?? [], fn (string $ui): bool => fnmatch($ui, rtrim((string) preg_replace('/\*.*$/', '', $root), '/'))) === []));
+        $folder = trim((string) preg_replace('/\*.*$/', '', $this->paths['view_models'] ?? $roots[0] ?? $app.'/ViewModels'), '/');
+        $folder = str_contains($folder, '/') ? $folder : $app.'/ViewModels';
+        $relative = substr($folder, strlen($app) + 1);
+
+        return [$base, [$folder, $namespace.'\\'.str_replace('/', '\\', $relative)]];
     }
 
     /**
@@ -323,6 +473,11 @@ final class Maker
 
     private function leaf(string $unit, string $flavor): string
     {
+        // The page leaves moved to crud; a single page still stamps the leaf it implements.
+        if ($unit === 'page' && $this->catalog->node('ui-page.'.$flavor) instanceof Leaf) {
+            return 'ui-page.'.$flavor;
+        }
+
         $make = "standards:make {$unit} --flavor={$flavor}";
         $matches = array_values(array_filter($this->catalog->leaves(), fn (Leaf $leaf): bool => $leaf->make === $make));
         usort($matches, fn (Leaf $a, Leaf $b): int => ($a->status === 'ready' ? 0 : 1) <=> ($b->status === 'ready' ? 0 : 1));

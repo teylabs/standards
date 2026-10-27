@@ -1,0 +1,100 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Http\Controllers;
+
+use {{ namespace }}\Actions\Create{{ name }};
+use {{ namespace }}\Actions\Delete{{ name }};
+use {{ namespace }}\Actions\Update{{ name }};
+use {{ namespace }}\Http\Requests\Store{{ name }}Request;
+use {{ namespace }}\Http\Requests\Update{{ name }}Request;
+use {{ namespace }}\Models\{{ name }};
+use {{ vm_namespace }}\{{ name }}FormViewModel;
+use {{ vm_namespace }}\{{ name }}IndexViewModel;
+use {{ vm_namespace }}\{{ name }}ShowViewModel;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Inertia\Inertia;
+use Inertia\Response;
+use Tey\Kit\Features\Core\Concerns\Toastable;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Core\Users;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+use Tey\Kit\Features\Workspaces\TenantBoundary;
+use Tey\Kit\Features\Workspaces\WorkspaceUrl;
+
+/** One operation per method. Every method runs inside the workspace's tenant boundary and asks the policy first; the writes are the Actions'. */
+final class {{ name }}Controller
+{
+    use Toastable;
+
+    public function index(Request $request, int $workspace): Response
+    {
+        return app(TenantBoundary::class)->run($workspace, function () use ($request, $workspace): Response {
+            Gate::forUser($request->user())->authorize('viewAny', [{{ name }}::class, Workspace::required()]);
+
+            return Inertia::render('{{ plural }}/Index/Page', new {{ name }}IndexViewModel($request, $workspace, $request->user()));
+        });
+    }
+
+    public function create(Request $request, int $workspace): Response
+    {
+        return app(TenantBoundary::class)->run($workspace, function () use ($request, $workspace): Response {
+            Gate::forUser($request->user())->authorize('create', [{{ name }}::class, Workspace::required()]);
+
+            return Inertia::render('{{ plural }}/Form/Page', new {{ name }}FormViewModel($workspace, null));
+        });
+    }
+
+    public function store(Store{{ name }}Request $request, int $workspace, Create{{ name }} $create): RedirectResponse
+    {
+        abort_unless(Users::is($request->user()), 401);
+        ${{ var }} = app(TenantBoundary::class)->run($workspace, fn (): {{ name }} => $create->handle(new Principal((int) $request->user()->getAuthIdentifier()), $workspace, $request->validated()));
+
+        $this->toast('{{ title }} created.')->from('save');
+
+        return redirect(WorkspaceUrl::to($workspace, '{{ slug }}/'.${{ var }}->getKey()));
+    }
+
+    public function show(Request $request, int $workspace, int $id): Response
+    {
+        return app(TenantBoundary::class)->run($workspace, function () use ($request, $workspace, $id): Response {
+            ${{ var }} = {{ name }}::query()->where('workspace_id', $workspace)->findOrFail($id);
+            Gate::forUser($request->user())->authorize('view', ${{ var }});
+
+            return Inertia::render('{{ plural }}/Show/Page', new {{ name }}ShowViewModel($workspace, ${{ var }}, $request->user()));
+        });
+    }
+
+    public function edit(Request $request, int $workspace, int $id): Response
+    {
+        return app(TenantBoundary::class)->run($workspace, function () use ($request, $workspace, $id): Response {
+            ${{ var }} = {{ name }}::query()->where('workspace_id', $workspace)->findOrFail($id);
+            Gate::forUser($request->user())->authorize('update', ${{ var }});
+
+            return Inertia::render('{{ plural }}/Form/Page', new {{ name }}FormViewModel($workspace, ${{ var }}));
+        });
+    }
+
+    public function update(Update{{ name }}Request $request, int $workspace, int $id, Update{{ name }} $update): RedirectResponse
+    {
+        abort_unless(Users::is($request->user()), 401);
+        app(TenantBoundary::class)->run($workspace, fn (): {{ name }} => $update->handle(new Principal((int) $request->user()->getAuthIdentifier()), $workspace, $id, $request->validated()));
+
+        $this->toast('{{ title }} saved.')->from('save');
+
+        return redirect(WorkspaceUrl::to($workspace, '{{ slug }}/'.$id));
+    }
+
+    public function destroy(Request $request, int $workspace, int $id, Delete{{ name }} $delete): RedirectResponse
+    {
+        abort_unless(Users::is($request->user()), 401);
+        app(TenantBoundary::class)->run($workspace, fn () => $delete->handle(new Principal((int) $request->user()->getAuthIdentifier()), $workspace, [$id]));
+
+        $this->toast('{{ title }} deleted.');
+
+        return redirect(WorkspaceUrl::to($workspace, '{{ slug }}'));
+    }
+}
