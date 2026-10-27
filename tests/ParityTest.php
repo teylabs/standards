@@ -79,9 +79,12 @@ test('standards:check and the Pest suite report the same findings for the same a
 
         expect($viaCheck)->toBe($viaPest);
 
+        // Pest names the file with native separators, and ratchet keys keep them (see ConformanceTest).
+        $path = fn (string $file): string => str_replace('/', DIRECTORY_SEPARATOR, $file);
+
         foreach ([
-            ['preset laravel', 'App\\Console\\FirstOwnerCommand', "Expecting 'app/Console/FirstOwnerCommand.php' not to extend 'Illuminate\\Console\\Command'."],
-            ['preset laravel', 'App\\Support\\TypeScriptProvider', "Expecting 'app/Support/TypeScriptProvider.php' not to extend 'Illuminate\\Support\\ServiceProvider'."],
+            ['preset laravel', 'App\\Console\\FirstOwnerCommand', "Expecting '{$path('app/Console/FirstOwnerCommand.php')}' not to extend 'Illuminate\\Console\\Command'."],
+            ['preset laravel', 'App\\Support\\TypeScriptProvider', "Expecting '{$path('app/Support/TypeScriptProvider.php')}' not to extend 'Illuminate\\Support\\ServiceProvider'."],
         ] as $expected) {
             expect(in_array($expected, $viaCheck, true))->toBeTrue('Missing '.json_encode($expected, JSON_UNESCAPED_SLASHES).' in '.json_encode($viaCheck, JSON_UNESCAPED_SLASHES));
         }
