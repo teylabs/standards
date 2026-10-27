@@ -121,7 +121,8 @@ final class Native
         $suite = TestSuite::getInstance();
         $running = $suite->test;
 
-        if (! $running instanceof TestCase) {
+        // A running test without Pest's arch trait (one outside the suite root Pest applies it to) cannot verify either.
+        if (! $running instanceof TestCase || ! method_exists($running, 'arch')) {
             $suite->test = new class('standards') extends TestCase
             {
                 use Architectable;

@@ -38,8 +38,11 @@ function parityApp(): string
     }
 
     $files->copyDirectory($package.'/vendor/pestphp/pest/bin', $base.'/vendor/pestphp/pest/bin');
-    // Pest's arch plugin evaluates the second-to-last line of the app's autoload.php to find its loader.
-    file_put_contents($base.'/vendor/autoload.php', "<?php\n\nreturn (function () { \$loader = require ".var_export($package.'/vendor/autoload.php', true)."; \$loader->addPsr4('App\\\\', dirname(__DIR__).'/app/'); \$loader->addPsr4('Tests\\\\', dirname(__DIR__).'/tests/'); return \$loader; })();\n");
+    // Pest's arch plugin evaluates the second-to-last line of the app's autoload.php to find its loader and
+    // treats every PSR-4 root outside the app's vendor as user code. Hand it a loader with only the app's
+    // roots, so the symlinked package dependencies are not scanned (and loaded) as if they were the app's.
+    // The line is eval'd elsewhere, so it names absolute paths rather than __DIR__.
+    file_put_contents($base.'/vendor/autoload.php', "<?php\n\nreturn (function () { require_once ".var_export($package.'/vendor/autoload.php', true)."; \$loader = new Composer\\Autoload\\ClassLoader(); \$loader->addPsr4('App\\\\', ".var_export($base.'/app/', true)."); \$loader->addPsr4('Tests\\\\', ".var_export($base.'/tests/', true)."); \$loader->register(true); return \$loader; })();\n");
 
     return $base;
 }
