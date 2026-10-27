@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`standards:install` no longer infers a ViewModel base the app doesn't have.** In an app with neither tey/kit, nor a `ViewModel.php` in `app/ViewModels`, `app/UI` or `app/Support`, nor spatie/laravel-data, it wrote `typedViewModel: 'App\ViewModels\ViewModel'`, so rule 20 stopped with "could not run: Class … does not exist" and `standards:check` reported drift on any fresh app.
+  - It now writes `typedViewModel: ''` and `viewModelBases: []`, and its note says no base was found.
+  - Rule 20 treats an empty typed base as none: it finds ViewModels by suffix, checks their roots and suffix, and requires no base.
+  - `standards:make crud` still uses tey/kit's ViewModel when the configured base is empty.
+
 ## 0.11.4 - 2026-10-27
 
 ### Upgrading

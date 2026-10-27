@@ -515,6 +515,33 @@ test('install scaffolds an inferred configuration and conformance test when miss
     }
 });
 
+test('install in a bare app with no ViewModel base infers none, so rule 20 runs and checks ViewModels by suffix', function () {
+    $base = ($this->directory)();
+    file_put_contents($base.'/artisan', "<?php\n");
+    file_put_contents($base.'/composer.json', json_encode(['name' => 'acme/bare', 'require' => ['tey/standards' => '*'], 'autoload' => ['psr-4' => ['BareApp\\' => 'app/']]]));
+    mkdir($base.'/app/ViewModels', 0777, true);
+    mkdir($base.'/app/Reports', 0777, true);
+    file_put_contents($base.'/app/ViewModels/StatsViewModel.php', "<?php\n\nnamespace BareApp\\ViewModels;\n\nfinal class StatsViewModel {}\n");
+    file_put_contents($base.'/app/Reports/TotalsViewModel.php', "<?php\n\nnamespace BareApp\\Reports;\n\nfinal class TotalsViewModel {}\n");
+    $loader = new Composer\Autoload\ClassLoader;
+    $loader->addPsr4('BareApp\\', $base.'/app');
+    $loader->register();
+
+    try {
+        $lines = (new Installer($base, TreeCatalog::shipped()))->configuration();
+        expect($lines[0])->toContain('typed ViewModel base none found')
+            ->and(file_get_contents($base.'/tests/Arch/configuration.php'))->toContain("viewModelBases: [],")->toContain("typedViewModel: '',");
+
+        $report = CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped());
+        $rule20 = array_values(array_filter($report['violations'], fn (array $v): bool => $v['rule'] === '20'));
+        expect(array_column($rule20, 'kind'))->not->toContain('error')
+            ->and(array_column($rule20, 'check'))->toBe(['ViewModel outside configured roots'])
+            ->and($rule20[0]['target'])->toBe('BareApp\Reports\TotalsViewModel');
+    } finally {
+        $loader->unregister();
+    }
+});
+
 test('install keeps an existing conformance test elsewhere and infers kit and mod', function () {
     $base = ($this->app)();
     mkdir($base.'/app/Http/Controllers', 0777, true);
