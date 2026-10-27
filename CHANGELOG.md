@@ -18,6 +18,10 @@
   - Evidence: fleet 6 apps × 11, past 18 apps × 129.
 - **Rule `operator`, advisory:** a command that writes must run through `Operator::run`, or have a dry-run option and a production check. The new `Gate::ADVISORY` reports its findings as advisories that never fail `standards:check`, until an app lists `operator` in `Configuration::optionalRules`.
 
+### Changed
+
+- A generated test outside the folders `tests/Pest.php` covers now imports the app's TestCase into its `use` block (sorted) and calls `pest()->extend(TestCase::class)`, so it passes Pint's `fully_qualified_strict_types` and `ordered_imports`. A test without imports keeps the fully qualified form.
+
 ## 0.11.3 - 2026-10-27
 
 ### Upgrading
