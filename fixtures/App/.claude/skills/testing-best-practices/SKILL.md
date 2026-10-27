@@ -1,5 +1,5 @@
 ---
-name: pest-testing
+name: testing-best-practices
 description: Write Pest tests.
 ---
 

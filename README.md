@@ -99,19 +99,19 @@ Each diagnostic uses rule `21`, a relative controller path and a stable check su
 
 - `pest-only` parses PHP under `tests/` without loading it. It flags PHPUnit or Laravel TestCase subclasses with `test*` methods or PHPUnit `#[Test]` attributes, including aliases and inheritance through test classes. `Configuration::testBasePaths` defaults to `['tests/TestCase.php']`; other `*Case.php` files are accepted when referenced by Pest's `extend()` or `uses()`. Configure additional base paths explicitly. External custom base-class ancestry and dynamically declared test methods are not resolved.
 - `tia` checks `tests/Pest.php` for the guard below: an argv assignment from `$_SERVER['argv'] ?? []`, all five conditions joined with `&&`, strict flag checks against that variable, and a direct integer `exit` from 1 to 255. Comments, zero exits and nested conditional exits do not count. This is a static guard-shape check, not proof that TIA has a coverage driver or a valid replay cache. Pest 4 apps can baseline this rule until their Pest 5 adoption.
-- `boost` requires `laravel/boost` in Composer `require-dev`, a readable JSON object in `boost.json`, `.ai/guidelines/`, and a non-empty generated `<laravel-boost-guidelines>` block in `AGENTS.md` or `CLAUDE.md`. Without the dependency it emits one prerequisite finding. It checks non-empty `SKILL.md` files for declared Composer and npm stack packages using `Configuration::boostSkills` (package name → list of skill names). Replace that map for another stack; unrelated packages add no requirements. `boostSkillRoots` defaults to `.claude/skills`, `.agents/skills` and `.codex/skills`. This checks source declarations and generated files, not an installed vendor tree, guideline freshness or live MCP connectivity.
+- `boost` requires `laravel/boost` in Composer `require-dev`, a readable JSON object in `boost.json` that lists `agents` and `packages` (Boost 2.10's `boost:update` refuses to run without agents, and `boost:install` without packages deletes project skills; `standards:install` infers whichever is missing and never changes one that is set), `.ai/guidelines/`, and a non-empty generated `<laravel-boost-guidelines>` block in `AGENTS.md` or `CLAUDE.md`. Without the dependency it emits one prerequisite finding. It checks non-empty `SKILL.md` files for declared Composer and npm stack packages using `Configuration::boostSkills` (package name → list of skill names). Replace that map for another stack; unrelated packages add no requirements. `inertia-vue-development` is required only for `@inertiajs/vue3` 1 and 2, and `tailwindcss-development` only for Tailwind 3 and 4, the majors Boost 2.10.3 ships them for. `boostSkillRoots` defaults to `.claude/skills`, `.agents/skills` and `.codex/skills`. This checks source declarations and generated files, not an installed vendor tree, guideline freshness or live MCP connectivity.
 
 Paste this guard near the start of `tests/Pest.php`, after imports and before test registration:
 
 ```php
 $argv = $_SERVER['argv'] ?? [];
-if (getenv('CI') === false && getenv('PARATEST') === false && getenv('PEST_TIA') === false && ! in_array('--tia', $argv, true) && ! in_array('--no-tia', $argv, true)) {
+if ((getenv('CI') === false || getenv('CI') === '') && getenv('PARATEST') === false && getenv('PEST_TIA') === false && ! in_array('--tia', $argv, true) && ! in_array('--no-tia', $argv, true)) {
     fwrite(STDERR, "Choose --tia for local tests or --no-tia for an explicit full run.\n");
     exit(1);
 }
 ```
 
-Run local Pest 5 tests with `vendor/bin/pest --tia` (PCOV or Xdebug is needed to record coverage). Use `--no-tia` for an explicit uncached run or browser specifications. CI and parallel/TIA workers bypass the local guard; CI still executes the full selected suite. The checker does not add the guard or configure TIA for the app.
+Run local Pest 5 tests with `vendor/bin/pest --tia` (PCOV or Xdebug is needed to record coverage). Use `--no-tia` for an explicit uncached run or browser specifications. CI (a non-empty `CI`) and parallel/TIA workers bypass the local guard; a set-but-empty `CI=` does not; CI still executes the full selected suite. The checker does not add the guard or configure TIA for the app.
 
 ## Deployment preflight
 
@@ -392,7 +392,7 @@ php artisan standards:check --file=app/Http/Controllers/InvoicesController.php
 php artisan standards:check --json          # stable schema 1, see below
 ```
 
-The gate reads `tests/Arch/configuration.php`, a file that returns the app's `Configuration` (change the path with `standards.configuration`; publish with `--tag=standards-config`). When the file is missing, `standards:install` scaffolds one inferred from composer.json and the app's folders: class roots, the Inertia pages folder, a typed ViewModel base, and whether tey/kit and tey/mod are present. With tey/mod, the layout in `config/mod.php` adds module controller, ViewModel and page roots (for example `app/Modules/*/Http/Controllers*`), and a controller found in a module folder outside them is generalised over its module name. It prints what it inferred, then adds `tests/Arch/ConformanceTest.php` requiring that file, unless a test already uses `Conformance::TESTS`. It never overwrites either file. Review the scaffold, since it is yours from then on. The gate runs every `Conformance::TESTS` rule outside Pest, including placement and the Pest presets. Disabled optional UI rules and rule 51 (until `ciEnforce`) are listed under `skipped`, never reported as passes. Drift means any of these:
+The gate reads `tests/Arch/configuration.php`, a file that returns the app's `Configuration` (change the path with `standards.configuration`; publish with `--tag=standards-config`). When the file is missing, `standards:install` scaffolds one inferred from composer.json and the app's folders: class roots, the Inertia pages folder, a typed ViewModel base, and whether tey/kit and tey/mod are present. With tey/mod, the layout in `config/mod.php` adds module controller, ViewModel and page roots (for example `app/Modules/*/Http/Controllers*`), and a controller found in a module folder outside them is generalised over its module name. It prints what it inferred, then adds `tests/Arch/ConformanceTest.php` requiring that file, unless a test already uses `Conformance::TESTS`. It never overwrites either file. Review the scaffold, since it is yours from then on. The gate runs every `Conformance::TESTS` rule outside Pest, including placement and the Pest presets, and reports the same findings the Pest suite does for the same app. Disabled optional UI rules and rule 51 (until `ciEnforce`) are listed under `skipped`, never reported as passes. Drift means any of these:
 
 - an unexcepted violation;
 - a stale allowlist entry;
@@ -413,7 +413,7 @@ jobs:
       base-ref: ${{ github.base_ref }}   # omit for a full check on main
 ```
 
-It uploads `standards-report.json` as the `standards-report` artifact. **Pre-push.** `standards:install` installs `.git/hooks/pre-push` running `standards:check --changed`. It never replaces a hook it didn't write. Add the line to yours instead.
+It uploads `standards-report.json` as the `standards-report` artifact. **Pre-push.** `standards:install` installs a pre-push hook running `standards:check --changed`, in `.git/hooks` or in `core.hooksPath` when that points inside the repository. When `core.hooksPath` points outside it (a global hooks folder, say), it writes nothing and prints the line to add there. It never replaces a hook it didn't write. Add the line to yours instead.
 
 ### 2. Agent guardrails: `standards:install`
 

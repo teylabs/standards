@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tey\Standards;
 
 use Composer\InstalledVersions;
+use Pest\Arch\Concerns\Architectable;
 use Pest\Arch\Contracts\ArchExpectation;
 use Pest\Arch\GroupArchExpectation;
 use Pest\Arch\Objects\FunctionDescription;
@@ -14,6 +15,7 @@ use Pest\ArchPresets\AbstractPreset;
 use Pest\TestSuite;
 use PHPUnit\Architecture\Elements\ObjectDescription;
 use PHPUnit\Framework\AssertionFailedError;
+use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 
 /**
@@ -46,7 +48,7 @@ final class Native
         }
 
         try {
-            $expectation->ensureLazyExpectationIsVerified();
+            self::verify($expectation);
 
             return [];
         } catch (AssertionFailedError $error) {
@@ -64,49 +66,86 @@ final class Native
     {
         $failures = [];
         $ignored = [];
+        // Building the preset already asks the running test for its arch options, so stand in for the whole run.
+        $suite = TestSuite::getInstance();
+        $running = $suite->test;
+        $suite->test = self::architectable($running);
 
-        do {
-            $found = false;
-            $preset = new $type($namespaces);
-            $preset->execute();
-            $expectations = (new ReflectionProperty(AbstractPreset::class, 'expectations'))->getValue($preset);
-            $leaves = [];
+        try {
+            do {
+                $found = false;
+                $preset = new $type($namespaces);
+                $preset->execute();
+                $expectations = (new ReflectionProperty(AbstractPreset::class, 'expectations'))->getValue($preset);
+                $leaves = [];
 
-            foreach ($expectations as $expectation) {
-                if ($expectation instanceof ArchExpectation) {
-                    $leaves = [...$leaves, ...self::leaves($expectation)];
-                }
-            }
-
-            foreach ($leaves as $index => $leaf) {
-                $exclude = $ignored[$index] ?? [];
-                $scope = array_values($classes);
-                $leaf->mergeExcludeCallbacks([fn (ObjectDescription $object): bool => in_array($object->name, $exclude, true)
-                    || (! in_array($object->name, $scope, true) && ! $object instanceof FunctionDescription && ! $object instanceof VendorObjectDescription)]);
-
-                try {
-                    $leaf->ensureLazyExpectationIsVerified();
-                } catch (AssertionFailedError $error) {
-                    if (! method_exists($error, 'toCollisionEditor')) {
-                        throw $error;
+                foreach ($expectations as $expectation) {
+                    if ($expectation instanceof ArchExpectation) {
+                        $leaves = [...$leaves, ...self::leaves($expectation)];
                     }
-
-                    $path = $error->toCollisionEditor()->getFile();
-                    $absolute = realpath($path) ?: realpath(TestSuite::getInstance()->rootPath.'/'.$path);
-                    $target = $classes[$absolute] ?? null;
-
-                    if ($target === null) {
-                        throw new \LogicException("Preset failure outside configured class roots [{$path}]. Add its source root, do not ignore it.", previous: $error);
-                    }
-
-                    $ignored[$index][] = $target;
-                    $failures[] = ['target' => $target, 'check' => self::diagnostic($error)];
-                    $found = true;
                 }
-            }
-        } while ($found);
+
+                foreach ($leaves as $index => $leaf) {
+                    $exclude = $ignored[$index] ?? [];
+                    $scope = array_values($classes);
+                    $leaf->mergeExcludeCallbacks([fn (ObjectDescription $object): bool => in_array($object->name, $exclude, true)
+                        || (! in_array($object->name, $scope, true) && ! $object instanceof FunctionDescription && ! $object instanceof VendorObjectDescription)]);
+
+                    try {
+                        self::verify($leaf);
+                    } catch (AssertionFailedError $error) {
+                        if (! method_exists($error, 'toCollisionEditor')) {
+                            throw $error;
+                        }
+
+                        $path = $error->toCollisionEditor()->getFile();
+                        $absolute = realpath($path) ?: realpath(TestSuite::getInstance()->rootPath.'/'.$path);
+                        $target = $classes[$absolute] ?? null;
+
+                        if ($target === null) {
+                            throw new \LogicException("Preset failure outside configured class roots [{$path}]. Add its source root, do not ignore it.", previous: $error);
+                        }
+
+                        $ignored[$index][] = $target;
+                        $failures[] = ['target' => $target, 'check' => self::diagnostic($error)];
+                        $found = true;
+                    }
+                }
+            } while ($found);
+        } finally {
+            $suite->test = $running;
+        }
 
         return array_values(array_unique($failures, SORT_REGULAR));
+    }
+
+    /**
+     * Pest only verifies a lazy expectation while a test is running; outside one
+     * (standards:check) it is a silent pass. Stand a test in so the gate fails
+     * the same expectations the Pest suite does, and restore the suite after.
+     */
+    private static function verify(SingleArchExpectation $expectation): void
+    {
+        $suite = TestSuite::getInstance();
+        $running = $suite->test;
+
+        $suite->test = self::architectable($running);
+
+        try {
+            $expectation->ensureLazyExpectationIsVerified();
+        } finally {
+            $suite->test = $running;
+        }
+    }
+
+    /** The running test when it carries Pest's arch trait; otherwise a stand-in that does. */
+    private static function architectable(?TestCase $running): TestCase
+    {
+        // A running test without the trait (one outside the root Pest applies it to) cannot verify either.
+        return $running instanceof TestCase && method_exists($running, 'arch') ? $running : new class('standards') extends TestCase
+        {
+            use Architectable;
+        };
     }
 
     /** Preserve exact ratchet keys when Pest 5 brackets targeted expectation arguments. */

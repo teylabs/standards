@@ -14,6 +14,10 @@ use Tey\Standards\Patterns\TreeCatalog;
 
 beforeEach(function () {
     $this->temporary = [];
+    // Keep the developer's global git config (a global core.hooksPath, say) out of the installer tests.
+    $this->globalGitConfig = getenv('GIT_CONFIG_GLOBAL');
+    putenv('GIT_CONFIG_GLOBAL=/dev/null');
+    $_SERVER['GIT_CONFIG_GLOBAL'] = $_ENV['GIT_CONFIG_GLOBAL'] = '/dev/null'; // Symfony Process reads these, not getenv()
     $this->directory = function (): string {
         $directory = sys_get_temp_dir().'/standards-enforce-'.bin2hex(random_bytes(6));
         mkdir($directory, 0777, true);
@@ -31,6 +35,12 @@ beforeEach(function () {
 });
 
 afterEach(function () {
+    putenv($this->globalGitConfig === false ? 'GIT_CONFIG_GLOBAL' : 'GIT_CONFIG_GLOBAL='.$this->globalGitConfig);
+    unset($_SERVER['GIT_CONFIG_GLOBAL'], $_ENV['GIT_CONFIG_GLOBAL']);
+
+    if ($this->globalGitConfig !== false) {
+        $_SERVER['GIT_CONFIG_GLOBAL'] = $_ENV['GIT_CONFIG_GLOBAL'] = $this->globalGitConfig;
+    }
     foreach ($this->temporary as $directory) {
         (new Filesystem)->deleteDirectory($directory);
     }
@@ -318,6 +328,53 @@ test('install adds a pre-push hook but never replaces someone else\'s', function
     file_put_contents($base.'/.git/hooks/pre-push', "#!/bin/sh\necho theirs\n");
     expect($installer->prePush())->toContain('left alone')
         ->and(file_get_contents($base.'/.git/hooks/pre-push'))->toBe("#!/bin/sh\necho theirs\n");
+});
+
+test('install writes the pre-push hook into an in-repo core.hooksPath', function () {
+    $base = ($this->app)();
+    (new Process(['git', 'init', '-q'], $base))->mustRun();
+    (new Process(['git', 'config', 'core.hooksPath', '.githooks'], $base))->mustRun();
+
+    expect((new Installer($base, TreeCatalog::shipped()))->prePush())->toBe('pre-push hook installed')
+        ->and(file_get_contents($base.'/.githooks/pre-push'))->toContain('standards:check --changed')
+        ->and(is_file($base.'/.git/hooks/pre-push'))->toBeFalse();
+});
+
+test('install warns and prints the line when core.hooksPath is outside the repository', function () {
+    $base = ($this->app)();
+    $outside = ($this->directory)();
+    (new Process(['git', 'init', '-q'], $base))->mustRun();
+    (new Process(['git', 'config', 'core.hooksPath', $outside], $base))->mustRun();
+
+    expect((new Installer($base, TreeCatalog::shipped()))->prePush())->toContain('core.hooksPath points outside this repository')
+        ->toContain('php artisan standards:check --changed')
+        ->and(is_file($outside.'/pre-push'))->toBeFalse()
+        ->and(is_file($base.'/.git/hooks/pre-push'))->toBeFalse();
+});
+
+test('install fills in missing Boost agents and packages and never changes ones that are set', function () {
+    $base = ($this->app)();
+    file_put_contents($base.'/composer.json', json_encode(['require' => ['tey/standards' => '^0.11', 'laravel/fortify' => '^1.0'], 'require-dev' => ['laravel/boost' => '^2.10', 'pestphp/pest' => '^5.0']]));
+    mkdir($base.'/vendor/laravel/fortify/resources/boost', 0777, true);
+    mkdir($base.'/vendor/pestphp/pest', 0777, true);
+    $installer = new Installer($base, TreeCatalog::shipped());
+
+    expect($installer->boost())->toContain('added agents (claude_code) and packages (laravel/fortify)')
+        ->and(json_decode(file_get_contents($base.'/boost.json'), true))->toBe(['agents' => ['claude_code'], 'packages' => ['laravel/fortify']]);
+
+    file_put_contents($base.'/boost.json', json_encode(['agents' => ['cursor'], 'packages' => [], 'guidelines' => true]));
+    expect($installer->boost())->toBe('boost.json kept: agents and packages are set')
+        ->and(json_decode(file_get_contents($base.'/boost.json'), true))->toBe(['agents' => ['cursor'], 'packages' => [], 'guidelines' => true]);
+
+    file_put_contents($base.'/boost.json', json_encode(['agents' => ['cursor'], 'mcp' => true]));
+    expect($installer->boost())->toContain('added packages')
+        ->and(json_decode(file_get_contents($base.'/boost.json'), true))->toBe(['agents' => ['cursor'], 'mcp' => true, 'packages' => ['laravel/fortify']]);
+});
+
+test('install leaves boost.json alone without laravel/boost', function () {
+    $base = ($this->app)();
+    expect((new Installer($base, TreeCatalog::shipped()))->boost())->toContain('skipped')
+        ->and(is_file($base.'/boost.json'))->toBeFalse();
 });
 
 // Layer 4: drift report

@@ -66,7 +66,9 @@ test('TIA rejects missing flags, bypasses, comments, zero exits and conditional 
     expect((new Tia($this->toolingConfig))->violations())->toHaveCount(1);
 })->with([
     'missing flag' => ["'--no-tia'", "'--other'"],
-    'missing CI bypass' => ["getenv('CI') === false && ", ''],
+    'missing CI bypass' => ["(getenv('CI') === false || getenv('CI') === '') && ", ''],
+    'half CI check' => ["(getenv('CI') === false || getenv('CI') === '')", "(getenv('CI') === false || getenv('PARATEST') === '')"],
+    'CI emptiness alone' => ["(getenv('CI') === false || getenv('CI') === '')", "getenv('CI') === ''"],
     'missing worker bypass' => ["getenv('PARATEST') === false && ", ''],
     'missing replay bypass' => ["getenv('PEST_TIA') === false && ", ''],
     'zero exit' => ['exit(1)', 'exit(0)'],
@@ -77,6 +79,17 @@ test('TIA rejects missing flags, bypasses, comments, zero exits and conditional 
     'comment only' => ['exit(1);', '// exit(1);'],
     'dead exit' => ['exit(1);', 'if (false) { exit(1); }'],
     'wrong boolean' => [' && ', ' || '],
+]);
+
+test('TIA accepts the non-empty CI check, its negated form and the older unset-only check', function (string $ci) {
+    $path = $this->toolingBase.'/tests/Pest.php';
+    file_put_contents($path, str_replace("(getenv('CI') === false || getenv('CI') === '')", $ci, file_get_contents($path)));
+    expect((new Tia($this->toolingConfig))->violations())->toBe([]);
+})->with([
+    'recommended' => ["(getenv('CI') === false || getenv('CI') === '')"],
+    'reversed' => ["('' === getenv('CI') || false === getenv('CI'))"],
+    'negated' => ["! (getenv('CI') !== false && getenv('CI') !== '')"],
+    'unset only' => ["getenv('CI') === false"],
 ]);
 
 test('the copied TIA guard refuses an implicit local run and permits every explicit bypass', function (array $arguments, array $environment, int $exit) {
@@ -91,6 +104,7 @@ test('the copied TIA guard refuses an implicit local run and permits every expli
     'TIA' => [['--tia'], [], 0],
     'explicit full' => [['--no-tia'], [], 0],
     'CI' => [[], ['CI' => 'true'], 0],
+    'empty CI is not CI' => [[], ['CI' => ''], 1],
     'parallel worker' => [[], ['PARATEST' => '1'], 0],
     'TIA replay' => [[], ['PEST_TIA' => '1'], 0],
 ]);
@@ -117,11 +131,11 @@ test('Boost rejects invalid or missing configuration objects', function (string 
 test('Boost accepts either agent file and configured skill roots and reports absent stack skills', function () {
     rename($this->toolingBase.'/AGENTS.md', $this->toolingBase.'/CLAUDE.md');
     (new Filesystem)->ensureDirectoryExists($this->toolingBase.'/.agents/skills');
-    rename($this->toolingBase.'/.claude/skills/pest-testing', $this->toolingBase.'/.agents/skills/pest-testing');
+    rename($this->toolingBase.'/.claude/skills/testing-best-practices', $this->toolingBase.'/.agents/skills/testing-best-practices');
     expect((new Boost($this->toolingConfig))->violations())->toBe([]);
-    unlink($this->toolingBase.'/.agents/skills/pest-testing/SKILL.md');
+    unlink($this->toolingBase.'/.agents/skills/testing-best-practices/SKILL.md');
     expect((new Boost($this->toolingConfig))->violations())->toBe([
-        ['target' => 'boost.json', 'check' => 'missing Boost skill pest-testing for pestphp/pest'],
+        ['target' => 'boost.json', 'check' => 'missing Boost skill testing-best-practices for pestphp/pest'],
     ]);
 });
 
@@ -144,3 +158,40 @@ test('tooling rules honour exact ratchets and reject stale entries after a fix',
     (new Conformance(toolingConfiguration('Bad', [$entry])))->assert($rule);
     expect(fn () => (new Conformance(toolingConfiguration('Good', [$entry])))->assert($rule))->toThrow(AssertionFailedError::class, 'stale exception');
 })->with(['pest-only', 'tia', 'boost']);
+
+test('default Boost skills use the names Boost 2.10 ships', function () {
+    $skills = (new ReflectionClass(Configuration::class))->getConstructor()->getParameters();
+    $defaults = array_values(array_filter($skills, fn (ReflectionParameter $p): bool => $p->getName() === 'boostSkills'))[0]->getDefaultValue();
+
+    expect($defaults['pestphp/pest'])->toBe(['testing-best-practices'])
+        ->and(array_merge(...array_values($defaults)))->not->toContain('pest-testing')
+        ->and($defaults)->toMatchArray([
+            'laravel/framework' => ['laravel-best-practices'],
+            'laravel/folio' => ['folio-routing'],
+            'laravel/wayfinder' => ['wayfinder-development'],
+            '@inertiajs/vue3' => ['inertia-vue-development'],
+            'tailwindcss' => ['tailwindcss-development'],
+        ]);
+});
+
+test('Boost requires agents and packages in boost.json, since boost:install without packages deletes project skills', function (string $contents) {
+    file_put_contents($this->toolingBase.'/boost.json', $contents);
+    expect((new Boost($this->toolingConfig))->violations())->toBe([
+        ['target' => 'boost.json', 'check' => 'boost.json must list "agents" and "packages" before boost:install or boost:update (run php artisan standards:install to infer them)'],
+    ]);
+})->with([
+    'empty' => '{}',
+    'no packages' => '{"agents": ["claude_code"]}',
+    'no agents' => '{"packages": []}',
+    'empty agents' => '{"agents": [], "packages": []}',
+]);
+
+test('Boost requires the Inertia Vue and Tailwind skills only for majors Boost 2.10 ships them for', function (string $inertia, string $tailwind, array $expected) {
+    file_put_contents($this->toolingBase.'/package.json', json_encode(['dependencies' => ['@inertiajs/vue3' => $inertia, 'tailwindcss' => $tailwind]]));
+    $checks = array_column((new Boost($this->toolingConfig))->violations(), 'check');
+    expect(array_values(array_filter($checks, fn (string $check): bool => str_contains($check, '@inertiajs') || str_contains($check, 'tailwindcss'))))->toBe($expected);
+})->with([
+    'Inertia 3, Tailwind 5' => ['^3.0', '^5.0', []],
+    'Inertia 2, Tailwind 4' => ['^2.0', '^4.0', ['missing Boost skill inertia-vue-development for @inertiajs/vue3', 'missing Boost skill tailwindcss-development for tailwindcss']],
+    'unreadable constraints still require' => ['latest', 'next', ['missing Boost skill inertia-vue-development for @inertiajs/vue3', 'missing Boost skill tailwindcss-development for tailwindcss']],
+]);

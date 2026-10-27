@@ -93,7 +93,7 @@ final readonly class Configuration
         public array $testBasePaths = ['tests/TestCase.php'],
         public array $boostSkills = [
             'laravel/framework' => ['laravel-best-practices'],
-            'pestphp/pest' => ['pest-testing'],
+            'pestphp/pest' => ['testing-best-practices'],
             'laravel/folio' => ['folio-routing'],
             'laravel/fortify' => ['fortify-development'],
             'laravel/wayfinder' => ['wayfinder-development'],

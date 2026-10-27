@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tey\Standards\Enforcement;
 
 use InvalidArgumentException;
+use Symfony\Component\Process\Process;
 use Tey\Standards\Patterns\Branch;
 use Tey\Standards\Patterns\Leaf;
 use Tey\Standards\Patterns\Lookup;
@@ -40,6 +41,7 @@ final class Installer
             $this->agents(),
             ...$this->skills(),
             $this->settings(),
+            $this->boost(),
             $this->prePush(),
         ];
     }
@@ -446,6 +448,56 @@ final class Installer
         return '.claude/settings.json hooks merged';
     }
 
+    /**
+     * Boost 2.10's boost:update refuses to run without `agents`, and boost:install
+     * without `packages` deletes the project's third-party skills. Fill in
+     * whichever is missing, inferred from the app, and never change one that is set.
+     */
+    public function boost(): string
+    {
+        $composer = json_decode(is_file($this->base.'/composer.json') ? (string) file_get_contents($this->base.'/composer.json') : '', true);
+
+        if (! is_array($composer) || ! isset($composer['require-dev']['laravel/boost']) && ! isset($composer['require']['laravel/boost'])) {
+            return 'boost.json skipped: laravel/boost is not required';
+        }
+
+        $file = $this->base.'/boost.json';
+        $config = is_file($file) ? json_decode((string) file_get_contents($file), true) : [];
+
+        if (! is_array($config) || ($config !== [] && array_is_list($config))) {
+            return 'boost.json left alone: it is not a JSON object; fix it, then add "agents" and "packages"';
+        }
+
+        $added = [];
+
+        if (! is_array($config['agents'] ?? null) || $config['agents'] === []) {
+            $agents = array_keys(array_filter(['claude_code' => true, 'codex' => is_dir($this->base.'/.codex') || is_dir($this->base.'/.agents')]));
+            $config['agents'] = $agents;
+            $added[] = 'agents ('.implode(', ', $agents).')';
+        }
+
+        if (! is_array($config['packages'] ?? null)) {
+            $packages = [];
+
+            foreach (array_keys([...($composer['require'] ?? []), ...($composer['require-dev'] ?? [])]) as $package) {
+                if (str_contains((string) $package, '/') && is_dir($this->base.'/vendor/'.$package.'/resources/boost')) {
+                    $packages[] = (string) $package;
+                }
+            }
+
+            $config['packages'] = $packages;
+            $added[] = 'packages ('.($packages === [] ? 'none found' : implode(', ', $packages)).')';
+        }
+
+        if ($added === []) {
+            return 'boost.json kept: agents and packages are set';
+        }
+
+        file_put_contents($file, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n");
+
+        return 'boost.json: added '.implode(' and ', $added).'; review them before boost:install or boost:update';
+    }
+
     /** The hook exits 0 before running anything when the package is not installed here. */
     public static function command(string $event): string
     {
@@ -458,6 +510,19 @@ final class Installer
 
         if ($hooks === null) {
             return 'pre-push skipped: not a git checkout';
+        }
+
+        $hooksPath = $this->hooksPath();
+
+        if ($hooksPath !== null) {
+            $base = rtrim(str_replace('\\', '/', (string) (realpath($this->base) ?: $this->base)), '/').'/';
+            $resolved = str_replace('\\', '/', $hooksPath);
+
+            if (! str_starts_with(rtrim($resolved, '/').'/', $base)) {
+                return 'pre-push not written: core.hooksPath points outside this repository ('.$hooksPath.'); add this line to its pre-push hook: [ -f vendor/tey/standards/bin/standards ] && php artisan standards:check --changed';
+            }
+
+            $hooks = $hooksPath;
         }
 
         $file = $hooks.'/pre-push';
@@ -480,6 +545,41 @@ final class Installer
         chmod($file, 0755);
 
         return 'pre-push hook installed';
+    }
+
+    /** core.hooksPath as git resolves it (relative to the work tree, ~ expanded), or null when unset. */
+    private function hooksPath(): ?string
+    {
+        $process = new Process(['git', 'config', '--get', 'core.hooksPath'], $this->base);
+        $process->run();
+        $path = trim($process->getOutput());
+
+        if (! $process->isSuccessful() || $path === '') {
+            return null;
+        }
+
+        if (str_starts_with($path, '~/')) {
+            $path = rtrim((string) getenv('HOME'), '/').substr($path, 1);
+        } elseif (! str_starts_with($path, '/') && preg_match('/^[A-Za-z]:/', $path) !== 1) {
+            $path = (realpath($this->base) ?: $this->base).'/'.$path;
+        }
+
+        $path = rtrim($path, '/');
+
+        // Normalise ./ and ../ segments without requiring the directory to exist.
+        $parts = [];
+
+        foreach (explode('/', str_replace('\\', '/', $path)) as $i => $part) {
+            if ($part === '..') {
+                array_pop($parts);
+            } elseif ($part !== '.' && ($part !== '' || $i === 0)) {
+                $parts[] = $part;
+            }
+        }
+
+        $path = implode('/', $parts);
+
+        return realpath($path) ?: $path;
     }
 
     private function gitHooks(): ?string
