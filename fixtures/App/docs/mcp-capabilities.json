@@ -1,0 +1,73 @@
+{
+    "version": 1,
+    "inventory": [
+        {
+            "path": "app/UI/Link.php",
+            "capabilities": ["record.read"],
+            "variants": {
+                "record.read": ["default"]
+            }
+        }
+    ],
+    "capabilities": [
+        {
+            "id": "record.read",
+            "kind": "read",
+            "ui": [
+                {
+                    "path": "app/UI/Link.php",
+                    "symbol": "read"
+                }
+            ],
+            "domain": {
+                "path": "app/UI/Link.php",
+                "symbol": "read"
+            },
+            "mcp": {
+                "status": "implemented",
+                "kind": "resource",
+                "name": "records",
+                "entrypoint": {
+                    "path": "app/UI/Link.php",
+                    "symbol": "read"
+                },
+                "scopes": ["records:read"]
+            },
+            "tests": [
+                {
+                    "path": "tests/Parity.php",
+                    "name": "reads through both adapters",
+                    "covers": [
+                        "success",
+                        "authorization",
+                        "validation",
+                        "privacy"
+                    ]
+                }
+            ],
+            "variants": [
+                {
+                    "id": "default",
+                    "ui": {
+                        "options": {},
+                        "defaults": {},
+                        "effects": ["read"]
+                    },
+                    "mcp": {
+                        "status": "implemented",
+                        "options": {},
+                        "defaults": {},
+                        "effects": ["read"]
+                    },
+                    "tests": [
+                        {
+                            "path": "tests/Parity.php",
+                            "name": "reads default mode",
+                            "covers": ["success", "error", "recovery"]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

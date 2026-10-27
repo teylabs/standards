@@ -1,0 +1,79 @@
+answer: Mail or notifications
+entry: mail-notifications
+nodes:
+  - id: mail-notifications
+    question: Is the channel mail, SMS or an agent recipient?
+    options:
+      - { answer: "Mail", next: mail-notifications.mail }
+      - { answer: "SMS or an agent", next: mail-notifications.custom-channel }
+      - { answer: "None of these", next: mail-notifications.byo }
+  - id: mail-notifications.mail
+    question: What does the mail carry?
+    options:
+      - { answer: "A message about the person's account", next: mail-notifications.notification }
+      - { answer: "A document or signed link, with a send record", next: mail-notifications.document-delivery }
+      - { answer: "A digest for many users", next: mail-notifications.digest }
+      - { answer: "The brand header, footer or preheader every mail shares", next: mail-notifications.branded-layout }
+      - { answer: "None of these", next: mail-notifications.mail.byo }
+  - id: mail-notifications.notification
+    recipe: Account notification
+    summary: A Notification with the configured mail composer; never a Mailable or the Mail facade.
+    kit: []
+    make: standards:make notification --flavor=plain
+    checks: ['mail']
+    paths: ['app/**/Notifications/**']
+    keywords: [notify, email, mail, notification]
+    status: ready
+    evidence: { apps: 1, count: 2, prs: 2, past_apps: 13, past_count: 48 }
+  - id: mail-notifications.document-delivery
+    recipe: Document delivery
+    summary: Send a document or signed link with an attachment threshold, a send record and a test-send variant.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [send document, attachment, signed link, test send]
+    status: gap
+    evidence: { apps: 3, count: 8, prs: 8 }
+  - id: mail-notifications.digest
+    recipe: Digest
+    summary: Many users in a digest.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [digest, newsletter, batch email]
+    status: gap
+  - id: mail-notifications.custom-channel
+    recipe: Custom channel
+    summary: A custom notification channel for SMS or an agent, with held and quiet-hours gating.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [sms, text message, agent, channel]
+    status: gap
+    evidence: { apps: 1, count: 9, prs: 9 }
+  - id: mail-notifications.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: mail-notifications.mail.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: mail-notifications.branded-layout
+    recipe: branded-mail
+    summary: Every notification renders through the configured mail composer's branded layout, with the header, footer and preheader set once; no per-mail Blade copies.
+    kit: []
+    make: standards:make notification --flavor=plain
+    checks: ['mail']
+    paths: ['app/**/Notifications/**']
+    keywords: [brand, mail layout, footer, header, preheader, email template]
+    status: ready
+    evidence: { apps: 5, count: 9, prs: 9, past_apps: 2, past_count: 10 }

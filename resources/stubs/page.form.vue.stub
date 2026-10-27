@@ -1,0 +1,18 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+import { Field, FormActions, FormCard, Input, Page } from '@kit/ui';
+import { useForm } from '@inertiajs/vue3';
+
+const form = useForm({ name: '' });
+</script>
+
+<template>
+    <Page title="{{ title }}">
+        <FormCard title="{{ title }}" @submit="form.post('/{{ slug }}')">
+            <Field label="Name" :error="form.errors.name">
+                <Input v-model="form.name" name="name" />
+            </Field>
+            <FormActions :processing="form.processing" />
+        </FormCard>
+    </Page>
+</template>

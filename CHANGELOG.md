@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased (0.11.0)
+
+### Upgrading
+
+- `standards:check` needs a `tests/Arch/configuration.php` that returns your `Configuration` (or set `standards.configuration`). It fails closed without one. `standards:install` scaffolds an inferred one and a matching Arch test when it is missing, and never overwrites either.
+- Allowlist entries need `expires` (a real `Y-m-d` date) for `standards:check`. Expired entries and entries without one are drift. Pest ratchets still accept entries without `expires`.
+
+### Added
+
+- `standards:check [--changed] [--file=…] [--json]` runs every conformance rule outside Pest, applies the allowlist with expiries, and exits 1 on drift. A class that fails to load is a `load` finding, never a crash. JSON schema 1 carries app, sha, violations, allowlist count and expiries, and pattern gaps.
+- A reusable `.github/workflows/standards.yml` workflow to make a required check.
+- `standards:install` writes the generated AGENTS.md pattern index, one Boost skill per recipe, path-scoped Claude skills, and merged `.claude/settings.json` hooks. Stop and `git commit` block on drift. New files get an advisory lookup plus a one-time stamp request. Edits get an advisory `--file` check. Every hook is a no-op outside an app that requires tey/standards. It also installs a pre-push hook.
+- Pattern lookup in three levels: features (plans composed of unit leaves), the unit decision tree, and kit components per leaf, validated against the kit's `@kit/ui` exports. `Lookup::find(intent|path|answers)` and `recipe(id)` answer with the frozen pattern contract 1 (`docs/pattern-contract.md`), which the hosted recipe MCP builds on. `standards:pattern` is the offline CLI. Every question has a build-your-own exit. Byo and gap leaves return their nearest recipes, conventions and an anonymised demand record, and `standards:check --json` and the drift report count that demand. Leaves carry optional `recipe_make` and count-only `evidence`, and `--gaps` sorts by fleet plus past demand.
+- `standards:make` emits stamped, conformant code, with tests that bind the app's TestCase when `tests/Pest.php` doesn't cover their folder. `model`, `policy`, `job`, `command` and `notification` delegate to tey/mod's `make:*` generators and are stamped afterwards. `page`, `capability-tool`, `settings-section` and `action` come from recipe stubs. `bin/standards kit-exports --refresh` regenerates the `@kit/ui` export snapshot, and an installed kit that differs only warns. Every ready leaf is proven in a fixture app.
+- `standards report` aggregates several apps' JSON into a drift report with regressions against the previous run.
+
 ## 0.10.1 - 2026-10-26
 
 ### Fixed

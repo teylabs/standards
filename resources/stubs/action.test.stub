@@ -1,0 +1,11 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Actions\{{ action }};
+
+it('returns the attributes {{ action }} saved', function () {
+    $saved = (new {{ action }})->handle(['name' => 'Example']);
+
+    expect($saved)->toBeArray()->toBe(['name' => 'Example']);
+});

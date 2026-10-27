@@ -35,7 +35,7 @@ jobs:
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: ${{ runner.os == 'Windows' && 'mbstring, pdo, pdo_sqlite, sqlite3' || 'mbstring, sqlite3, pcntl' }}
+          extensions: ${{ runner.os == 'Windows' && 'mbstring, pdo, pdo_sqlite, sqlite3, exif, fileinfo' || 'mbstring, sqlite3, pcntl, exif, fileinfo' }}
           tools: composer:v2
           coverage: none
       - name: Validate package
@@ -55,7 +55,8 @@ jobs:
           production=$(mktemp -d)
           trap 'rm -rf "$production"' EXIT
           mkdir "$production/package"
-          tar --exclude=vendor --exclude=.git --exclude=composer.lock -cf - . | tar -xf - -C "$production/package"
+          # McpRun* folders are per-test temporary copies; never package them.
+          tar --exclude=vendor --exclude=.git --exclude=composer.lock --exclude='fixtures/McpRun*' -cf - . | tar -xf - -C "$production/package"
           cat > "$production/composer.json" <<JSON
           {
               "repositories": [{ "type": "path", "url": "./package", "options": { "symlink": false } }],

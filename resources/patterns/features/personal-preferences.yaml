@@ -1,0 +1,8 @@
+id: personal-preferences
+summary: A person's own settings, with a profile form and on/off preferences.
+keywords: [my settings, profile settings, account settings, notification preferences, personal preferences]
+questions:
+  - { id: toggles, question: "Are there on/off preferences that save on change?", options: ["yes", "no"] }
+composition:
+  - { unit_leaf_id: settings.form, role: profile form }
+  - { unit_leaf_id: settings.toggles, role: preferences, when: toggles=yes }

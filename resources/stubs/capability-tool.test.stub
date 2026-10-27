@@ -1,0 +1,20 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Mcp\Tools\{{ name }}Tool;
+use Laravel\Mcp\Request;
+use Tey\Kit\Features\Mcp\Capability;
+
+it('declares the {{ capability }} capability with a scope', function () {
+    $capability = Capability::of({{ name }}Tool::class);
+
+    expect($capability?->capability)->toBe('{{ capability }}')
+        ->and($capability?->scope)->toBe('{{ capability }}');
+});
+
+it('refuses a call without a principal through the consent gate', function () {
+    $response = app({{ name }}Tool::class)->handle(new Request([]));
+
+    expect($response->isError())->toBeTrue();
+});

@@ -1,0 +1,31 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Mcp\Tools;
+
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Mcp\Capability;
+use Tey\Kit\Features\Mcp\CapabilityTool;
+
+#[Capability('{{ capability }}', scope: '{{ capability }}')]
+final class {{ name }}Tool extends CapabilityTool
+{
+    protected string $description = '{{ title }}.';
+
+    /** @return array<string, mixed> the accepted arguments' rules; the kit refuses any other argument */
+    protected function rules(): array
+    {
+        return [{{ tool_rules }}];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    protected function call(Principal $principal, int $workspace, array $validated): array
+    {
+        // Call the operation the UI uses; it authorizes the principal. Never duplicate the business logic here.
+        return [];
+    }
+}

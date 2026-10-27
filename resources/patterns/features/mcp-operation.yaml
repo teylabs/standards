@@ -1,0 +1,10 @@
+id: mcp-operation
+summary: Expose an app operation to AI assistants over MCP, in parity with the UI.
+keywords: [mcp, assistant, ai tool, expose to agents, agent access, mcp tool]
+questions:
+  - { id: writes, question: "Does the operation change data?", options: ["yes", "no"] }
+composition:
+  - { unit_leaf_id: data-actions.action, role: shared operation }
+  - { unit_leaf_id: mcp.read, role: read tool, when: writes=no }
+  - { unit_leaf_id: mcp.write, role: write tool, when: writes=yes }
+  - { unit_leaf_id: mcp.agent-docs, role: manifest and parity guard }

@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Tey\Standards;
 
 use Illuminate\Support\ServiceProvider;
+use Tey\Standards\Enforcement\CheckCommand;
+use Tey\Standards\Enforcement\InstallCommand;
+use Tey\Standards\Enforcement\MakeCommand;
+use Tey\Standards\Enforcement\PatternCommand;
 use Tey\Standards\Preflight\CoreCheck;
 use Tey\Standards\Preflight\InstallCheck;
 use Tey\Standards\Preflight\PreflightCommand;
@@ -14,6 +18,7 @@ final class StandardsServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/preflight.php', 'preflight');
+        $this->mergeConfigFrom(__DIR__.'/../config/standards.php', 'standards');
 
         foreach (CoreCheck::NAMES as $name) {
             $id = 'standards.preflight.'.$name;
@@ -31,9 +36,10 @@ final class StandardsServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->publishes([__DIR__.'/../config/preflight.php' => $this->app->configPath('preflight.php')], 'standards-preflight-config');
+        $this->publishes([__DIR__.'/../config/standards.php' => $this->app->configPath('standards.php')], 'standards-config');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([PreflightCommand::class]);
+            $this->commands([PreflightCommand::class, CheckCommand::class, PatternCommand::class, InstallCommand::class, MakeCommand::class]);
         }
     }
 }

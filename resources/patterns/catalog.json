@@ -1,0 +1,3094 @@
+{
+    "schema": 1,
+    "root": "root",
+    "features": {
+        "document-send": {
+            "id": "document-send",
+            "summary": "Render a document such as a PDF and send it to a recipient, optionally behind a signed link, with a send record.",
+            "keywords": [
+                "send document",
+                "send pdf",
+                "email invoice",
+                "deliver report",
+                "document delivery",
+                "send a quote"
+            ],
+            "questions": [
+                {
+                    "id": "link",
+                    "question": "Does the recipient open it through a signed link rather than an attachment?",
+                    "options": [
+                        "yes",
+                        "no"
+                    ]
+                }
+            ],
+            "composition": [
+                {
+                    "unit_leaf_id": "data-actions.document",
+                    "role": "render"
+                },
+                {
+                    "unit_leaf_id": "mail-notifications.document-delivery",
+                    "role": "send"
+                },
+                {
+                    "unit_leaf_id": "ui-page.show",
+                    "role": "send from the record"
+                },
+                {
+                    "unit_leaf_id": "access-tenancy.signed-link",
+                    "role": "recipient link",
+                    "when": "link=yes"
+                },
+                {
+                    "unit_leaf_id": "ui-page.signed-guest",
+                    "role": "recipient page",
+                    "when": "link=yes"
+                }
+            ]
+        },
+        "file-import": {
+            "id": "file-import",
+            "summary": "People upload a spreadsheet, CSV or XML file and a queued import processes it, with history.",
+            "keywords": [
+                "import file",
+                "csv import",
+                "spreadsheet import",
+                "upload and import",
+                "bulk import",
+                "xml import"
+            ],
+            "questions": [],
+            "composition": [
+                {
+                    "unit_leaf_id": "ui-page.upload",
+                    "role": "upload"
+                },
+                {
+                    "unit_leaf_id": "data-actions.file-import",
+                    "role": "import pipeline"
+                },
+                {
+                    "unit_leaf_id": "background.job",
+                    "role": "queued processing"
+                },
+                {
+                    "unit_leaf_id": "ui-page.index",
+                    "role": "import history"
+                }
+            ]
+        },
+        "manage-records": {
+            "id": "manage-records",
+            "summary": "Manage a record type end to end. People list, create, edit and view it, with optional bulk actions, assistant access and notifications.",
+            "keywords": [
+                "manage records",
+                "crud",
+                "records",
+                "resource",
+                "admin screens",
+                "bulk actions",
+                "list create edit"
+            ],
+            "questions": [
+                {
+                    "id": "bulk",
+                    "question": "Do people act on many records at once (bulk actions, filters, sorting)?",
+                    "options": [
+                        "yes",
+                        "no"
+                    ]
+                },
+                {
+                    "id": "mcp",
+                    "question": "Should an AI assistant be able to read or change these records?",
+                    "options": [
+                        "yes",
+                        "no"
+                    ]
+                },
+                {
+                    "id": "notify",
+                    "question": "Should someone be told when a record changes?",
+                    "options": [
+                        "yes",
+                        "no"
+                    ]
+                }
+            ],
+            "composition": [
+                {
+                    "unit_leaf_id": "ui-page.index",
+                    "role": "list"
+                },
+                {
+                    "unit_leaf_id": "ui-page.form",
+                    "role": "create and edit"
+                },
+                {
+                    "unit_leaf_id": "ui-page.show",
+                    "role": "detail"
+                },
+                {
+                    "unit_leaf_id": "data-actions.action",
+                    "role": "write"
+                },
+                {
+                    "unit_leaf_id": "ui-page.action-menu",
+                    "role": "record actions"
+                },
+                {
+                    "unit_leaf_id": "ui-page.data-table",
+                    "role": "bulk actions",
+                    "when": "bulk=yes"
+                },
+                {
+                    "unit_leaf_id": "mcp.write",
+                    "role": "assistant access",
+                    "when": "mcp=yes"
+                },
+                {
+                    "unit_leaf_id": "mail-notifications.notification",
+                    "role": "notification",
+                    "when": "notify=yes"
+                }
+            ]
+        },
+        "mcp-operation": {
+            "id": "mcp-operation",
+            "summary": "Expose an app operation to AI assistants over MCP, in parity with the UI.",
+            "keywords": [
+                "mcp",
+                "assistant",
+                "ai tool",
+                "expose to agents",
+                "agent access",
+                "mcp tool"
+            ],
+            "questions": [
+                {
+                    "id": "writes",
+                    "question": "Does the operation change data?",
+                    "options": [
+                        "yes",
+                        "no"
+                    ]
+                }
+            ],
+            "composition": [
+                {
+                    "unit_leaf_id": "data-actions.action",
+                    "role": "shared operation"
+                },
+                {
+                    "unit_leaf_id": "mcp.read",
+                    "role": "read tool",
+                    "when": "writes=no"
+                },
+                {
+                    "unit_leaf_id": "mcp.write",
+                    "role": "write tool",
+                    "when": "writes=yes"
+                },
+                {
+                    "unit_leaf_id": "mcp.agent-docs",
+                    "role": "manifest and parity guard"
+                }
+            ]
+        },
+        "operator-maintenance": {
+            "id": "operator-maintenance",
+            "summary": "Maintenance an operator runs or schedules, such as backfills, repairs and retention sweeps, watched by monitoring.",
+            "keywords": [
+                "maintenance",
+                "backfill",
+                "operator command",
+                "cleanup",
+                "retention",
+                "repair data",
+                "cron job"
+            ],
+            "questions": [
+                {
+                    "id": "scheduled",
+                    "question": "Does it also run on a schedule?",
+                    "options": [
+                        "yes",
+                        "no"
+                    ]
+                }
+            ],
+            "composition": [
+                {
+                    "unit_leaf_id": "background.command",
+                    "role": "operator command"
+                },
+                {
+                    "unit_leaf_id": "background.schedule",
+                    "role": "schedule",
+                    "when": "scheduled=yes"
+                },
+                {
+                    "unit_leaf_id": "integrations.monitoring",
+                    "role": "monitoring"
+                }
+            ]
+        },
+        "personal-preferences": {
+            "id": "personal-preferences",
+            "summary": "A person's own settings, with a profile form and on/off preferences.",
+            "keywords": [
+                "my settings",
+                "profile settings",
+                "account settings",
+                "notification preferences",
+                "personal preferences"
+            ],
+            "questions": [
+                {
+                    "id": "toggles",
+                    "question": "Are there on/off preferences that save on change?",
+                    "options": [
+                        "yes",
+                        "no"
+                    ]
+                }
+            ],
+            "composition": [
+                {
+                    "unit_leaf_id": "settings.form",
+                    "role": "profile form"
+                },
+                {
+                    "unit_leaf_id": "settings.toggles",
+                    "role": "preferences",
+                    "when": "toggles=yes"
+                }
+            ]
+        },
+        "workspace-settings": {
+            "id": "workspace-settings",
+            "summary": "Settings that a workspace's admins edit, saved through one action and gated by a capability.",
+            "keywords": [
+                "workspace settings",
+                "team settings",
+                "organisation settings",
+                "admin settings",
+                "tenant settings"
+            ],
+            "questions": [],
+            "composition": [
+                {
+                    "unit_leaf_id": "settings.workspace",
+                    "role": "settings section"
+                },
+                {
+                    "unit_leaf_id": "access-tenancy.capability",
+                    "role": "who may edit"
+                },
+                {
+                    "unit_leaf_id": "data-actions.action",
+                    "role": "save"
+                }
+            ]
+        }
+    },
+    "nodes": {
+        "root": {
+            "id": "root",
+            "question": "What are you building?",
+            "options": [
+                {
+                    "answer": "A page people open in the browser",
+                    "next": "ui-page"
+                },
+                {
+                    "answer": "Logic that changes data",
+                    "next": "data-actions"
+                },
+                {
+                    "answer": "A tool an AI assistant calls over MCP",
+                    "next": "mcp"
+                },
+                {
+                    "answer": "A settings screen",
+                    "next": "settings"
+                },
+                {
+                    "answer": "Mail or notifications",
+                    "next": "mail-notifications"
+                },
+                {
+                    "answer": "Work that runs later",
+                    "next": "background"
+                },
+                {
+                    "answer": "Who can see or do something",
+                    "next": "access-tenancy"
+                },
+                {
+                    "answer": "A connection to another service",
+                    "next": "integrations"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "byo"
+                }
+            ]
+        },
+        "ui-page": {
+            "id": "ui-page",
+            "question": "Who opens the page?",
+            "why": "Guests, signed-link recipients, panel users and signed-in users each get a different shell, auth and caching.",
+            "options": [
+                {
+                    "answer": "A signed-in user of the app",
+                    "next": "ui-page.app"
+                },
+                {
+                    "answer": "A guest on a public page",
+                    "next": "ui-page.public"
+                },
+                {
+                    "answer": "A recipient arriving by a signed link",
+                    "next": "ui-page.signed-guest"
+                },
+                {
+                    "answer": "A user of a Filament panel",
+                    "next": "ui-page.filament"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.byo"
+                }
+            ]
+        },
+        "ui-page.app": {
+            "id": "ui-page.app",
+            "question": "Does the page live in a kit-owned subtree (the dashboard, the auth screens), or is it the app's own?",
+            "why": "Kit-owned pages are extended by registration or slots, never copied into the app.",
+            "options": [
+                {
+                    "answer": "It extends a kit-owned page",
+                    "next": "ui-page.kit-owned"
+                },
+                {
+                    "answer": "It is one of the app's own pages",
+                    "next": "ui-page.own"
+                },
+                {
+                    "answer": "Several CRUD screens at once, or a bespoke workflow",
+                    "next": "ui-page.larger"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.app.byo"
+                }
+            ]
+        },
+        "ui-page.kit-owned": {
+            "id": "ui-page.kit-owned",
+            "question": "Which kit-owned page?",
+            "options": [
+                {
+                    "answer": "The dashboard",
+                    "next": "ui-page.dashboard-widget"
+                },
+                {
+                    "answer": "A sign-in, registration or password screen",
+                    "next": "ui-page.auth-override"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.kit-owned.byo"
+                }
+            ]
+        },
+        "ui-page.own": {
+            "id": "ui-page.own",
+            "question": "What does the page mainly do?",
+            "why": "Each answer has its own controller method, page shape and test.",
+            "options": [
+                {
+                    "answer": "Lists records",
+                    "next": "ui-page.list"
+                },
+                {
+                    "answer": "Shows one record",
+                    "next": "ui-page.show"
+                },
+                {
+                    "answer": "Creates or edits a record",
+                    "next": "ui-page.form"
+                },
+                {
+                    "answer": "Adds buttons, links, menus or uploads to a page",
+                    "next": "ui-page.actions"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.own.byo"
+                }
+            ]
+        },
+        "ui-page.list": {
+            "id": "ui-page.list",
+            "question": "Does the list need sorting, filters, row actions or reordering?",
+            "options": [
+                {
+                    "answer": "No, a plain list",
+                    "next": "ui-page.index"
+                },
+                {
+                    "answer": "Yes",
+                    "next": "ui-page.data-table"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.list.byo"
+                }
+            ]
+        },
+        "ui-page.actions": {
+            "id": "ui-page.actions",
+            "question": "Which kind of control?",
+            "why": "Add buttons, external links, action menus and uploads each have a kit component and a check.",
+            "options": [
+                {
+                    "answer": "An add or create button",
+                    "next": "ui-page.add-button"
+                },
+                {
+                    "answer": "A link to another site",
+                    "next": "ui-page.external-link"
+                },
+                {
+                    "answer": "A menu of actions on a record",
+                    "next": "ui-page.action-menu"
+                },
+                {
+                    "answer": "A file upload field",
+                    "next": "ui-page.upload"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.actions.byo"
+                }
+            ]
+        },
+        "ui-page.larger": {
+            "id": "ui-page.larger",
+            "question": "Is it a full set of CRUD screens, or a workflow page beyond CRUD?",
+            "options": [
+                {
+                    "answer": "Index, form and show screens for one record type",
+                    "next": "ui-page.crud-resource"
+                },
+                {
+                    "answer": "A bespoke workflow page",
+                    "next": "ui-page.workbench"
+                },
+                {
+                    "answer": "An activity stream",
+                    "next": "ui-page.activity-feed"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.larger.byo"
+                }
+            ]
+        },
+        "ui-page.public": {
+            "id": "ui-page.public",
+            "question": "Which public or shared page?",
+            "options": [
+                {
+                    "answer": "Marketing, product or legal (privacy, terms)",
+                    "next": "ui-page.public-legal"
+                },
+                {
+                    "answer": "A per-visitor demo exhibit",
+                    "next": "ui-page.exhibit"
+                },
+                {
+                    "answer": "An error page anyone can hit",
+                    "next": "ui-page.error"
+                },
+                {
+                    "answer": "A kiosk-style entry flow",
+                    "next": "ui-page.kiosk"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.public.byo"
+                }
+            ]
+        },
+        "ui-page.index": {
+            "id": "ui-page.index",
+            "recipe": "Inertia index page",
+            "summary": "A CRUDDY index controller passes a typed ViewModel to resources/js/pages/<Area>/Index/Page.vue.",
+            "kit": [
+                "@kit/ui Page",
+                "@kit/ui SectionHeader",
+                "@kit/ui DataTable",
+                "@kit/ui Placeholder"
+            ],
+            "make": "standards:make page --flavor=index",
+            "checks": [
+                "20",
+                "21",
+                "descriptors",
+                "js-imports"
+            ],
+            "paths": [
+                "app/**/Http/Controllers/**",
+                "resources/js/pages/**/Index/Page.vue"
+            ],
+            "keywords": [
+                "list",
+                "index",
+                "table",
+                "browse",
+                "overview"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "page shell",
+                    "kit_component": "Page",
+                    "use": "Wraps the whole page with title and breadcrumbs",
+                    "props_hint": "title"
+                },
+                {
+                    "name": "header",
+                    "kit_component": "SectionHeader",
+                    "use": "Title plus the primary add action",
+                    "props_hint": "title, actions slot"
+                },
+                {
+                    "name": "filters",
+                    "kit_component": "Toolbar",
+                    "use": "Search and filters above the table",
+                    "props_hint": "v-model filters"
+                },
+                {
+                    "name": "rows",
+                    "kit_component": "DataTable",
+                    "use": "The record list",
+                    "props_hint": "rows, columns"
+                },
+                {
+                    "name": "row menu",
+                    "kit_component": "RowActions",
+                    "use": "Per-row actions, never navigation",
+                    "props_hint": "actions descriptors"
+                },
+                {
+                    "name": "empty state",
+                    "kit_component": "Placeholder",
+                    "use": "Shown when there are no rows",
+                    "props_hint": "title, description"
+                }
+            ]
+        },
+        "ui-page.show": {
+            "id": "ui-page.show",
+            "recipe": "Inertia show page",
+            "summary": "A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand.",
+            "kit": [
+                "@kit/ui Page",
+                "@kit/ui SectionHeader",
+                "@kit/ui Section",
+                "@kit/ui ActionBar"
+            ],
+            "make": "standards:make page --flavor=show",
+            "checks": [
+                "20",
+                "21",
+                "descriptors",
+                "js-imports"
+            ],
+            "paths": [
+                "app/**/Http/Controllers/**",
+                "resources/js/pages/**/Show/Page.vue"
+            ],
+            "keywords": [
+                "show",
+                "detail",
+                "view",
+                "record",
+                "relative time",
+                "date"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "page shell",
+                    "kit_component": "Page",
+                    "use": "Wraps the record page",
+                    "props_hint": "title"
+                },
+                {
+                    "name": "header",
+                    "kit_component": "SectionHeader",
+                    "use": "Record title and its actions",
+                    "props_hint": "title, actions slot"
+                },
+                {
+                    "name": "details",
+                    "kit_component": "Section",
+                    "use": "Groups the record fields",
+                    "props_hint": "title"
+                },
+                {
+                    "name": "actions",
+                    "kit_component": "ActionBar",
+                    "use": "Record actions placed by the kit",
+                    "props_hint": "actions descriptors"
+                },
+                {
+                    "name": "button set",
+                    "kit_component": "ButtonGroup",
+                    "use": "Related buttons side by side",
+                    "props_hint": "default slot"
+                }
+            ]
+        },
+        "ui-page.form": {
+            "id": "ui-page.form",
+            "recipe": "Inertia form page",
+            "summary": "create/store or edit/update methods, a FormRequest, an Action for the write and a toast on the redirect.",
+            "kit": [
+                "@kit/ui FormCard",
+                "@kit/ui Field",
+                "@kit/ui FormActions"
+            ],
+            "make": "standards:make page --flavor=form",
+            "checks": [
+                "20",
+                "21",
+                "toast",
+                "actions",
+                "descriptors"
+            ],
+            "paths": [
+                "app/**/Http/Requests/**",
+                "resources/js/pages/**/Form/Page.vue"
+            ],
+            "keywords": [
+                "form",
+                "create",
+                "edit",
+                "store",
+                "update",
+                "save",
+                "toast",
+                "feedback"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "page shell",
+                    "kit_component": "Page",
+                    "use": "Wraps the form page",
+                    "props_hint": "title"
+                },
+                {
+                    "name": "form",
+                    "kit_component": "FormCard",
+                    "use": "The form surface",
+                    "props_hint": "title, @submit"
+                },
+                {
+                    "name": "field",
+                    "kit_component": "Field",
+                    "use": "Label, input slot and error",
+                    "props_hint": "label, error"
+                },
+                {
+                    "name": "input",
+                    "kit_component": "Input",
+                    "use": "Text input inside a Field",
+                    "props_hint": "v-model, name"
+                },
+                {
+                    "name": "submit",
+                    "kit_component": "FormActions",
+                    "use": "Submit and cancel buttons",
+                    "props_hint": "processing"
+                }
+            ]
+        },
+        "ui-page.add-button": {
+            "id": "ui-page.add-button",
+            "recipe": "Add action button",
+            "summary": "Add, New and Create buttons are kit Buttons carrying the Plus icon.",
+            "kit": [
+                "@kit/ui Button"
+            ],
+            "make": "standards:make page --flavor=index",
+            "checks": [
+                "ui plus"
+            ],
+            "paths": [],
+            "keywords": [
+                "add",
+                "new",
+                "create button",
+                "plus"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "add button",
+                    "kit_component": "Button",
+                    "use": "Add, New or Create with the Plus icon",
+                    "props_hint": "href or @click, icon"
+                },
+                {
+                    "name": "action bar",
+                    "kit_component": "ActionBar",
+                    "use": "Where page-level actions sit",
+                    "props_hint": "actions descriptors"
+                }
+            ]
+        },
+        "ui-page.external-link": {
+            "id": "ui-page.external-link",
+            "recipe": "External link",
+            "summary": "target=_blank links carry rel=noopener and the external-link icon.",
+            "kit": [
+                "@kit/ui Button",
+                "@kit/ui DropdownLink"
+            ],
+            "make": "standards:make page --flavor=show",
+            "checks": [
+                "ui new-tab"
+            ],
+            "paths": [],
+            "keywords": [
+                "external",
+                "new tab",
+                "blank",
+                "outbound link"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "external link",
+                    "kit_component": "Button",
+                    "use": "A link styled as a button, target _blank with rel noopener and the external icon",
+                    "props_hint": "href, target, rel"
+                },
+                {
+                    "name": "menu link",
+                    "kit_component": "DropdownLink",
+                    "use": "An external link inside a menu",
+                    "props_hint": "href"
+                }
+            ]
+        },
+        "ui-page.action-menu": {
+            "id": "ui-page.action-menu",
+            "recipe": "Record action menu",
+            "summary": "Action menus run actions only. Navigation goes in links or tabs, never in an action menu, and nothing hand-rolls a kit primitive.",
+            "kit": [
+                "@kit/ui RowActions",
+                "@kit/ui DropdownAction",
+                "@kit/ui DropdownConfirm"
+            ],
+            "make": "standards:make page --flavor=show",
+            "checks": [
+                "descriptors",
+                "js-imports"
+            ],
+            "paths": [],
+            "keywords": [
+                "menu",
+                "dropdown",
+                "actions",
+                "kebab",
+                "row actions"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "row menu",
+                    "kit_component": "RowActions",
+                    "use": "The action menu on a record",
+                    "props_hint": "actions descriptors"
+                },
+                {
+                    "name": "action item",
+                    "kit_component": "DropdownAction",
+                    "use": "Runs an action",
+                    "props_hint": "action"
+                },
+                {
+                    "name": "confirm item",
+                    "kit_component": "DropdownConfirm",
+                    "use": "An action that needs confirmation",
+                    "props_hint": "action, confirm text"
+                },
+                {
+                    "name": "delete item",
+                    "kit_component": "DropdownDelete",
+                    "use": "Deletes with confirmation",
+                    "props_hint": "href"
+                },
+                {
+                    "name": "dialog",
+                    "kit_component": "Dialog",
+                    "use": "A confirmation or detail dialog",
+                    "props_hint": "open, title"
+                }
+            ]
+        },
+        "ui-page.upload": {
+            "id": "ui-page.upload",
+            "recipe": "File upload field",
+            "summary": "File inputs only come from the kit dropzone component inside a form page.",
+            "kit": [
+                "@kit/ui FileInput",
+                "@kit/ui BulkDrop"
+            ],
+            "make": "standards:make page --flavor=form",
+            "checks": [
+                "ui dropzone"
+            ],
+            "paths": [],
+            "keywords": [
+                "upload",
+                "file",
+                "dropzone",
+                "attachment",
+                "image"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "file field",
+                    "kit_component": "FileInput",
+                    "use": "The only file input",
+                    "props_hint": "v-model, accept, multiple"
+                },
+                {
+                    "name": "drop zone",
+                    "kit_component": "BulkDrop",
+                    "use": "Drag-and-drop or paste of many files",
+                    "props_hint": "@files"
+                }
+            ]
+        },
+        "ui-page.data-table": {
+            "id": "ui-page.data-table",
+            "recipe": "Data table list",
+            "summary": "Sorting, filters, row actions with confirmation and reordering through the kit DataTable and toolbar, not a hand-rolled table.",
+            "kit": [
+                "@kit/ui DataTable",
+                "@kit/ui Toolbar",
+                "@kit/ui RowActions"
+            ],
+            "make": null,
+            "checks": [
+                "js-imports"
+            ],
+            "paths": [],
+            "keywords": [
+                "sort",
+                "filter",
+                "toolbar",
+                "reorder",
+                "row action",
+                "confirm",
+                "data table"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 5,
+                "count": 6,
+                "prs": 6,
+                "past_apps": 6,
+                "past_count": 33
+            },
+            "components": [
+                {
+                    "name": "rows",
+                    "kit_component": "DataTable",
+                    "use": "Sortable rows",
+                    "props_hint": "rows, columns, sort"
+                },
+                {
+                    "name": "filters",
+                    "kit_component": "Toolbar",
+                    "use": "Filters and search",
+                    "props_hint": "v-model filters"
+                },
+                {
+                    "name": "bulk bar",
+                    "kit_component": "FloatingToolbar",
+                    "use": "Bulk actions on the selection",
+                    "props_hint": "selection"
+                },
+                {
+                    "name": "row menu",
+                    "kit_component": "RowActions",
+                    "use": "Per-row actions",
+                    "props_hint": "actions descriptors"
+                }
+            ]
+        },
+        "ui-page.crud-resource": {
+            "id": "ui-page.crud-resource",
+            "recipe": "CRUD resource screens",
+            "summary": "One generator for a record type's controller, request, ViewModel and index, form and show pages.",
+            "kit": [
+                "@kit/ui FormCard",
+                "@kit/ui DataTable"
+            ],
+            "make": null,
+            "checks": [
+                "20",
+                "21"
+            ],
+            "paths": [],
+            "keywords": [
+                "crud",
+                "resource",
+                "scaffold",
+                "index form show"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 7,
+                "count": 15,
+                "prs": 15,
+                "past_apps": 33,
+                "past_count": 312
+            }
+        },
+        "ui-page.workbench": {
+            "id": "ui-page.workbench",
+            "recipe": "Workflow page",
+            "summary": "A bespoke workflow page beyond CRUD still gets route, controller, typed ViewModel, page and test from one skeleton.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "20",
+                "21"
+            ],
+            "paths": [],
+            "keywords": [
+                "workflow",
+                "workbench",
+                "wizard",
+                "bespoke page"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 5,
+                "count": 25,
+                "prs": 25,
+                "past_apps": 10,
+                "past_count": 40
+            },
+            "components": [
+                {
+                    "name": "panes",
+                    "kit_component": "SplitPane",
+                    "use": "A list beside its detail",
+                    "props_hint": "default slots"
+                },
+                {
+                    "name": "tabs",
+                    "kit_component": "PaneTabs",
+                    "use": "Tabs inside a pane",
+                    "props_hint": "tabs"
+                }
+            ]
+        },
+        "ui-page.dashboard-widget": {
+            "id": "ui-page.dashboard-widget",
+            "recipe": "Dashboard widget",
+            "summary": "Register a widget with its order and placement; never fork the kit dashboard page.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "dashboard",
+                "widget",
+                "home",
+                "lane"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 4,
+                "count": 14,
+                "prs": 14,
+                "past_apps": 21,
+                "past_count": 65
+            },
+            "components": [
+                {
+                    "name": "lane",
+                    "kit_component": "ScrollList",
+                    "use": "A scrolling widget lane",
+                    "props_hint": "items"
+                }
+            ]
+        },
+        "ui-page.auth-override": {
+            "id": "ui-page.auth-override",
+            "recipe": "Auth screen extension",
+            "summary": "Extend kit auth screens through their slots and link configuration instead of an app-owned copy.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "login",
+                "sign in",
+                "register",
+                "password",
+                "auth page"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 3,
+                "count": 3,
+                "prs": 3,
+                "past_apps": 17,
+                "past_count": 98
+            }
+        },
+        "ui-page.public-legal": {
+            "id": "ui-page.public-legal",
+            "recipe": "Public page",
+            "summary": "A sessionless public shell with config-driven product and legal links and markdown content.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "public",
+                "marketing",
+                "landing",
+                "privacy",
+                "terms",
+                "legal"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 8,
+                "count": 15,
+                "prs": 15,
+                "past_apps": 12,
+                "past_count": 37
+            }
+        },
+        "ui-page.exhibit": {
+            "id": "ui-page.exhibit",
+            "recipe": "Demo exhibit",
+            "summary": "A per-visitor demo exhibit with capacity limits and a prune command.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "demo",
+                "exhibit",
+                "sandbox",
+                "visitor"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 1,
+                "count": 11,
+                "prs": 11
+            }
+        },
+        "ui-page.signed-guest": {
+            "id": "ui-page.signed-guest",
+            "recipe": "Signed-link guest page",
+            "summary": "A token-bound page for an unauthenticated recipient, served no-store, recording their decisions.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "signed link",
+                "guest",
+                "token",
+                "client portal",
+                "recipient"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 2,
+                "count": 8,
+                "prs": 8
+            }
+        },
+        "ui-page.error": {
+            "id": "ui-page.error",
+            "recipe": "Error page",
+            "summary": "A branded Inertia error page for 4xx and 5xx responses.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "error",
+                "404",
+                "403",
+                "500",
+                "not found"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 2,
+                "count": 3,
+                "prs": 3
+            }
+        },
+        "ui-page.filament": {
+            "id": "ui-page.filament",
+            "recipe": "Filament panel page",
+            "summary": "Use native Filament fields and relations by default; a custom field states its reason.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "filament",
+                "panel",
+                "admin",
+                "relation manager"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 2,
+                "count": 14,
+                "prs": 14
+            }
+        },
+        "ui-page.byo": {
+            "id": "ui-page.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.app.byo": {
+            "id": "ui-page.app.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.kit-owned.byo": {
+            "id": "ui-page.kit-owned.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.own.byo": {
+            "id": "ui-page.own.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.list.byo": {
+            "id": "ui-page.list.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.actions.byo": {
+            "id": "ui-page.actions.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.larger.byo": {
+            "id": "ui-page.larger.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.public.byo": {
+            "id": "ui-page.public.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.kiosk": {
+            "id": "ui-page.kiosk",
+            "recipe": "Kiosk page",
+            "summary": "A kiosk-style public entry flow.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "kiosk",
+                "check in",
+                "self service",
+                "entry"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 0,
+                "count": 0,
+                "prs": 0,
+                "past_apps": 1,
+                "past_count": 1
+            }
+        },
+        "ui-page.activity-feed": {
+            "id": "ui-page.activity-feed",
+            "recipe": "activity-stream adoption",
+            "summary": "Publish activity through the activity-stream service's verb guide and authoriser, and render its feed; never a hand-built activity table.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "activity",
+                "feed",
+                "stream",
+                "timeline",
+                "publish activity"
+            ],
+            "status": "draft",
+            "evidence": {
+                "apps": 4,
+                "count": 11,
+                "prs": 11,
+                "past_apps": 1,
+                "past_count": 1
+            }
+        },
+        "data-actions": {
+            "id": "data-actions",
+            "question": "What are you adding?",
+            "options": [
+                {
+                    "answer": "An operation that changes state",
+                    "next": "data-actions.action"
+                },
+                {
+                    "answer": "A model or table",
+                    "next": "data-actions.model"
+                },
+                {
+                    "answer": "An output: a rendered document or a public API operation",
+                    "next": "data-actions.output"
+                },
+                {
+                    "answer": "A bulk import",
+                    "next": "data-actions.file-import"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "data-actions.byo"
+                }
+            ]
+        },
+        "data-actions.model": {
+            "id": "data-actions.model",
+            "question": "Does the model need composite-FK tenancy and a lock_version stale-write guard?",
+            "options": [
+                {
+                    "answer": "Yes, it is workspace-scoped",
+                    "next": "data-actions.tenant-model"
+                },
+                {
+                    "answer": "No; it needs enum and check-constraint conventions",
+                    "next": "data-actions.constraints"
+                },
+                {
+                    "answer": "Its history must be append-only",
+                    "next": "data-actions.ledger"
+                },
+                {
+                    "answer": "It needs file or photo attachments",
+                    "next": "data-actions.record-extras"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "data-actions.model.byo"
+                }
+            ]
+        },
+        "data-actions.output": {
+            "id": "data-actions.output",
+            "question": "Which output?",
+            "options": [
+                {
+                    "answer": "A rendered document such as a PDF",
+                    "next": "data-actions.document"
+                },
+                {
+                    "answer": "A public, versioned API operation",
+                    "next": "data-actions.api-op"
+                },
+                {
+                    "answer": "A report with aggregation and export",
+                    "next": "data-actions.report"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "data-actions.output.byo"
+                }
+            ]
+        },
+        "data-actions.record-extras": {
+            "id": "data-actions.record-extras",
+            "question": "Which addition?",
+            "options": [
+                {
+                    "answer": "Per-record files and photos (media library)",
+                    "next": "data-actions.media-library"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "data-actions.record-extras.byo"
+                }
+            ]
+        },
+        "data-actions.action": {
+            "id": "data-actions.action",
+            "recipe": "Domain action",
+            "summary": "One principal-first Action owns the write. It checks lock_version against stale writes, which also stops concurrent edits, and is shared by controllers, jobs and MCP tools.",
+            "kit": [],
+            "make": "standards:make action --flavor=plain",
+            "checks": [
+                "actions",
+                "21"
+            ],
+            "paths": [
+                "app/**/Actions/**"
+            ],
+            "keywords": [
+                "action",
+                "write",
+                "business logic",
+                "mutate",
+                "operation"
+            ],
+            "status": "ready",
+            "evidence": {
+                "apps": 7,
+                "count": 33,
+                "prs": 33,
+                "past_apps": 13,
+                "past_count": 73
+            }
+        },
+        "data-actions.tenant-model": {
+            "id": "data-actions.tenant-model",
+            "recipe": "Workspace-scoped model",
+            "summary": "A model with composite tenancy foreign keys, a lock_version stale-write guard and its policy.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "model",
+                "tenant",
+                "workspace",
+                "lock_version",
+                "composite key",
+                "concurrent edit",
+                "edit lock"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 4,
+                "count": 11,
+                "prs": 11,
+                "past_apps": 17,
+                "past_count": 190
+            }
+        },
+        "data-actions.constraints": {
+            "id": "data-actions.constraints",
+            "recipe": "Enum and constraint conventions",
+            "summary": "Backed enums and database check constraints for a domain model's states.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "enum",
+                "check constraint",
+                "status column",
+                "migration"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 3,
+                "count": 28,
+                "prs": 28,
+                "past_apps": 18,
+                "past_count": 169
+            }
+        },
+        "data-actions.ledger": {
+            "id": "data-actions.ledger",
+            "recipe": "Append-only ledger",
+            "summary": "An append-only ledger or receipts table guarded by database triggers and idempotency keys.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "ledger",
+                "append only",
+                "receipt",
+                "immutable",
+                "idempotency"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 3,
+                "count": 5,
+                "prs": 5,
+                "past_apps": 9,
+                "past_count": 25
+            }
+        },
+        "data-actions.document": {
+            "id": "data-actions.document",
+            "recipe": "pdf-reports",
+            "summary": "A frozen document rendered to PDF through one renderer contract.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "pdf",
+                "document",
+                "render",
+                "invoice"
+            ],
+            "status": "gap",
+            "recipe_make": "mod:butter/pdf-reports {Name}",
+            "evidence": {
+                "apps": 3,
+                "count": 11,
+                "prs": 11,
+                "past_apps": 16,
+                "past_count": 46
+            }
+        },
+        "data-actions.api-op": {
+            "id": "data-actions.api-op",
+            "recipe": "Versioned API operation",
+            "summary": "An OpenAPI entry, controller and MCP mirror for each public, versioned API operation.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "api",
+                "openapi",
+                "versioned",
+                "endpoint"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 2,
+                "count": 9,
+                "prs": 9
+            }
+        },
+        "data-actions.file-import": {
+            "id": "data-actions.file-import",
+            "recipe": "File import pipeline",
+            "summary": "A queued spreadsheet, CSV or XML import with an upload workspace and processing history.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "import",
+                "bulk",
+                "csv",
+                "spreadsheet",
+                "xml",
+                "upload"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 0,
+                "count": 0,
+                "prs": 0,
+                "past_apps": 2,
+                "past_count": 16
+            }
+        },
+        "data-actions.byo": {
+            "id": "data-actions.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "data-actions.model.byo": {
+            "id": "data-actions.model.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "data-actions.output.byo": {
+            "id": "data-actions.output.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "data-actions.report": {
+            "id": "data-actions.report",
+            "recipe": "Report builder",
+            "summary": "Monthly aggregation and performance report classes with export.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "report",
+                "aggregate",
+                "export",
+                "monthly",
+                "performance"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 0,
+                "count": 0,
+                "prs": 0,
+                "past_apps": 1,
+                "past_count": 10
+            }
+        },
+        "data-actions.media-library": {
+            "id": "data-actions.media-library",
+            "recipe": "media-library",
+            "summary": "Per-record files and photos through spatie/laravel-medialibrary as the kit wires it. Follow the kit's avatar upload (SessionUi Avatars and StoreAvatar) and the medialibrary Boost skill. There is no scaffold yet.",
+            "kit": [
+                "@kit/ui FileInput"
+            ],
+            "make": null,
+            "checks": [
+                "19",
+                "ui dropzone"
+            ],
+            "paths": [],
+            "keywords": [
+                "attachment",
+                "photo",
+                "file storage",
+                "media",
+                "medialibrary",
+                "upload to record"
+            ],
+            "status": "draft",
+            "evidence": {
+                "apps": 0,
+                "count": 0,
+                "prs": 0,
+                "past_apps": 2,
+                "past_count": 4
+            },
+            "components": [
+                {
+                    "name": "file field",
+                    "kit_component": "FileInput",
+                    "use": "Uploads the record's file or photo",
+                    "props_hint": "v-model, accept"
+                }
+            ]
+        },
+        "data-actions.record-extras.byo": {
+            "id": "data-actions.record-extras.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "mcp": {
+            "id": "mcp",
+            "question": "What are you adding to MCP?",
+            "options": [
+                {
+                    "answer": "A tool over an app operation",
+                    "next": "mcp.tool"
+                },
+                {
+                    "answer": "A capability manifest, llms.txt or a parity guard",
+                    "next": "mcp.agent-docs"
+                },
+                {
+                    "answer": "Deciding where MCP files live in a module",
+                    "next": "mcp.module-placement"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "mcp.byo"
+                }
+            ]
+        },
+        "mcp.tool": {
+            "id": "mcp.tool",
+            "question": "Does the tool change data?",
+            "why": "Writing tools reuse the UI's Action and mark destructive calls for confirmation; read tools stay side-effect free.",
+            "options": [
+                {
+                    "answer": "It only reads",
+                    "next": "mcp.read"
+                },
+                {
+                    "answer": "It creates, changes or deletes data",
+                    "next": "mcp.write"
+                },
+                {
+                    "answer": "It starts slow or external work",
+                    "next": "mcp.queued"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "mcp.tool.byo"
+                }
+            ]
+        },
+        "mcp.read": {
+            "id": "mcp.read",
+            "recipe": "Read capability tool",
+            "summary": "A kit CapabilityTool with a",
+            "kit": [
+                "Tey\\Kit\\Features\\Mcp\\CapabilityTool",
+                "Tey\\Kit\\Features\\Mcp\\Capability"
+            ],
+            "make": "standards:make capability-tool --flavor=read",
+            "checks": [
+                "55"
+            ],
+            "paths": [
+                "app/Mcp/Tools/**"
+            ],
+            "keywords": [
+                "mcp",
+                "tool",
+                "assistant",
+                "read",
+                "query",
+                "agent"
+            ],
+            "status": "ready",
+            "evidence": {
+                "apps": 9,
+                "count": 27,
+                "prs": 27,
+                "past_apps": 0,
+                "past_count": 0
+            }
+        },
+        "mcp.write": {
+            "id": "mcp.write",
+            "recipe": "mcp-parity",
+            "summary": "A CapabilityTool whose call() runs the same Action as the UI (destructive in its",
+            "kit": [
+                "Tey\\Kit\\Features\\Mcp\\CapabilityTool",
+                "Tey\\Kit\\Features\\Mcp\\Capability"
+            ],
+            "make": "standards:make capability-tool --flavor=write",
+            "checks": [
+                "55",
+                "actions"
+            ],
+            "paths": [
+                "app/Mcp/Tools/**"
+            ],
+            "keywords": [
+                "mcp",
+                "tool",
+                "write",
+                "update",
+                "delete",
+                "mutate",
+                "parity"
+            ],
+            "status": "ready",
+            "recipe_make": "mod:butter/mcp-parity {Name}",
+            "evidence": {
+                "apps": 1,
+                "count": 4,
+                "prs": 4,
+                "past_apps": 1,
+                "past_count": 23
+            }
+        },
+        "mcp.queued": {
+            "id": "mcp.queued",
+            "recipe": "Queued capability tool",
+            "summary": "Slow or external work answers with a run token the assistant reads back.",
+            "kit": [
+                "Tey\\Kit\\Features\\Mcp\\CapabilityTool"
+            ],
+            "make": null,
+            "checks": [
+                "55"
+            ],
+            "paths": [],
+            "keywords": [
+                "mcp",
+                "queued",
+                "long running",
+                "external",
+                "run token"
+            ],
+            "status": "gap"
+        },
+        "mcp.agent-docs": {
+            "id": "mcp.agent-docs",
+            "recipe": "Agent docs and parity guard",
+            "summary": "A capability manifest, generated llms.txt and an architecture test that keeps routes and MCP tools in parity.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "55"
+            ],
+            "paths": [
+                "docs/mcp-capabilities.json"
+            ],
+            "keywords": [
+                "llms.txt",
+                "manifest",
+                "capabilities",
+                "parity",
+                "agent docs"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 7,
+                "count": 10,
+                "prs": 10
+            }
+        },
+        "mcp.module-placement": {
+            "id": "mcp.module-placement",
+            "recipe": "MCP files in a module",
+            "summary": "Where MCP tools, resources and servers live inside a module.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "module",
+                "placement",
+                "mcp folder"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 1,
+                "count": 1,
+                "prs": 1
+            }
+        },
+        "mcp.byo": {
+            "id": "mcp.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "mcp.tool.byo": {
+            "id": "mcp.tool.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "settings": {
+            "id": "settings",
+            "question": "Is the value per deploy (config or env), a per-tenant or per-person setting, an on/off feature or access grant, or an attribute of a domain record?",
+            "why": "Only per-tenant and per-person values belong in a settings section; the rest live in config, access or the record itself.",
+            "options": [
+                {
+                    "answer": "Per deploy: config or env",
+                    "next": "settings.config"
+                },
+                {
+                    "answer": "A per-tenant or per-person setting",
+                    "next": "settings.section"
+                },
+                {
+                    "answer": "A feature switch, a plan entitlement or a role permission",
+                    "next": "settings.access-kind"
+                },
+                {
+                    "answer": "An attribute or option of a domain record",
+                    "next": "settings.record-attribute"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "settings.byo"
+                }
+            ]
+        },
+        "settings.section": {
+            "id": "settings.section",
+            "question": "Whose setting is it?",
+            "options": [
+                {
+                    "answer": "The signed-in person's own",
+                    "next": "settings.person"
+                },
+                {
+                    "answer": "A workspace's, edited by its admins",
+                    "next": "settings.workspace"
+                },
+                {
+                    "answer": "The whole installation (single tenant)",
+                    "next": "settings.house"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "settings.section.byo"
+                }
+            ]
+        },
+        "settings.person": {
+            "id": "settings.person",
+            "question": "Does the settings group need its own nav section, or join an existing settings class?",
+            "why": "A new section gets its own route, page and nav item; preferences can join an existing one.",
+            "options": [
+                {
+                    "answer": "Its own section with a form",
+                    "next": "settings.form"
+                },
+                {
+                    "answer": "On/off preferences",
+                    "next": "settings.toggles"
+                },
+                {
+                    "answer": "Per-person state outside a settings page",
+                    "next": "settings.user-state"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "settings.person.byo"
+                }
+            ]
+        },
+        "settings.access-kind": {
+            "id": "settings.access-kind",
+            "question": "Is this a capability toggle, an entitlement or a role permission?",
+            "why": "Capabilities, entitlements, membership and permissions stay distinct.",
+            "options": [
+                {
+                    "answer": "A capability switched on or off per workspace",
+                    "next": "settings.capability-toggle"
+                },
+                {
+                    "answer": "A plan entitlement or a role permission",
+                    "next": "settings.not-a-setting"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "settings.access-kind.byo"
+                }
+            ]
+        },
+        "settings.form": {
+            "id": "settings.form",
+            "recipe": "Settings form section",
+            "summary": "An edit/update controller under the settings route group renders resources/js/pages/settings/<Section>/Page.vue in the settings layout.",
+            "kit": [
+                "@kit/ui SettingsFrame",
+                "@kit/ui FormCard",
+                "@kit/ui Field"
+            ],
+            "make": "standards:make settings-section --flavor=form",
+            "checks": [
+                "20",
+                "21",
+                "toast",
+                "actions"
+            ],
+            "paths": [
+                "app/**/Http/Controllers/Settings/**",
+                "resources/js/pages/settings/**"
+            ],
+            "keywords": [
+                "settings",
+                "profile",
+                "account",
+                "preferences form"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "settings shell",
+                    "kit_component": "SettingsFrame",
+                    "use": "The settings layout and nav",
+                    "props_hint": "title"
+                },
+                {
+                    "name": "form",
+                    "kit_component": "FormCard",
+                    "use": "The section form",
+                    "props_hint": "title, @submit"
+                },
+                {
+                    "name": "field",
+                    "kit_component": "Field",
+                    "use": "Label, input and error",
+                    "props_hint": "label, error"
+                },
+                {
+                    "name": "input",
+                    "kit_component": "Input",
+                    "use": "A text setting",
+                    "props_hint": "v-model"
+                },
+                {
+                    "name": "submit",
+                    "kit_component": "FormActions",
+                    "use": "Save button",
+                    "props_hint": "processing"
+                }
+            ]
+        },
+        "settings.toggles": {
+            "id": "settings.toggles",
+            "recipe": "Settings preference toggles",
+            "summary": "Each toggle saves on change through one update endpoint and confirms with a toast.",
+            "kit": [
+                "@kit/ui SettingsFrame",
+                "@kit/ui Section",
+                "@kit/ui Checkbox"
+            ],
+            "make": "standards:make settings-section --flavor=toggles",
+            "checks": [
+                "20",
+                "21",
+                "toast"
+            ],
+            "paths": [
+                "app/**/Http/Controllers/Settings/**",
+                "resources/js/pages/settings/**"
+            ],
+            "keywords": [
+                "toggle",
+                "switch",
+                "preference",
+                "notification settings",
+                "on off"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "settings shell",
+                    "kit_component": "SettingsFrame",
+                    "use": "The settings layout and nav",
+                    "props_hint": "title"
+                },
+                {
+                    "name": "group",
+                    "kit_component": "Section",
+                    "use": "Groups related preferences",
+                    "props_hint": "title"
+                },
+                {
+                    "name": "toggle",
+                    "kit_component": "Checkbox",
+                    "use": "An on/off preference that saves on change",
+                    "props_hint": "v-model, label"
+                }
+            ]
+        },
+        "settings.user-state": {
+            "id": "settings.user-state",
+            "recipe": "Per-person state",
+            "summary": "Timezone, avatar and remembered UI state stored per person, outside a settings page.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "timezone",
+                "avatar",
+                "user state",
+                "remembered"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 3,
+                "count": 3,
+                "prs": 3
+            }
+        },
+        "settings.workspace": {
+            "id": "settings.workspace",
+            "recipe": "Workspace settings",
+            "summary": "A settings section per workspace group from the settings-section generator, guarded by a permission (rule 32) and audited.",
+            "kit": [
+                "@kit/ui SettingsFrame",
+                "@kit/ui FormCard",
+                "@kit/ui Field"
+            ],
+            "make": "standards:make settings-section --flavor=form",
+            "checks": [
+                "32"
+            ],
+            "paths": [
+                "app/**/Http/Controllers/Settings/**",
+                "resources/js/pages/settings/**"
+            ],
+            "keywords": [
+                "workspace",
+                "team",
+                "organisation",
+                "tenant settings"
+            ],
+            "status": "ready",
+            "evidence": {
+                "apps": 3,
+                "count": 9,
+                "prs": 9
+            }
+        },
+        "settings.house": {
+            "id": "settings.house",
+            "recipe": "Installation-wide settings",
+            "summary": "A typed settings class with its settings migration for a single-tenant installation.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "house",
+                "global",
+                "single tenant",
+                "site settings"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 1,
+                "count": 13,
+                "prs": 13,
+                "past_apps": 7,
+                "past_count": 22
+            }
+        },
+        "settings.config": {
+            "id": "settings.config",
+            "recipe": "Config value",
+            "summary": "A config key read from env, with a boot-time guard that fails closed when it is missing.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [
+                "config/**"
+            ],
+            "keywords": [
+                "config",
+                "env",
+                "environment",
+                "deploy setting",
+                "boot guard"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 7,
+                "count": 16,
+                "prs": 16
+            }
+        },
+        "settings.capability-toggle": {
+            "id": "settings.capability-toggle",
+            "recipe": "Capability toggle",
+            "summary": "A per-workspace capability in the capabilities registry, kept distinct from entitlements; name the key and its gate points.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "32"
+            ],
+            "paths": [],
+            "keywords": [
+                "capability",
+                "feature flag",
+                "feature toggle",
+                "enable feature"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 1,
+                "count": 3,
+                "prs": 3
+            }
+        },
+        "settings.not-a-setting": {
+            "id": "settings.not-a-setting",
+            "recipe": "Entitlement or permission",
+            "summary": "Not a setting. Build it under access-tenancy as an entitlement or a role permission.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "entitlement",
+                "plan",
+                "permission",
+                "role"
+            ],
+            "status": "gap"
+        },
+        "settings.record-attribute": {
+            "id": "settings.record-attribute",
+            "recipe": "Record attribute",
+            "summary": "Not a setting. Add a field or option to the domain record through data-actions.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "attribute",
+                "field",
+                "option",
+                "column"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 5,
+                "count": 18,
+                "prs": 18
+            }
+        },
+        "settings.byo": {
+            "id": "settings.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "settings.section.byo": {
+            "id": "settings.section.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "settings.person.byo": {
+            "id": "settings.person.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "settings.access-kind.byo": {
+            "id": "settings.access-kind.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "mail-notifications": {
+            "id": "mail-notifications",
+            "question": "Is the channel mail, SMS or an agent recipient?",
+            "options": [
+                {
+                    "answer": "Mail",
+                    "next": "mail-notifications.mail"
+                },
+                {
+                    "answer": "SMS or an agent",
+                    "next": "mail-notifications.custom-channel"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "mail-notifications.byo"
+                }
+            ]
+        },
+        "mail-notifications.mail": {
+            "id": "mail-notifications.mail",
+            "question": "What does the mail carry?",
+            "options": [
+                {
+                    "answer": "A message about the person's account",
+                    "next": "mail-notifications.notification"
+                },
+                {
+                    "answer": "A document or signed link, with a send record",
+                    "next": "mail-notifications.document-delivery"
+                },
+                {
+                    "answer": "A digest for many users",
+                    "next": "mail-notifications.digest"
+                },
+                {
+                    "answer": "The brand header, footer or preheader every mail shares",
+                    "next": "mail-notifications.branded-layout"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "mail-notifications.mail.byo"
+                }
+            ]
+        },
+        "mail-notifications.notification": {
+            "id": "mail-notifications.notification",
+            "recipe": "Account notification",
+            "summary": "A Notification with the configured mail composer; never a Mailable or the Mail facade.",
+            "kit": [],
+            "make": "standards:make notification --flavor=plain",
+            "checks": [
+                "mail"
+            ],
+            "paths": [
+                "app/**/Notifications/**"
+            ],
+            "keywords": [
+                "notify",
+                "email",
+                "mail",
+                "notification"
+            ],
+            "status": "ready",
+            "evidence": {
+                "apps": 1,
+                "count": 2,
+                "prs": 2,
+                "past_apps": 13,
+                "past_count": 48
+            }
+        },
+        "mail-notifications.document-delivery": {
+            "id": "mail-notifications.document-delivery",
+            "recipe": "Document delivery",
+            "summary": "Send a document or signed link with an attachment threshold, a send record and a test-send variant.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "send document",
+                "attachment",
+                "signed link",
+                "test send"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 3,
+                "count": 8,
+                "prs": 8
+            }
+        },
+        "mail-notifications.digest": {
+            "id": "mail-notifications.digest",
+            "recipe": "Digest",
+            "summary": "Many users in a digest.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "digest",
+                "newsletter",
+                "batch email"
+            ],
+            "status": "gap"
+        },
+        "mail-notifications.custom-channel": {
+            "id": "mail-notifications.custom-channel",
+            "recipe": "Custom channel",
+            "summary": "A custom notification channel for SMS or an agent, with held and quiet-hours gating.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "sms",
+                "text message",
+                "agent",
+                "channel"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 1,
+                "count": 9,
+                "prs": 9
+            }
+        },
+        "mail-notifications.byo": {
+            "id": "mail-notifications.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "mail-notifications.mail.byo": {
+            "id": "mail-notifications.mail.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "mail-notifications.branded-layout": {
+            "id": "mail-notifications.branded-layout",
+            "recipe": "branded-mail",
+            "summary": "Every notification renders through the configured mail composer's branded layout, with the header, footer and preheader set once; no per-mail Blade copies.",
+            "kit": [],
+            "make": "standards:make notification --flavor=plain",
+            "checks": [
+                "mail"
+            ],
+            "paths": [
+                "app/**/Notifications/**"
+            ],
+            "keywords": [
+                "brand",
+                "mail layout",
+                "footer",
+                "header",
+                "preheader",
+                "email template"
+            ],
+            "status": "ready",
+            "evidence": {
+                "apps": 5,
+                "count": 9,
+                "prs": 9,
+                "past_apps": 2,
+                "past_count": 10
+            }
+        },
+        "background": {
+            "id": "background",
+            "question": "When does it run?",
+            "options": [
+                {
+                    "answer": "After a request, in the background",
+                    "next": "background.job"
+                },
+                {
+                    "answer": "On a schedule",
+                    "next": "background.schedule"
+                },
+                {
+                    "answer": "When an operator runs a command",
+                    "next": "background.command"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "background.byo"
+                }
+            ]
+        },
+        "background.job": {
+            "id": "background.job",
+            "recipe": "Queued job",
+            "summary": "A queued job that calls the Action doing the work, so the logic is shared and the job stays thin.",
+            "kit": [],
+            "make": "standards:make job --flavor=plain",
+            "checks": [
+                "actions"
+            ],
+            "paths": [
+                "app/**/Jobs/**"
+            ],
+            "keywords": [
+                "queue",
+                "job",
+                "background",
+                "async"
+            ],
+            "status": "ready"
+        },
+        "background.schedule": {
+            "id": "background.schedule",
+            "recipe": "Scheduled job",
+            "summary": "A scheduled job registered with an overlap guard and a retention sweep. The evidence is weak; few cited changes clearly fit.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "schedule",
+                "cron",
+                "nightly",
+                "retention"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 4,
+                "count": 21,
+                "prs": 21,
+                "past_apps": 7,
+                "past_count": 22
+            }
+        },
+        "background.command": {
+            "id": "background.command",
+            "recipe": "Operator command",
+            "summary": "An artisan command that is idempotent, supports --dry-run and refuses to run in production unless forced.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "command",
+                "artisan",
+                "operator",
+                "backfill",
+                "dry run"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 6,
+                "count": 11,
+                "prs": 11,
+                "past_apps": 18,
+                "past_count": 129
+            }
+        },
+        "background.byo": {
+            "id": "background.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "access-tenancy": {
+            "id": "access-tenancy",
+            "question": "Is the actor an unauthenticated recipient arriving by a signed token link?",
+            "options": [
+                {
+                    "answer": "Yes",
+                    "next": "access-tenancy.signed-link"
+                },
+                {
+                    "answer": "No, a signed-in user",
+                    "next": "access-tenancy.user"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "access-tenancy.byo"
+                }
+            ]
+        },
+        "access-tenancy.user": {
+            "id": "access-tenancy.user",
+            "question": "What decides access?",
+            "why": "Capabilities, entitlements, membership and admission stay distinct.",
+            "options": [
+                {
+                    "answer": "A role permission or a record policy",
+                    "next": "access-tenancy.authorization"
+                },
+                {
+                    "answer": "A purchase or plan (entitlement)",
+                    "next": "access-tenancy.entitlements"
+                },
+                {
+                    "answer": "Workspace membership",
+                    "next": "access-tenancy.membership"
+                },
+                {
+                    "answer": "Login or request hardening",
+                    "next": "access-tenancy.hardening"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "access-tenancy.user.byo"
+                }
+            ]
+        },
+        "access-tenancy.authorization": {
+            "id": "access-tenancy.authorization",
+            "question": "Is it a role permission, or authorization on a record?",
+            "why": "Permissions, capabilities, entitlements and membership stay distinct.",
+            "options": [
+                {
+                    "answer": "A role permission",
+                    "next": "access-tenancy.permissions"
+                },
+                {
+                    "answer": "A policy on a record",
+                    "next": "access-tenancy.capability"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "access-tenancy.authorization.byo"
+                }
+            ]
+        },
+        "access-tenancy.hardening": {
+            "id": "access-tenancy.hardening",
+            "question": "Which hardening?",
+            "options": [
+                {
+                    "answer": "Login throttling, local login or two-factor",
+                    "next": "access-tenancy.auth-hardening"
+                },
+                {
+                    "answer": "Host split or security headers on every request",
+                    "next": "access-tenancy.host-middleware"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "access-tenancy.hardening.byo"
+                }
+            ]
+        },
+        "access-tenancy.signed-link": {
+            "id": "access-tenancy.signed-link",
+            "recipe": "Signed recipient link",
+            "summary": "A hashed, expiring, revocable token link that records who used it.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "signed link",
+                "token",
+                "magic link",
+                "recipient",
+                "revoke"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 4,
+                "count": 7,
+                "prs": 7
+            }
+        },
+        "access-tenancy.capability": {
+            "id": "access-tenancy.capability",
+            "recipe": "Capability or policy",
+            "summary": "A policy authorizes the record; the operation asks it, never a role check in code.",
+            "kit": [],
+            "make": "standards:make policy --flavor=plain",
+            "checks": [
+                "32"
+            ],
+            "paths": [
+                "app/**/Policies/**"
+            ],
+            "keywords": [
+                "permission",
+                "policy",
+                "capability",
+                "authorize"
+            ],
+            "status": "ready",
+            "evidence": {
+                "apps": 2,
+                "count": 3,
+                "prs": 3,
+                "past_apps": 7,
+                "past_count": 32
+            }
+        },
+        "access-tenancy.entitlements": {
+            "id": "access-tenancy.entitlements",
+            "recipe": "Entitlement",
+            "summary": "Access granted by purchase or plan, kept distinct from capabilities and roles.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "entitlement",
+                "plan",
+                "purchase",
+                "subscription access"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 3,
+                "count": 6,
+                "prs": 6
+            }
+        },
+        "access-tenancy.membership": {
+            "id": "access-tenancy.membership",
+            "recipe": "Workspace membership",
+            "summary": "Workspace membership.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "workspace",
+                "member",
+                "invite",
+                "tenant"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 3,
+                "count": 4,
+                "prs": 4,
+                "past_apps": 7,
+                "past_count": 27
+            }
+        },
+        "access-tenancy.auth-hardening": {
+            "id": "access-tenancy.auth-hardening",
+            "recipe": "Auth hardening",
+            "summary": "Login rate limiters and local-only sign-in defaults.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "throttle",
+                "rate limit",
+                "local login",
+                "two factor",
+                "2fa"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 4,
+                "count": 8,
+                "prs": 8,
+                "past_apps": 8,
+                "past_count": 22
+            }
+        },
+        "access-tenancy.host-middleware": {
+            "id": "access-tenancy.host-middleware",
+            "recipe": "Host and header middleware",
+            "summary": "Host-split routing and security-headers middleware.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "host",
+                "domain split",
+                "security headers",
+                "middleware"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 4,
+                "count": 7,
+                "prs": 7
+            }
+        },
+        "access-tenancy.byo": {
+            "id": "access-tenancy.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "access-tenancy.user.byo": {
+            "id": "access-tenancy.user.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "access-tenancy.hardening.byo": {
+            "id": "access-tenancy.hardening.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "access-tenancy.permissions": {
+            "id": "access-tenancy.permissions",
+            "recipe": "kit-permissions",
+            "summary": "Register the permission with Registry::permission() and run php artisan kit:permissions:sync; check it through a policy, never a role name in code.",
+            "kit": [],
+            "make": "standards:make policy --flavor=plain",
+            "checks": [
+                "32",
+                "descriptors"
+            ],
+            "paths": [
+                "app/**/Policies/**"
+            ],
+            "keywords": [
+                "permission",
+                "role",
+                "sync permissions",
+                "registry"
+            ],
+            "status": "ready",
+            "evidence": {
+                "apps": 2,
+                "count": 2,
+                "prs": 2,
+                "past_apps": 13,
+                "past_count": 26
+            }
+        },
+        "access-tenancy.authorization.byo": {
+            "id": "access-tenancy.authorization.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "integrations": {
+            "id": "integrations",
+            "question": "Which service?",
+            "options": [
+                {
+                    "answer": "Monitoring",
+                    "next": "integrations.monitoring"
+                },
+                {
+                    "answer": "Payments and billing",
+                    "next": "integrations.billing"
+                },
+                {
+                    "answer": "An AI model or agent",
+                    "next": "integrations.ai"
+                },
+                {
+                    "answer": "Another provider's API or webhooks",
+                    "next": "integrations.provider"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "integrations.byo"
+                }
+            ]
+        },
+        "integrations.provider": {
+            "id": "integrations.provider",
+            "question": "Is there an official provider SDK and a fake driver for tests, or is it a known kind of service?",
+            "options": [
+                {
+                    "answer": "Yes: wrap the SDK behind a contract with a fake",
+                    "next": "integrations.outbound"
+                },
+                {
+                    "answer": "No: raw HTTP or inbound signed webhooks",
+                    "next": "integrations.webhooks"
+                },
+                {
+                    "answer": "An accounting package to sync invoices with",
+                    "next": "integrations.accounting"
+                },
+                {
+                    "answer": "A full-text search index",
+                    "next": "integrations.search"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "integrations.provider.byo"
+                }
+            ]
+        },
+        "integrations.monitoring": {
+            "id": "integrations.monitoring",
+            "recipe": "Monitoring install",
+            "summary": "A token-gated Nightwatch install with request sampling at 0.1, off in tests, checked by preflight. Queue dashboards and debug tooling belong here too.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "monitoring",
+                "nightwatch",
+                "apm",
+                "errors"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 8,
+                "count": 8,
+                "prs": 8,
+                "past_apps": 9,
+                "past_count": 20
+            }
+        },
+        "integrations.billing": {
+            "id": "integrations.billing",
+            "recipe": "Billing",
+            "summary": "Guarded Stripe Checkout, a signed webhook, a shared-account guard and the catalogue as code.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "stripe",
+                "billing",
+                "checkout",
+                "payment",
+                "subscription"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 6,
+                "count": 14,
+                "prs": 14,
+                "past_apps": 2,
+                "past_count": 7
+            }
+        },
+        "integrations.ai": {
+            "id": "integrations.ai",
+            "recipe": "AI provider",
+            "summary": "An AI agent call with metering, a timeout and a per-workspace key.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "ai",
+                "llm",
+                "agent",
+                "model",
+                "openai",
+                "anthropic"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 3,
+                "count": 4,
+                "prs": 4
+            }
+        },
+        "integrations.outbound": {
+            "id": "integrations.outbound",
+            "recipe": "Provider client",
+            "summary": "Use the official SDK behind an app contract with a fake for tests; verify inbound webhooks by signature.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "api",
+                "client",
+                "sdk",
+                "third party",
+                "http",
+                "webhook client"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 4,
+                "count": 15,
+                "prs": 15,
+                "past_apps": 12,
+                "past_count": 28
+            }
+        },
+        "integrations.webhooks": {
+            "id": "integrations.webhooks",
+            "recipe": "Inbound webhooks",
+            "summary": "Receive signed webhooks without an official SDK.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "webhook",
+                "callback",
+                "inbound"
+            ],
+            "status": "gap"
+        },
+        "integrations.byo": {
+            "id": "integrations.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "integrations.provider.byo": {
+            "id": "integrations.provider.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "integrations.accounting": {
+            "id": "integrations.accounting",
+            "recipe": "Accounting sync",
+            "summary": "OAuth to an accounting package, invoice generation and entity mapping sync.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "accounting",
+                "invoice sync",
+                "bookkeeping",
+                "oauth"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 0,
+                "count": 0,
+                "prs": 0,
+                "past_apps": 2,
+                "past_count": 2
+            }
+        },
+        "integrations.search": {
+            "id": "integrations.search",
+            "recipe": "Search index",
+            "summary": "A full-text search index with rebuild and sync.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "search",
+                "full text",
+                "index",
+                "scout"
+            ],
+            "status": "gap",
+            "evidence": {
+                "apps": 0,
+                "count": 0,
+                "prs": 0,
+                "past_apps": 1,
+                "past_count": 1
+            }
+        },
+        "byo": {
+            "id": "byo",
+            "recipe": "Build your own",
+            "summary": "Nothing in the tree fits. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        }
+    }
+}

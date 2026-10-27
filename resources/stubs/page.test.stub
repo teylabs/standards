@@ -1,0 +1,7 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+it('renders the {{ title }} {{ flavor }} page', function () {
+    $this->get('/{{ slug }}{{ test_suffix }}')->assertOk();
+});

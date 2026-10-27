@@ -1,0 +1,148 @@
+answer: Logic that changes data
+entry: data-actions
+nodes:
+  - id: data-actions
+    question: What are you adding?
+    options:
+      - { answer: "An operation that changes state", next: data-actions.action }
+      - { answer: "A model or table", next: data-actions.model }
+      - { answer: "An output: a rendered document or a public API operation", next: data-actions.output }
+      - { answer: "A bulk import", next: data-actions.file-import }
+      - { answer: "None of these", next: data-actions.byo }
+  - id: data-actions.model
+    question: Does the model need composite-FK tenancy and a lock_version stale-write guard?
+    options:
+      - { answer: "Yes, it is workspace-scoped", next: data-actions.tenant-model }
+      - { answer: "No; it needs enum and check-constraint conventions", next: data-actions.constraints }
+      - { answer: "Its history must be append-only", next: data-actions.ledger }
+      - { answer: "It needs file or photo attachments", next: data-actions.record-extras }
+      - { answer: "None of these", next: data-actions.model.byo }
+  - id: data-actions.output
+    question: Which output?
+    options:
+      - { answer: "A rendered document such as a PDF", next: data-actions.document }
+      - { answer: "A public, versioned API operation", next: data-actions.api-op }
+      - { answer: "A report with aggregation and export", next: data-actions.report }
+      - { answer: "None of these", next: data-actions.output.byo }
+  - id: data-actions.record-extras
+    question: Which addition?
+    options:
+      - { answer: "Per-record files and photos (media library)", next: data-actions.media-library }
+      - { answer: "None of these", next: data-actions.record-extras.byo }
+  - id: data-actions.action
+    recipe: Domain action
+    summary: One principal-first Action owns the write. It checks lock_version against stale writes, which also stops concurrent edits, and is shared by controllers, jobs and MCP tools.
+    kit: []
+    make: standards:make action --flavor=plain
+    checks: ['actions', '21']
+    paths: ['app/**/Actions/**']
+    keywords: [action, write, business logic, mutate, operation]
+    status: ready
+    evidence: { apps: 7, count: 33, prs: 33, past_apps: 13, past_count: 73 }
+  - id: data-actions.tenant-model
+    recipe: Workspace-scoped model
+    summary: A model with composite tenancy foreign keys, a lock_version stale-write guard and its policy.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [model, tenant, workspace, lock_version, composite key, concurrent edit, edit lock]
+    status: gap
+    evidence: { apps: 4, count: 11, prs: 11, past_apps: 17, past_count: 190 }
+  - id: data-actions.constraints
+    recipe: Enum and constraint conventions
+    summary: Backed enums and database check constraints for a domain model's states.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [enum, check constraint, status column, migration]
+    status: gap
+    evidence: { apps: 3, count: 28, prs: 28, past_apps: 18, past_count: 169 }
+  - id: data-actions.ledger
+    recipe: Append-only ledger
+    summary: An append-only ledger or receipts table guarded by database triggers and idempotency keys.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [ledger, append only, receipt, immutable, idempotency]
+    status: gap
+    evidence: { apps: 3, count: 5, prs: 5, past_apps: 9, past_count: 25 }
+  - id: data-actions.document
+    recipe: pdf-reports
+    recipe_make: "mod:butter/pdf-reports {Name}"
+    summary: A frozen document rendered to PDF through one renderer contract.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [pdf, document, render, invoice]
+    status: gap
+    evidence: { apps: 3, count: 11, prs: 11, past_apps: 16, past_count: 46 }
+  - id: data-actions.api-op
+    recipe: Versioned API operation
+    summary: An OpenAPI entry, controller and MCP mirror for each public, versioned API operation.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [api, openapi, versioned, endpoint]
+    status: gap
+    evidence: { apps: 2, count: 9, prs: 9 }
+  - id: data-actions.file-import
+    recipe: File import pipeline
+    summary: A queued spreadsheet, CSV or XML import with an upload workspace and processing history.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [import, bulk, csv, spreadsheet, xml, upload]
+    status: gap
+    evidence: { apps: 0, count: 0, prs: 0, past_apps: 2, past_count: 16 }
+  - id: data-actions.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: data-actions.model.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: data-actions.output.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: data-actions.report
+    recipe: Report builder
+    summary: Monthly aggregation and performance report classes with export.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [report, aggregate, export, monthly, performance]
+    status: gap
+    evidence: { apps: 0, count: 0, prs: 0, past_apps: 1, past_count: 10 }
+  - id: data-actions.media-library
+    recipe: media-library
+    summary: Per-record files and photos through spatie/laravel-medialibrary as the kit wires it. Follow the kit's avatar upload (SessionUi Avatars and StoreAvatar) and the medialibrary Boost skill. There is no scaffold yet.
+    kit: ['@kit/ui FileInput']
+    components:
+      - { name: "file field", kit_component: FileInput, use: "Uploads the record's file or photo", props_hint: "v-model, accept" }
+    checks: ['19', 'ui dropzone']
+    paths: []
+    keywords: [attachment, photo, file storage, media, medialibrary, upload to record]
+    status: draft
+    evidence: { apps: 0, count: 0, prs: 0, past_apps: 2, past_count: 4 }
+  - id: data-actions.record-extras.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo

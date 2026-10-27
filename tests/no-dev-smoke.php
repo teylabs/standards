@@ -158,6 +158,21 @@ try {
     $provider->register();
     $provider->boot();
     $artisan = new Application($app, $app['events'], 'smoke');
+
+    if ($artisan->call('standards:pattern', ['query' => 'app/Mcp/Tools/ReadTool.php', '--json' => true]) !== 0
+        || json_decode($artisan->output(), true, flags: JSON_THROW_ON_ERROR)['candidates'][0]['id'] !== 'mcp.read') {
+        throw new RuntimeException('standards:pattern must work without development dependencies.');
+    }
+
+    if (! in_array('--with-dev', $argv, true)) {
+        $exit = $artisan->call('standards:check', ['--json' => true]);
+        $check = json_decode($artisan->output(), true, flags: JSON_THROW_ON_ERROR);
+
+        if ($exit !== 1 || $check['violations'][0]['kind'] !== 'error') {
+            throw new RuntimeException('standards:check must fail closed without architecture tools: '.json_encode($check));
+        }
+    }
+
     $exit = $artisan->call('standards:preflight', ['--json' => true, '--no-stderr' => true]);
     $stdout = $artisan->output();
     $json = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);

@@ -1,0 +1,18 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+final class Save{{ name }}Request extends FormRequest
+{
+    /** @return array<string, list<string>> */
+    public function rules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:255'],
+        ];
+    }
+}

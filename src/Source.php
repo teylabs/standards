@@ -58,6 +58,22 @@ final class Source
         return $this->parsed[$path];
     }
 
+    /** @return array<string, string> class => path, from parsing alone: nothing is loaded */
+    public function declared(): array
+    {
+        $classes = [];
+
+        foreach ($this->files(array_keys($this->config->classRoots)) as $path => $source) {
+            foreach ((new NodeFinder)->findInstanceOf($this->nodes($path), Node\Stmt\ClassLike::class) as $node) {
+                if (isset($node->namespacedName)) {
+                    $classes[$node->namespacedName->toString()] = $path;
+                }
+            }
+        }
+
+        return $classes;
+    }
+
     /** @return array<class-string, string> class => path */
     public function classes(): array
     {
@@ -67,6 +83,10 @@ final class Source
             foreach ((new NodeFinder)->findInstanceOf($this->nodes($path), Node\Stmt\ClassLike::class) as $node) {
                 if (isset($node->namespacedName)) {
                     $class = $node->namespacedName->toString();
+
+                    if (in_array($class, $this->config->unloadable, true)) {
+                        continue;
+                    }
 
                     if (! class_exists($class) && ! interface_exists($class) && ! trait_exists($class)) {
                         throw new InvalidArgumentException("Conformance class [{$class}] at [{$path}] cannot be autoloaded: check its PSR-4 placement.");

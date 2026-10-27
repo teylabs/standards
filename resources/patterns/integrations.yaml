@@ -1,0 +1,97 @@
+answer: A connection to another service
+entry: integrations
+nodes:
+  - id: integrations
+    question: Which service?
+    options:
+      - { answer: "Monitoring", next: integrations.monitoring }
+      - { answer: "Payments and billing", next: integrations.billing }
+      - { answer: "An AI model or agent", next: integrations.ai }
+      - { answer: "Another provider's API or webhooks", next: integrations.provider }
+      - { answer: "None of these", next: integrations.byo }
+  - id: integrations.provider
+    question: Is there an official provider SDK and a fake driver for tests, or is it a known kind of service?
+    options:
+      - { answer: "Yes: wrap the SDK behind a contract with a fake", next: integrations.outbound }
+      - { answer: "No: raw HTTP or inbound signed webhooks", next: integrations.webhooks }
+      - { answer: "An accounting package to sync invoices with", next: integrations.accounting }
+      - { answer: "A full-text search index", next: integrations.search }
+      - { answer: "None of these", next: integrations.provider.byo }
+  - id: integrations.monitoring
+    recipe: Monitoring install
+    summary: A token-gated Nightwatch install with request sampling at 0.1, off in tests, checked by preflight. Queue dashboards and debug tooling belong here too.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [monitoring, nightwatch, apm, errors]
+    status: gap
+    evidence: { apps: 8, count: 8, prs: 8, past_apps: 9, past_count: 20 }
+  - id: integrations.billing
+    recipe: Billing
+    summary: Guarded Stripe Checkout, a signed webhook, a shared-account guard and the catalogue as code.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [stripe, billing, checkout, payment, subscription]
+    status: gap
+    evidence: { apps: 6, count: 14, prs: 14, past_apps: 2, past_count: 7 }
+  - id: integrations.ai
+    recipe: AI provider
+    summary: An AI agent call with metering, a timeout and a per-workspace key.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [ai, llm, agent, model, openai, anthropic]
+    status: gap
+    evidence: { apps: 3, count: 4, prs: 4 }
+  - id: integrations.outbound
+    recipe: Provider client
+    summary: Use the official SDK behind an app contract with a fake for tests; verify inbound webhooks by signature.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [api, client, sdk, third party, http, webhook client]
+    status: gap
+    evidence: { apps: 4, count: 15, prs: 15, past_apps: 12, past_count: 28 }
+  - id: integrations.webhooks
+    recipe: Inbound webhooks
+    summary: Receive signed webhooks without an official SDK.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [webhook, callback, inbound]
+    status: gap
+  - id: integrations.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: integrations.provider.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: integrations.accounting
+    recipe: Accounting sync
+    summary: OAuth to an accounting package, invoice generation and entity mapping sync.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [accounting, invoice sync, bookkeeping, oauth]
+    status: gap
+    evidence: { apps: 0, count: 0, prs: 0, past_apps: 2, past_count: 2 }
+  - id: integrations.search
+    recipe: Search index
+    summary: A full-text search index with rebuild and sync.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [search, full text, index, scout]
+    status: gap
+    evidence: { apps: 0, count: 0, prs: 0, past_apps: 1, past_count: 1 }
