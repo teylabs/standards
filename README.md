@@ -392,7 +392,7 @@ php artisan standards:check --file=app/Http/Controllers/InvoicesController.php
 php artisan standards:check --json          # stable schema 1, see below
 ```
 
-Move the app's `Configuration` into `tests/Arch/configuration.php`, a file that returns it (or set `standards.configuration`; publish with `--tag=standards-config`). Have the Arch test `require` the same file, so the Pest suite and the gate judge one setup. The gate runs every `Conformance::TESTS` rule outside Pest, including placement and the Pest presets. Disabled optional UI rules and rule 51 (until `ciEnforce`) are listed under `skipped`, never reported as passes. Drift means any of these:
+The gate reads `tests/Arch/configuration.php`, a file that returns the app's `Configuration` (change the path with `standards.configuration`; publish with `--tag=standards-config`). When the file is missing, `standards:install` scaffolds one inferred from composer.json and the app's folders: class roots, the Inertia pages folder, a typed ViewModel base, and whether tey/kit and tey/mod are present. It prints what it inferred, then adds `tests/Arch/ConformanceTest.php` requiring that file, unless a test already uses `Conformance::TESTS`. It never overwrites either file. Review the scaffold, since it is yours from then on. The gate runs every `Conformance::TESTS` rule outside Pest, including placement and the Pest presets. Disabled optional UI rules and rule 51 (until `ciEnforce`) are listed under `skipped`, never reported as passes. Drift means any of these:
 
 - an unexcepted violation;
 - a stale allowlist entry;

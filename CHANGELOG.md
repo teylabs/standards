@@ -4,7 +4,7 @@
 
 ### Upgrading
 
-- `standards:check` needs a `tests/Arch/configuration.php` that returns your `Configuration` (or set `standards.configuration`). It fails closed without one.
+- `standards:check` needs a `tests/Arch/configuration.php` that returns your `Configuration` (or set `standards.configuration`). It fails closed without one. `standards:install` scaffolds an inferred one and a matching Arch test when it is missing, and never overwrites either.
 - Allowlist entries need `expires` (a real `Y-m-d` date) for `standards:check`. Expired entries and entries without one are drift. Pest ratchets still accept entries without `expires`.
 
 ### Added

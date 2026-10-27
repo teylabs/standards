@@ -427,3 +427,40 @@ test('the artisan commands are registered and print the lookup, gaps and a fail-
         Illuminate\Container\Container::setInstance($previous);
     }
 });
+
+test('install scaffolds an inferred configuration and conformance test when missing, so check can run', function () {
+    $base = fixtureApp();
+
+    try {
+        unlink($base.'/tests/Arch/configuration.php');
+        $installer = new Installer($base, TreeCatalog::shipped());
+        $lines = $installer->configuration();
+
+        expect($lines[0])->toStartWith('tests/Arch/configuration.php scaffolded; inferred: class roots app => App; Inertia pages resources/js/pages; typed ViewModel base App\UI\ViewModel; tey/kit absent; tey/mod absent')
+            ->and($lines[1])->toBe('tests/Arch/ConformanceTest.php scaffolded')
+            ->and(file_get_contents($base.'/tests/Arch/configuration.php'))->toContain("classRoots: ['app' => 'App'],")->toContain('base: dirname(__DIR__, 2),')
+            ->and(file_get_contents($base.'/tests/Arch/ConformanceTest.php'))->toContain("require __DIR__.'/configuration.php'");
+
+        $report = CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped());
+        expect(array_filter($report['violations'], fn (array $v): bool => $v['kind'] === 'error'))->toBe([]);
+
+        file_put_contents($base.'/tests/Arch/configuration.php', '<?php // mine');
+        expect($installer->configuration())->toBe(['tests/Arch/configuration.php kept', 'Arch conformance test kept'])
+            ->and(file_get_contents($base.'/tests/Arch/configuration.php'))->toBe('<?php // mine');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('install keeps an existing conformance test elsewhere and infers kit and mod', function () {
+    $base = ($this->app)();
+    mkdir($base.'/app/Http/Controllers', 0777, true);
+    mkdir($base.'/tests/Architecture', 0777, true);
+    file_put_contents($base.'/tests/Architecture/RulesTest.php', '<?php foreach (Tey\Standards\Conformance::TESTS as $rule => $name) {}');
+    file_put_contents($base.'/composer.json', json_encode(['require' => ['tey/standards' => '*', 'tey/kit' => '*', 'tey/mod' => '*'], 'autoload' => ['psr-4' => ['App\\' => 'app/']]]));
+    $lines = (new Installer($base, TreeCatalog::shipped()))->configuration();
+
+    expect($lines[0])->toContain('typed ViewModel base Tey\Kit\Features\Core\ViewModels\ViewModel')->toContain('tey/kit present')->toContain('tey/mod present')->toContain('Inertia pages not found')
+        ->and($lines[1])->toBe('Arch conformance test kept')
+        ->and(is_file($base.'/tests/Arch/ConformanceTest.php'))->toBeFalse();
+});
