@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `kit-exports.json` is refreshed from tey/kit 0.4.10, which adds `PageEnd`, `SearchBox` and `StickyBar` to the `@kit/ui` barrel. An app on kit 0.4.10 no longer gets the "installed tey/kit exports differ from the pattern catalog's snapshot" warning from `standards:check`. The development requirement is now tey/kit ^0.4.10.
+
 ## 0.11.3 - 2026-10-27
 
 ### Upgrading
