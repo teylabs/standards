@@ -1,0 +1,39 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Console\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Tey\Standards\Operator\Operator;
+use Tey\Standards\Operator\OperatorRun;
+
+/**
+ * Deletes {{ table }} rows whose {{ column }} is older than --days. A dry run unless --apply; refused in production unless allow-listed or --force
+ * with the name typed back; one run at a time; a re-run finds nothing left to delete. Edit TABLE, COLUMN and the cutoff for the real sweep: the operator
+ * contract (Operator::run) stays as it is.
+ */
+final class {{ name }} extends Command
+{
+    public const TABLE = '{{ table }}';
+
+    public const COLUMN = '{{ column }}';
+
+    protected $signature = 'app:{{ slug }} {--apply : Delete (without it, a dry run)} {--force : Allow --apply in production, after typing the command name} {--days=30 : Keep rows newer than this} {--chunk=500 : Rows per batch}';
+
+    protected $description = 'Delete stale '.self::TABLE.' rows (dry run unless --apply)';
+
+    public function handle(): int
+    {
+        return Operator::run($this, function (OperatorRun $run): void {
+            $cutoff = now()->subDays(max(1, (int) $this->option('days')));
+            DB::table(self::TABLE)->where(self::COLUMN, '<', $cutoff)->orderBy('id')->chunkById(max(1, (int) $this->option('chunk')), function ($rows) use ($run, $cutoff): void {
+                $run->each($rows, function (object $row, OperatorRun $run) use ($cutoff): void {
+                    $run->write(fn () => DB::table(self::TABLE)->where('id', $row->id)->where(self::COLUMN, '<', $cutoff)->delete());
+                    $run->changed();
+                });
+            });
+        });
+    }
+}

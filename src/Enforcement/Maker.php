@@ -14,9 +14,9 @@ use Tey\Standards\Patterns\PatternCatalog;
 
 /**
  * Emits conformant code for a pattern leaf. Units tey/mod generates (model,
- * policy, job, command, notification) run its make:* command and then get the
+ * policy, job, notification) run its make:* command and then get the
  * standards stamp; units with no mod generator (crud, page, action,
- * capability-tool, settings-section) come from recipe stubs, which an app or kit
+ * capability-tool, settings-section, command) come from recipe stubs, which an app or kit
  * can override with standards.make.stubs. Every file carries the leaf's pattern
  * stamp (a crud resource stamps each file with the leaf it implements); existing
  * files are never overwritten.
@@ -28,7 +28,6 @@ final class Maker
         'model' => 'make:model',
         'policy' => 'make:policy',
         'job' => 'make:job',
-        'command' => 'make:command',
         'notification' => 'make:notification',
     ];
 
@@ -108,6 +107,17 @@ final class Maker
                 "{$app}/Actions/{$name}.php" => 'action.stub',
                 "{$tests}/Actions/{$name}Test.php" => 'action.test.stub',
             ], null],
+            // An operator command on Tey\Standards\Operator (dry run unless --apply, idempotent, refused in production unless forced) and the test that proves it.
+            // The class is suffixed Command (Laravel's preset expects it); the artisan name and the table come from the name without it.
+            'command' => (function () use ($app, $tests, $flavor, $name): array {
+                $base = Str::beforeLast(Str::finish($name, 'Command'), 'Command');
+                $values = ['name' => $base.'Command', 'slug' => Str::kebab($base), 'table' => Str::snake($base), 'column' => $flavor === 'maintenance' ? 'created_at' : 'processed_at'];
+
+                return [[
+                    "{$app}/Console/Commands/{$base}Command.php" => ["command/{$flavor}.stub", $values],
+                    "{$tests}/Console/{$base}CommandTest.php" => ["command/{$flavor}.test.stub", $values],
+                ], null];
+            })(),
             'capability-tool' => [[
                 "{$app}/Mcp/Tools/{$name}Tool.php" => 'capability-tool.stub',
                 "{$tests}/Mcp/{$name}ToolTest.php" => 'capability-tool.test.stub',
@@ -354,6 +364,14 @@ final class Maker
         }
 
         $end = strpos($contents, "\n", $at) + 1;
+        // With an import block, the test case joins it (sorted, as Pint's ordered_imports wants) and extend() names it short, after the block.
+        if (preg_match('/\A((?:use [^;]+;\n)+)/', ltrim(substr($contents, $end), "\n"), $block) === 1) {
+            $offset = $end + strpos(substr($contents, $end), $block[1]);
+            $imports = array_values(array_unique([...array_filter(explode("\n", $block[1])), 'use '.$testCase.';']));
+            usort($imports, fn (string $a, string $b): int => strcasecmp(str_replace('\\', ' ', $a), str_replace('\\', ' ', $b)));
+
+            return substr($contents, 0, $offset).implode("\n", $imports)."\n\npest()->extend(".class_basename($testCase)."::class);\n".substr($contents, $offset + strlen($block[1]));
+        }
 
         return substr($contents, 0, $end)."\npest()->extend(\\".$testCase."::class);\n".substr($contents, $end);
     }
@@ -476,6 +494,11 @@ final class Maker
         // The page leaves moved to crud; a single page still stamps the leaf it implements.
         if ($unit === 'page' && $this->catalog->node('ui-page.'.$flavor) instanceof Leaf) {
             return 'ui-page.'.$flavor;
+        }
+
+        // Every operator command flavor implements the one operator-command leaf.
+        if ($unit === 'command' && $this->catalog->node('background.command') instanceof Leaf) {
+            return 'background.command';
         }
 
         $make = "standards:make {$unit} --flavor={$flavor}";

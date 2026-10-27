@@ -31,6 +31,7 @@ final class Conformance
         'ui new-tab' => '[ui new-tab] new-tab actions carry noopener and an external icon',
         'ui dropzone' => '[ui dropzone] only the configured dropzone owns file inputs',
         'ui toast' => '[ui toast] notifications use one configured toast path',
+        'operator' => '[operator] commands that write offer a dry run and a production guard',
 
         '14' => '[rule 14] UI does not build host routes',
         '22' => '[rule 22] UI has no host PHP dependencies',
@@ -93,6 +94,11 @@ final class Conformance
             Assert::markTestSkipped('Rule 51 is advisory until PREFLIGHT_CI_ENFORCE=true; run `php artisan standards:preflight --ci --only=ci` to see findings ('.count($violations).' findings).');
         }
 
+        // Advisory until an app opts in: static write detection can miss a write or flag a non-write.
+        if ($rule === 'operator' && ! in_array($rule, $this->config->optionalRules, true)) {
+            Assert::markTestSkipped('Rule [operator] is advisory until listed in Configuration::optionalRules ('.count($violations).' findings).');
+        }
+
         $failures = $this->ratchet->failures($rule, $violations);
         expect($failures)->toBe([], implode("\n", $failures));
     }
@@ -122,8 +128,9 @@ final class Conformance
                 (new CiTriggers($this->config->base, $this->config->ciDefaultBranches, $this->config->ciDistribution, $this->config->ciDrafts))->findings());
         }
 
-        if (in_array($rule, ['actions', 'toast', 'mail', 'providers'], true)) {
+        if (in_array($rule, ['actions', 'toast', 'mail', 'providers', 'operator'], true)) {
             $check = match ($rule) {
+                'operator' => new Checks\OperatorCommands($this->config, $this->source),
                 'actions' => new Checks\Actions($this->config, $this->source),
                 'toast' => new Checks\Toast($this->config, $this->source),
                 'mail' => new Checks\Mail($this->config, $this->source),
