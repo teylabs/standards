@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
+use Tey\Standards\Configuration;
 use Tey\Standards\Enforcement\CheckReport;
 use Tey\Standards\Enforcement\DriftReport;
 use Tey\Standards\Enforcement\Gate;
@@ -463,4 +464,41 @@ test('install keeps an existing conformance test elsewhere and infers kit and mo
     expect($lines[0])->toContain('typed ViewModel base Tey\Kit\Features\Core\ViewModels\ViewModel')->toContain('tey/kit present')->toContain('tey/mod present')->toContain('Inertia pages not found')
         ->and($lines[1])->toBe('Arch conformance test kept')
         ->and(is_file($base.'/tests/Arch/ConformanceTest.php'))->toBeFalse();
+});
+
+test('with tey/mod the scaffold infers module controller roots from the layout and from where controllers live', function () {
+    $base = fixtureApp();
+
+    try {
+        unlink($base.'/tests/Arch/configuration.php');
+        $composer = json_decode(file_get_contents($base.'/composer.json'), true);
+        $composer['require']['tey/mod'] = '^0.11';
+        file_put_contents($base.'/composer.json', json_encode($composer));
+        mkdir($base.'/config');
+        file_put_contents($base.'/config/mod.php', "<?php\n\nreturn ['layout' => 'modules'];\n");
+        $controllers = [
+            'Billing/Http/Controllers/InvoiceController' => 'App\Modules\Billing\Http\Controllers',
+            'Shipping/Http/Controllers/ParcelController' => 'App\Modules\Shipping\Http\Controllers',
+            'Billing/Http/WebhookController' => 'App\Modules\Billing\Http',
+        ];
+
+        foreach ($controllers as $path => $namespace) {
+            is_dir(dirname($base.'/app/Modules/'.$path)) || mkdir(dirname($base.'/app/Modules/'.$path), 0777, true);
+            file_put_contents($base.'/app/Modules/'.$path.'.php', "<?php\n\nnamespace {$namespace};\n\nfinal class ".basename($path)."\n{\n    public function index(): string\n    {\n        return '';\n    }\n}\n");
+        }
+
+        $lines = (new Installer($base, TreeCatalog::shipped()))->configuration();
+        $configuration = require $base.'/tests/Arch/configuration.php';
+
+        expect($lines[0])->toContain('tey/mod present, layout modules, module controllers app/Modules/*/Http/Controllers*, app/Modules/*/Http')
+            ->and($configuration->controllerRoots)->toContain('app/Http/Controllers*', 'app/Modules/*/Http/Controllers*', 'app/Modules/*/Http');
+
+        $misplaced = fn (Configuration $config): array => array_values(array_filter((new Tey\Standards\Conformance($config))->violations('20'), fn (array $v): bool => $v['check'] === 'controller outside configured Http controllers'));
+
+        expect($misplaced($configuration))->toBe([])
+            ->and(array_column($misplaced(new Configuration(...array_replace(get_object_vars($configuration), ['controllerRoots' => ['app/Http/Controllers*']]))), 'target'))
+            ->toEqualCanonicalizing(['App\Modules\Billing\Http\Controllers\InvoiceController', 'App\Modules\Shipping\Http\Controllers\ParcelController', 'App\Modules\Billing\Http\WebhookController']);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
 });

@@ -37,7 +37,7 @@ nodes:
     checks: ['actions', '21']
     paths: ['app/**/Actions/**']
     keywords: [action, write, business logic, mutate, operation]
-    status: draft
+    status: ready
     evidence: { apps: 7, count: 33, prs: 33, past_apps: 13, past_count: 73 }
   - id: data-actions.tenant-model
     recipe: Workspace-scoped model

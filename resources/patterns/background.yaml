@@ -10,12 +10,13 @@ nodes:
       - { answer: "None of these", next: background.byo }
   - id: background.job
     recipe: Queued job
-    summary: After a request, in the background.
+    summary: A queued job that calls the Action doing the work, so the logic is shared and the job stays thin.
     kit: []
-    checks: []
-    paths: []
+    make: standards:make job --flavor=plain
+    checks: ['actions']
+    paths: ['app/**/Jobs/**']
     keywords: [queue, job, background, async]
-    status: gap
+    status: ready
   - id: background.schedule
     recipe: Scheduled job
     summary: A scheduled job registered with an overlap guard and a retention sweep. The evidence is weak; few cited changes clearly fit.

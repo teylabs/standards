@@ -12,7 +12,7 @@ use Tey\Standards\Patterns\TreeCatalog;
 
 final class MakeCommand extends Command
 {
-    public $signature = 'standards:make {unit : page, action, capability-tool or settings-section; model, policy, job, command or notification through tey/mod} {name : StudlyCase name} {--flavor= : The leaf flavor, as standards:pattern prints it}';
+    public $signature = 'standards:make {unit : page, action, capability-tool or settings-section; model, policy, job, command or notification through tey/mod} {name : StudlyCase name} {--flavor= : The leaf flavor, as standards:pattern prints it} {--leaf= : The leaf to stamp, when several leaves share this make command}';
 
     public $description = 'Scaffold conformant code for a pattern leaf';
 
@@ -32,7 +32,7 @@ final class MakeCommand extends Command
                 ? array_values(array_filter(array_keys($this->getApplication()?->all() ?? []), fn (string $name): bool => str_starts_with($name, 'make:')))
                 : [];
             $files = (new Maker($this->laravel->basePath(), TreeCatalog::shipped(), (array) $config->get('standards.make', []), $generators, fn (string $command, array $arguments): int => $this->call($command, $arguments)))
-                ->make($unit, (string) $this->argument('name'), (string) $flavor);
+                ->make($unit, (string) $this->argument('name'), (string) $flavor, $this->option('leaf'));
         } catch (InvalidArgumentException $error) {
             $this->error($error->getMessage());
 

@@ -4,8 +4,8 @@
 
 use {{ namespace }}\Actions\{{ action }};
 
-it('runs {{ action }}', function () {
-    (new {{ action }})->handle([]);
+it('returns the attributes {{ action }} saved', function () {
+    $saved = (new {{ action }})->handle(['name' => 'Example']);
 
-    expect(true)->toBeTrue();
+    expect($saved)->toBeArray()->toBe(['name' => 'Example']);
 });

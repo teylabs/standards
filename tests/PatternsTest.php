@@ -223,7 +223,7 @@ test('an intent matches a feature plan first, then unit leaves; a path matches u
 
     $byPath = $lookup->find(['path' => 'resources/js/pages/settings/Alerts/Page.vue']);
     expect($byPath['type'])->toBe('question')
-        ->and(array_column($byPath['candidates'], 'id'))->toBe(['settings.form', 'settings.toggles'])
+        ->and(array_column($byPath['candidates'], 'id'))->toBe(['settings.form', 'settings.toggles', 'settings.workspace'])
         ->and($byPath['id'])->toBe('settings.person');
 
     expect($lookup->find(['intent' => 'quantum flux capacitor'])['id'])->toBe('root');
@@ -295,7 +295,7 @@ test('gap leaves name the nearest sibling', function () {
     $lookup = new Lookup(TreeCatalog::shipped());
     $gaps = $lookup->gaps();
 
-    expect(array_column($gaps, 'id'))->toContain('mcp.queued', 'settings.workspace');
+    expect(array_column($gaps, 'id'))->toContain('mcp.queued', 'settings.house');
 
     foreach ($gaps as $gap) {
         expect($gap['message'])->toMatch('/^No recipe yet\. Build to the nearest sibling [a-z.-]+ and flag it\.$/');
@@ -459,7 +459,7 @@ test('mod-generated units delegate to tey/mod and get stamped; stub units never 
         $maker = new Maker($base, TreeCatalog::shipped(), generators: ['make:policy', 'make:notification'], run: fakeModGenerator($base, $calls));
 
         expect($maker->make('policy', 'InvoicePolicy', 'plain'))->toBe(['app/Policies/InvoicePolicy.php'])
-            ->and(file_get_contents($base.'/app/Policies/InvoicePolicy.php'))->toStartWith("<?php\n\n// standards-pattern: access-tenancy.permissions\n");
+            ->and(file_get_contents($base.'/app/Policies/InvoicePolicy.php'))->toStartWith("<?php\n\n// standards-pattern: access-tenancy.capability\n");
         expect($calls)->toBe([['make:policy', ['name' => 'InvoicePolicy', '--no-interaction' => true]]]);
 
         $maker->make('action', 'ArchiveInvoice', 'plain');
@@ -527,4 +527,52 @@ test('a class that fatals on load is a [load] finding with exit 1, not a crash, 
     } finally {
         (new Filesystem)->deleteDirectory($base);
     }
+});
+
+test('generated tests bind the app TestCase themselves when tests/Pest.php does not cover their folder', function (string $pest, bool $bound) {
+    $base = fixtureApp();
+
+    try {
+        // Keep the fixture's TIA guard; only the coverage line varies.
+        file_put_contents($base.'/tests/Pest.php', str_replace("pest()->extend(TestCase::class)->in('Feature');", '', file_get_contents($base.'/tests/Pest.php')).substr($pest, 5));
+        $files = (new Maker($base, TreeCatalog::shipped()))->make('page', 'Widgets', 'index');
+        $test = file_get_contents($base.'/'.collect($files)->first(fn (string $file): bool => str_ends_with($file, 'Test.php')));
+
+        $bound
+            ? expect($test)->toContain("// standards-pattern: ui-page.index\n\npest()->extend(\\Tests\\TestCase::class);\n")
+            : expect($test)->not->toContain('pest()->extend');
+        expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped())['violations'])->toBe([]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+})->with([
+    'flat files and named groups only' => ["<?php\n\npest()->extend(TestCase::class)->in('*Test.php', 'Cases');\n", true],
+    'no Pest.php ->in() at all' => ["<?php\n", true],
+    'Feature covered' => ["<?php\n\nuses(Tests\\TestCase::class)->in('Feature');\n", false],
+    'a glob over Feature' => ["<?php\n\npest()->extend(Tests\\TestCase::class)->in('Feature/*');\n", false],
+]);
+
+test('several leaves sharing a make command are told apart by --leaf', function () {
+    $base = fixtureApp();
+
+    try {
+        expect((new Lookup(TreeCatalog::shipped()))->recipe('settings.workspace')['preferred_make'])->toBe('standards:make settings-section --flavor=form <Name> --leaf=settings.workspace')
+            ->and((new Lookup(TreeCatalog::shipped()))->recipe('ui-page.form')['preferred_make'])->toEndWith('--leaf=ui-page.form');
+        (new Maker($base, TreeCatalog::shipped()))->make('settings-section', 'Team', 'form', 'settings.workspace');
+        expect(file_get_contents($base.'/app/Http/Controllers/Settings/TeamController.php'))->toContain('standards-pattern: settings.workspace');
+        expect(fn () => (new Maker($base, TreeCatalog::shipped()))->make('settings-section', 'Other', 'form', 'mcp.read'))->toThrow(InvalidArgumentException::class, 'is not scaffolded by');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('every leaf whose make command has a proven generator is ready', function () {
+    foreach (TreeCatalog::shipped()->leaves() as $leaf) {
+        if ($leaf->make !== null) {
+            expect($leaf->status)->toBe('ready', $leaf->id.' has a generator but is '.$leaf->status);
+        }
+    }
+
+    expect(TreeCatalog::shipped()->node('settings.workspace')->status)->toBe('ready')
+        ->and(TreeCatalog::shipped()->node('data-actions.action')->status)->toBe('ready');
 });

@@ -40,12 +40,13 @@ nodes:
     evidence: { apps: 4, count: 7, prs: 7 }
   - id: access-tenancy.capability
     recipe: Capability or policy
-    summary: A capability or policy.
+    summary: A policy authorizes the record; the operation asks it, never a role check in code.
     kit: []
+    make: standards:make policy --flavor=plain
     checks: ['32']
-    paths: []
+    paths: ['app/**/Policies/**']
     keywords: [permission, policy, capability, authorize]
-    status: draft
+    status: ready
     evidence: { apps: 2, count: 3, prs: 3, past_apps: 7, past_count: 32 }
   - id: access-tenancy.entitlements
     recipe: Entitlement

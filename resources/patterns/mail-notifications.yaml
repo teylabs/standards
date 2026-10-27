@@ -19,10 +19,11 @@ nodes:
     recipe: Account notification
     summary: A Notification with the configured mail composer; never a Mailable or the Mail facade.
     kit: []
+    make: standards:make notification --flavor=plain
     checks: ['mail']
-    paths: []
+    paths: ['app/**/Notifications/**']
     keywords: [notify, email, mail, notification]
-    status: draft
+    status: ready
     evidence: { apps: 1, count: 2, prs: 2, past_apps: 13, past_count: 48 }
   - id: mail-notifications.document-delivery
     recipe: Document delivery

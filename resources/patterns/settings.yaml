@@ -71,12 +71,13 @@ nodes:
     evidence: { apps: 3, count: 3, prs: 3 }
   - id: settings.workspace
     recipe: Workspace settings
-    summary: A settings section per workspace group, guarded by a permission and audited.
-    kit: ['@kit/ui SettingsFrame']
+    summary: A settings section per workspace group from the settings-section generator, guarded by a permission (rule 32) and audited.
+    kit: ['@kit/ui SettingsFrame', '@kit/ui FormCard', '@kit/ui Field']
+    make: standards:make settings-section --flavor=form
     checks: ['32']
-    paths: []
+    paths: ['app/**/Http/Controllers/Settings/**', 'resources/js/pages/settings/**']
     keywords: [workspace, team, organisation, tenant settings]
-    status: gap
+    status: ready
     evidence: { apps: 3, count: 9, prs: 9 }
   - id: settings.house
     recipe: Installation-wide settings

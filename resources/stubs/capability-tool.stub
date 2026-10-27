@@ -8,7 +8,7 @@ use Tey\Kit\Features\Core\Principal;
 use Tey\Kit\Features\Mcp\Capability;
 use Tey\Kit\Features\Mcp\CapabilityTool;
 
-#[Capability('{{ capability }}')]
+#[Capability('{{ capability }}', scope: '{{ capability }}')]
 final class {{ name }}Tool extends CapabilityTool
 {
     protected string $description = '{{ title }}.';

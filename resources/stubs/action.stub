@@ -6,9 +6,14 @@ namespace {{ namespace }}\Actions;
 
 final class {{ action }}
 {
-    /** @param array<string, mixed> $attributes */
-    public function handle(array $attributes): void
+    /**
+     * The one place this write happens; controllers, jobs and MCP tools call it.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed> the attributes it saved
+     */
+    public function handle(array $attributes): array
     {
-        // The one place this write happens; controllers, jobs and MCP tools call it.
+        return $attributes;
     }
 }

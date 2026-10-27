@@ -144,6 +144,7 @@ final class Installer
         $kit = in_array('tey/kit', $packages, true) || is_dir($this->base.'/vendor/tey/kit');
         $mod = in_array('tey/mod', $packages, true) || is_dir($this->base.'/vendor/tey/mod');
         $typed = $this->typedViewModel($kit, $packages);
+        [$layout, $modControllers, $modViewModels, $modPages] = $this->modLayout($mod);
         $globs = fn (string $suffix): array => array_values(array_unique([...array_map(fn (string $root): string => $root.'/'.$suffix, $roots), ...array_map(fn (string $root): string => $root.'/*/'.$suffix, $roots)]));
 
         $arguments = [
@@ -153,15 +154,15 @@ final class Installer
             'uiRoots' => [$main.'/UI*'],
             'uiNamespaces' => [$mainNamespace.'\\UI'],
             'hostNamespaces' => $namespaces,
-            'controllerRoots' => $globs('Http/Controllers*'),
+            'controllerRoots' => array_values(array_unique([...$globs('Http/Controllers*'), ...$modControllers])),
             'routeRoots' => is_dir($this->base.'/routes') ? ['routes'] : [],
             'controllerSuffix' => 'Controller',
             'routeDirectory' => 'routes',
-            'viewModelRoots' => $globs('ViewModels*'),
+            'viewModelRoots' => array_values(array_unique([...$globs('ViewModels*'), ...$modViewModels])),
             'viewModelBases' => [$typed],
             'typedViewModel' => $typed,
             'viewModelSuffix' => 'ViewModel',
-            'pageRoots' => $pages === [] ? ['resources/js/pages*'] : $pages,
+            'pageRoots' => [...($pages === [] ? ['resources/js/pages*'] : $pages), ...$modPages],
             'pageScaffolds' => array_values(array_unique([...['resources', 'js', 'pages', 'Pages', 'layouts', 'components', 'auth', 'settings', 'app'], ...\Tey\Standards\PageConventions::scaffolds($this->base)])),
             'placements' => [],
             'retired' => [],
@@ -177,11 +178,65 @@ final class Installer
             'Inertia pages '.($pages === [] ? 'not found (glob resources/js/pages*)' : implode(', ', $pages)),
             'typed ViewModel base '.$typed,
             'tey/kit '.($kit ? 'present' : 'absent'),
-            'tey/mod '.($mod ? 'present' : 'absent'),
+            'tey/mod '.($mod ? 'present, layout '.$layout.($modControllers === [] ? '' : ', module controllers '.implode(', ', $modControllers)) : 'absent'),
             'optional UI rules off (enable in optionalRules)',
         ];
 
         return [$arguments, $notes];
+    }
+
+    /**
+     * Module-aware roots for a tey/mod app: the layout named in config/mod.php
+     * decides where module controllers, ViewModels and pages live, and any
+     * controller found under a module folder outside them is generalised over
+     * its module name, so module controllers are never reported as misplaced.
+     *
+     * @return array{0: string, 1: list<string>, 2: list<string>, 3: list<string>} layout, controller, ViewModel and page roots
+     */
+    private function modLayout(bool $mod): array
+    {
+        if (! $mod) {
+            return ['none', [], [], []];
+        }
+
+        $config = is_file($this->base.'/config/mod.php') ? (string) file_get_contents($this->base.'/config/mod.php') : '';
+        $layout = preg_match("/'layout'\s*=>\s*'([\w-]+)'/", $config, $match) === 1 ? $match[1] : 'laravel';
+        $bases = match ($layout) {
+            'modules', 'ddd' => ['app/Modules/*'],
+            'features' => ['app/Features/*'],
+            'slices' => ['app/*'],
+            'type-first' => ['app/*/*'],
+            default => [],
+        };
+        $controllers = $layout === 'ddd'
+            ? ['app/Modules/*/Controllers', 'app/Modules/*/*/Controllers']
+            : array_map(fn (string $base): string => $base.'/Http/Controllers*', $bases);
+        $viewModels = array_map(fn (string $base): string => $base.'/ViewModels*', $bases);
+        $pages = array_values(array_filter(array_map(fn (string $base): string => $base.'/resources/js/pages', $bases), fn (string $glob): bool => (glob($this->base.'/'.$glob, GLOB_ONLYDIR) ?: []) !== []));
+
+        foreach (['app/Modules', 'app/Features', 'app/Domains', 'src/Domain'] as $parent) {
+            foreach (glob($this->base.'/'.$parent.'/*', GLOB_ONLYDIR) ?: [] as $module) {
+                foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($module, \FilesystemIterator::SKIP_DOTS)) as $file) {
+                    if (! str_ends_with($file->getFilename(), 'Controller.php')) {
+                        continue;
+                    }
+
+                    $directory = str_replace('\\', '/', substr(dirname($file->getPathname()), strlen($this->base) + 1));
+                    $generalised = $parent.'/*'.substr($directory, strlen($parent) + 1 + strlen(basename($module)));
+                    $covered = false;
+
+                    foreach ($controllers as $root) {
+                        $covered = $covered || fnmatch(rtrim($root, '*').'*', $directory) || fnmatch($root, $directory);
+                    }
+
+                    if (! $covered) {
+                        $controllers[] = $generalised;
+                    }
+                }
+            }
+        }
+
+        return [$layout, array_values(array_unique($controllers)), $viewModels, $pages];
     }
 
     /** @param list<string> $packages */

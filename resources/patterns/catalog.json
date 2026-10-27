@@ -1418,7 +1418,7 @@
                 "mutate",
                 "operation"
             ],
-            "status": "draft",
+            "status": "ready",
             "evidence": {
                 "apps": 7,
                 "count": 33,
@@ -2100,22 +2100,27 @@
         "settings.workspace": {
             "id": "settings.workspace",
             "recipe": "Workspace settings",
-            "summary": "A settings section per workspace group, guarded by a permission and audited.",
+            "summary": "A settings section per workspace group from the settings-section generator, guarded by a permission (rule 32) and audited.",
             "kit": [
-                "@kit/ui SettingsFrame"
+                "@kit/ui SettingsFrame",
+                "@kit/ui FormCard",
+                "@kit/ui Field"
             ],
-            "make": null,
+            "make": "standards:make settings-section --flavor=form",
             "checks": [
                 "32"
             ],
-            "paths": [],
+            "paths": [
+                "app/**/Http/Controllers/Settings/**",
+                "resources/js/pages/settings/**"
+            ],
             "keywords": [
                 "workspace",
                 "team",
                 "organisation",
                 "tenant settings"
             ],
-            "status": "gap",
+            "status": "ready",
             "evidence": {
                 "apps": 3,
                 "count": 9,
@@ -2322,18 +2327,20 @@
             "recipe": "Account notification",
             "summary": "A Notification with the configured mail composer; never a Mailable or the Mail facade.",
             "kit": [],
-            "make": null,
+            "make": "standards:make notification --flavor=plain",
             "checks": [
                 "mail"
             ],
-            "paths": [],
+            "paths": [
+                "app/**/Notifications/**"
+            ],
             "keywords": [
                 "notify",
                 "email",
                 "mail",
                 "notification"
             ],
-            "status": "draft",
+            "status": "ready",
             "evidence": {
                 "apps": 1,
                 "count": 2,
@@ -2475,18 +2482,22 @@
         "background.job": {
             "id": "background.job",
             "recipe": "Queued job",
-            "summary": "After a request, in the background.",
+            "summary": "A queued job that calls the Action doing the work, so the logic is shared and the job stays thin.",
             "kit": [],
-            "make": null,
-            "checks": [],
-            "paths": [],
+            "make": "standards:make job --flavor=plain",
+            "checks": [
+                "actions"
+            ],
+            "paths": [
+                "app/**/Jobs/**"
+            ],
             "keywords": [
                 "queue",
                 "job",
                 "background",
                 "async"
             ],
-            "status": "gap"
+            "status": "ready"
         },
         "background.schedule": {
             "id": "background.schedule",
@@ -2653,20 +2664,22 @@
         "access-tenancy.capability": {
             "id": "access-tenancy.capability",
             "recipe": "Capability or policy",
-            "summary": "A capability or policy.",
+            "summary": "A policy authorizes the record; the operation asks it, never a role check in code.",
             "kit": [],
-            "make": null,
+            "make": "standards:make policy --flavor=plain",
             "checks": [
                 "32"
             ],
-            "paths": [],
+            "paths": [
+                "app/**/Policies/**"
+            ],
             "keywords": [
                 "permission",
                 "policy",
                 "capability",
                 "authorize"
             ],
-            "status": "draft",
+            "status": "ready",
             "evidence": {
                 "apps": 2,
                 "count": 3,

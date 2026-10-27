@@ -249,7 +249,7 @@ final class Lookup
             'kit' => $leaf->kit,
             'make' => $leaf->make,
             'recipe_make' => $leaf->recipeMake,
-            'preferred_make' => $preferRecipe ? str_replace('{Name}', '<Name>', (string) $leaf->recipeMake) : ($leaf->make === null ? null : $leaf->make.' <Name>'),
+            'preferred_make' => $preferRecipe ? str_replace('{Name}', '<Name>', (string) $leaf->recipeMake) : ($leaf->make === null ? null : $leaf->make.' <Name>'.($this->shared($leaf) ? ' --leaf='.$leaf->id : '')),
             'preferred_make_source' => $preferRecipe ? self::RECIPE_PACKAGE : ($leaf->make === null ? null : 'tey/standards'),
             'checks' => $leaf->checks,
             'paths' => $leaf->paths,
@@ -360,6 +360,18 @@ final class Lookup
         sort($rules);
 
         return $rules;
+    }
+
+    /** Whether another leaf uses the same make command, so the stamp must name this one. */
+    private function shared(Leaf $leaf): bool
+    {
+        foreach ($this->catalog->leaves() as $other) {
+            if ($other->id !== $leaf->id && $other->make !== null && $other->make === $leaf->make) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return list<string> the answers from the root to a node */

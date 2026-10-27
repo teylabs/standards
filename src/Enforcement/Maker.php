@@ -43,7 +43,7 @@ final class Maker
     ) {}
 
     /** @return list<string> the project-relative files written or changed */
-    public function make(string $unit, string $name, string $flavor): array
+    public function make(string $unit, string $name, string $flavor, ?string $leafId = null): array
     {
         if (! in_array($flavor, Compiler::UNITS[$unit] ?? [], true)) {
             throw new InvalidArgumentException("Unknown unit or flavor {$unit} --flavor={$flavor}. Units: ".implode('; ', array_map(fn (string $u, array $f): string => $u.' ('.implode('|', $f).')', array_keys(Compiler::UNITS), Compiler::UNITS)).'.');
@@ -53,7 +53,15 @@ final class Maker
             throw new InvalidArgumentException('Name must be StudlyCase, for example Invoices.');
         }
 
-        $leaf = $this->leaf($unit, $flavor);
+        $leaf = $leafId ?? $this->leaf($unit, $flavor);
+
+        if ($leafId !== null) {
+            $node = $this->catalog->node($leafId);
+
+            if (! $node instanceof Leaf || $node->make !== "standards:make {$unit} --flavor={$flavor}") {
+                throw new InvalidArgumentException("Leaf [{$leafId}] is not scaffolded by standards:make {$unit} --flavor={$flavor}.");
+            }
+        }
 
         if (isset(self::DELEGATED[$unit])) {
             return $this->delegate(self::DELEGATED[$unit], $name, $leaf);
@@ -106,7 +114,8 @@ final class Maker
 
         foreach ($files as $target => $stub) {
             [$stub, $overrides] = is_array($stub) ? $stub : [$stub, []];
-            $this->write($target, $this->render($stub, [...$values, ...$overrides]));
+            $contents = $this->render($stub, [...$values, ...$overrides]);
+            $this->write($target, str_ends_with($target, 'Test.php') ? $this->covered($target, $contents) : $contents);
             $written[] = $target;
         }
 
@@ -156,6 +165,53 @@ final class Maker
     private static function group(string $controller, array $routes): string
     {
         return "Route::controller(\\{$controller}::class)->group(function () {\n".implode("\n", array_map(fn (string $route): string => '    '.$route, $routes))."\n});";
+    }
+
+    /**
+     * Pest applies the app's TestCase only to the folders tests/Pest.php names
+     * with ->in(). A generated test outside them binds the TestCase itself, so
+     * $this->get() and the container work wherever the test lands.
+     */
+    private function covered(string $target, string $contents): string
+    {
+        $pest = is_file($this->base.'/tests/Pest.php') ? (string) file_get_contents($this->base.'/tests/Pest.php') : '';
+        $relative = (string) preg_replace('#^tests/#', '', $target);
+
+        if (! str_starts_with($target, 'tests/')) {
+            return $contents;
+        }
+
+        preg_match_all('/->in\(([^)]*)\)/', $pest, $calls);
+
+        foreach ($calls[1] as $arguments) {
+            preg_match_all('/[\'"]([^\'"]+)[\'"]/', $arguments, $globs);
+
+            foreach ($globs[1] as $glob) {
+                $glob = trim($glob, '/');
+
+                if ($glob === '.' || $glob === '' || str_starts_with($relative, $glob.'/') || fnmatch($glob, $relative, FNM_PATHNAME) || fnmatch($glob, dirname($relative), FNM_PATHNAME)) {
+                    return $contents;
+                }
+            }
+        }
+
+        $testCase = preg_match('/(?:extend|uses)\(\s*\\\\?([\w\\\\]+)::class/', $pest, $match) === 1 ? $match[1] : 'TestCase';
+
+        if (! str_contains($testCase, '\\') && preg_match('/^use\s+([\w\\\\]+\\\\'.preg_quote($testCase, '/').');/m', $pest, $import) === 1) {
+            $testCase = $import[1];
+        }
+
+        $testCase = str_contains($testCase, '\\') ? $testCase : 'Tests\\'.$testCase;
+        $stamp = '// '.Hook::STAMP;
+        $at = strpos($contents, $stamp);
+
+        if ($at === false) {
+            return $contents;
+        }
+
+        $end = strpos($contents, "\n", $at) + 1;
+
+        return substr($contents, 0, $end)."\npest()->extend(\\".$testCase."::class);\n".substr($contents, $end);
     }
 
     /**
