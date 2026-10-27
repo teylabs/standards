@@ -20,6 +20,12 @@ final class Compiler
 
     public const QUESTION = 'What are you building?';
 
+    /** @var list<string> component names the kit's @kit/ui barrel exports */
+    private static array $components = [];
+
+    /** The root's build-your-own exit. */
+    public const BYO = 'byo';
+
     public const BRANCHES = ['ui-page', 'data-actions', 'mcp', 'settings', 'mail-notifications', 'background', 'access-tenancy', 'integrations'];
 
     public const UNITS = ['page' => ['index', 'show', 'form'], 'action' => ['plain'], 'capability-tool' => ['read', 'write'], 'settings-section' => ['form', 'toggles']];
@@ -27,6 +33,13 @@ final class Compiler
     /** @return array{schema: int, root: string, nodes: array<string, array<string, mixed>>} */
     public static function compile(string $directory): array
     {
+        $exports = json_decode((string) @file_get_contents($directory.'/kit-exports.json'), true);
+
+        if (! is_array($exports) || ! is_array($exports['components'] ?? null)) {
+            throw new InvalidArgumentException('Missing or invalid kit-exports.json.');
+        }
+
+        self::$components = $exports['components'];
         $nodes = [];
         $options = [];
 
@@ -52,7 +65,7 @@ final class Compiler
             foreach ($source['nodes'] as $node) {
                 $node = self::node($node, $branch);
 
-                if (isset($nodes[$node['id']]) || $node['id'] === self::ROOT) {
+                if (isset($nodes[$node['id']]) || in_array($node['id'], [self::ROOT, self::BYO], true)) {
                     throw new InvalidArgumentException("Duplicate pattern node {$node['id']}.");
                 }
 
@@ -66,10 +79,80 @@ final class Compiler
             }
         }
 
-        $nodes = [self::ROOT => ['id' => self::ROOT, 'question' => self::QUESTION, 'options' => $options], ...$nodes];
+        $options[] = ['answer' => 'None of these', 'next' => self::BYO];
+        $nodes = [
+            self::ROOT => ['id' => self::ROOT, 'question' => self::QUESTION, 'options' => $options],
+            ...$nodes,
+            self::BYO => ['id' => self::BYO, 'recipe' => 'Build your own', 'summary' => 'Nothing in the tree fits. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.', 'kit' => [], 'make' => null, 'checks' => [], 'paths' => [], 'keywords' => [], 'status' => 'byo'],
+        ];
         self::validate($nodes);
 
-        return ['schema' => 1, 'root' => self::ROOT, 'nodes' => $nodes];
+        return ['schema' => 1, 'root' => self::ROOT, 'features' => self::features($directory.'/features', $nodes), 'nodes' => $nodes];
+    }
+
+    /**
+     * Features sit above the unit tree: each composes unit leaves into a plan.
+     *
+     * @param  array<string, array<string, mixed>>  $nodes
+     * @return array<string, array<string, mixed>>
+     */
+    private static function features(string $directory, array $nodes): array
+    {
+        $features = [];
+
+        foreach (glob($directory.'/*.yaml') ?: [] as $file) {
+            try {
+                $feature = Yaml::parseFile($file);
+            } catch (ParseException $error) {
+                throw new InvalidArgumentException('features/'.basename($file).' is not valid YAML: '.$error->getMessage(), previous: $error);
+            }
+
+            $id = $feature['id'] ?? null;
+
+            if (! is_array($feature) || $id !== basename($file, '.yaml') || ! is_string($feature['summary'] ?? null) || ! is_array($feature['keywords'] ?? null) || ! is_array($feature['composition'] ?? null) || $feature['composition'] === []) {
+                throw new InvalidArgumentException('features/'.basename($file).' needs id (its file name), summary, keywords and a non-empty composition.');
+            }
+
+            $extra = array_diff(array_keys($feature), ['id', 'summary', 'keywords', 'questions', 'composition']);
+
+            if ($extra !== []) {
+                throw new InvalidArgumentException("Feature {$id} has unknown fields: ".implode(', ', $extra).'.');
+            }
+
+            $questions = [];
+
+            foreach ($feature['questions'] ?? [] as $question) {
+                if (! is_array($question) || ! is_string($question['id'] ?? null) || ! is_string($question['question'] ?? null) || ! is_array($question['options'] ?? null) || count($question['options']) < 2 || array_filter($question['options'], 'is_string') !== $question['options']) {
+                    throw new InvalidArgumentException("Feature {$id} questions need id, question and at least two string options.");
+                }
+
+                $questions[$question['id']] = $question;
+            }
+
+            foreach ($feature['composition'] as $unit) {
+                if (! is_array($unit) || ! is_string($unit['unit_leaf_id'] ?? null) || ! is_string($unit['role'] ?? null) || array_diff(array_keys($unit), ['unit_leaf_id', 'role', 'when']) !== []) {
+                    throw new InvalidArgumentException("Feature {$id} composition entries need unit_leaf_id and role, and optionally when.");
+                }
+
+                if (! isset($nodes[$unit['unit_leaf_id']]) || isset($nodes[$unit['unit_leaf_id']]['question'])) {
+                    throw new InvalidArgumentException("Feature {$id} names [{$unit['unit_leaf_id']}], which is not a unit leaf.");
+                }
+
+                if (isset($unit['when'])) {
+                    [$question, $answer] = array_pad(explode('=', (string) $unit['when'], 2), 2, null);
+
+                    if (! isset($questions[$question]) || ! in_array($answer, $questions[$question]['options'], true)) {
+                        throw new InvalidArgumentException("Feature {$id} when [{$unit['when']}] must name one of its questions and an option.");
+                    }
+                }
+            }
+
+            $features[$id] = ['id' => $id, 'summary' => $feature['summary'], 'keywords' => $feature['keywords'], 'questions' => array_values($questions), 'composition' => $feature['composition']];
+        }
+
+        ksort($features);
+
+        return $features;
     }
 
     /** @return array<string, mixed> */
@@ -115,7 +198,7 @@ final class Compiler
         }
 
         if (! in_array($node['status'], Leaf::STATUSES, true)) {
-            throw new InvalidArgumentException("Leaf {$id} status must be ready, draft or gap.");
+            throw new InvalidArgumentException("Leaf {$id} status must be ready, draft, gap or byo.");
         }
 
         foreach ($node['checks'] as $rule) {
@@ -142,10 +225,32 @@ final class Compiler
             throw new InvalidArgumentException("Leaf {$id} recipe_make must look like mod:<vendor>/<recipe> {Name}.");
         }
 
+        foreach ($node['kit'] as $entry) {
+            if (str_starts_with($entry, '@kit/ui ') && ! in_array(substr($entry, 8), self::$components, true)) {
+                throw new InvalidArgumentException("Leaf {$id} names [{$entry}], which the kit does not export.");
+            }
+        }
+
+        $components = $node['components'] ?? [];
+
+        if (! is_array($components) || ! array_is_list($components)) {
+            throw new InvalidArgumentException("Leaf {$id} components must be a list.");
+        }
+
+        foreach ($components as $component) {
+            if (! is_array($component) || array_keys($component) !== ['name', 'kit_component', 'use', 'props_hint'] || array_filter($component, 'is_string') !== $component) {
+                throw new InvalidArgumentException("Leaf {$id} components need exactly name, kit_component, use and props_hint strings.");
+            }
+
+            if (! in_array($component['kit_component'], self::$components, true)) {
+                throw new InvalidArgumentException("Leaf {$id} component [{$component['kit_component']}] is not exported by the kit.");
+            }
+        }
+
         $evidence = $node['evidence'] ?? null;
 
         if ($evidence !== null) {
-            $valid = is_array($evidence) && array_keys($evidence) === ['apps', 'count', 'prs'];
+            $valid = is_array($evidence) && in_array(array_keys($evidence), [['apps', 'count', 'prs'], ['apps', 'count', 'prs', 'past_apps', 'past_count']], true);
 
             foreach ($valid ? $evidence : [] as $value) {
                 $valid = $valid && is_int($value) && $value >= 0;
@@ -153,17 +258,17 @@ final class Compiler
 
             // Public evidence is counts only: no app names or change references ship in the package.
             if (! $valid) {
-                throw new InvalidArgumentException("Leaf {$id} evidence must be {apps, count, prs} as non-negative counts.");
+                throw new InvalidArgumentException("Leaf {$id} evidence must be {apps, count, prs} with optional {past_apps, past_count}, all non-negative counts.");
             }
         }
 
-        $extra = array_diff(array_keys($node), ['id', 'recipe', 'summary', 'kit', 'make', 'recipe_make', 'checks', 'paths', 'keywords', 'status', 'evidence']);
+        $extra = array_diff(array_keys($node), ['id', 'recipe', 'summary', 'kit', 'make', 'recipe_make', 'checks', 'paths', 'keywords', 'status', 'evidence', 'components']);
 
         if ($extra !== []) {
             throw new InvalidArgumentException("Leaf {$id} has unknown fields: ".implode(', ', $extra).'.');
         }
 
-        return ['id' => $id, 'recipe' => $node['recipe'], 'summary' => $node['summary'], 'kit' => $node['kit'], 'make' => $make, 'checks' => $node['checks'], 'paths' => $node['paths'], 'keywords' => $node['keywords'], 'status' => $node['status'], ...($recipeMake === null ? [] : ['recipe_make' => $recipeMake]), ...($evidence === null ? [] : ['evidence' => $evidence])];
+        return ['id' => $id, 'recipe' => $node['recipe'], 'summary' => $node['summary'], 'kit' => $node['kit'], 'make' => $make, 'checks' => $node['checks'], 'paths' => $node['paths'], 'keywords' => $node['keywords'], 'status' => $node['status'], ...($recipeMake === null ? [] : ['recipe_make' => $recipeMake]), ...($evidence === null ? [] : ['evidence' => $evidence]), ...($components === [] ? [] : ['components' => $components])];
     }
 
     /** @param array<string, array<string, mixed>> $nodes */
@@ -196,6 +301,27 @@ final class Compiler
             $state[$id] = 'done';
         };
         $visit(self::ROOT);
+
+        // Every path ends in a leaf: each question must reach a build-your-own exit.
+        $byo = function (string $id) use (&$byo, $nodes): bool {
+            if (($nodes[$id]['status'] ?? null) === 'byo') {
+                return true;
+            }
+
+            foreach ($nodes[$id]['options'] ?? [] as $option) {
+                if ($byo($option['next'])) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        foreach ($nodes as $id => $node) {
+            if (isset($node['question']) && ! $byo($id)) {
+                throw new InvalidArgumentException("Branch {$id} has no reachable build-your-own (byo) leaf; add a \"None of these\" option.");
+            }
+        }
 
         $orphans = array_diff(array_keys($nodes), array_keys($state));
 

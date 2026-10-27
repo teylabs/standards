@@ -1,13 +1,18 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
-import { Button, Field, Form, SettingsLayout } from '@kit/ui';
+import { Field, FormActions, FormCard, Input, SettingsFrame } from '@kit/ui';
+import { useForm } from '@inertiajs/vue3';
+
+const form = useForm({ name: '' });
 </script>
 
 <template>
-    <SettingsLayout title="{{ title }}">
-        <Form :action="'/settings/{{ slug }}'" method="patch">
-            <Field name="name" label="Name" />
-            <Button type="submit">Save</Button>
-        </Form>
-    </SettingsLayout>
+    <SettingsFrame title="{{ title }}">
+        <FormCard title="{{ title }}" @submit="form.patch('/settings/{{ slug }}')">
+            <Field label="Name" :error="form.errors.name">
+                <Input v-model="form.name" name="name" />
+            </Field>
+            <FormActions :processing="form.processing" />
+        </FormCard>
+    </SettingsFrame>
 </template>

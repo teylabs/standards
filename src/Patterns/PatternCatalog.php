@@ -13,6 +13,9 @@ interface PatternCatalog
 {
     public function root(): Branch;
 
+    /** @return list<Feature> */
+    public function features(): array;
+
     public function node(string $id): Branch|Leaf|null;
 
     public function parentOf(string $id): ?Branch;

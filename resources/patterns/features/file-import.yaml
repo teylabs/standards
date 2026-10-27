@@ -1,0 +1,8 @@
+id: file-import
+summary: People upload a spreadsheet, CSV or XML file and a queued import processes it, with history.
+keywords: [import file, csv import, spreadsheet import, upload and import, bulk import, xml import]
+composition:
+  - { unit_leaf_id: ui-page.upload, role: upload }
+  - { unit_leaf_id: data-actions.file-import, role: import pipeline }
+  - { unit_leaf_id: background.job, role: queued processing }
+  - { unit_leaf_id: ui-page.index, role: import history }

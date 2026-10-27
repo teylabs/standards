@@ -112,7 +112,7 @@ final class Hook
             return ['exit' => 0, 'stdout' => self::json(['hookSpecificOutput' => [
                 'hookEventName' => 'PreToolUse',
                 'permissionDecision' => 'deny',
-                'permissionDecisionReason' => "New file {$path} has no pattern stamp. Traverse before you build: pick the leaf below (or run `php artisan standards:pattern`), prefer its make command, or add a comment `".self::STAMP." <leaf-id>` (or `".self::STAMP." gap`) to the file and write it again. This asks once; the next attempt goes through.\n".$lookup,
+                'permissionDecisionReason' => "New file {$path} has no pattern stamp. Traverse before you build: call bakery.find (offline: `php artisan standards:pattern`), pick the leaf below, prefer its make command, or add a comment `".self::STAMP." <leaf-id>` (or `".self::STAMP." gap`) to the file and write it again. This asks once; the next attempt goes through.\n".$lookup,
             ]]), 'stderr' => ''];
         }
 
@@ -162,20 +162,25 @@ final class Hook
         $result = ($this->artisan)(['standards:pattern', $path, '--json']);
         $lookup = json_decode($result['output'], true);
 
-        if (! is_array($lookup)) {
-            return 'Pattern lookup unavailable; run `php artisan standards:pattern` to traverse from the root question.';
+        if (! is_array($lookup) || ! in_array($lookup['type'] ?? null, ['question', 'leaf'], true)) {
+            return 'Pattern lookup unavailable here; call bakery.find, or run `php artisan standards:pattern` to traverse from the root question.';
         }
 
         $lines = [];
+        $leaves = $lookup['type'] === 'leaf' ? [$lookup] : $lookup['candidates'];
 
-        foreach ($lookup['candidates'] ?? [] as $leaf) {
-            $lines[] = "- leaf {$leaf['id']} ({$leaf['status']}): {$leaf['summary']}".(($leaf['preferred_make'] ?? null) !== null ? "\n  make ({$leaf['preferred_make_source']}): php artisan {$leaf['preferred_make']}" : '').(isset($leaf['message']) ? "\n  ".$leaf['message'] : '');
+        foreach ($leaves as $leaf) {
+            $lines[] = "- leaf {$leaf['id']} ({$leaf['status']}): {$leaf['summary']}".(($leaf['preferred_make'] ?? null) !== null ? "\n  make ({$leaf['preferred_make_source']}): php artisan {$leaf['preferred_make']}" : (($leaf['make'] ?? null) !== null ? "\n  make: php artisan {$leaf['make']} <Name>" : '')).(($leaf['message'] ?? null) !== null ? "\n  ".$leaf['message'] : '');
         }
 
-        foreach ($lookup['questions'] ?? [] as $question) {
-            $answers = implode(' | ', array_map(fn (array $o): string => $o['answer'].' → '.$o['next'], $question['options']));
-            $lines[] = "- next question ({$question['id']}): {$question['question']} {$answers}";
+        $question = $lookup['type'] === 'question' ? $lookup : $lookup['next_question'];
+
+        if ($question !== null) {
+            $answers = isset($question['options']) ? ' '.implode(' | ', array_map(fn (array $o): string => $o['answer'].' → '.$o['next'], $question['options'])) : '';
+            $lines[] = "- next question ({$question['id']}): {$question['question']}{$answers}";
         }
+
+        $lines[] = 'More detail: bakery.recipe <leaf>, or `php artisan standards:pattern --recipe=<leaf>`.';
 
         return implode("\n", $lines);
     }

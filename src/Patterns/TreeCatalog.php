@@ -11,16 +11,23 @@ final class TreeCatalog implements PatternCatalog
     /** @var array<string, Branch|Leaf> */
     private array $nodes = [];
 
+    /** @var list<Feature> */
+    private array $features = [];
+
     /** @var array<string, string> child id => parent id */
     private array $parents = [];
 
-    /** @param array{schema: int, root: string, nodes: array<string, array<string, mixed>>} $catalog */
+    /** @param array{schema: int, root: string, features?: array<string, array<string, mixed>>, nodes: array<string, array<string, mixed>>} $catalog */
     public function __construct(array $catalog)
     {
+        foreach ($catalog['features'] ?? [] as $feature) {
+            $this->features[] = new Feature($feature['id'], $feature['summary'], $feature['keywords'], $feature['questions'], $feature['composition']);
+        }
+
         foreach ($catalog['nodes'] as $id => $node) {
             $this->nodes[$id] = isset($node['question'])
                 ? new Branch($id, $node['question'], $node['options'], $node['why'] ?? null)
-                : new Leaf($id, $node['recipe'], $node['summary'], $node['kit'], $node['make'], $node['checks'], $node['paths'], $node['keywords'], $node['status'], $node['recipe_make'] ?? null, $node['evidence'] ?? null);
+                : new Leaf($id, $node['recipe'], $node['summary'], $node['kit'], $node['make'], $node['checks'], $node['paths'], $node['keywords'], $node['status'], $node['recipe_make'] ?? null, $node['evidence'] ?? null, $node['components'] ?? []);
 
             foreach ($node['options'] ?? [] as $option) {
                 $this->parents[$option['next']] = $id;
@@ -45,6 +52,11 @@ final class TreeCatalog implements PatternCatalog
         assert($root instanceof Branch);
 
         return $root;
+    }
+
+    public function features(): array
+    {
+        return $this->features;
     }
 
     public function node(string $id): Branch|Leaf|null

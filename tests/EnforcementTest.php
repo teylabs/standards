@@ -3,14 +3,12 @@
 declare(strict_types=1);
 
 use Illuminate\Filesystem\Filesystem;
-use Laravel\Mcp\Request;
 use Symfony\Component\Process\Process;
 use Tey\Standards\Enforcement\CheckReport;
 use Tey\Standards\Enforcement\DriftReport;
 use Tey\Standards\Enforcement\Gate;
 use Tey\Standards\Enforcement\Hook;
 use Tey\Standards\Enforcement\Installer;
-use Tey\Standards\Enforcement\PatternLookupTool;
 use Tey\Standards\Patterns\TreeCatalog;
 
 beforeEach(function () {
@@ -207,7 +205,7 @@ test('a broken check fails the commit gate closed', function () {
 test('a new unstamped file under app/ is soft-blocked once with the leaf, make command and next question, then allowed', function () {
     $calls = [];
     $base = ($this->app)();
-    $lookup = json_encode((new Tey\Standards\Patterns\Lookup(TreeCatalog::shipped()))->intent('resources/js/pages/settings/Alerts/Page.vue'));
+    $lookup = json_encode((new Tey\Standards\Patterns\Lookup(TreeCatalog::shipped()))->find(['path' => 'resources/js/pages/settings/Alerts/Page.vue']));
     $hook = new Hook($base, fakeArtisan([['exit' => 0, 'output' => $lookup], ['exit' => 0, 'output' => $lookup]], $calls), ($this->directory)());
     $input = ['session_id' => 's1', 'tool_input' => ['file_path' => $base.'/resources/js/pages/settings/Alerts/Page.vue', 'content' => '<template />']];
 
@@ -216,6 +214,7 @@ test('a new unstamped file under app/ is soft-blocked once with the leaf, make c
         ->and($first['permissionDecisionReason'])->toContain('settings.toggles')
         ->toContain('php artisan standards:make settings-section --flavor=toggles')
         ->toContain('Does the settings group need its own nav section')
+        ->toContain('call bakery.find (offline: `php artisan standards:pattern`)')
         ->toContain('standards-pattern: gap');
 
     $second = json_decode($hook->handle('pre-write', $input)['stdout'], true)['hookSpecificOutput'];
@@ -320,23 +319,10 @@ test('install adds a pre-push hook but never replaces someone else\'s', function
         ->and(file_get_contents($base.'/.git/hooks/pre-push'))->toBe("#!/bin/sh\necho theirs\n");
 });
 
-// Layer 3: lookup over MCP
-
-test('pattern_lookup answers the same lookup as the command', function () {
-    $tool = new PatternLookupTool;
-    $text = fn (array $arguments): array => json_decode((string) $tool->handle(new Request($arguments))->content(), true);
-
-    expect($tool->name())->toBe('pattern_lookup')
-        ->and($text([])['question'])->toBe('What are you building?')
-        ->and($text(['node' => 'mcp.tool', 'answer' => '1'])['id'])->toBe('mcp.read')
-        ->and($text(['query' => 'app/Mcp/Tools/ReadTool.php'])['candidates'][0]['id'])->toBe('mcp.read')
-        ->and(array_column($text(['gaps' => true])['leaves'], 'status'))->each->toBe('gap');
-});
-
 // Layer 4: drift report
 
 test('the drift report aggregates apps and lists regressions against the previous run', function () {
-    $report = fn (string $app, array $violations): array => ['schema' => 1, 'app' => $app, 'sha' => 'abc', 'violations' => $violations, 'allowlist' => ['count' => 2, 'expiring' => [], 'expired' => [['rule' => 'x']]], 'gaps' => ['catalog' => 9, 'flagged' => 1]];
+    $report = fn (string $app, array $violations): array => ['schema' => 1, 'app' => $app, 'sha' => 'abc', 'violations' => $violations, 'allowlist' => ['count' => 2, 'expiring' => [], 'expired' => [['rule' => 'x']]], 'gaps' => ['catalog' => 9, 'flagged' => 1, 'demand' => ['total' => 3, 'by_unit_type' => ['mcp' => 3]]]];
     $a = ['rule' => 'toast', 'kind' => 'violation', 'target' => 'A.php', 'check' => 'c', 'hint' => ''];
     $b = ['rule' => '21', 'kind' => 'violation', 'target' => 'B.php', 'check' => 'c', 'hint' => ''];
 
@@ -346,7 +332,7 @@ test('the drift report aggregates apps and lists regressions against the previou
     expect($first['apps'][0]['first_run'])->toBeTrue()
         ->and($second['apps'][0]['regressions'])->toBe(['21 | violation | B.php | c'])
         ->and($second['apps'][0]['fixed'])->toBe(['toast | violation | A.php | c'])
-        ->and($second['totals'])->toMatchArray(['apps' => 2, 'violations' => 1, 'regressions' => 1, 'fixed' => 1, 'expired' => 2, 'flagged_gaps' => 2])
+        ->and($second['totals'])->toMatchArray(['apps' => 2, 'violations' => 1, 'regressions' => 1, 'fixed' => 1, 'expired' => 2, 'flagged_gaps' => 2, 'gap_demand' => 6])
         ->and(DriftReport::text($second))->toContain('+ 21 | violation | B.php | c');
 
     expect(fn () => DriftReport::aggregate([['schema' => 2]]))->toThrow(InvalidArgumentException::class);
@@ -415,17 +401,28 @@ test('the artisan commands are registered and print the lookup, gaps and a fail-
 
         expect($artisan->call('standards:pattern'))->toBe(0)
             ->and($artisan->output())->toContain('? What are you building?')->toContain('8. A connection to another service → integrations');
-        expect($artisan->call('standards:pattern', ['--node' => 'mcp.tool', '--answer' => '2']))->toBe(0)
+        expect($artisan->call('standards:pattern', ['--answer' => ['3', '1', '2']]))->toBe(0)
             ->and($artisan->output())->toContain('■ mcp.write [ready] mcp-parity')->toContain('make (tey/standards): php artisan standards:make capability-tool --flavor=write <Name>')
             ->toContain('with the Bakery installed: php artisan mod:butter/mcp-parity <Name>');
+        expect($artisan->call('standards:pattern', ['query' => 'manage records with bulk actions']))->toBe(0)
+            ->and($artisan->output())->toContain('Plan: manage-records')->toContain('bulk actions (when bulk=yes): ui-page.data-table [gap]');
+        expect($artisan->call('standards:pattern', ['--recipe' => 'ui-page.index']))->toBe(0)
+            ->and($artisan->output())->toContain('- DataTable (rows)');
         expect($artisan->call('standards:pattern', ['--gaps' => true]))->toBe(0)
-            ->and($artisan->output())->toContain('- ui-page.workbench (5 apps × 25 changes)');
-        expect($artisan->call('standards:pattern', ['--node' => 'mcp', '--answer' => '9']))->toBe(2);
-        expect($artisan->call('standards:check', ['--json' => true]))->toBe(1)
-            ->and(json_decode($artisan->output(), true)['violations'][0]['kind'])->toBe('error');
+            ->and($artisan->output())->toContain('- ui-page.crud-resource (fleet 7 apps × 15, past 33 apps × 312)');
+        expect(is_file($base.'/'.Tey\Standards\Enforcement\GapDemand::FILE))->toBeFalse();
+        expect($artisan->call('standards:pattern', ['--answer' => ['3', 'None of these']]))->toBe(0)
+            ->and($artisan->output())->toContain('No recipe fits. Proceed');
+        expect(Tey\Standards\Enforcement\GapDemand::counts($base))->toBe(['total' => 1, 'by_unit_type' => ['mcp' => 1]])
+            ->and(file_get_contents($base.'/'.Tey\Standards\Enforcement\GapDemand::FILE))->not->toContain($base);
+        expect($artisan->call('standards:pattern', ['--answer' => ['3', '9']]))->toBe(2);
+        expect($artisan->call('standards:check', ['--json' => true]))->toBe(1);
+        $check = json_decode($artisan->output(), true);
+        expect($check['violations'][0]['kind'])->toBe('error')
+            ->and($check['gaps']['demand'])->toBe(['total' => 1, 'by_unit_type' => ['mcp' => 1]]);
         expect($artisan->call('standards:make', ['unit' => 'action', 'name' => 'Archive']))->toBe(0)
             ->and(file_get_contents($base.'/app/Actions/Archive.php'))->toContain('standards-pattern: data-actions.action');
-        expect($config->get('boost.mcp.tools.include'))->toBe([PatternLookupTool::class]);
+        expect($config->get('boost.mcp.tools.include'))->toBeNull();
     } finally {
         Illuminate\Container\Container::setInstance($previous);
     }

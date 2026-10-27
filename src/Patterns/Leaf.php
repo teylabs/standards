@@ -6,7 +6,7 @@ namespace Tey\Standards\Patterns;
 
 final readonly class Leaf
 {
-    public const STATUSES = ['ready', 'draft', 'gap'];
+    public const STATUSES = ['ready', 'draft', 'gap', 'byo'];
 
     /**
      * @param  list<string>  $kit
@@ -25,19 +25,21 @@ final readonly class Leaf
         public array $keywords,
         public string $status,
         public ?string $recipeMake = null,
-        /** @var array{apps: int, count: int, prs: int}|null counts only */
+        /** @var array{apps: int, count: int, prs: int, past_apps?: int, past_count?: int}|null counts only */
         public ?array $evidence = null,
+        /** @var list<array{name: string, kit_component: string, use: string, props_hint: string}> */
+        public array $components = [],
     ) {}
 
-    /** Gap priority: apps × count from the evidence, 0 without it. */
+    /** Demand: fleet apps × changes plus past apps × changes, 0 without evidence. */
     public function weight(): int
     {
-        return $this->evidence === null ? 0 : $this->evidence['apps'] * $this->evidence['count'];
+        return $this->evidence === null ? 0 : $this->evidence['apps'] * $this->evidence['count'] + ($this->evidence['past_apps'] ?? 0) * ($this->evidence['past_count'] ?? 0);
     }
 
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return ['type' => 'leaf', 'id' => $this->id, 'recipe' => $this->recipe, 'summary' => $this->summary, 'kit' => $this->kit, 'make' => $this->make, 'checks' => $this->checks, 'paths' => $this->paths, 'keywords' => $this->keywords, 'status' => $this->status, 'recipe_make' => $this->recipeMake, 'evidence' => $this->evidence];
+        return ['type' => 'leaf', 'id' => $this->id, 'recipe' => $this->recipe, 'summary' => $this->summary, 'kit' => $this->kit, 'make' => $this->make, 'checks' => $this->checks, 'paths' => $this->paths, 'keywords' => $this->keywords, 'status' => $this->status, 'recipe_make' => $this->recipeMake, 'evidence' => $this->evidence, 'components' => $this->components];
     }
 }

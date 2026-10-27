@@ -65,6 +65,7 @@ final class DriftReport
                 'fixed' => array_sum(array_map(fn (array $app): int => count($app['fixed']), $apps)),
                 'expired' => array_sum(array_column($apps, 'expired')),
                 'flagged_gaps' => array_sum(array_map(fn (array $app): int => (int) ($app['gaps']['flagged'] ?? 0), $apps)),
+                'gap_demand' => array_sum(array_map(fn (array $app): int => (int) ($app['gaps']['demand']['total'] ?? 0), $apps)),
             ],
         ];
     }
@@ -75,8 +76,8 @@ final class DriftReport
         $lines = ['Drift report '.$report['generated_at'], ''];
 
         foreach ($report['apps'] as $app) {
-            $lines[] = sprintf('%s @ %s: %d violations, %d allowlisted (%d expiring, %d expired), %d flagged gaps%s',
-                $app['app'], substr((string) $app['sha'], 0, 12), $app['violations'], $app['allowlist'], $app['expiring'], $app['expired'], (int) ($app['gaps']['flagged'] ?? 0),
+            $lines[] = sprintf('%s @ %s: %d violations, %d allowlisted (%d expiring, %d expired), %d flagged gaps, %d gap-demand lookups%s',
+                $app['app'], substr((string) $app['sha'], 0, 12), $app['violations'], $app['allowlist'], $app['expiring'], $app['expired'], (int) ($app['gaps']['flagged'] ?? 0), (int) ($app['gaps']['demand']['total'] ?? 0),
                 $app['first_run'] ? ', first run' : sprintf(', %d new, %d fixed', count($app['regressions']), count($app['fixed'])));
 
             foreach ($app['regressions'] as $key) {

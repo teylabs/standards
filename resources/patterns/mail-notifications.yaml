@@ -6,12 +6,14 @@ nodes:
     options:
       - { answer: "Mail", next: mail-notifications.mail }
       - { answer: "SMS or an agent", next: mail-notifications.custom-channel }
+      - { answer: "None of these", next: mail-notifications.byo }
   - id: mail-notifications.mail
     question: What does the mail carry?
     options:
       - { answer: "A message about the person's account", next: mail-notifications.notification }
       - { answer: "A document or signed link, with a send record", next: mail-notifications.document-delivery }
       - { answer: "A digest for many users", next: mail-notifications.digest }
+      - { answer: "None of these", next: mail-notifications.mail.byo }
   - id: mail-notifications.notification
     recipe: Account notification
     summary: A Notification with the configured mail composer; never a Mailable or the Mail facade.
@@ -20,6 +22,7 @@ nodes:
     paths: []
     keywords: [notify, email, mail, notification]
     status: draft
+    evidence: { apps: 1, count: 2, prs: 2, past_apps: 13, past_count: 48 }
   - id: mail-notifications.document-delivery
     recipe: Document delivery
     summary: Send a document or signed link with an attachment threshold, a send record and a test-send variant.
@@ -46,3 +49,19 @@ nodes:
     keywords: [sms, text message, agent, channel]
     status: gap
     evidence: { apps: 1, count: 9, prs: 9 }
+  - id: mail-notifications.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: mail-notifications.mail.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo

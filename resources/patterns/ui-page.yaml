@@ -8,19 +8,22 @@ nodes:
       - { answer: "A signed-in user of the app", next: ui-page.app }
       - { answer: "A guest on a public page", next: ui-page.public }
       - { answer: "A recipient arriving by a signed link", next: ui-page.signed-guest }
-      - { answer: "Anyone hitting an error", next: ui-page.error }
       - { answer: "A user of a Filament panel", next: ui-page.filament }
+      - { answer: "None of these", next: ui-page.byo }
   - id: ui-page.app
     question: Does the page live in a kit-owned subtree (the dashboard, the auth screens), or is it the app's own?
     why: Kit-owned pages are extended by registration or slots, never copied into the app.
     options:
       - { answer: "It extends a kit-owned page", next: ui-page.kit-owned }
-      - { answer: "It is the app's own page", next: ui-page.own }
+      - { answer: "It is one of the app's own pages", next: ui-page.own }
+      - { answer: "Several CRUD screens at once, or a bespoke workflow", next: ui-page.larger }
+      - { answer: "None of these", next: ui-page.app.byo }
   - id: ui-page.kit-owned
     question: Which kit-owned page?
     options:
       - { answer: "The dashboard", next: ui-page.dashboard-widget }
       - { answer: "A sign-in, registration or password screen", next: ui-page.auth-override }
+      - { answer: "None of these", next: ui-page.kit-owned.byo }
   - id: ui-page.own
     question: What does the page mainly do?
     why: Each answer has its own controller method, page shape and test.
@@ -29,12 +32,13 @@ nodes:
       - { answer: "Shows one record", next: ui-page.show }
       - { answer: "Creates or edits a record", next: ui-page.form }
       - { answer: "Adds buttons, links, menus or uploads to a page", next: ui-page.actions }
-      - { answer: "Several CRUD screens at once, or a bespoke workflow", next: ui-page.larger }
+      - { answer: "None of these", next: ui-page.own.byo }
   - id: ui-page.list
     question: Does the list need sorting, filters, row actions or reordering?
     options:
       - { answer: "No, a plain list", next: ui-page.index }
       - { answer: "Yes", next: ui-page.data-table }
+      - { answer: "None of these", next: ui-page.list.byo }
   - id: ui-page.actions
     question: Which kind of control?
     why: Add buttons, external links, action menus and uploads each have a kit component and a check.
@@ -43,20 +47,33 @@ nodes:
       - { answer: "A link to another site", next: ui-page.external-link }
       - { answer: "A menu of actions on a record", next: ui-page.action-menu }
       - { answer: "A file upload field", next: ui-page.upload }
+      - { answer: "None of these", next: ui-page.actions.byo }
   - id: ui-page.larger
     question: Is it a full set of CRUD screens, or a workflow page beyond CRUD?
     options:
       - { answer: "Index, form and show screens for one record type", next: ui-page.crud-resource }
       - { answer: "A bespoke workflow page", next: ui-page.workbench }
+      - { answer: "An activity stream", next: ui-page.activity-feed }
+      - { answer: "None of these", next: ui-page.larger.byo }
   - id: ui-page.public
-    question: Which public page?
+    question: Which public or shared page?
     options:
       - { answer: "Marketing, product or legal (privacy, terms)", next: ui-page.public-legal }
       - { answer: "A per-visitor demo exhibit", next: ui-page.exhibit }
+      - { answer: "An error page anyone can hit", next: ui-page.error }
+      - { answer: "A kiosk-style entry flow", next: ui-page.kiosk }
+      - { answer: "None of these", next: ui-page.public.byo }
   - id: ui-page.index
     recipe: Inertia index page
     summary: A CRUDDY index controller passes a typed ViewModel to resources/js/pages/<Area>/Index/Page.vue.
-    kit: ['@kit/ui PageHeader', '@kit/ui DataTable', '@kit/ui EmptyState']
+    kit: ['@kit/ui Page', '@kit/ui SectionHeader', '@kit/ui DataTable', '@kit/ui Placeholder']
+    components:
+      - { name: "page shell", kit_component: Page, use: "Wraps the whole page with title and breadcrumbs", props_hint: "title" }
+      - { name: "header", kit_component: SectionHeader, use: "Title plus the primary add action", props_hint: "title, actions slot" }
+      - { name: "filters", kit_component: Toolbar, use: "Search and filters above the table", props_hint: "v-model filters" }
+      - { name: "rows", kit_component: DataTable, use: "The record list", props_hint: "rows, columns" }
+      - { name: "row menu", kit_component: RowActions, use: "Per-row actions, never navigation", props_hint: "actions descriptors" }
+      - { name: "empty state", kit_component: Placeholder, use: "Shown when there are no rows", props_hint: "title, description" }
     make: standards:make page --flavor=index
     checks: ['20', '21', 'descriptors', 'js-imports']
     paths: ['app/**/Http/Controllers/**', 'resources/js/pages/**/Index/Page.vue']
@@ -64,8 +81,14 @@ nodes:
     status: ready
   - id: ui-page.show
     recipe: Inertia show page
-    summary: A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render with the kit RelativeTime component.
-    kit: ['@kit/ui PageHeader', '@kit/ui DescriptionList', '@kit/ui RelativeTime']
+    summary: A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand.
+    kit: ['@kit/ui Page', '@kit/ui SectionHeader', '@kit/ui Section', '@kit/ui ActionBar']
+    components:
+      - { name: "page shell", kit_component: Page, use: "Wraps the record page", props_hint: "title" }
+      - { name: "header", kit_component: SectionHeader, use: "Record title and its actions", props_hint: "title, actions slot" }
+      - { name: "details", kit_component: Section, use: "Groups the record fields", props_hint: "title" }
+      - { name: "actions", kit_component: ActionBar, use: "Record actions placed by the kit", props_hint: "actions descriptors" }
+      - { name: "button set", kit_component: ButtonGroup, use: "Related buttons side by side", props_hint: "default slot" }
     make: standards:make page --flavor=show
     checks: ['20', '21', 'descriptors', 'js-imports']
     paths: ['app/**/Http/Controllers/**', 'resources/js/pages/**/Show/Page.vue']
@@ -74,7 +97,13 @@ nodes:
   - id: ui-page.form
     recipe: Inertia form page
     summary: create/store or edit/update methods, a FormRequest, an Action for the write and a toast on the redirect.
-    kit: ['@kit/ui Form', '@kit/ui Field', '@kit/ui Button']
+    kit: ['@kit/ui FormCard', '@kit/ui Field', '@kit/ui FormActions']
+    components:
+      - { name: "page shell", kit_component: Page, use: "Wraps the form page", props_hint: "title" }
+      - { name: "form", kit_component: FormCard, use: "The form surface", props_hint: "title, @submit" }
+      - { name: "field", kit_component: Field, use: "Label, input slot and error", props_hint: "label, error" }
+      - { name: "input", kit_component: Input, use: "Text input inside a Field", props_hint: "v-model, name" }
+      - { name: "submit", kit_component: FormActions, use: "Submit and cancel buttons", props_hint: "processing" }
     make: standards:make page --flavor=form
     checks: ['20', '21', 'toast', 'actions', 'descriptors']
     paths: ['app/**/Http/Requests/**', 'resources/js/pages/**/Form/Page.vue']
@@ -83,7 +112,10 @@ nodes:
   - id: ui-page.add-button
     recipe: Add action button
     summary: Add, New and Create buttons are kit Buttons carrying the Plus icon.
-    kit: ['@kit/ui Button', 'Plus icon']
+    kit: ['@kit/ui Button']
+    components:
+      - { name: "add button", kit_component: Button, use: "Add, New or Create with the Plus icon", props_hint: "href or @click, icon" }
+      - { name: "action bar", kit_component: ActionBar, use: "Where page-level actions sit", props_hint: "actions descriptors" }
     make: standards:make page --flavor=index
     checks: ['ui plus']
     paths: []
@@ -92,7 +124,10 @@ nodes:
   - id: ui-page.external-link
     recipe: External link
     summary: target=_blank links carry rel=noopener and the external-link icon.
-    kit: ['@kit/ui Link', 'ArrowUpRight icon']
+    kit: ['@kit/ui Button', '@kit/ui DropdownLink']
+    components:
+      - { name: "external link", kit_component: Button, use: "A link styled as a button, target _blank with rel noopener and the external icon", props_hint: "href, target, rel" }
+      - { name: "menu link", kit_component: DropdownLink, use: "An external link inside a menu", props_hint: "href" }
     make: standards:make page --flavor=show
     checks: ['ui new-tab']
     paths: []
@@ -101,7 +136,13 @@ nodes:
   - id: ui-page.action-menu
     recipe: Record action menu
     summary: Action menus run actions only. Navigation goes in links or tabs, never in an action menu, and nothing hand-rolls a kit primitive.
-    kit: ['@kit/ui DropdownMenu', '@kit/ui DropdownMenuItem']
+    kit: ['@kit/ui RowActions', '@kit/ui DropdownAction', '@kit/ui DropdownConfirm']
+    components:
+      - { name: "row menu", kit_component: RowActions, use: "The action menu on a record", props_hint: "actions descriptors" }
+      - { name: "action item", kit_component: DropdownAction, use: "Runs an action", props_hint: "action" }
+      - { name: "confirm item", kit_component: DropdownConfirm, use: "An action that needs confirmation", props_hint: "action, confirm text" }
+      - { name: "delete item", kit_component: DropdownDelete, use: "Deletes with confirmation", props_hint: "href" }
+      - { name: "dialog", kit_component: Dialog, use: "A confirmation or detail dialog", props_hint: "open, title" }
     make: standards:make page --flavor=show
     checks: ['descriptors', 'js-imports']
     paths: []
@@ -110,7 +151,10 @@ nodes:
   - id: ui-page.upload
     recipe: File upload field
     summary: File inputs only come from the kit dropzone component inside a form page.
-    kit: ['@kit/ui InputFile']
+    kit: ['@kit/ui FileInput', '@kit/ui BulkDrop']
+    components:
+      - { name: "file field", kit_component: FileInput, use: "The only file input", props_hint: "v-model, accept, multiple" }
+      - { name: "drop zone", kit_component: BulkDrop, use: "Drag-and-drop or paste of many files", props_hint: "@files" }
     make: standards:make page --flavor=form
     checks: ['ui dropzone']
     paths: []
@@ -119,39 +163,49 @@ nodes:
   - id: ui-page.data-table
     recipe: Data table list
     summary: Sorting, filters, row actions with confirmation and reordering through the kit DataTable and toolbar, not a hand-rolled table.
-    kit: ['@kit/ui DataTable']
+    kit: ['@kit/ui DataTable', '@kit/ui Toolbar', '@kit/ui RowActions']
+    components:
+      - { name: "rows", kit_component: DataTable, use: "Sortable rows", props_hint: "rows, columns, sort" }
+      - { name: "filters", kit_component: Toolbar, use: "Filters and search", props_hint: "v-model filters" }
+      - { name: "bulk bar", kit_component: FloatingToolbar, use: "Bulk actions on the selection", props_hint: "selection" }
+      - { name: "row menu", kit_component: RowActions, use: "Per-row actions", props_hint: "actions descriptors" }
     checks: ['js-imports']
     paths: []
     keywords: [sort, filter, toolbar, reorder, row action, confirm, data table]
     status: gap
-    evidence: { apps: 5, count: 6, prs: 6 }
+    evidence: { apps: 5, count: 6, prs: 6, past_apps: 6, past_count: 33 }
   - id: ui-page.crud-resource
     recipe: CRUD resource screens
     summary: One generator for a record type's controller, request, ViewModel and index, form and show pages.
-    kit: ['@kit/ui Form', '@kit/ui DataTable']
+    kit: ['@kit/ui FormCard', '@kit/ui DataTable']
     checks: ['20', '21']
     paths: []
     keywords: [crud, resource, scaffold, index form show]
     status: gap
-    evidence: { apps: 7, count: 15, prs: 15 }
+    evidence: { apps: 7, count: 15, prs: 15, past_apps: 33, past_count: 312 }
   - id: ui-page.workbench
     recipe: Workflow page
     summary: A bespoke workflow page beyond CRUD still gets route, controller, typed ViewModel, page and test from one skeleton.
     kit: []
+    components:
+      - { name: "panes", kit_component: SplitPane, use: "A list beside its detail", props_hint: "default slots" }
+      - { name: "tabs", kit_component: PaneTabs, use: "Tabs inside a pane", props_hint: "tabs" }
     checks: ['20', '21']
     paths: []
     keywords: [workflow, workbench, wizard, bespoke page]
     status: gap
-    evidence: { apps: 5, count: 25, prs: 25 }
+    evidence: { apps: 5, count: 25, prs: 25, past_apps: 10, past_count: 40 }
   - id: ui-page.dashboard-widget
     recipe: Dashboard widget
     summary: Register a widget with its order and placement; never fork the kit dashboard page.
     kit: []
+    components:
+      - { name: "lane", kit_component: ScrollList, use: "A scrolling widget lane", props_hint: "items" }
     checks: []
     paths: []
     keywords: [dashboard, widget, home, lane]
     status: gap
-    evidence: { apps: 4, count: 14, prs: 14 }
+    evidence: { apps: 4, count: 14, prs: 14, past_apps: 21, past_count: 65 }
   - id: ui-page.auth-override
     recipe: Auth screen extension
     summary: Extend kit auth screens through their slots and link configuration instead of an app-owned copy.
@@ -160,7 +214,7 @@ nodes:
     paths: []
     keywords: [login, sign in, register, password, auth page]
     status: gap
-    evidence: { apps: 3, count: 3, prs: 3 }
+    evidence: { apps: 3, count: 3, prs: 3, past_apps: 17, past_count: 98 }
   - id: ui-page.public-legal
     recipe: Public page
     summary: A sessionless public shell with config-driven product and legal links and markdown content.
@@ -169,7 +223,7 @@ nodes:
     paths: []
     keywords: [public, marketing, landing, privacy, terms, legal]
     status: gap
-    evidence: { apps: 8, count: 15, prs: 15 }
+    evidence: { apps: 8, count: 15, prs: 15, past_apps: 12, past_count: 37 }
   - id: ui-page.exhibit
     recipe: Demo exhibit
     summary: A per-visitor demo exhibit with capacity limits and a prune command.
@@ -206,3 +260,85 @@ nodes:
     keywords: [filament, panel, admin, relation manager]
     status: gap
     evidence: { apps: 2, count: 14, prs: 14 }
+  - id: ui-page.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.app.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.kit-owned.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.own.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.list.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.actions.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.larger.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.public.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.kiosk
+    recipe: Kiosk page
+    summary: A kiosk-style public entry flow.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [kiosk, check in, self service, entry]
+    status: gap
+    evidence: { apps: 0, count: 0, prs: 0, past_apps: 1, past_count: 1 }
+  - id: ui-page.activity-feed
+    recipe: Activity stream
+    summary: A social-style activity stream page.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [activity, feed, stream, timeline]
+    status: gap
+    evidence: { apps: 0, count: 0, prs: 0, past_apps: 1, past_count: 1 }

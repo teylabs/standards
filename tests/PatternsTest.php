@@ -23,8 +23,14 @@ function mutatedPatterns(string $branch, callable $change): string
     $directory = sys_get_temp_dir().'/standards-patterns-'.bin2hex(random_bytes(6));
     mkdir($directory);
 
-    foreach (glob(patternSources().'/*.yaml') as $file) {
+    foreach (glob(patternSources().'/*.{yaml,json}', GLOB_BRACE) as $file) {
         copy($file, $directory.'/'.basename($file));
+    }
+
+    mkdir($directory.'/features');
+
+    foreach (glob(patternSources().'/features/*.yaml') as $file) {
+        copy($file, $directory.'/features/'.basename($file));
     }
 
     $source = Yaml::parseFile($directory.'/'.$branch.'.yaml');
@@ -66,7 +72,8 @@ test('the tree starts at "What are you building?" with the eight branches', func
     $root = TreeCatalog::shipped()->root();
 
     expect($root->question)->toBe('What are you building?')
-        ->and(array_column($root->options, 'next'))->toBe(Compiler::BRANCHES);
+        ->and(array_column($root->options, 'next'))->toBe([...Compiler::BRANCHES, 'byo'])
+        ->and($root->options[array_key_last($root->options)]['answer'])->toBe('None of these');
 });
 
 test('every next resolves, branches below the root have 2–5 options and every node is reachable exactly once', function () {
@@ -158,35 +165,102 @@ test('the compiler rejects a ready leaf without make, an unknown generator and a
     'missing make' => ['make', null, 'Ready leaf settings.form needs a make command'],
     'unknown unit' => ['make', 'standards:make widget --flavor=form', 'known unit and flavor'],
     'unknown check' => ['checks', ['nope'], 'unknown check [nope]'],
-    'bad status' => ['status', 'done', 'status must be ready, draft or gap'],
+    'bad status' => ['status', 'done', 'status must be ready, draft, gap or byo'],
 ]);
 
-test('step mode asks one question at a time and ends on a leaf with its make command', function () {
+test('answers walk from the root question to a leaf with its make command, contract 1', function () {
     $lookup = new Lookup(TreeCatalog::shipped());
 
-    expect($lookup->step())->toMatchArray(['type' => 'question', 'id' => 'root', 'question' => 'What are you building?']);
-    expect($lookup->step('root', '4'))->toMatchArray(['type' => 'question', 'id' => 'settings']);
-    expect($lookup->step('settings', '2'))->toMatchArray(['type' => 'question', 'id' => 'settings.section']);
-    expect($lookup->step('settings.section', 'settings.person'))->toMatchArray(['type' => 'question', 'id' => 'settings.person']);
-    expect($lookup->step('settings.person', 'On/off preferences'))
-        ->toMatchArray(['type' => 'leaf', 'id' => 'settings.toggles', 'make' => 'standards:make settings-section --flavor=toggles']);
-    expect(fn () => $lookup->step('settings', 'nonsense'))->toThrow(InvalidArgumentException::class);
+    expect($lookup->find(['answers' => []]))->toMatchArray(['contract' => 1, 'type' => 'question', 'id' => 'root', 'question' => 'What are you building?', 'path' => []]);
+    expect($lookup->find(['answers' => ['4', '2']]))->toMatchArray(['type' => 'question', 'id' => 'settings.section']);
+    expect($lookup->find(['answers' => ['4', '2', 'settings.person', 'On/off preferences']]))
+        ->toMatchArray(['contract' => 1, 'type' => 'leaf', 'id' => 'settings.toggles', 'make' => 'standards:make settings-section --flavor=toggles', 'demand' => null, 'conventions' => null])
+        ->and($lookup->find(['answers' => ['4', '2', '1', '2']])['path'])->toBe(['A settings screen', 'A per-tenant or per-person setting', "The signed-in person's own", 'On/off preferences']);
+    expect($lookup->find(['answers' => ['4', 'nonsense']]))->toMatchArray(['contract' => 1, 'type' => 'error']);
+    expect($lookup->recipe('nope'))->toMatchArray(['contract' => 1, 'type' => 'error']);
 });
 
-test('intent mode returns candidate leaves and at most two disambiguating questions', function () {
+test('an intent matches a feature plan first, then unit leaves; a path matches unit leaves', function () {
     $lookup = new Lookup(TreeCatalog::shipped());
-    $result = $lookup->intent('a settings page with on off toggle switches');
 
-    expect($result['mode'])->toBe('intent')
-        ->and($result['candidates'][0]['id'])->toBe('settings.toggles')
-        ->and(count($result['questions']))->toBeLessThanOrEqual(2);
+    $plan = $lookup->find(['intent' => 'manage records for invoices with bulk actions']);
+    expect($plan)->toMatchArray(['contract' => 1, 'type' => 'plan'])
+        ->and($plan['feature']['id'])->toBe('manage-records')
+        ->and(array_column($plan['units'], 'role'))->toContain('list', 'write', 'bulk actions')
+        ->and(array_column($plan['questions'], 'id'))->toBe(['bulk', 'mcp', 'notify']);
 
-    $byPath = $lookup->intent('resources/js/pages/settings/Alerts/Page.vue');
-    expect($byPath['mode'])->toBe('path')
+    $unit = $lookup->find(['intent' => 'a dropzone upload']);
+    expect($unit['type'] === 'leaf' ? [$unit['id']] : array_column($unit['candidates'], 'id'))->toContain('ui-page.upload');
+    expect($lookup->find(['intent' => 'ui-page.upload']))->toMatchArray(['type' => 'leaf', 'id' => 'ui-page.upload']);
+
+    $byPath = $lookup->find(['path' => 'resources/js/pages/settings/Alerts/Page.vue']);
+    expect($byPath['type'])->toBe('question')
         ->and(array_column($byPath['candidates'], 'id'))->toBe(['settings.form', 'settings.toggles'])
-        ->and(array_column($byPath['questions'], 'id'))->toBe(['settings.person']);
+        ->and($byPath['id'])->toBe('settings.person');
 
-    expect($lookup->intent('quantum flux capacitor')['questions'][0]['id'])->toBe('root');
+    expect($lookup->find(['intent' => 'quantum flux capacitor'])['id'])->toBe('root');
+});
+
+test('every feature plan lists its units with recipes, and units without one carry their nearest recipes', function () {
+    $lookup = new Lookup(TreeCatalog::shipped());
+    $features = TreeCatalog::shipped()->features();
+
+    expect(count($features))->toBeGreaterThanOrEqual(5)->toBeLessThanOrEqual(8);
+
+    foreach ($features as $feature) {
+        $plan = $lookup->plan($feature);
+        expect($plan['units'])->not->toBeEmpty();
+
+        foreach ($plan['units'] as $unit) {
+            expect($unit)->toHaveKeys(['leaf', 'recipe', 'make', 'role']);
+
+            if (in_array($unit['status'], ['gap', 'byo'], true)) {
+                expect($unit['siblings'])->not->toBeEmpty()->and($unit['message'])->not->toBeNull();
+            }
+        }
+    }
+
+    expect($lookup->find(['intent' => 'document-send'])['feature']['id'])->toBe('document-send');
+});
+
+test('the feature validator rejects unknown units and conditions', function (string $file, Closure $change, string $message) {
+    $directory = mutatedPatterns('mcp', fn (array $source): array => $source);
+    $feature = Yaml::parseFile($directory.'/features/'.$file);
+    file_put_contents($directory.'/features/'.$file, Yaml::dump($change($feature), 10));
+
+    expect(fn () => Compiler::compile($directory))->toThrow(InvalidArgumentException::class, $message);
+})->with([
+    'branch, not a leaf' => ['manage-records.yaml', fn (array $f): array => [...$f, 'composition' => [['unit_leaf_id' => 'ui-page.list', 'role' => 'list']]], 'not a unit leaf'],
+    'unknown leaf' => ['manage-records.yaml', fn (array $f): array => [...$f, 'composition' => [['unit_leaf_id' => 'ui-page.nope', 'role' => 'list']]], 'not a unit leaf'],
+    'unknown condition' => ['manage-records.yaml', fn (array $f): array => [...$f, 'composition' => [['unit_leaf_id' => 'ui-page.index', 'role' => 'list', 'when' => 'colour=red']]], 'must name one of its questions'],
+    'empty composition' => ['manage-records.yaml', fn (array $f): array => [...$f, 'composition' => []], 'non-empty composition'],
+]);
+
+test('every branch reaches a build-your-own exit, and byo leaves return siblings, conventions, a note and a demand record', function () {
+    $directory = mutatedPatterns('mcp', function (array $source): array {
+        $at = nodeAt($source, 'mcp.tool');
+        $source['nodes'][$at]['options'] = array_values(array_filter($source['nodes'][$at]['options'], fn (array $o): bool => $o['next'] !== 'mcp.tool.byo'));
+        $source['nodes'] = array_values(array_filter($source['nodes'], fn (array $n): bool => $n['id'] !== 'mcp.tool.byo'));
+
+        return $source;
+    });
+    expect(fn () => Compiler::compile($directory))->toThrow(InvalidArgumentException::class, 'Branch mcp.tool has no reachable build-your-own');
+
+    $lookup = new Lookup(TreeCatalog::shipped(), now: new DateTimeImmutable('2026-10-27T12:00:00Z'));
+    $byo = $lookup->find(['answers' => ['3', '1', 'None of these']]);
+
+    expect($byo)->toMatchArray(['type' => 'leaf', 'id' => 'mcp.tool.byo', 'status' => 'byo'])
+        ->and($byo['siblings'])->toContain('mcp.read')
+        ->and($byo['conventions']['rules'])->toContain('55', 'actions')
+        ->and($byo['message'])->toStartWith('No recipe fits. Proceed')
+        ->and($byo['demand'])->toBe([
+            'answers' => ['A tool an AI assistant calls over MCP', 'A tool over an app operation', 'None of these'],
+            'criteria' => ['assistant', 'mcp', 'operation', 'tool'],
+            'unit_type' => 'mcp',
+            'ts' => '2026-10-27T12:00:00Z',
+        ]);
+
+    expect($lookup->find(['answers' => ['None of these']]))->toMatchArray(['id' => 'byo', 'status' => 'byo']);
 });
 
 test('gap leaves name the nearest sibling', function () {
@@ -199,7 +273,8 @@ test('gap leaves name the nearest sibling', function () {
         expect($gap['message'])->toMatch('/^No recipe yet\. Build to the nearest sibling [a-z.-]+ and flag it\.$/');
     }
 
-    expect($lookup->intent('mcp.queued')['message'])->toBe('No recipe yet. Build to the nearest sibling mcp.read and flag it.');
+    expect($lookup->recipe('mcp.queued')['message'])->toBe('No recipe yet. Build to the nearest sibling mcp.read and flag it.')
+        ->and($lookup->recipe('mcp.queued')['demand']['unit_type'])->toBe('mcp');
 });
 
 test('every ready leaf\'s make command emits code that passes standards:check in a fixture app', function (string $id) {
@@ -264,11 +339,12 @@ test('recipe_make is optional, validated, and preferred only when the recipe pac
         ->and($leaf->make)->toBe('standards:make capability-tool --flavor=write')
         ->and($leaf->recipeMake)->toBe('mod:butter/mcp-parity {Name}');
 
-    expect((new Lookup($catalog))->intent('mcp.write'))
+    expect((new Lookup($catalog))->recipe('mcp.write'))
         ->toMatchArray(['preferred_make' => 'standards:make capability-tool --flavor=write <Name>', 'preferred_make_source' => 'tey/standards']);
-    expect((new Lookup($catalog, recipes: true))->intent('mcp.write'))
-        ->toMatchArray(['preferred_make' => 'mod:butter/mcp-parity <Name>', 'preferred_make_source' => 'bakery (butter/bakery)']);
-    expect((new Lookup($catalog, recipes: true))->intent('mcp.read')['preferred_make_source'])->toBe('tey/standards');
+    expect((new Lookup($catalog, recipes: true))->recipe('mcp.write'))
+        ->toMatchArray(['preferred_make' => 'mod:butter/mcp-parity <Name>', 'preferred_make_source' => 'butter/bakery']);
+    expect((new Lookup($catalog, recipes: true))->recipe('mcp.read')['preferred_make_source'])->toBe('tey/standards');
+    expect($catalog->node('data-actions.document'))->toMatchObject(['recipe' => 'pdf-reports', 'recipeMake' => 'mod:butter/pdf-reports {Name}', 'status' => 'gap']);
 
     $directory = mutatedPatterns('settings', function (array $source): array {
         $source['nodes'][nodeAt($source, 'settings.form')]['recipe_make'] = 'butter mcp-parity';
@@ -287,18 +363,22 @@ test('recipe_make is optional, validated, and preferred only when the recipe pac
 
 test('gap leaves carry count-only evidence and --gaps sorts them by apps × count', function () {
     $gaps = (new Lookup(TreeCatalog::shipped()))->gaps();
-    $weights = array_column($gaps, 'weight');
+    $weights = array_map(fn (array $gap): int => TreeCatalog::shipped()->node($gap['id'])->weight(), $gaps);
+    $gaps = array_map(fn (array $gap, int $weight): array => [...$gap, 'weight' => $weight], $gaps, $weights);
     $sorted = $weights;
     rsort($sorted);
 
     expect($weights)->toBe($sorted)
-        ->and($gaps[0]['id'])->toBe('ui-page.workbench')
-        ->and($gaps[0]['weight'])->toBe(5 * 25)
+        ->and($gaps[0]['id'])->toBe('ui-page.crud-resource')
+        ->and($gaps[0]['weight'])->toBe(7 * 15 + 33 * 312)
         ->and(end($gaps)['weight'])->toBe(0);
+
+    $imports = array_values(array_filter($gaps, fn (array $gap): bool => ($gap['evidence']['apps'] ?? 1) === 0));
+    expect($imports[0]['id'])->toBe('data-actions.file-import');
 
     foreach (TreeCatalog::shipped()->leaves() as $leaf) {
         if ($leaf->evidence !== null) {
-            expect(array_keys($leaf->evidence))->toBe(['apps', 'count', 'prs'])
+            expect(array_slice(array_keys($leaf->evidence), 0, 3))->toBe(['apps', 'count', 'prs'])
                 ->and(array_filter($leaf->evidence, 'is_int'))->toBe($leaf->evidence);
         }
     }
@@ -308,11 +388,34 @@ test('gap leaves carry count-only evidence and --gaps sorts them by apps × coun
 
         return $source;
     });
-    expect(fn () => Compiler::compile($directory))->toThrow(InvalidArgumentException::class, 'non-negative counts');
+    expect(fn () => Compiler::compile($directory))->toThrow(InvalidArgumentException::class, 'all non-negative counts');
 });
 
 test('public pattern sources name no client apps and cite no change references', function () {
     foreach ([...glob(patternSources().'/*.yaml'), patternSources().'/catalog.json'] as $file) {
         expect(file_get_contents($file))->not->toMatch('/#\d{1,5}\b|cookbook/i');
     }
+});
+
+test('components name only what the kit exports, and recipe() returns them', function () {
+    $exports = json_decode(file_get_contents(patternSources().'/kit-exports.json'), true)['components'];
+    $recipe = (new Lookup(TreeCatalog::shipped()))->recipe('ui-page.index');
+
+    expect(array_column($recipe['components'], 'kit_component'))->toContain('DataTable', 'Toolbar', 'RowActions')
+        ->and(array_keys($recipe['components'][0]))->toBe(['name', 'kit_component', 'use', 'props_hint']);
+
+    foreach (glob(dirname(__DIR__).'/resources/stubs/*.vue.stub') as $stub) {
+        preg_match_all("/import \{([^}]*)\} from '@kit\/ui'/", file_get_contents($stub), $imports);
+
+        foreach (array_map('trim', explode(',', implode(',', $imports[1]))) as $name) {
+            expect($exports)->toContain($name);
+        }
+    }
+
+    $directory = mutatedPatterns('ui-page', function (array $source): array {
+        $source['nodes'][nodeAt($source, 'ui-page.index')]['components'][] = ['name' => 'toolbar', 'kit_component' => 'IndexToolbar', 'use' => 'x', 'props_hint' => 'x'];
+
+        return $source;
+    });
+    expect(fn () => Compiler::compile($directory))->toThrow(InvalidArgumentException::class, 'component [IndexToolbar] is not exported by the kit');
 });

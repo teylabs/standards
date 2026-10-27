@@ -56,6 +56,7 @@ final class CheckReport
                 'catalog' => count($gapLeaves = array_filter($catalog->leaves(), fn (Leaf $leaf): bool => $leaf->status === 'gap')),
                 'evidenced' => count(array_filter($gapLeaves, fn (Leaf $leaf): bool => $leaf->evidence !== null)),
                 'flagged' => self::flaggedGaps($base),
+                'demand' => GapDemand::counts($base),
             ],
             'exit_code' => $violations === [] ? 0 : 1,
         ];

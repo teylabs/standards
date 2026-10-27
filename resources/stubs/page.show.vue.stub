@@ -1,11 +1,13 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
-import { DescriptionList, PageHeader } from '@kit/ui';
+import { Page, Section, SectionHeader } from '@kit/ui';
 
 defineProps<{ record: Record<string, unknown> }>();
 </script>
 
 <template>
-    <PageHeader title="{{ title }}" />
-    <DescriptionList :items="record" />
+    <Page title="{{ title }}">
+        <SectionHeader title="{{ title }}" />
+        <Section title="Details" />
+    </Page>
 </template>

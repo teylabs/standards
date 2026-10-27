@@ -1,0 +1,11 @@
+id: document-send
+summary: Render a document such as a PDF and send it to a recipient, optionally behind a signed link, with a send record.
+keywords: [send document, send pdf, email invoice, deliver report, document delivery, send a quote]
+questions:
+  - { id: link, question: "Does the recipient open it through a signed link rather than an attachment?", options: ["yes", "no"] }
+composition:
+  - { unit_leaf_id: data-actions.document, role: render }
+  - { unit_leaf_id: mail-notifications.document-delivery, role: send }
+  - { unit_leaf_id: ui-page.show, role: send from the record }
+  - { unit_leaf_id: access-tenancy.signed-link, role: recipient link, when: link=yes }
+  - { unit_leaf_id: ui-page.signed-guest, role: recipient page, when: link=yes }

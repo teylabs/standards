@@ -1,13 +1,15 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
-import { SettingsLayout, Switch } from '@kit/ui';
+import { Checkbox, Section, SettingsFrame } from '@kit/ui';
 import { router } from '@inertiajs/vue3';
 
 const save = (key: string, value: boolean) => router.patch('/settings/{{ slug }}', { [key]: value }, { preserveScroll: true });
 </script>
 
 <template>
-    <SettingsLayout title="{{ title }}">
-        <Switch label="Email me updates" @update:model-value="(value: boolean) => save('updates', value)" />
-    </SettingsLayout>
+    <SettingsFrame title="{{ title }}">
+        <Section title="Preferences">
+            <Checkbox label="Email me updates" @update:model-value="(value: boolean) => save('updates', value)" />
+        </Section>
+    </SettingsFrame>
 </template>

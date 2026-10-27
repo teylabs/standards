@@ -1,12 +1,14 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
-import { DataTable, EmptyState, PageHeader } from '@kit/ui';
+import { DataTable, Page, Placeholder, SectionHeader } from '@kit/ui';
 
 defineProps<{ rows: Array<Record<string, unknown>> }>();
 </script>
 
 <template>
-    <PageHeader title="{{ title }}" />
-    <DataTable v-if="rows.length" :rows="rows" />
-    <EmptyState v-else title="Nothing here yet" />
+    <Page title="{{ title }}">
+        <SectionHeader title="{{ title }}" />
+        <DataTable v-if="rows.length" :rows="rows" />
+        <Placeholder v-else title="Nothing here yet" />
+    </Page>
 </template>

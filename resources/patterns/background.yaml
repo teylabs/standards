@@ -7,6 +7,7 @@ nodes:
       - { answer: "After a request, in the background", next: background.job }
       - { answer: "On a schedule", next: background.schedule }
       - { answer: "When an operator runs a command", next: background.command }
+      - { answer: "None of these", next: background.byo }
   - id: background.job
     recipe: Queued job
     summary: After a request, in the background.
@@ -23,7 +24,7 @@ nodes:
     paths: []
     keywords: [schedule, cron, nightly, retention]
     status: gap
-    evidence: { apps: 4, count: 21, prs: 21 }
+    evidence: { apps: 4, count: 21, prs: 21, past_apps: 7, past_count: 22 }
   - id: background.command
     recipe: Operator command
     summary: An artisan command that is idempotent, supports --dry-run and refuses to run in production unless forced.
@@ -32,4 +33,12 @@ nodes:
     paths: []
     keywords: [command, artisan, operator, backfill, dry run]
     status: gap
-    evidence: { apps: 6, count: 11, prs: 11 }
+    evidence: { apps: 6, count: 11, prs: 11, past_apps: 18, past_count: 129 }
+  - id: background.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo

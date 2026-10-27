@@ -1,0 +1,7 @@
+id: workspace-settings
+summary: Settings that a workspace's admins edit, saved through one action and gated by a capability.
+keywords: [workspace settings, team settings, organisation settings, admin settings, tenant settings]
+composition:
+  - { unit_leaf_id: settings.workspace, role: settings section }
+  - { unit_leaf_id: access-tenancy.capability, role: who may edit }
+  - { unit_leaf_id: data-actions.action, role: save }

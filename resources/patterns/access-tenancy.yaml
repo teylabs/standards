@@ -6,6 +6,7 @@ nodes:
     options:
       - { answer: "Yes", next: access-tenancy.signed-link }
       - { answer: "No, a signed-in user", next: access-tenancy.user }
+      - { answer: "None of these", next: access-tenancy.byo }
   - id: access-tenancy.user
     question: What decides access?
     why: Capabilities, entitlements, membership and admission stay distinct.
@@ -13,8 +14,14 @@ nodes:
       - { answer: "A capability or policy", next: access-tenancy.capability }
       - { answer: "A purchase or plan (entitlement)", next: access-tenancy.entitlements }
       - { answer: "Workspace membership", next: access-tenancy.membership }
+      - { answer: "Login or request hardening", next: access-tenancy.hardening }
+      - { answer: "None of these", next: access-tenancy.user.byo }
+  - id: access-tenancy.hardening
+    question: Which hardening?
+    options:
       - { answer: "Login throttling, local login or two-factor", next: access-tenancy.auth-hardening }
       - { answer: "Host split or security headers on every request", next: access-tenancy.host-middleware }
+      - { answer: "None of these", next: access-tenancy.hardening.byo }
   - id: access-tenancy.signed-link
     recipe: Signed recipient link
     summary: A hashed, expiring, revocable token link that records who used it.
@@ -32,6 +39,7 @@ nodes:
     paths: []
     keywords: [permission, policy, capability, authorize]
     status: draft
+    evidence: { apps: 2, count: 3, prs: 3, past_apps: 7, past_count: 32 }
   - id: access-tenancy.entitlements
     recipe: Entitlement
     summary: Access granted by purchase or plan, kept distinct from capabilities and roles.
@@ -49,6 +57,7 @@ nodes:
     paths: []
     keywords: [workspace, member, invite, tenant]
     status: gap
+    evidence: { apps: 3, count: 4, prs: 4, past_apps: 7, past_count: 27 }
   - id: access-tenancy.auth-hardening
     recipe: Auth hardening
     summary: Login rate limiters and local-only sign-in defaults.
@@ -57,7 +66,7 @@ nodes:
     paths: []
     keywords: [throttle, rate limit, local login, two factor, 2fa]
     status: gap
-    evidence: { apps: 4, count: 8, prs: 8 }
+    evidence: { apps: 4, count: 8, prs: 8, past_apps: 8, past_count: 22 }
   - id: access-tenancy.host-middleware
     recipe: Host and header middleware
     summary: Host-split routing and security-headers middleware.
@@ -67,3 +76,27 @@ nodes:
     keywords: [host, domain split, security headers, middleware]
     status: gap
     evidence: { apps: 4, count: 7, prs: 7 }
+  - id: access-tenancy.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: access-tenancy.user.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: access-tenancy.hardening.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo

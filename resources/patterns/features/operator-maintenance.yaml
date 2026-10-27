@@ -1,0 +1,9 @@
+id: operator-maintenance
+summary: Maintenance an operator runs or schedules, such as backfills, repairs and retention sweeps, watched by monitoring.
+keywords: [maintenance, backfill, operator command, cleanup, retention, repair data, cron job]
+questions:
+  - { id: scheduled, question: "Does it also run on a schedule?", options: ["yes", "no"] }
+composition:
+  - { unit_leaf_id: background.command, role: operator command }
+  - { unit_leaf_id: background.schedule, role: schedule, when: scheduled=yes }
+  - { unit_leaf_id: integrations.monitoring, role: monitoring }

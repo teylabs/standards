@@ -418,7 +418,7 @@ It uploads `standards-report.json` as the `standards-report` artifact. **Pre-pus
 
 `php artisan standards:install` writes, and on re-run refreshes, only what it owns:
 
-- **AGENTS.md:** the pattern index between `<!-- tey/standards:patterns:start -->` and `:end` markers, led by "Traverse before you build". Text outside the markers is kept; an unmatched marker stops the install.
+- **AGENTS.md:** the pattern index between `<!-- tey/standards:patterns:start -->` and `:end` markers. It leads with the one always-loaded line, "Before implementing a page, action, MCP tool, setting… call bakery.find (offline: `php artisan standards:pattern`)", then "Traverse before you build". Text outside the markers is kept; an unmatched marker stops the install.
 - **Skills:** one per recipe (leaves that aren't gaps) in `.ai/skills/standards-*` for Boost (`boost:install` / `boost:update` publishes them). The same file goes in `.claude/skills/standards-*` with `paths:` globs, so it loads when an agent edits a matching folder.
 - **`.claude/settings.json` hooks:** merged into existing settings. Other keys and hooks are kept, and an invalid file is refused, never overwritten. Every hook first checks for `vendor/tey/standards/bin/standards` and exits 0 without it. It also does nothing unless the directory has `artisan` and a `composer.json` that requires `tey/standards`, so fleet and house-rules repositories are never blocked.
 
@@ -426,40 +426,41 @@ It uploads `standards-report.json` as the `standards-report` artifact. **Pre-pus
 | ---- | ----- | ------ |
 | `stop` | Stop | Blocks finishing on `standards:check --changed` drift, with fix hints. Skipped when a Stop hook is already active. |
 | `pre-commit` | PreToolUse `Bash` | Blocks `git commit` (exit 2) on drift, with fix hints. A check that crashes also blocks. |
-| `pre-write` | PreToolUse `Write` | For a **new** file under `app/` or `resources/js/`, adds the path lookup: candidate leaves, their make command and the next question. If the content has no `standards-pattern: <leaf-id>` or `standards-pattern: gap` stamp, it denies once per session and file, asking for a leaf or `gap`. The retry goes through. |
+| `pre-write` | PreToolUse `Write` | For a **new** file under `app/` or `resources/js/`, adds the path lookup and points at bakery.find, with the CLI as fallback. The lookup lists candidate leaves, their make command and the next question. If the content has no `standards-pattern: <leaf-id>` or `standards-pattern: gap` stamp, it denies once per session and file, asking for a leaf or `gap`. The retry goes through. |
 | `post-edit` | PostToolUse `Edit\|MultiEdit\|Write` | Runs `standards:check --file=<path>` and returns findings as context. Never blocks. |
 
 Hard blocks happen only at commit and Stop.
 
-### 3. Pattern lookup: a decision tree
+### 3. Pattern lookup: feature → unit → component
 
-The tree starts at "What are you building?" and branches into `ui-page`, `data-actions`, `mcp`, `settings`, `mail-notifications`, `background`, `access-tenancy` and `integrations`. Its sources are `resources/patterns/<branch>.yaml`. `php bin/standards patterns:compile` validates them into `catalog.json`, and the suite fails if the two differ.
+A hosted recipe MCP (`bakery.find`, `bakery.recipe`, `bakery.scaffold`, `bakery.check`) is the entry point for agents. This package ships the library it calls, and the offline CLI. Both answer with [pattern contract 1](docs/pattern-contract.md), whose stable fields are frozen by a schema snapshot test.
 
-- A branch node is `{id, question, why?, options: [{answer, next}]}`, with 2–5 options below the root.
-- A leaf node is `{id, recipe, summary, kit, make?, recipe_make?, checks, paths, keywords, status, evidence?}`.
-  - `status` is `ready`, `draft` or `gap`.
-  - `make` is `standards:make <unit> --flavor=<flavor>`.
-  - `recipe_make` is an optional recipe-package command such as `mod:<vendor>/<recipe> {Name}`.
-  - `evidence` is `{apps, count, prs}`, as counts only.
+- **Features** (`resources/patterns/features/*.yaml`) compose unit leaves into a plan. Each is `{id, summary, keywords, questions?, composition: [{unit_leaf_id, role, when?}]}`. Seven ship: manage records, workspace settings, personal preferences, an MCP-exposed operation, document send, operator maintenance and file import.
+- **Units** form a decision tree. It starts at "What are you building?" and branches into `ui-page`, `data-actions`, `mcp`, `settings`, `mail-notifications`, `background`, `access-tenancy` and `integrations` (`resources/patterns/<branch>.yaml`).
+  - A branch is `{id, question, why?, options: [{answer, next}]}`, with 2–5 options and a "None of these" exit.
+  - A leaf is `{id, recipe, summary, kit, components?, make?, recipe_make?, checks, paths, keywords, status, evidence?}`, where `status` is `ready`, `draft`, `gap` or `byo`.
+- **Components** list the `@kit/ui` components a leaf is built from, as `{name, kit_component, use, props_hint}`. `resources/patterns/kit-exports.json` snapshots the kit's `@kit/ui` barrel, and the validator rejects any name it doesn't export.
 
-The validator rejects these:
+`php bin/standards patterns:compile` validates the sources into `catalog.json`, and the suite fails if the two differ. The validator rejects these:
 
 - unresolved `next` ids;
 - orphans, nodes with two parents, and cycles;
-- unknown fields, check ids, units or flavors;
+- a question with no reachable `byo` exit;
+- unknown fields, checks, units, flavors or kit components;
+- a feature unit that isn't a leaf, and a `when` that names no question;
 - a ready leaf without `make`.
 
 A test runs every ready leaf's `make` in a fixture app and asserts that `standards:check` passes.
 
 ```sh
-php artisan standards:pattern                                    # step mode: the root question
-php artisan standards:pattern --node=settings --answer=2         # answer by number, text or next id
-php artisan standards:pattern "a settings page with toggles"     # intent: candidate leaves + up to two questions
-php artisan standards:pattern resources/js/pages/settings/A/Page.vue   # the same, by path glob
-php artisan standards:pattern --gaps                             # gap leaves, sorted by apps × count
+php artisan standards:pattern "manage records with bulk actions"   # a feature plan, else unit candidates + a question
+php artisan standards:pattern resources/js/pages/settings/A/Page.vue # by path
+php artisan standards:pattern --answer=4 --answer=2                  # walk the tree from the root
+php artisan standards:pattern --recipe=ui-page.index                 # one leaf, with its kit components
+php artisan standards:pattern --gaps                                 # gap leaves by demand: fleet apps × changes + past apps × changes
 ```
 
-On a gap leaf the lookup says "No recipe yet. Build to the nearest sibling `<id>` and flag it." With `butter/bakery` installed, a leaf's `recipe_make` becomes the preferred, labelled make command. Otherwise `make` is preferred. The same lookup is the `pattern_lookup` MCP tool, added to `boost.mcp.tools.include` when `laravel/mcp` is installed. Callers depend on `Tey\Standards\Patterns\PatternCatalog`, not on the file format.
+Every path ends in a leaf. Gap and byo leaves return their nearest recipes, the general conventions (rules and notes) and a note to proceed. A gap says "No recipe yet. Build to the nearest sibling `<id>` and flag it." A traversal or search that ends on one appends an anonymised demand record to `storage/standards/gap-demand.jsonl`: answers, catalog-keyword criteria, unit type and timestamp, with no code, names or paths. With `butter/bakery` installed, `recipe_make` becomes the preferred, labelled make command. Callers depend on `PatternCatalog` and the contract, not on the file format. Leaf `evidence` is counts only (`apps`, `count`, `prs`, optional `past_apps` and `past_count`). App names and change references never ship.
 
 **Generators.** `php artisan standards:make <unit> <Name> --flavor=<flavor>` writes stamped, conformant files and never overwrites. Set `standards.make.stubs` to use your own copies of the stubs.
 
@@ -479,10 +480,10 @@ On a gap leaf the lookup says "No recipe yet. Build to the nearest sibling `<id>
 - `violations`: `[{rule, kind, target, check, hint}]`, where `kind` is `violation`, `stale`, `missing-expiry`, `expired` or `error`;
 - `allowlist`: `{count, expiring, expired}`;
 - `skipped`;
-- `gaps`: `{catalog, evidenced, flagged}`, where `flagged` counts files stamped `standards-pattern: gap`;
+- `gaps`: `{catalog, evidenced, flagged, demand}`. `flagged` counts files stamped `standards-pattern: gap`, and `demand` is `{total, by_unit_type}` from the gap-demand log;
 - `exit_code`.
 
-`vendor/bin/standards report <reports or dirs> [--previous=last.json] [--json] [--strict]` aggregates several apps' reports. For each app it counts violations, allowlisted entries, expiring and expired entries and flagged gaps, and lists regressions and fixes against the previous aggregate. Totals cover them all. `--strict` exits 1 on any regression. Delivery stays outside the package. A nightly fleet job can run each app's reusable workflow, or `standards:check --json` in each checkout, then collect the files and run `standards report reports/ --previous=state/last.json --json > state/today.json`. It posts the text form wherever the fleet reads, and keeps `today.json` as the next run's `--previous`.
+`vendor/bin/standards report <reports or dirs> [--previous=last.json] [--json] [--strict]` aggregates several apps' reports. For each app it counts violations, allowlisted entries, expiring and expired entries, flagged gaps and gap-demand lookups, and lists regressions and fixes against the previous aggregate. Totals cover them all. `--strict` exits 1 on any regression. Delivery stays outside the package. A nightly fleet job can run each app's reusable workflow, or `standards:check --json` in each checkout, then collect the files and run `standards report reports/ --previous=state/last.json --json > state/today.json`. It posts the text form wherever the fleet reads, and keeps `today.json` as the next run's `--previous`.
 
 **Coverage and limits.** These are static checks and generated scaffolds. The hooks rely on Claude Code's hook contract. Other agents get AGENTS.md and the Boost skills only. `--changed` needs a fetched base ref. Without a merge base it checks working-tree changes and says so. Generated pages target Inertia and kit components that the package does not install, and its fixture app uses stand-in classes for them. The generators don't run `mod:*` commands. They emit from recipe stubs that an app or kit can override.
 

@@ -9,12 +9,14 @@ nodes:
       - { answer: "A per-tenant or per-person setting", next: settings.section }
       - { answer: "A feature switch, a plan entitlement or a role permission", next: settings.access-kind }
       - { answer: "An attribute or option of a domain record", next: settings.record-attribute }
+      - { answer: "None of these", next: settings.byo }
   - id: settings.section
     question: Whose setting is it?
     options:
       - { answer: "The signed-in person's own", next: settings.person }
       - { answer: "A workspace's, edited by its admins", next: settings.workspace }
       - { answer: "The whole installation (single tenant)", next: settings.house }
+      - { answer: "None of these", next: settings.section.byo }
   - id: settings.person
     question: Does the settings group need its own nav section, or join an existing settings class?
     why: A new section gets its own route, page and nav item; preferences can join an existing one.
@@ -22,16 +24,24 @@ nodes:
       - { answer: "Its own section with a form", next: settings.form }
       - { answer: "On/off preferences", next: settings.toggles }
       - { answer: "Per-person state outside a settings page", next: settings.user-state }
+      - { answer: "None of these", next: settings.person.byo }
   - id: settings.access-kind
     question: Is this a capability toggle, an entitlement or a role permission?
     why: Capabilities, entitlements, membership and permissions stay distinct.
     options:
       - { answer: "A capability switched on or off per workspace", next: settings.capability-toggle }
       - { answer: "A plan entitlement or a role permission", next: settings.not-a-setting }
+      - { answer: "None of these", next: settings.access-kind.byo }
   - id: settings.form
     recipe: Settings form section
     summary: An edit/update controller under the settings route group renders resources/js/pages/settings/<Section>/Page.vue in the settings layout.
-    kit: ['@kit/ui SettingsLayout', '@kit/ui Form', '@kit/ui Field']
+    kit: ['@kit/ui SettingsFrame', '@kit/ui FormCard', '@kit/ui Field']
+    components:
+      - { name: "settings shell", kit_component: SettingsFrame, use: "The settings layout and nav", props_hint: "title" }
+      - { name: "form", kit_component: FormCard, use: "The section form", props_hint: "title, @submit" }
+      - { name: "field", kit_component: Field, use: "Label, input and error", props_hint: "label, error" }
+      - { name: "input", kit_component: Input, use: "A text setting", props_hint: "v-model" }
+      - { name: "submit", kit_component: FormActions, use: "Save button", props_hint: "processing" }
     make: standards:make settings-section --flavor=form
     checks: ['20', '21', 'toast', 'actions']
     paths: ['app/**/Http/Controllers/Settings/**', 'resources/js/pages/settings/**']
@@ -40,7 +50,11 @@ nodes:
   - id: settings.toggles
     recipe: Settings preference toggles
     summary: Each toggle saves on change through one update endpoint and confirms with a toast.
-    kit: ['@kit/ui SettingsLayout', '@kit/ui Switch']
+    kit: ['@kit/ui SettingsFrame', '@kit/ui Section', '@kit/ui Checkbox']
+    components:
+      - { name: "settings shell", kit_component: SettingsFrame, use: "The settings layout and nav", props_hint: "title" }
+      - { name: "group", kit_component: Section, use: "Groups related preferences", props_hint: "title" }
+      - { name: "toggle", kit_component: Checkbox, use: "An on/off preference that saves on change", props_hint: "v-model, label" }
     make: standards:make settings-section --flavor=toggles
     checks: ['20', '21', 'toast']
     paths: ['app/**/Http/Controllers/Settings/**', 'resources/js/pages/settings/**']
@@ -58,7 +72,7 @@ nodes:
   - id: settings.workspace
     recipe: Workspace settings
     summary: A settings section per workspace group, guarded by a permission and audited.
-    kit: ['@kit/ui SettingsLayout']
+    kit: ['@kit/ui SettingsFrame']
     checks: ['32']
     paths: []
     keywords: [workspace, team, organisation, tenant settings]
@@ -72,7 +86,7 @@ nodes:
     paths: []
     keywords: [house, global, single tenant, site settings]
     status: gap
-    evidence: { apps: 1, count: 13, prs: 13 }
+    evidence: { apps: 1, count: 13, prs: 13, past_apps: 7, past_count: 22 }
   - id: settings.config
     recipe: Config value
     summary: A config key read from env, with a boot-time guard that fails closed when it is missing.
@@ -108,3 +122,35 @@ nodes:
     keywords: [attribute, field, option, column]
     status: gap
     evidence: { apps: 5, count: 18, prs: 18 }
+  - id: settings.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: settings.section.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: settings.person.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: settings.access-kind.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo

@@ -7,6 +7,7 @@ nodes:
       - { answer: "A tool over an app operation", next: mcp.tool }
       - { answer: "A capability manifest, llms.txt or a parity guard", next: mcp.agent-docs }
       - { answer: "Deciding where MCP files live in a module", next: mcp.module-placement }
+      - { answer: "None of these", next: mcp.byo }
   - id: mcp.tool
     question: Does the tool change data?
     why: Writing tools declare WRITES and confirmation; read tools stay side-effect free.
@@ -14,6 +15,7 @@ nodes:
       - { answer: "It only reads", next: mcp.read }
       - { answer: "It creates, changes or deletes data", next: mcp.write }
       - { answer: "It starts slow or external work", next: mcp.queued }
+      - { answer: "None of these", next: mcp.tool.byo }
   - id: mcp.read
     recipe: Read capability tool
     summary: A kit CapabilityTool with a #[Capability] attribute, an ABILITY and a call() that reuses the page's shared operation.
@@ -23,7 +25,7 @@ nodes:
     paths: ['app/Mcp/Tools/**']
     keywords: [mcp, tool, assistant, read, query, agent]
     status: ready
-    evidence: { apps: 9, count: 27, prs: 27 }
+    evidence: { apps: 9, count: 27, prs: 27, past_apps: 0, past_count: 0 }
   - id: mcp.write
     recipe: mcp-parity
     summary: A CapabilityTool with WRITES = true that calls the same Action as the UI, declared in the MCP capability manifest with its parity test.
@@ -34,6 +36,7 @@ nodes:
     paths: ['app/Mcp/Tools/**']
     keywords: [mcp, tool, write, update, delete, mutate, parity]
     status: ready
+    evidence: { apps: 1, count: 4, prs: 4, past_apps: 1, past_count: 23 }
   - id: mcp.queued
     recipe: Queued capability tool
     summary: Slow or external work answers with a run token the assistant reads back.
@@ -60,3 +63,19 @@ nodes:
     keywords: [module, placement, mcp folder]
     status: gap
     evidence: { apps: 1, count: 1, prs: 1 }
+  - id: mcp.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: mcp.tool.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
