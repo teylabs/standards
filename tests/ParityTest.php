@@ -77,11 +77,14 @@ test('standards:check and the Pest suite report the same findings for the same a
         sort($viaPest);
         sort($viaCheck);
 
-        expect($viaCheck)->toBe($viaPest)
-            ->and($viaCheck)->toContain(
-                ['preset laravel', 'App\\Console\\FirstOwnerCommand', "Expecting 'app/Console/FirstOwnerCommand.php' not to extend 'Illuminate\\Console\\Command'."],
-                ['preset laravel', 'App\\Support\\TypeScriptProvider', "Expecting 'app/Support/TypeScriptProvider.php' not to extend 'Illuminate\\Support\\ServiceProvider'."],
-            );
+        expect($viaCheck)->toBe($viaPest);
+
+        foreach ([
+            ['preset laravel', 'App\\Console\\FirstOwnerCommand', "Expecting 'app/Console/FirstOwnerCommand.php' not to extend 'Illuminate\\Console\\Command'."],
+            ['preset laravel', 'App\\Support\\TypeScriptProvider', "Expecting 'app/Support/TypeScriptProvider.php' not to extend 'Illuminate\\Support\\ServiceProvider'."],
+        ] as $expected) {
+            expect(in_array($expected, $viaCheck, true))->toBeTrue('Missing '.json_encode($expected, JSON_UNESCAPED_SLASHES).' in '.json_encode($viaCheck, JSON_UNESCAPED_SLASHES));
+        }
     } finally {
         (new Filesystem)->deleteDirectory($base);
     }

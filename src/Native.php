@@ -148,10 +148,11 @@ final class Native
         };
     }
 
-    /** Preserve exact ratchet keys when Pest 5 brackets targeted expectation arguments. */
+    /** Preserve exact ratchet keys across separators, and when Pest 5 brackets targeted expectation arguments. */
     private static function diagnostic(AssertionFailedError $error): string
     {
-        $message = $error->getMessage();
+        // Pest names the file with native separators; keep ratchet keys the same on Windows.
+        $message = (string) preg_replace_callback("/^(Expecting ')([^']+\\.php)(')/", fn (array $match): string => $match[1].str_replace('\\', '/', $match[2]).$match[3], $error->getMessage());
 
         if (! str_starts_with(InstalledVersions::getVersion('pestphp/pest') ?? '', '5.')) {
             return $message;
