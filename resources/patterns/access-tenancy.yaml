@@ -1,0 +1,69 @@
+answer: Who can see or do something
+entry: access-tenancy
+nodes:
+  - id: access-tenancy
+    question: Is the actor an unauthenticated recipient arriving by a signed token link?
+    options:
+      - { answer: "Yes", next: access-tenancy.signed-link }
+      - { answer: "No, a signed-in user", next: access-tenancy.user }
+  - id: access-tenancy.user
+    question: What decides access?
+    why: Capabilities, entitlements, membership and admission stay distinct.
+    options:
+      - { answer: "A capability or policy", next: access-tenancy.capability }
+      - { answer: "A purchase or plan (entitlement)", next: access-tenancy.entitlements }
+      - { answer: "Workspace membership", next: access-tenancy.membership }
+      - { answer: "Login throttling, local login or two-factor", next: access-tenancy.auth-hardening }
+      - { answer: "Host split or security headers on every request", next: access-tenancy.host-middleware }
+  - id: access-tenancy.signed-link
+    recipe: Signed recipient link
+    summary: A hashed, expiring, revocable token link that records who used it.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [signed link, token, magic link, recipient, revoke]
+    status: gap
+    evidence: { apps: 4, count: 7, prs: 7 }
+  - id: access-tenancy.capability
+    recipe: Capability or policy
+    summary: A capability or policy.
+    kit: []
+    checks: ['32']
+    paths: []
+    keywords: [permission, policy, capability, authorize]
+    status: draft
+  - id: access-tenancy.entitlements
+    recipe: Entitlement
+    summary: Access granted by purchase or plan, kept distinct from capabilities and roles.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [entitlement, plan, purchase, subscription access]
+    status: gap
+    evidence: { apps: 3, count: 6, prs: 6 }
+  - id: access-tenancy.membership
+    recipe: Workspace membership
+    summary: Workspace membership.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [workspace, member, invite, tenant]
+    status: gap
+  - id: access-tenancy.auth-hardening
+    recipe: Auth hardening
+    summary: Login rate limiters and local-only sign-in defaults.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [throttle, rate limit, local login, two factor, 2fa]
+    status: gap
+    evidence: { apps: 4, count: 8, prs: 8 }
+  - id: access-tenancy.host-middleware
+    recipe: Host and header middleware
+    summary: Host-split routing and security-headers middleware.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [host, domain split, security headers, middleware]
+    status: gap
+    evidence: { apps: 4, count: 7, prs: 7 }

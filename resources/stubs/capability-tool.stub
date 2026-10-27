@@ -1,0 +1,29 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Mcp\Tools;
+
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Mcp\Capability;
+use Tey\Kit\Features\Mcp\CapabilityTool;
+
+#[Capability('{{ capability_group }}')]
+final class {{ name }}Tool extends CapabilityTool
+{
+    public const CAPABILITY = '{{ capability }}';
+
+    public const ABILITY = '{{ ability }}';
+{{ writes }}
+    protected string $description = '{{ title }}.';
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    protected function call(Principal $principal, int $workspace, array $arguments): array
+    {
+        // Reuse the operation the UI uses; never duplicate the business logic here.
+        return [];
+    }
+}

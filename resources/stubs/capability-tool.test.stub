@@ -1,0 +1,9 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Mcp\Tools\{{ name }}Tool;
+
+it('declares the {{ capability }} capability', function () {
+    expect({{ name }}Tool::CAPABILITY)->toBe('{{ capability }}');
+});

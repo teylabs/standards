@@ -1,0 +1,208 @@
+answer: A page people open in the browser
+entry: ui-page
+nodes:
+  - id: ui-page
+    question: Who opens the page?
+    why: Guests, signed-link recipients, panel users and signed-in users each get a different shell, auth and caching.
+    options:
+      - { answer: "A signed-in user of the app", next: ui-page.app }
+      - { answer: "A guest on a public page", next: ui-page.public }
+      - { answer: "A recipient arriving by a signed link", next: ui-page.signed-guest }
+      - { answer: "Anyone hitting an error", next: ui-page.error }
+      - { answer: "A user of a Filament panel", next: ui-page.filament }
+  - id: ui-page.app
+    question: Does the page live in a kit-owned subtree (the dashboard, the auth screens), or is it the app's own?
+    why: Kit-owned pages are extended by registration or slots, never copied into the app.
+    options:
+      - { answer: "It extends a kit-owned page", next: ui-page.kit-owned }
+      - { answer: "It is the app's own page", next: ui-page.own }
+  - id: ui-page.kit-owned
+    question: Which kit-owned page?
+    options:
+      - { answer: "The dashboard", next: ui-page.dashboard-widget }
+      - { answer: "A sign-in, registration or password screen", next: ui-page.auth-override }
+  - id: ui-page.own
+    question: What does the page mainly do?
+    why: Each answer has its own controller method, page shape and test.
+    options:
+      - { answer: "Lists records", next: ui-page.list }
+      - { answer: "Shows one record", next: ui-page.show }
+      - { answer: "Creates or edits a record", next: ui-page.form }
+      - { answer: "Adds buttons, links, menus or uploads to a page", next: ui-page.actions }
+      - { answer: "Several CRUD screens at once, or a bespoke workflow", next: ui-page.larger }
+  - id: ui-page.list
+    question: Does the list need sorting, filters, row actions or reordering?
+    options:
+      - { answer: "No, a plain list", next: ui-page.index }
+      - { answer: "Yes", next: ui-page.data-table }
+  - id: ui-page.actions
+    question: Which kind of control?
+    why: Add buttons, external links, action menus and uploads each have a kit component and a check.
+    options:
+      - { answer: "An add or create button", next: ui-page.add-button }
+      - { answer: "A link to another site", next: ui-page.external-link }
+      - { answer: "A menu of actions on a record", next: ui-page.action-menu }
+      - { answer: "A file upload field", next: ui-page.upload }
+  - id: ui-page.larger
+    question: Is it a full set of CRUD screens, or a workflow page beyond CRUD?
+    options:
+      - { answer: "Index, form and show screens for one record type", next: ui-page.crud-resource }
+      - { answer: "A bespoke workflow page", next: ui-page.workbench }
+  - id: ui-page.public
+    question: Which public page?
+    options:
+      - { answer: "Marketing, product or legal (privacy, terms)", next: ui-page.public-legal }
+      - { answer: "A per-visitor demo exhibit", next: ui-page.exhibit }
+  - id: ui-page.index
+    recipe: Inertia index page
+    summary: A CRUDDY index controller passes a typed ViewModel to resources/js/pages/<Area>/Index/Page.vue.
+    kit: ['@kit/ui PageHeader', '@kit/ui DataTable', '@kit/ui EmptyState']
+    make: standards:make page --flavor=index
+    checks: ['20', '21', 'descriptors', 'js-imports']
+    paths: ['app/**/Http/Controllers/**', 'resources/js/pages/**/Index/Page.vue']
+    keywords: [list, index, table, browse, overview]
+    status: ready
+  - id: ui-page.show
+    recipe: Inertia show page
+    summary: A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render with the kit RelativeTime component.
+    kit: ['@kit/ui PageHeader', '@kit/ui DescriptionList', '@kit/ui RelativeTime']
+    make: standards:make page --flavor=show
+    checks: ['20', '21', 'descriptors', 'js-imports']
+    paths: ['app/**/Http/Controllers/**', 'resources/js/pages/**/Show/Page.vue']
+    keywords: [show, detail, view, record, relative time, date]
+    status: ready
+  - id: ui-page.form
+    recipe: Inertia form page
+    summary: create/store or edit/update methods, a FormRequest, an Action for the write and a toast on the redirect.
+    kit: ['@kit/ui Form', '@kit/ui Field', '@kit/ui Button']
+    make: standards:make page --flavor=form
+    checks: ['20', '21', 'toast', 'actions', 'descriptors']
+    paths: ['app/**/Http/Requests/**', 'resources/js/pages/**/Form/Page.vue']
+    keywords: [form, create, edit, store, update, save, toast, feedback]
+    status: ready
+  - id: ui-page.add-button
+    recipe: Add action button
+    summary: Add, New and Create buttons are kit Buttons carrying the Plus icon.
+    kit: ['@kit/ui Button', 'Plus icon']
+    make: standards:make page --flavor=index
+    checks: ['ui plus']
+    paths: []
+    keywords: [add, new, create button, plus]
+    status: ready
+  - id: ui-page.external-link
+    recipe: External link
+    summary: target=_blank links carry rel=noopener and the external-link icon.
+    kit: ['@kit/ui Link', 'ArrowUpRight icon']
+    make: standards:make page --flavor=show
+    checks: ['ui new-tab']
+    paths: []
+    keywords: [external, new tab, blank, outbound link]
+    status: ready
+  - id: ui-page.action-menu
+    recipe: Record action menu
+    summary: Action menus run actions only. Navigation goes in links or tabs, never in an action menu, and nothing hand-rolls a kit primitive.
+    kit: ['@kit/ui DropdownMenu', '@kit/ui DropdownMenuItem']
+    make: standards:make page --flavor=show
+    checks: ['descriptors', 'js-imports']
+    paths: []
+    keywords: [menu, dropdown, actions, kebab, row actions]
+    status: ready
+  - id: ui-page.upload
+    recipe: File upload field
+    summary: File inputs only come from the kit dropzone component inside a form page.
+    kit: ['@kit/ui InputFile']
+    make: standards:make page --flavor=form
+    checks: ['ui dropzone']
+    paths: []
+    keywords: [upload, file, dropzone, attachment, image]
+    status: ready
+  - id: ui-page.data-table
+    recipe: Data table list
+    summary: Sorting, filters, row actions with confirmation and reordering through the kit DataTable and toolbar, not a hand-rolled table.
+    kit: ['@kit/ui DataTable']
+    checks: ['js-imports']
+    paths: []
+    keywords: [sort, filter, toolbar, reorder, row action, confirm, data table]
+    status: gap
+    evidence: { apps: 5, count: 6, prs: 6 }
+  - id: ui-page.crud-resource
+    recipe: CRUD resource screens
+    summary: One generator for a record type's controller, request, ViewModel and index, form and show pages.
+    kit: ['@kit/ui Form', '@kit/ui DataTable']
+    checks: ['20', '21']
+    paths: []
+    keywords: [crud, resource, scaffold, index form show]
+    status: gap
+    evidence: { apps: 7, count: 15, prs: 15 }
+  - id: ui-page.workbench
+    recipe: Workflow page
+    summary: A bespoke workflow page beyond CRUD still gets route, controller, typed ViewModel, page and test from one skeleton.
+    kit: []
+    checks: ['20', '21']
+    paths: []
+    keywords: [workflow, workbench, wizard, bespoke page]
+    status: gap
+    evidence: { apps: 5, count: 25, prs: 25 }
+  - id: ui-page.dashboard-widget
+    recipe: Dashboard widget
+    summary: Register a widget with its order and placement; never fork the kit dashboard page.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [dashboard, widget, home, lane]
+    status: gap
+    evidence: { apps: 4, count: 14, prs: 14 }
+  - id: ui-page.auth-override
+    recipe: Auth screen extension
+    summary: Extend kit auth screens through their slots and link configuration instead of an app-owned copy.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [login, sign in, register, password, auth page]
+    status: gap
+    evidence: { apps: 3, count: 3, prs: 3 }
+  - id: ui-page.public-legal
+    recipe: Public page
+    summary: A sessionless public shell with config-driven product and legal links and markdown content.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [public, marketing, landing, privacy, terms, legal]
+    status: gap
+    evidence: { apps: 8, count: 15, prs: 15 }
+  - id: ui-page.exhibit
+    recipe: Demo exhibit
+    summary: A per-visitor demo exhibit with capacity limits and a prune command.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [demo, exhibit, sandbox, visitor]
+    status: gap
+    evidence: { apps: 1, count: 11, prs: 11 }
+  - id: ui-page.signed-guest
+    recipe: Signed-link guest page
+    summary: A token-bound page for an unauthenticated recipient, served no-store, recording their decisions.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [signed link, guest, token, client portal, recipient]
+    status: gap
+    evidence: { apps: 2, count: 8, prs: 8 }
+  - id: ui-page.error
+    recipe: Error page
+    summary: A branded Inertia error page for 4xx and 5xx responses.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [error, '404', '403', '500', not found]
+    status: gap
+    evidence: { apps: 2, count: 3, prs: 3 }
+  - id: ui-page.filament
+    recipe: Filament panel page
+    summary: Use native Filament fields and relations by default; a custom field states its reason.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [filament, panel, admin, relation manager]
+    status: gap
+    evidence: { apps: 2, count: 14, prs: 14 }

@@ -1,0 +1,11 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Actions\{{ action }};
+
+it('runs {{ action }}', function () {
+    (new {{ action }})->handle([]);
+
+    expect(true)->toBeTrue();
+});

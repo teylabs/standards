@@ -1,0 +1,57 @@
+name: Standards
+
+# Reusable: apps call this and make its job a required check.
+#   jobs:
+#     standards:
+#       uses: teylabs/standards/.github/workflows/standards.yml@v0.11
+on:
+  workflow_call:
+    inputs:
+      php-version:
+        type: string
+        default: '8.4'
+      base-ref:
+        description: Ref --changed compares against; empty runs the full check.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  standards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: ${{ inputs.php-version }}
+          tools: composer:v2
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare environment
+        run: |
+          [ -f .env ] || cp .env.example .env
+          php artisan key:generate --force
+      - name: Check standards
+        env:
+          BASE_REF: ${{ inputs.base-ref }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            php artisan standards:check --changed --base="origin/$BASE_REF" --json > standards-report.json || status=$?
+          else
+            php artisan standards:check --json > standards-report.json || status=$?
+          fi
+          php artisan standards:check ${BASE_REF:+--changed --base="origin/$BASE_REF"} || true
+          exit ${status:-0}
+      - name: Keep the drift report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: standards-report
+          path: standards-report.json

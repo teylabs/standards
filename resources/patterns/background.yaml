@@ -1,0 +1,35 @@
+answer: Work that runs later
+entry: background
+nodes:
+  - id: background
+    question: When does it run?
+    options:
+      - { answer: "After a request, in the background", next: background.job }
+      - { answer: "On a schedule", next: background.schedule }
+      - { answer: "When an operator runs a command", next: background.command }
+  - id: background.job
+    recipe: Queued job
+    summary: After a request, in the background.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [queue, job, background, async]
+    status: gap
+  - id: background.schedule
+    recipe: Scheduled job
+    summary: A scheduled job registered with an overlap guard and a retention sweep. The evidence is weak; few cited changes clearly fit.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [schedule, cron, nightly, retention]
+    status: gap
+    evidence: { apps: 4, count: 21, prs: 21 }
+  - id: background.command
+    recipe: Operator command
+    summary: An artisan command that is idempotent, supports --dry-run and refuses to run in production unless forced.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [command, artisan, operator, backfill, dry run]
+    status: gap
+    evidence: { apps: 6, count: 11, prs: 11 }

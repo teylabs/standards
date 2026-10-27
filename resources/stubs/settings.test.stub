@@ -1,0 +1,7 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+it('renders the {{ title }} settings section', function () {
+    $this->get('/settings/{{ slug }}')->assertOk();
+});

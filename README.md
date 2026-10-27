@@ -379,9 +379,116 @@ Publish `config/preflight.php` with `php artisan vendor:publish --tag=standards-
 
 The preflight runs **before migrate** and sees the previous release's queue. A backlog warning means “jobs are waiting and nothing is draining them”, not “this deploy broke something”. It is a signal to investigate: a slow or overloaded worker can also cause an old backlog. Heartbeats are deferred; no hosting API or worker-process inspection is performed.
 
+## Self-enforcing conformance
+
+One command drives four layers: gates, agent guardrails, pattern lookup and a drift report. Nobody has to remember to run the checks.
+
+### 1. Gates: `standards:check`
+
+```sh
+php artisan standards:check                 # every rule, exit 1 on drift
+php artisan standards:check --changed       # findings in files changed against standards.base_ref (origin/main)
+php artisan standards:check --file=app/Http/Controllers/InvoicesController.php
+php artisan standards:check --json          # stable schema 1, see below
+```
+
+Move the app's `Configuration` into `tests/Arch/configuration.php`, a file that returns it (or set `standards.configuration`; publish with `--tag=standards-config`). Have the Arch test `require` the same file, so the Pest suite and the gate judge one setup. The gate runs every `Conformance::TESTS` rule outside Pest, including placement and the Pest presets. Disabled optional UI rules and rule 51 (until `ciEnforce`) are listed under `skipped`, never reported as passes. Drift means any of these:
+
+- an unexcepted violation;
+- a stale allowlist entry;
+- an allowlist entry without `expires`. Every entry needs `rule`, `target`, `check`, `reason`, `date` and `expires`, all real `Y-m-d` dates. Pest ratchets still accept entries without `expires`; the gate does not;
+- an expired entry;
+- a rule that cannot run, such as a missing configuration, missing dev tools or a crash. The gate fails closed.
+
+Entries expiring within `standards.expiring_days` (14) are listed but don't fail. `--changed` and `--file` keep findings whose target is one of those files. Class targets map to files through `classRoots`. Expiry findings are always reported.
+
+**CI.** Call the reusable workflow and make its job a required check:
+
+```yaml
+jobs:
+  standards:
+    uses: teylabs/standards/.github/workflows/standards.yml@v0.11.0
+    with:
+      base-ref: ${{ github.base_ref }}   # omit for a full check on main
+```
+
+It uploads `standards-report.json` as the `standards-report` artifact. **Pre-push.** `standards:install` installs `.git/hooks/pre-push` running `standards:check --changed`. It never replaces a hook it didn't write. Add the line to yours instead.
+
+### 2. Agent guardrails: `standards:install`
+
+`php artisan standards:install` writes, and on re-run refreshes, only what it owns:
+
+- **AGENTS.md:** the pattern index between `<!-- tey/standards:patterns:start -->` and `:end` markers, led by "Traverse before you build". Text outside the markers is kept; an unmatched marker stops the install.
+- **Skills:** one per recipe (leaves that aren't gaps) in `.ai/skills/standards-*` for Boost (`boost:install` / `boost:update` publishes them). The same file goes in `.claude/skills/standards-*` with `paths:` globs, so it loads when an agent edits a matching folder.
+- **`.claude/settings.json` hooks:** merged into existing settings. Other keys and hooks are kept, and an invalid file is refused, never overwritten. Every hook first checks for `vendor/tey/standards/bin/standards` and exits 0 without it. It also does nothing unless the directory has `artisan` and a `composer.json` that requires `tey/standards`, so fleet and house-rules repositories are never blocked.
+
+| Hook | Event | Effect |
+| ---- | ----- | ------ |
+| `stop` | Stop | Blocks finishing on `standards:check --changed` drift, with fix hints. Skipped when a Stop hook is already active. |
+| `pre-commit` | PreToolUse `Bash` | Blocks `git commit` (exit 2) on drift, with fix hints. A check that crashes also blocks. |
+| `pre-write` | PreToolUse `Write` | For a **new** file under `app/` or `resources/js/`, adds the path lookup: candidate leaves, their make command and the next question. If the content has no `standards-pattern: <leaf-id>` or `standards-pattern: gap` stamp, it denies once per session and file, asking for a leaf or `gap`. The retry goes through. |
+| `post-edit` | PostToolUse `Edit\|MultiEdit\|Write` | Runs `standards:check --file=<path>` and returns findings as context. Never blocks. |
+
+Hard blocks happen only at commit and Stop.
+
+### 3. Pattern lookup: a decision tree
+
+The tree starts at "What are you building?" and branches into `ui-page`, `data-actions`, `mcp`, `settings`, `mail-notifications`, `background`, `access-tenancy` and `integrations`. Its sources are `resources/patterns/<branch>.yaml`. `php bin/standards patterns:compile` validates them into `catalog.json`, and the suite fails if the two differ.
+
+- A branch node is `{id, question, why?, options: [{answer, next}]}`, with 2–5 options below the root.
+- A leaf node is `{id, recipe, summary, kit, make?, recipe_make?, checks, paths, keywords, status, evidence?}`.
+  - `status` is `ready`, `draft` or `gap`.
+  - `make` is `standards:make <unit> --flavor=<flavor>`.
+  - `recipe_make` is an optional recipe-package command such as `mod:<vendor>/<recipe> {Name}`.
+  - `evidence` is `{apps, count, prs}`, as counts only.
+
+The validator rejects these:
+
+- unresolved `next` ids;
+- orphans, nodes with two parents, and cycles;
+- unknown fields, check ids, units or flavors;
+- a ready leaf without `make`.
+
+A test runs every ready leaf's `make` in a fixture app and asserts that `standards:check` passes.
+
+```sh
+php artisan standards:pattern                                    # step mode: the root question
+php artisan standards:pattern --node=settings --answer=2         # answer by number, text or next id
+php artisan standards:pattern "a settings page with toggles"     # intent: candidate leaves + up to two questions
+php artisan standards:pattern resources/js/pages/settings/A/Page.vue   # the same, by path glob
+php artisan standards:pattern --gaps                             # gap leaves, sorted by apps × count
+```
+
+On a gap leaf the lookup says "No recipe yet. Build to the nearest sibling `<id>` and flag it." With `butter/bakery` installed, a leaf's `recipe_make` becomes the preferred, labelled make command. Otherwise `make` is preferred. The same lookup is the `pattern_lookup` MCP tool, added to `boost.mcp.tools.include` when `laravel/mcp` is installed. Callers depend on `Tey\Standards\Patterns\PatternCatalog`, not on the file format.
+
+**Generators.** `php artisan standards:make <unit> <Name> --flavor=<flavor>` writes stamped, conformant files and never overwrites. Set `standards.make.stubs` to use your own copies of the stubs.
+
+| Unit | Flavors | Writes |
+| ---- | ------- | ------ |
+| `page` | `index`, `show`, `form` | controller, `Page.vue`, `Route::controller()` group, Pest test; `form` adds a FormRequest and an Action |
+| `capability-tool` | `read`, `write` | kit `CapabilityTool` with `#[Capability]`, `CAPABILITY`, `ABILITY` (and `WRITES`), Pest test |
+| `settings-section` | `form`, `toggles` | settings controller, FormRequest, Action, `pages/settings/<Name>/Page.vue`, routes, test |
+| `action` | `plain` | Action class and test |
+
+### 4. Drift report
+
+`standards:check --json` emits schema 1 with these keys:
+
+- `app` (the Composer name) and `sha`;
+- `generated_at`, `scope` (`full`, `changed` or `file`) and `paths`;
+- `violations`: `[{rule, kind, target, check, hint}]`, where `kind` is `violation`, `stale`, `missing-expiry`, `expired` or `error`;
+- `allowlist`: `{count, expiring, expired}`;
+- `skipped`;
+- `gaps`: `{catalog, evidenced, flagged}`, where `flagged` counts files stamped `standards-pattern: gap`;
+- `exit_code`.
+
+`vendor/bin/standards report <reports or dirs> [--previous=last.json] [--json] [--strict]` aggregates several apps' reports. For each app it counts violations, allowlisted entries, expiring and expired entries and flagged gaps, and lists regressions and fixes against the previous aggregate. Totals cover them all. `--strict` exits 1 on any regression. Delivery stays outside the package. A nightly fleet job can run each app's reusable workflow, or `standards:check --json` in each checkout, then collect the files and run `standards report reports/ --previous=state/last.json --json > state/today.json`. It posts the text form wherever the fleet reads, and keeps `today.json` as the next run's `--previous`.
+
+**Coverage and limits.** These are static checks and generated scaffolds. The hooks rely on Claude Code's hook contract. Other agents get AGENTS.md and the Boost skills only. `--changed` needs a fetched base ref. Without a merge base it checks working-tree changes and says so. Generated pages target Inertia and kit components that the package does not install, and its fixture app uses stand-in classes for them. The generators don't run `mod:*` commands. They emit from recipe stubs that an app or kit can override.
+
 ## Agent guidance
 
-The package ships a Laravel Boost guideline. Select `tey/standards` during `php artisan boost:install` to include it in the application's agent instructions.
+The package ships a Laravel Boost guideline. Select `tey/standards` during `php artisan boost:install` to include it in the application's agent instructions. `standards:install` adds the pattern index, per-recipe skills and Claude hooks described above.
 
 *Changelog: 2026-10-12 — trial `tey/standards` package with configured checks, exact stale-checked ratchets, seeded negative controls and a package-source-only strict preset.*
 *Changelog: 2026-10-13 — added offline deploy preflight, registered checks, CI mode, timeout guards and persistent emergency skips; mail warns at deploy time, while generic --strict promotes failed results but not advisories for CI. (#105)*

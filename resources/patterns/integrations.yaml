@@ -1,0 +1,59 @@
+answer: A connection to another service
+entry: integrations
+nodes:
+  - id: integrations
+    question: Which service?
+    options:
+      - { answer: "Monitoring", next: integrations.monitoring }
+      - { answer: "Payments and billing", next: integrations.billing }
+      - { answer: "An AI model or agent", next: integrations.ai }
+      - { answer: "Another provider's API or webhooks", next: integrations.provider }
+  - id: integrations.provider
+    question: Is there an official provider SDK and a fake driver for tests?
+    options:
+      - { answer: "Yes: wrap the SDK behind a contract with a fake", next: integrations.outbound }
+      - { answer: "No: raw HTTP or inbound signed webhooks", next: integrations.webhooks }
+  - id: integrations.monitoring
+    recipe: Monitoring install
+    summary: A token-gated Nightwatch install with request sampling at 0.1, off in tests, checked by preflight.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [monitoring, nightwatch, apm, errors]
+    status: gap
+    evidence: { apps: 8, count: 8, prs: 8 }
+  - id: integrations.billing
+    recipe: Billing
+    summary: Guarded Stripe Checkout, a signed webhook, a shared-account guard and the catalogue as code.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [stripe, billing, checkout, payment, subscription]
+    status: gap
+    evidence: { apps: 6, count: 14, prs: 14 }
+  - id: integrations.ai
+    recipe: AI provider
+    summary: An AI agent call with metering, a timeout and a per-workspace key.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [ai, llm, agent, model, openai, anthropic]
+    status: gap
+    evidence: { apps: 3, count: 4, prs: 4 }
+  - id: integrations.outbound
+    recipe: Provider client
+    summary: Use the official SDK behind an app contract with a fake for tests; verify inbound webhooks by signature.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [api, client, sdk, third party, http, webhook client]
+    status: gap
+    evidence: { apps: 4, count: 15, prs: 15 }
+  - id: integrations.webhooks
+    recipe: Inbound webhooks
+    summary: Receive signed webhooks without an official SDK.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [webhook, callback, inbound]
+    status: gap

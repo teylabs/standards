@@ -1,0 +1,14 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Actions;
+
+final class {{ action }}
+{
+    /** @param array<string, mixed> $attributes */
+    public function handle(array $attributes): void
+    {
+        // The one place this write happens; controllers, jobs and MCP tools call it.
+    }
+}

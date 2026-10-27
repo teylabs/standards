@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased (0.11.0)
+
+### Upgrading
+
+- `standards:check` needs a `tests/Arch/configuration.php` that returns your `Configuration` (or set `standards.configuration`). It fails closed without one.
+- Allowlist entries need `expires` (a real `Y-m-d` date) for `standards:check`. Expired entries and entries without one are drift. Pest ratchets still accept entries without `expires`.
+
+### Added
+
+- `standards:check [--changed] [--file=…] [--json]` runs every conformance rule outside Pest, applies the allowlist with expiries, and exits 1 on drift. JSON schema 1 carries app, sha, violations, allowlist count and expiries, and pattern gaps.
+- A reusable `.github/workflows/standards.yml` workflow to make a required check.
+- `standards:install` writes the generated AGENTS.md pattern index, one Boost skill per recipe, path-scoped Claude skills, and merged `.claude/settings.json` hooks. Stop and `git commit` block on drift. New files get an advisory lookup plus a one-time stamp request. Edits get an advisory `--file` check. Every hook is a no-op outside an app that requires tey/standards. It also installs a pre-push hook.
+- The pattern decision tree: `resources/patterns/*.yaml` compiled to `catalog.json` behind `PatternCatalog`. `standards:pattern` has step mode, intent and path mode, and `--gaps` sorted by apps × count. The `pattern_lookup` MCP tool registers with Boost when `laravel/mcp` is installed. Leaves can carry `recipe_make` and count-only `evidence`.
+- `standards:make page|capability-tool|settings-section|action --flavor=…` emits stamped, conformant code. Every ready leaf is proven in a fixture app.
+- `standards report` aggregates several apps' JSON into a drift report with regressions against the previous run.
+
 ## 0.10.1 - 2026-10-26
 
 ### Fixed

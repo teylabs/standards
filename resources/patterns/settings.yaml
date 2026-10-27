@@ -1,0 +1,110 @@
+answer: A settings screen
+entry: settings
+nodes:
+  - id: settings
+    question: Is the value per deploy (config or env), a per-tenant or per-person setting, an on/off feature or access grant, or an attribute of a domain record?
+    why: Only per-tenant and per-person values belong in a settings section; the rest live in config, access or the record itself.
+    options:
+      - { answer: "Per deploy: config or env", next: settings.config }
+      - { answer: "A per-tenant or per-person setting", next: settings.section }
+      - { answer: "A feature switch, a plan entitlement or a role permission", next: settings.access-kind }
+      - { answer: "An attribute or option of a domain record", next: settings.record-attribute }
+  - id: settings.section
+    question: Whose setting is it?
+    options:
+      - { answer: "The signed-in person's own", next: settings.person }
+      - { answer: "A workspace's, edited by its admins", next: settings.workspace }
+      - { answer: "The whole installation (single tenant)", next: settings.house }
+  - id: settings.person
+    question: Does the settings group need its own nav section, or join an existing settings class?
+    why: A new section gets its own route, page and nav item; preferences can join an existing one.
+    options:
+      - { answer: "Its own section with a form", next: settings.form }
+      - { answer: "On/off preferences", next: settings.toggles }
+      - { answer: "Per-person state outside a settings page", next: settings.user-state }
+  - id: settings.access-kind
+    question: Is this a capability toggle, an entitlement or a role permission?
+    why: Capabilities, entitlements, membership and permissions stay distinct.
+    options:
+      - { answer: "A capability switched on or off per workspace", next: settings.capability-toggle }
+      - { answer: "A plan entitlement or a role permission", next: settings.not-a-setting }
+  - id: settings.form
+    recipe: Settings form section
+    summary: An edit/update controller under the settings route group renders resources/js/pages/settings/<Section>/Page.vue in the settings layout.
+    kit: ['@kit/ui SettingsLayout', '@kit/ui Form', '@kit/ui Field']
+    make: standards:make settings-section --flavor=form
+    checks: ['20', '21', 'toast', 'actions']
+    paths: ['app/**/Http/Controllers/Settings/**', 'resources/js/pages/settings/**']
+    keywords: [settings, profile, account, preferences form]
+    status: ready
+  - id: settings.toggles
+    recipe: Settings preference toggles
+    summary: Each toggle saves on change through one update endpoint and confirms with a toast.
+    kit: ['@kit/ui SettingsLayout', '@kit/ui Switch']
+    make: standards:make settings-section --flavor=toggles
+    checks: ['20', '21', 'toast']
+    paths: ['app/**/Http/Controllers/Settings/**', 'resources/js/pages/settings/**']
+    keywords: [toggle, switch, preference, notification settings, on off]
+    status: ready
+  - id: settings.user-state
+    recipe: Per-person state
+    summary: Timezone, avatar and remembered UI state stored per person, outside a settings page.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [timezone, avatar, user state, remembered]
+    status: gap
+    evidence: { apps: 3, count: 3, prs: 3 }
+  - id: settings.workspace
+    recipe: Workspace settings
+    summary: A settings section per workspace group, guarded by a permission and audited.
+    kit: ['@kit/ui SettingsLayout']
+    checks: ['32']
+    paths: []
+    keywords: [workspace, team, organisation, tenant settings]
+    status: gap
+    evidence: { apps: 3, count: 9, prs: 9 }
+  - id: settings.house
+    recipe: Installation-wide settings
+    summary: A typed settings class with its settings migration for a single-tenant installation.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [house, global, single tenant, site settings]
+    status: gap
+    evidence: { apps: 1, count: 13, prs: 13 }
+  - id: settings.config
+    recipe: Config value
+    summary: A config key read from env, with a boot-time guard that fails closed when it is missing.
+    kit: []
+    checks: []
+    paths: ['config/**']
+    keywords: [config, env, environment, deploy setting, boot guard]
+    status: gap
+    evidence: { apps: 7, count: 16, prs: 16 }
+  - id: settings.capability-toggle
+    recipe: Capability toggle
+    summary: A per-workspace capability in the capabilities registry, kept distinct from entitlements; name the key and its gate points.
+    kit: []
+    checks: ['32']
+    paths: []
+    keywords: [capability, feature flag, feature toggle, enable feature]
+    status: gap
+    evidence: { apps: 1, count: 3, prs: 3 }
+  - id: settings.not-a-setting
+    recipe: Entitlement or permission
+    summary: Not a setting. Build it under access-tenancy as an entitlement or a role permission.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [entitlement, plan, permission, role]
+    status: gap
+  - id: settings.record-attribute
+    recipe: Record attribute
+    summary: Not a setting. Add a field or option to the domain record through data-actions.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [attribute, field, option, column]
+    status: gap
+    evidence: { apps: 5, count: 18, prs: 18 }

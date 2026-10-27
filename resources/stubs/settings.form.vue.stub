@@ -1,0 +1,13 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+import { Button, Field, Form, SettingsLayout } from '@kit/ui';
+</script>
+
+<template>
+    <SettingsLayout title="{{ title }}">
+        <Form :action="'/settings/{{ slug }}'" method="patch">
+            <Field name="name" label="Name" />
+            <Button type="submit">Save</Button>
+        </Form>
+    </SettingsLayout>
+</template>

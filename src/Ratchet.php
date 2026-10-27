@@ -9,7 +9,7 @@ use InvalidArgumentException;
 
 final class Ratchet
 {
-    /** @var list<array{rule: string, target: string, check: string, reason: string, date: string}> */
+    /** @var list<array{rule: string, target: string, check: string, reason: string, date: string, expires: ?string}> */
     private readonly array $entries;
 
     /**
@@ -27,12 +27,21 @@ final class Ratchet
                 'check' => self::field($entry, 'check'),
                 'reason' => self::field($entry, 'reason'),
                 'date' => self::field($entry, 'date'),
+                'expires' => isset($entry['expires']) ? self::field($entry, 'expires') : null,
             ];
 
             $date = DateTimeImmutable::createFromFormat('!Y-m-d', $entry['date']);
 
             if ($date === false || $date->format('Y-m-d') !== $entry['date']) {
                 throw new InvalidArgumentException('Conformance exception date must be a real Y-m-d date.');
+            }
+
+            foreach (array_filter([$entry['date'], $entry['expires']]) as $value) {
+                $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+                if ($parsed === false || $parsed->format('Y-m-d') !== $value) {
+                    throw new InvalidArgumentException('Conformance exception dates must be real Y-m-d dates.');
+                }
             }
 
             $key = $entry['rule'].' | '.$entry['target'].' | '.$entry['check'];
@@ -46,6 +55,12 @@ final class Ratchet
         }
 
         $this->entries = $validated;
+    }
+
+    /** @return list<array{rule: string, target: string, check: string, reason: string, date: string, expires: ?string}> */
+    public function entries(): array
+    {
+        return $this->entries;
     }
 
     /** @param array<string, mixed> $entry */

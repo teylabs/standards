@@ -1,0 +1,12 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+import { Button, Field, Form, PageHeader } from '@kit/ui';
+</script>
+
+<template>
+    <PageHeader title="{{ title }}" />
+    <Form :action="'/{{ slug }}'" method="post">
+        <Field name="name" label="Name" />
+        <Button type="submit">Save</Button>
+    </Form>
+</template>

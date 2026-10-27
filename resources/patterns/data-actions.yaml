@@ -1,0 +1,80 @@
+answer: Logic that changes data
+entry: data-actions
+nodes:
+  - id: data-actions
+    question: What are you adding?
+    options:
+      - { answer: "An operation that changes state", next: data-actions.action }
+      - { answer: "A model or table", next: data-actions.model }
+      - { answer: "A rendered document such as a PDF", next: data-actions.document }
+      - { answer: "A public, versioned API operation", next: data-actions.api-op }
+      - { answer: "A bulk import", next: data-actions.import }
+  - id: data-actions.model
+    question: Does the model need composite-FK tenancy and a lock_version stale-write guard?
+    options:
+      - { answer: "Yes, it is workspace-scoped", next: data-actions.tenant-model }
+      - { answer: "No; it needs enum and check-constraint conventions", next: data-actions.constraints }
+      - { answer: "Its history must be append-only", next: data-actions.ledger }
+  - id: data-actions.action
+    recipe: Domain action
+    summary: One principal-first Action owns the write, checks for stale writes, and is shared by controllers, jobs and MCP tools.
+    kit: []
+    make: standards:make action --flavor=plain
+    checks: ['actions', '21']
+    paths: ['app/**/Actions/**']
+    keywords: [action, write, business logic, mutate, operation]
+    status: draft
+    evidence: { apps: 7, count: 33, prs: 33 }
+  - id: data-actions.tenant-model
+    recipe: Workspace-scoped model
+    summary: A model with composite tenancy foreign keys, a lock_version stale-write guard and its policy.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [model, tenant, workspace, lock_version, composite key]
+    status: gap
+    evidence: { apps: 4, count: 11, prs: 11 }
+  - id: data-actions.constraints
+    recipe: Enum and constraint conventions
+    summary: Backed enums and database check constraints for a domain model's states.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [enum, check constraint, status column, migration]
+    status: gap
+    evidence: { apps: 3, count: 28, prs: 28 }
+  - id: data-actions.ledger
+    recipe: Append-only ledger
+    summary: An append-only ledger or receipts table guarded by database triggers and idempotency keys.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [ledger, append only, receipt, immutable, idempotency]
+    status: gap
+    evidence: { apps: 3, count: 5, prs: 5 }
+  - id: data-actions.document
+    recipe: Rendered document
+    summary: A frozen document rendered to PDF through one renderer contract.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [pdf, document, render, invoice]
+    status: gap
+    evidence: { apps: 3, count: 11, prs: 11 }
+  - id: data-actions.api-op
+    recipe: Versioned API operation
+    summary: An OpenAPI entry, controller and MCP mirror for each public, versioned API operation.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [api, openapi, versioned, endpoint]
+    status: gap
+    evidence: { apps: 2, count: 9, prs: 9 }
+  - id: data-actions.import
+    recipe: Bulk import
+    summary: Import records in bulk.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [import, bulk, csv]
+    status: gap

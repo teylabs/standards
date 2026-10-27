@@ -1,0 +1,48 @@
+answer: Mail or notifications
+entry: mail-notifications
+nodes:
+  - id: mail-notifications
+    question: Is the channel mail, SMS or an agent recipient?
+    options:
+      - { answer: "Mail", next: mail-notifications.mail }
+      - { answer: "SMS or an agent", next: mail-notifications.custom-channel }
+  - id: mail-notifications.mail
+    question: What does the mail carry?
+    options:
+      - { answer: "A message about the person's account", next: mail-notifications.notification }
+      - { answer: "A document or signed link, with a send record", next: mail-notifications.document-delivery }
+      - { answer: "A digest for many users", next: mail-notifications.digest }
+  - id: mail-notifications.notification
+    recipe: Account notification
+    summary: A Notification with the configured mail composer; never a Mailable or the Mail facade.
+    kit: []
+    checks: ['mail']
+    paths: []
+    keywords: [notify, email, mail, notification]
+    status: draft
+  - id: mail-notifications.document-delivery
+    recipe: Document delivery
+    summary: Send a document or signed link with an attachment threshold, a send record and a test-send variant.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [send document, attachment, signed link, test send]
+    status: gap
+    evidence: { apps: 3, count: 8, prs: 8 }
+  - id: mail-notifications.digest
+    recipe: Digest
+    summary: Many users in a digest.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [digest, newsletter, batch email]
+    status: gap
+  - id: mail-notifications.custom-channel
+    recipe: Custom channel
+    summary: A custom notification channel for SMS or an agent, with held and quiet-hours gating.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [sms, text message, agent, channel]
+    status: gap
+    evidence: { apps: 1, count: 9, prs: 9 }

@@ -1,0 +1,11 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+import { DescriptionList, PageHeader } from '@kit/ui';
+
+defineProps<{ record: Record<string, unknown> }>();
+</script>
+
+<template>
+    <PageHeader title="{{ title }}" />
+    <DescriptionList :items="record" />
+</template>

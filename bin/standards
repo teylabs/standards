@@ -9,12 +9,17 @@ $usage = <<<'TEXT'
 Usage: standards ci [--strict] [--json] [--base=<dir>]
                     [--default-branches=main,*.x] [--distribution=app|package] [--enforce]
                     [--drafts=lint|full]
+       standards report <report.json|dir>... [--previous=<aggregate.json>] [--json] [--strict]
+       standards hook <stop|pre-commit|pre-write|post-edit>
+       standards patterns:compile [--check]
        standards [--help]
 
 Inspect .github/workflows offline, without booting Laravel.
 Settings: flags > PREFLIGHT_CI_* environment > composer.json extra.tey-standards.ci > defaults.
 Defaults: current directory, main, auto-detected distribution, enforcement off, drafts lint.
 Exit: 0 for advisory runs; 1 for findings with --strict and enforcement on; 2 for invalid usage.
+report aggregates standards:check --json files; --strict exits 1 on regressions against --previous.
+hook runs a Claude Code hook (JSON on stdin) and exits 0 outside an app that requires tey/standards.
 TEXT;
 
 $arguments = array_slice($argv, 1);
@@ -22,6 +27,113 @@ $arguments = array_slice($argv, 1);
 if ($arguments === [] || $arguments === ['--help']) {
     echo $usage.PHP_EOL;
     exit(0);
+}
+
+$locate = function (): void {
+    global $_composer_autoload_path;
+    $autoload = $_composer_autoload_path ?? null;
+    $directory = __DIR__;
+
+    while ($autoload === null) {
+        if (is_file($directory.'/vendor/autoload.php')) {
+            $autoload = $directory.'/vendor/autoload.php';
+            break;
+        }
+
+        $parent = dirname($directory);
+
+        if ($parent === $directory) {
+            throw new RuntimeException('Composer autoloader not found; run composer install first.');
+        }
+
+        $directory = $parent;
+    }
+
+    require_once $autoload;
+};
+
+if (in_array($arguments[0], ['hook', 'report', 'patterns:compile'], true)) {
+    $command = array_shift($arguments);
+
+    if ($command === 'hook') {
+        // A hook must never break the agent: outside an app that requires tey/standards it exits 0 silently.
+        $base = (string) getcwd();
+
+        if (! in_array($arguments[0] ?? null, ['stop', 'pre-commit', 'pre-write', 'post-edit'], true)) {
+            fwrite(STDERR, 'standards hook: unknown event.'.PHP_EOL);
+            exit(0);
+        }
+
+        $locate();
+
+        if (! Tey\Standards\Enforcement\Hook::applies($base)) {
+            exit(0);
+        }
+
+        $input = json_decode((string) stream_get_contents(STDIN), true);
+        $result = (new Tey\Standards\Enforcement\Hook($base))->handle($arguments[0], is_array($input) ? $input : []);
+        fwrite(STDOUT, $result['stdout']);
+        fwrite(STDERR, $result['stderr']);
+        exit($result['exit']);
+    }
+
+    $locate();
+
+    if ($command === 'patterns:compile') {
+        $directory = dirname(__DIR__).'/resources/patterns';
+
+        try {
+            $json = json_encode(Tey\Standards\Patterns\Compiler::compile($directory), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR).PHP_EOL;
+        } catch (InvalidArgumentException $error) {
+            fwrite(STDERR, 'standards patterns:compile: '.$error->getMessage().PHP_EOL);
+            exit(1);
+        }
+
+        if (in_array('--check', $arguments, true)) {
+            $current = @file_get_contents($directory.'/catalog.json');
+            echo $current === $json ? 'catalog.json is current.'.PHP_EOL : 'catalog.json is stale; run standards patterns:compile.'.PHP_EOL;
+            exit($current === $json ? 0 : 1);
+        }
+
+        file_put_contents($directory.'/catalog.json', $json);
+        echo 'Wrote resources/patterns/catalog.json.'.PHP_EOL;
+        exit(0);
+    }
+
+    $files = [];
+    $previous = null;
+    $json = $strict = false;
+
+    try {
+        foreach ($arguments as $argument) {
+            if ($argument === '--json' || $argument === '--strict') {
+                ${substr($argument, 2)} = true;
+            } elseif (str_starts_with($argument, '--previous=')) {
+                $previous = json_decode((string) @file_get_contents(substr($argument, 11)), true, flags: JSON_THROW_ON_ERROR);
+            } elseif (is_dir($argument)) {
+                $files = [...$files, ...(glob(rtrim($argument, '/').'/*.json') ?: [])];
+            } elseif (is_file($argument)) {
+                $files[] = $argument;
+            } else {
+                throw new InvalidArgumentException('No such report file or directory: '.$argument);
+            }
+        }
+
+        if ($files === []) {
+            throw new InvalidArgumentException('Pass at least one standards:check --json report.');
+        }
+
+        $report = Tey\Standards\Enforcement\DriftReport::aggregate(
+            array_map(fn (string $file): array => json_decode((string) file_get_contents($file), true, flags: JSON_THROW_ON_ERROR), $files),
+            is_array($previous) ? $previous : null,
+        );
+    } catch (InvalidArgumentException|JsonException $error) {
+        fwrite(STDERR, 'standards report: '.$error->getMessage().PHP_EOL);
+        exit(2);
+    }
+
+    echo $json ? json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL : Tey\Standards\Enforcement\DriftReport::text($report);
+    exit($strict && $report['totals']['regressions'] > 0 ? 1 : 0);
 }
 
 try {
