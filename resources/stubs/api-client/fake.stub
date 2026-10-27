@@ -1,0 +1,25 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Services\{{ name }};
+
+/**
+ * {{ title }} for tests: in memory, seeded with the records a test needs, recording each call. Bind it with
+ * `$this->app->instance({{ name }}Client::class, new Fake{{ name }}Client([...]))`; a test never reaches the real service.
+ */
+final class Fake{{ name }}Client implements {{ name }}Client
+{
+    /** @var list<array{method: string, arguments: list<mixed>}> */
+    public array $calls = [];
+
+    /** @param array<string, array<string, mixed>> $records id => record */
+    public function __construct(private array $records = []) {}
+
+    public function find(string $id): array
+    {
+        $this->calls[] = ['method' => 'find', 'arguments' => [$id]];
+
+        return $this->records[$id] ?? throw new {{ name }}Exception('{{ slug }}: 404');
+    }
+}

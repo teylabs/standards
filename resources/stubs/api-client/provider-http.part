@@ -1,0 +1,15 @@
+    public function register(): void
+    {
+        $this->app->singleton({{ name }}Client::class, fn (): {{ name }}Client => new {{ impl }});
+    }
+
+    public function boot(): void
+    {
+        // A timeout on every call, and up to three tries with backoff, only for what a retry can fix: a connection error or a 5xx.
+        Http::macro('{{ macro }}', fn () => Http::baseUrl((string) config('services.{{ slug }}.base_url'))
+            ->withToken((string) config('services.{{ slug }}.token'))
+            ->acceptJson()
+            ->timeout((int) config('services.{{ slug }}.timeout', 10))
+            ->connectTimeout(5)
+            ->retry(3, fn (int $attempt): int => 200 * 2 ** ($attempt - 1), fn (Throwable $error): bool => $error instanceof ConnectionException || ($error instanceof RequestException && $error->response->serverError()), throw: false));
+    }

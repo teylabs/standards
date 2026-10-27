@@ -32,6 +32,7 @@ final class Conformance
         'ui dropzone' => '[ui dropzone] only the configured dropzone owns file inputs',
         'ui toast' => '[ui toast] notifications use one configured toast path',
         'operator' => '[operator] commands that write offer a dry run and a production guard',
+        'integrations' => '[integrations] webhooks verify their sender and API calls go through a contract',
 
         '14' => '[rule 14] UI does not build host routes',
         '22' => '[rule 22] UI has no host PHP dependencies',
@@ -95,8 +96,8 @@ final class Conformance
         }
 
         // Advisory until an app opts in: static write detection can miss a write or flag a non-write.
-        if ($rule === 'operator' && ! in_array($rule, $this->config->optionalRules, true)) {
-            Assert::markTestSkipped('Rule [operator] is advisory until listed in Configuration::optionalRules ('.count($violations).' findings).');
+        if (in_array($rule, ['operator', 'integrations'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+            Assert::markTestSkipped('Rule ['.$rule.'] is advisory until listed in Configuration::optionalRules ('.count($violations).' findings).');
         }
 
         $failures = $this->ratchet->failures($rule, $violations);
@@ -128,8 +129,9 @@ final class Conformance
                 (new CiTriggers($this->config->base, $this->config->ciDefaultBranches, $this->config->ciDistribution, $this->config->ciDrafts))->findings());
         }
 
-        if (in_array($rule, ['actions', 'toast', 'mail', 'providers', 'operator'], true)) {
+        if (in_array($rule, ['actions', 'toast', 'mail', 'providers', 'operator', 'integrations'], true)) {
             $check = match ($rule) {
+                'integrations' => new Checks\Integrations($this->config, $this->source),
                 'operator' => new Checks\OperatorCommands($this->config, $this->source),
                 'actions' => new Checks\Actions($this->config, $this->source),
                 'toast' => new Checks\Toast($this->config, $this->source),

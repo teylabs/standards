@@ -36,6 +36,9 @@ final class Compiler
         'crud' => ['resource'],
         // Operator commands (pattern background.command): stubs on Tey\Standards\Operator, not tey/mod's make:command.
         'command' => ['backfill', 'maintenance', 'report'],
+        // Integrations (patterns integrations.webhook and integrations.api-client).
+        'webhook' => ['signed'],
+        'api-client' => ['sdk', 'http'],
         // Delegated to tey/mod's make:* generators; standards stamps the result.
         'model' => ['plain'],
         'policy' => ['plain'],

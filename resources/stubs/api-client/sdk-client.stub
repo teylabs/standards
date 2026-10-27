@@ -1,0 +1,25 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Services\{{ name }};
+
+use Throwable;
+
+/**
+ * {{ title }} through its official SDK, the SDK's client given by {{ name }}ServiceProvider. The SDK's own errors become a {{ name }}Exception carrying
+ * the class only: never the request, a key or a payload. Map the SDK's call here; the rest of the app sees only {{ name }}Client.
+ */
+final class Sdk{{ name }}Client implements {{ name }}Client
+{
+    public function __construct(private readonly object $sdk) {}
+
+    public function find(string $id): array
+    {
+        try {
+            return (array) $this->sdk->find($id);
+        } catch (Throwable $error) {
+            throw new {{ name }}Exception('{{ slug }}: '.$error::class);
+        }
+    }
+}

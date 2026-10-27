@@ -1,0 +1,24 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Services\{{ name }}\{{ name }}Client;
+use {{ namespace }}\Services\{{ name }}\{{ name }}Exception;
+use {{ namespace }}\Services\{{ name }}\Fake{{ name }}Client;
+use Illuminate\Support\Facades\Http;
+
+// {{ title }} through its contract, against Fake{{ name }}Client. A stray HTTP request fails the test, so nothing here reaches the real service.
+
+beforeEach(function () {
+    Http::preventStrayRequests();
+    $this->app->instance({{ name }}Client::class, $this->fake = new Fake{{ name }}Client(['rec_1' => ['id' => 'rec_1', 'name' => 'First']]));
+});
+
+it('answers from the fake bound in place of the real client', function () {
+    expect(app({{ name }}Client::class)->find('rec_1'))->toBe(['id' => 'rec_1', 'name' => 'First'])
+        ->and($this->fake->calls)->toBe([['method' => 'find', 'arguments' => ['rec_1']]]);
+});
+
+it('refuses a record it does not have', function () {
+    expect(fn () => app({{ name }}Client::class)->find('rec_missing'))->toThrow({{ name }}Exception::class);
+});

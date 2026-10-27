@@ -37,7 +37,8 @@
         "pestphp/pest-plugin-arch": "^4.0 || ^5.0",
         "symfony/finder": "^7.0 || ^8.0",
         "tey/kit": "^0.4.10",
-        "laravel/mcp": "^0.6 || ^1.0"
+        "laravel/mcp": "^0.6 || ^1.0",
+        "spatie/laravel-webhook-client": "^3.7"
     },
     "suggest": {
         "nikic/php-parser": "Required for architecture checks (^5.0); install in the app's require-dev.",

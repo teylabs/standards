@@ -1,0 +1,33 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Services\{{ name }}\{{ name }}Exception;
+use {{ namespace }}\Services\{{ name }}\Http{{ name }}Client;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
+
+// The HTTP client's own contract, on Laravel's faked HTTP: the token is sent, a 5xx is retried with backoff (Sleep is faked, so no wait), and a
+// refusal carries the status only. A stray request fails the test; nothing reaches the real service.
+
+beforeEach(function () {
+    Http::preventStrayRequests();
+    Sleep::fake();
+    config(['services.{{ slug }}.base_url' => 'https://{{ slug }}.example.test', 'services.{{ slug }}.token' => 'test-token']);
+});
+
+it('retries a server error, then answers', function () {
+    Http::fake(['{{ slug }}.example.test/*' => Http::sequence()->push('unavailable', 503)->push(['id' => 'rec_1'], 200)]);
+
+    expect((new Http{{ name }}Client)->find('rec_1'))->toBe(['id' => 'rec_1']);
+    Http::assertSentCount(2);
+    Http::assertSent(fn (Request $request): bool => $request->hasHeader('Authorization', 'Bearer test-token'));
+});
+
+it('gives up with the status only, never the body', function () {
+    Http::fake(['{{ slug }}.example.test/*' => Http::response('secret details', 404)]);
+
+    expect(fn () => (new Http{{ name }}Client)->find('rec_1'))->toThrow({{ name }}Exception::class, '{{ slug }}: 404');
+    Http::assertSentCount(1);
+});

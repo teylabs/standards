@@ -1,0 +1,18 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Webhooks\{{ name }}\Handlers;
+
+/**
+ * Acts on a `{{ example_event }}` event from {{ title }}. It runs inside Process{{ name }}Webhook's transaction, once per event id: write to the
+ * database here (an Action is a good home for the work), and keep calls to other services idempotent, because a retry runs this again.
+ */
+final class Handle{{ example_class }}
+{
+    /** @param array<string, mixed> $payload the stored event */
+    public function handle(array $payload): void
+    {
+        // The work for this event.
+    }
+}

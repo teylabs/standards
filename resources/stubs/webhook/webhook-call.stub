@@ -1,0 +1,42 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Webhooks;
+
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\Request;
+use Spatie\WebhookClient\Models\WebhookCall as BaseWebhookCall;
+use Spatie\WebhookClient\WebhookConfig;
+
+/**
+ * A stored webhook, keyed by its sender's event id: unique per webhook name, so a duplicate delivery (a provider retrying our slow reply) reuses the
+ * stored call instead of making a second one. It is answered 2xx and not processed again. Only the raw JSON body is the payload; query parameters
+ * are not evidence. Shared by every webhook in the app.
+ */
+class WebhookCall extends BaseWebhookCall
+{
+    protected $casts = ['headers' => 'array', 'payload' => 'array', 'exception' => 'array', 'processed_at' => 'datetime'];
+
+    public static function storeWebhook(WebhookConfig $config, Request $request): BaseWebhookCall
+    {
+        $eventId = (string) data_get(json_decode($request->getContent(), true), 'id', '');
+        $existing = fn (): ?self => static::query()->where('name', $config->name)->where('event_id', $eventId)->first();
+        if (($call = $existing()) !== null) {
+            return $call;
+        }
+        try {
+            return static::create([
+                'name' => $config->name,
+                'event_id' => $eventId,
+                'url' => $request->url(),
+                'headers' => static::headersToStore($config, $request),
+                'payload' => json_decode($request->getContent(), true) ?? [],
+                'exception' => null,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // A concurrent delivery of the same event stored it first.
+            return $existing() ?? throw new \RuntimeException('webhook_call_missing');
+        }
+    }
+}

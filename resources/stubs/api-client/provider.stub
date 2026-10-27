@@ -1,0 +1,12 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Providers;
+
+{{ provider_uses }}
+/** Binds {{ name }}Client to the real {{ title }} client{{ provider_note }}. Tests bind Fake{{ name }}Client instead. */
+final class {{ name }}ServiceProvider extends ServiceProvider
+{
+{{ provider_body }}
+}

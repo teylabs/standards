@@ -1,0 +1,9 @@
+<?php
+
+// spatie/laravel-webhook-client: one entry per sender. Each names its signature validator, profile and job; secrets come from the environment.
+return [
+    'configs' => [
+    ],
+
+    'delete_after_days' => 30,
+];

@@ -1,0 +1,7 @@
+<?php
+
+use {{ namespace }}\Webhooks\ReceiveWebhook;
+use Illuminate\Support\Facades\Route;
+
+// Requests from other companies' servers: no browser, session or tenant here. Each route's webhook config (config/webhook-client.php) verifies
+// its sender's signature before anything is stored. Loaded by WebhookServiceProvider under the `webhooks` rate limit.

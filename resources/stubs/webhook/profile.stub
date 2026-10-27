@@ -1,0 +1,21 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Webhooks\{{ name }};
+
+use Illuminate\Http\Request;
+use Spatie\WebhookClient\WebhookProfile\WebhookProfile;
+
+/**
+ * Which signed {{ title }} webhooks are stored: any with an event id and a type. Which events are acted on is Process{{ name }}Webhook::HANDLERS
+ * (the allow-list): an event with no handler is stored, so it is on record, and marked done without being processed.
+ */
+final class {{ name }}WebhookProfile implements WebhookProfile
+{
+    public function shouldProcess(Request $request): bool
+    {
+        return is_string($request->json(Process{{ name }}Webhook::EVENT_ID)) && $request->json(Process{{ name }}Webhook::EVENT_ID) !== ''
+            && is_string($request->json(Process{{ name }}Webhook::EVENT_TYPE));
+    }
+}

@@ -1,0 +1,36 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Webhooks\{{ name }};
+
+use Illuminate\Http\Request;
+use Spatie\WebhookClient\SignatureValidator\SignatureValidator;
+use Spatie\WebhookClient\WebhookConfig;
+
+/**
+ * Proves a {{ title }} webhook came from {{ title }}. The signature is an HMAC-SHA256 of `<timestamp>.<raw body>` under the signing secret
+ * (services.{{ slug }}.webhook_secret), sent in the configured signature header and compared with hash_equals. The timestamp must be within
+ * TOLERANCE_SECONDS either way, so a captured request cannot be replayed later. Any doubt is a refusal, which ReceiveWebhook answers with a 403:
+ * a missing header, no secret configured, an unreadable or expired timestamp. Never log the body or the secret.
+ *
+ * Match the provider's documented scheme: its header names and what it signs.
+ */
+final class {{ name }}SignatureValidator implements SignatureValidator
+{
+    public const TIMESTAMP_HEADER = '{{ timestamp_header }}';
+
+    public const TOLERANCE_SECONDS = 300;
+
+    public function isValid(Request $request, WebhookConfig $config): bool
+    {
+        $secret = (string) $config->signingSecret;
+        $signature = (string) $request->header($config->signatureHeaderName);
+        $timestamp = (string) $request->header(self::TIMESTAMP_HEADER);
+        if ($secret === '' || $signature === '' || ! ctype_digit($timestamp) || abs(time() - (int) $timestamp) > self::TOLERANCE_SECONDS) {
+            return false;
+        }
+
+        return hash_equals(hash_hmac('sha256', $timestamp.'.'.$request->getContent(), $secret), $signature);
+    }
+}
