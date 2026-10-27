@@ -13,7 +13,10 @@ use Symfony\Component\Process\Process;
 function parityApp(): string
 {
     $package = dirname(__DIR__);
-    $base = sys_get_temp_dir().'/standards-parity-'.bin2hex(random_bytes(6));
+    $base = sys_get_temp_dir().DIRECTORY_SEPARATOR.'standards-parity-'.bin2hex(random_bytes(6));
+    mkdir($base);
+    // Long, real form with native separators (Windows temp dirs are 8.3 short names), as Pest compares paths.
+    $base = (string) realpath($base);
     $files = new Filesystem;
     $files->copyDirectory($package.'/fixtures/App', $base);
     $files->copyDirectory($package.'/fixtures/Parity', $base);
@@ -56,7 +59,7 @@ test('standards:check and the Pest suite report the same findings for the same a
         $report = json_decode($gate->getOutput(), true, flags: JSON_THROW_ON_ERROR);
 
         $out = $base.'/pest-findings.json';
-        $pest = new Process([PHP_BINARY, $base.'/vendor/pestphp/pest/bin/pest', '--no-tia', 'tests/Arch/ParityTest.php'], $base, ['STANDARDS_PARITY_OUT' => $out, 'CI' => false, 'PARATEST' => false, 'PEST_TIA' => false]);
+        $pest = new Process([PHP_BINARY, $base.'/vendor/pestphp/pest/bin/pest', 'tests/Arch/ParityTest.php'], $base, ['STANDARDS_PARITY_OUT' => $out, 'CI' => false, 'PARATEST' => false, 'PEST_TIA' => false]);
         $pest->run();
         expect(is_file($out))->toBeTrue($pest->getOutput().$pest->getErrorOutput());
 
