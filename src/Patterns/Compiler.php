@@ -34,11 +34,12 @@ final class Compiler
         'capability-tool' => ['read', 'write'],
         'settings-section' => ['form', 'toggles'],
         'crud' => ['resource'],
+        // Operator commands (pattern background.command): stubs on Tey\Standards\Operator, not tey/mod's make:command.
+        'command' => ['backfill', 'maintenance', 'report'],
         // Delegated to tey/mod's make:* generators; standards stamps the result.
         'model' => ['plain'],
         'policy' => ['plain'],
         'job' => ['plain'],
-        'command' => ['plain'],
         'notification' => ['plain'],
     ];
 

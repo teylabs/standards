@@ -1,0 +1,36 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Console\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Tey\Standards\Operator\Operator;
+use Tey\Standards\Operator\OperatorRun;
+
+/**
+ * Reports how many {{ table }} rows have {{ column }} set. Read-only: no --apply, no production refusal; one run at a time and the operator summary.
+ * Counts and labels only: never print record data. Edit TABLE, COLUMN and the grouping for the real report.
+ */
+final class {{ name }} extends Command
+{
+    public const TABLE = '{{ table }}';
+
+    public const COLUMN = '{{ column }}';
+
+    protected $signature = 'app:{{ slug }} {--chunk=500 : Rows per batch}';
+
+    protected $description = 'Report on '.self::TABLE.'.'.self::COLUMN.' (read-only)';
+
+    public function handle(): int
+    {
+        return Operator::report($this, function (OperatorRun $run): void {
+            DB::table(self::TABLE)->orderBy('id')->chunkById(max(1, (int) $this->option('chunk')), function ($rows) use ($run): void {
+                $run->each($rows, function (object $row, OperatorRun $run): void {
+                    $row->{self::COLUMN} === null ? $run->skipped('not set') : $run->changed();
+                });
+            });
+        });
+    }
+}

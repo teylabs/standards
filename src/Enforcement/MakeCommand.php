@@ -12,14 +12,21 @@ use Tey\Standards\Patterns\TreeCatalog;
 
 final class MakeCommand extends Command
 {
-    public $signature = 'standards:make {unit : crud, page, action, capability-tool or settings-section; model, policy, job, command or notification through tey/mod} {name : StudlyCase name (crud: the singular record name)} {--flavor= : The leaf flavor, as standards:pattern prints it} {--leaf= : The leaf to stamp, when several leaves share this make command} {--bulk : crud: selectable rows and a bulk delete} {--mcp : crud: read and write capability tools} {--soft-deletes : crud: soft deletes and a restoration}';
+    public $signature = 'standards:make {unit : crud, page, action, capability-tool, settings-section or command; model, policy, job or notification through tey/mod} {name : StudlyCase name (crud: the singular record name)} {--flavor= : The leaf flavor, as standards:pattern prints it} {--leaf= : The leaf to stamp, when several leaves share this make command} {--bulk : crud: selectable rows and a bulk delete} {--mcp : crud: read and write capability tools} {--soft-deletes : crud: soft deletes and a restoration} {--backfill : command: fill a column for rows that lack it (the default)} {--maintenance : command: delete stale rows} {--report : command: count, read-only}';
 
     public $description = 'Scaffold conformant code for a pattern leaf';
 
     public function handle(Repository $config): int
     {
         $unit = (string) $this->argument('unit');
-        $flavor = $this->option('flavor') ?? match ($unit) {
+        $chosen = array_keys(array_filter(['backfill' => $this->option('backfill'), 'maintenance' => $this->option('maintenance'), 'report' => $this->option('report')]));
+        if (count($chosen) > 1 || ($chosen !== [] && ($unit !== 'command' || $this->option('flavor') !== null))) {
+            $this->error('Choose one of --backfill, --maintenance or --report, for standards:make command only.');
+
+            return 2;
+        }
+        $flavor = $this->option('flavor') ?? $chosen[0] ?? match ($unit) {
+            'command' => 'backfill',
             'page' => 'index',
             'action' => 'plain',
             'capability-tool' => 'read',

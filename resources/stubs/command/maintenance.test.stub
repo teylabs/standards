@@ -1,0 +1,56 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Console\Commands\{{ name }};
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+// The operator contract for app:{{ slug }}: a dry run deletes nothing, --apply is idempotent, and production refuses unless forced and confirmed (or
+// allow-listed). Artisan::call and its output, so the test needs no console mocking.
+// Self-contained: it makes the table when the app has none (and drops it after), and counts only the rows it inserts.
+beforeEach(function () {
+    $this->created = ! Schema::hasTable({{ name }}::TABLE);
+    if ($this->created) {
+        Schema::create({{ name }}::TABLE, function (Blueprint $table): void {
+            $table->id();
+            $table->timestamp({{ name }}::COLUMN)->nullable();
+        });
+    }
+    $this->ids = array_map(fn ($value): int => (int) DB::table({{ name }}::TABLE)->insertGetId([{{ name }}::COLUMN => $value]), [now()->subDays(90), now()->subDays(60), now()]);
+});
+
+afterEach(function () {
+    $this->created ? Schema::drop({{ name }}::TABLE) : DB::table({{ name }}::TABLE)->whereIn('id', $this->ids)->delete();
+});
+
+$rows = fn (): int => DB::table({{ name }}::TABLE)->whereIn('id', test()->ids)->count();
+
+it('deletes nothing in a dry run', function () use ($rows) {
+    expect(Artisan::call('app:{{ slug }}'))->toBe(0)
+        ->and(Artisan::output())->toContain('Dry run: nothing was written')
+        ->and($rows())->toBe(3);
+});
+
+it('applies once, and a re-run is already done', function () use ($rows) {
+    expect(Artisan::call('app:{{ slug }}', ['--apply' => true]))->toBe(0)
+        ->and($rows())->toBe(1);
+
+    expect(Artisan::call('app:{{ slug }}', ['--apply' => true]))->toBe(0)
+        ->and(Artisan::output())->toContain('Already done: nothing to change.')
+        ->and($rows())->toBe(1);
+});
+
+it('refuses to apply in production unless forced and confirmed, or allow-listed', function () use ($rows) {
+    $this->app['env'] = 'production';
+
+    expect(Artisan::call('app:{{ slug }}', ['--apply' => true]))->toBe(2)
+        ->and(Artisan::call('app:{{ slug }}', ['--apply' => true, '--force' => true, '--no-interaction' => true]))->toBe(2)
+        ->and($rows())->toBe(3);
+
+    config(['standards.operator.allow' => ['app:{{ slug }}']]);
+    expect(Artisan::call('app:{{ slug }}', ['--apply' => true]))->toBe(0)
+        ->and($rows())->toBe(1);
+});

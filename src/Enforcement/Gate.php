@@ -24,6 +24,9 @@ final class Gate
 {
     public const OPTIONAL = ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast'];
 
+    /** Rules reported as advisories, never drift, until an app lists them in Configuration::optionalRules. */
+    public const ADVISORY = ['operator'];
+
     public function __construct(
         private readonly Configuration $config,
         private readonly DateTimeImmutable $today,
@@ -34,12 +37,13 @@ final class Gate
 
     /**
      * @param  list<string>|null  $paths  project-relative paths to scope violations to; null checks everything
-     * @return array{violations: list<array{rule: string, kind: string, target: string, check: string, hint: string}>, allowlist: array{count: int, expiring: list<array<string, string>>, expired: list<array<string, string>>}, skipped: list<string>}
+     * @return array{violations: list<array{rule: string, kind: string, target: string, check: string, hint: string}>, allowlist: array{count: int, expiring: list<array<string, string>>, expired: list<array<string, string>>}, skipped: list<string>, advisories: list<array{rule: string, kind: string, target: string, check: string, hint: string}>}
      */
     public function run(?array $paths = null): array
     {
         $ratchet = new Ratchet($this->config->allowlist);
         $violations = [];
+        $advisories = [];
         $skipped = [];
         $config = $this->config;
 
@@ -86,6 +90,16 @@ final class Gate
                 $actual = $conformance->violations($rule);
             } catch (Throwable $error) {
                 $violations[] = $this->finding($rule, 'error', 'rule', 'could not run: '.$error->getMessage());
+
+                continue;
+            }
+
+            if (in_array($rule, self::ADVISORY, true) && ! in_array($rule, $this->config->optionalRules, true)) {
+                foreach ($actual as $violation) {
+                    if ($this->inScope($violation['target'], $paths)) {
+                        $advisories[] = $this->finding($rule, 'advisory', $violation['target'], $violation['check']);
+                    }
+                }
 
                 continue;
             }
@@ -138,6 +152,7 @@ final class Gate
             'violations' => $violations,
             'allowlist' => ['count' => count($ratchet->entries()), 'expiring' => $expiring, 'expired' => $expired],
             'skipped' => $skipped,
+            'advisories' => $advisories,
         ];
     }
 

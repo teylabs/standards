@@ -58,13 +58,17 @@ final class CheckCommand extends Command
             $this->line('    fix: '.$violation['hint']);
         }
 
+        foreach ($report['advisories'] as $advisory) {
+            $this->line("<fg=yellow>~</> [{$advisory['rule']}] advisory: {$advisory['target']} — {$advisory['check']}");
+        }
+
         foreach ($report['allowlist']['expiring'] as $entry) {
             $this->line("<fg=yellow>!</> allowlist expires {$entry['expires']}: [{$entry['rule']}] {$entry['target']} — {$entry['check']}");
         }
 
-        $this->line(sprintf('%s: %d findings, %d allowlisted (%d expiring), %d flagged pattern gaps, scope %s%s.',
+        $this->line(sprintf('%s: %d findings, %d allowlisted (%d expiring), %d flagged pattern gaps%s, scope %s%s.',
             $report['exit_code'] === 0 ? 'standards:check passed' : 'standards:check found drift',
-            count($report['violations']), $report['allowlist']['count'], count($report['allowlist']['expiring']), $report['gaps']['flagged'], $scope,
+            count($report['violations']), $report['allowlist']['count'], count($report['allowlist']['expiring']), $report['gaps']['flagged'], $report['advisories'] === [] ? '' : ', '.count($report['advisories']).' advisories', $scope,
             $report['skipped'] === [] ? '' : '; not run: '.implode(', ', $report['skipped'])));
 
         return $report['exit_code'];
