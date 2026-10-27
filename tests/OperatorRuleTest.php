@@ -74,17 +74,17 @@ test('standards:make command stamps all three flavors, with a test each, and the
         $maker = new Maker($base, TreeCatalog::shipped());
         $files = [...$maker->make('command', 'BackfillTotals', 'backfill'), ...$maker->make('command', 'PruneVisits', 'maintenance'), ...$maker->make('command', 'CountVisits', 'report')];
 
-        expect($files)->toBe(['app/Console/Commands/BackfillTotals.php', 'tests/Feature/Console/BackfillTotalsTest.php', 'app/Console/Commands/PruneVisits.php', 'tests/Feature/Console/PruneVisitsTest.php', 'app/Console/Commands/CountVisits.php', 'tests/Feature/Console/CountVisitsTest.php']);
+        expect($files)->toBe(['app/Console/Commands/BackfillTotalsCommand.php', 'tests/Feature/Console/BackfillTotalsCommandTest.php', 'app/Console/Commands/PruneVisitsCommand.php', 'tests/Feature/Console/PruneVisitsCommandTest.php', 'app/Console/Commands/CountVisitsCommand.php', 'tests/Feature/Console/CountVisitsCommandTest.php']);
         foreach ($files as $file) {
             expect(file_get_contents($base.'/'.$file))->toContain('standards-pattern: background.command');
         }
-        expect(file_get_contents($base.'/app/Console/Commands/BackfillTotals.php'))->toContain("app:backfill-totals {--apply")->toContain('Operator::run(')
-            ->and(file_get_contents($base.'/app/Console/Commands/CountVisits.php'))->toContain('Operator::report(')->not->toContain('{--apply')
-            ->and(file_get_contents($base.'/tests/Feature/Console/BackfillTotalsTest.php'))->toContain('writes nothing in a dry run')->toContain('applies once, and a re-run is already done')->toContain('refuses to apply in production');
+        expect(file_get_contents($base.'/app/Console/Commands/BackfillTotalsCommand.php'))->toContain("app:backfill-totals {--apply")->toContain('Operator::run(')
+            ->and(file_get_contents($base.'/app/Console/Commands/CountVisitsCommand.php'))->toContain('Operator::report(')->not->toContain('{--apply')
+            ->and(file_get_contents($base.'/tests/Feature/Console/BackfillTotalsCommandTest.php'))->toContain('writes nothing in a dry run')->toContain('applies once, and a re-run is already done')->toContain('refuses to apply in production');
 
         $report = CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped());
         expect($report['violations'])->toBe([])->and($report['advisories'])->toBe([])->and($report['exit_code'])->toBe(0);
-        expect(fn () => $maker->make('command', 'BackfillTotals', 'backfill'))->toThrow(InvalidArgumentException::class, 'never overwrites')
+        expect(fn () => $maker->make('command', 'BackfillTotalsCommand', 'backfill'))->toThrow(InvalidArgumentException::class, 'never overwrites')
             ->and(fn () => $maker->make('command', 'Other', 'plain'))->toThrow(InvalidArgumentException::class, 'Unknown unit or flavor');
     } finally {
         (new Filesystem)->deleteDirectory($base);

@@ -481,8 +481,8 @@ test('the artisan commands are registered and print the lookup, gaps and a fail-
         expect($artisan->call('standards:make', ['unit' => 'action', 'name' => 'Archive']))->toBe(0)
             ->and(file_get_contents($base.'/app/Actions/Archive.php'))->toContain('standards-pattern: data-actions.action');
         expect($artisan->call('standards:make', ['unit' => 'command', 'name' => 'PruneVisits', '--maintenance' => true]))->toBe(0)
-            ->and(file_get_contents($base.'/app/Console/Commands/PruneVisits.php'))->toContain('standards-pattern: background.command')->toContain('{--days=30')
-            ->and(is_file($base.'/tests/Feature/Console/PruneVisitsTest.php'))->toBeTrue();
+            ->and(file_get_contents($base.'/app/Console/Commands/PruneVisitsCommand.php'))->toContain('standards-pattern: background.command')->toContain('{--days=30')
+            ->and(is_file($base.'/tests/Feature/Console/PruneVisitsCommandTest.php'))->toBeTrue();
         expect($artisan->call('standards:make', ['unit' => 'command', 'name' => 'Both', '--report' => true, '--backfill' => true]))->toBe(2)
             ->and($artisan->call('standards:make', ['unit' => 'action', 'name' => 'Flagged', '--report' => true]))->toBe(2);
         expect($config->get('boost.mcp.tools.include'))->toBeNull();

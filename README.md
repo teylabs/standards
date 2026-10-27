@@ -381,7 +381,7 @@ The preflight runs **before migrate** and sees the previous release's queue. A b
 
 ## Operator commands
 
-An operator command is an artisan command that someone runs by hand to backfill, sweep or report: pattern `background.command`. `php artisan standards:make command <Name> [--backfill|--maintenance|--report]` writes `app/Console/Commands/<Name>.php` and `tests/Feature/Console/<Name>Test.php`, both stamped. `--backfill` is the default.
+An operator command is an artisan command that someone runs by hand to backfill, sweep or report: pattern `background.command`. `php artisan standards:make command <Name> [--backfill|--maintenance|--report]` writes `app/Console/Commands/<Name>Command.php` (artisan name `app:<name-in-kebab-case>`) and `tests/Feature/Console/<Name>CommandTest.php`, both stamped. `--backfill` is the default.
 
 The command's work runs through `Tey\Standards\Operator\Operator`. The package's own classes stay final with no protected methods, so this is composition, not a base class, and it works in any Laravel app, with or without tey/kit:
 
