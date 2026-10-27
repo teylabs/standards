@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tey\Standards;
 
 use Composer\InstalledVersions;
+use Pest\Arch\Concerns\Architectable;
 use Pest\Arch\Contracts\ArchExpectation;
 use Pest\Arch\GroupArchExpectation;
 use Pest\Arch\Objects\FunctionDescription;
@@ -14,6 +15,7 @@ use Pest\ArchPresets\AbstractPreset;
 use Pest\TestSuite;
 use PHPUnit\Architecture\Elements\ObjectDescription;
 use PHPUnit\Framework\AssertionFailedError;
+use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 
 /**
@@ -46,7 +48,7 @@ final class Native
         }
 
         try {
-            $expectation->ensureLazyExpectationIsVerified();
+            self::verify($expectation);
 
             return [];
         } catch (AssertionFailedError $error) {
@@ -85,7 +87,7 @@ final class Native
                     || (! in_array($object->name, $scope, true) && ! $object instanceof FunctionDescription && ! $object instanceof VendorObjectDescription)]);
 
                 try {
-                    $leaf->ensureLazyExpectationIsVerified();
+                    self::verify($leaf);
                 } catch (AssertionFailedError $error) {
                     if (! method_exists($error, 'toCollisionEditor')) {
                         throw $error;
@@ -107,6 +109,30 @@ final class Native
         } while ($found);
 
         return array_values(array_unique($failures, SORT_REGULAR));
+    }
+
+    /**
+     * Pest only verifies a lazy expectation while a test is running; outside one
+     * (standards:check) it is a silent pass. Stand a test in so the gate fails
+     * the same expectations the Pest suite does, and restore the suite after.
+     */
+    private static function verify(SingleArchExpectation $expectation): void
+    {
+        $suite = TestSuite::getInstance();
+        $running = $suite->test;
+
+        if (! $running instanceof TestCase) {
+            $suite->test = new class('standards') extends TestCase
+            {
+                use Architectable;
+            };
+        }
+
+        try {
+            $expectation->ensureLazyExpectationIsVerified();
+        } finally {
+            $suite->test = $running;
+        }
     }
 
     /** Preserve exact ratchet keys when Pest 5 brackets targeted expectation arguments. */

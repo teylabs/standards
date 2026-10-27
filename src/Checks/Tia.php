@@ -47,7 +47,7 @@ final readonly class Tia
             }
         }
 
-        return [['target' => $path, 'check' => 'missing local --tia/--no-tia guard with CI, PARATEST, PEST_TIA bypasses and non-zero exit']];
+        return [['target' => $path, 'check' => "missing local --tia/--no-tia guard with CI, PARATEST, PEST_TIA bypasses and non-zero exit; check CI as non-empty: (getenv('CI') === false || getenv('CI') === '')"]];
     }
 
     /** @return list<string> */
@@ -55,6 +55,22 @@ final readonly class Tia
     {
         if ($expression instanceof Node\Expr\BinaryOp\BooleanAnd || $expression instanceof Node\Expr\BinaryOp\LogicalAnd) {
             return [...$this->predicates($expression->left, $argv), ...$this->predicates($expression->right, $argv)];
+        }
+
+        // A set-but-empty CI= is not CI: accept (getenv('CI') === false || getenv('CI') === '')
+        // and its negation ! (getenv('CI') !== false && getenv('CI') !== '').
+        if ($expression instanceof Node\Expr\BinaryOp\BooleanOr || $expression instanceof Node\Expr\BinaryOp\LogicalOr) {
+            $sides = [$this->ciComparison($expression->left, Node\Expr\BinaryOp\Identical::class), $this->ciComparison($expression->right, Node\Expr\BinaryOp\Identical::class)];
+            sort($sides);
+
+            return $sides === ['empty', 'false'] ? ['CI'] : ['unrecognised guard condition'];
+        }
+
+        if ($expression instanceof Node\Expr\BooleanNot && ($expression->expr instanceof Node\Expr\BinaryOp\BooleanAnd || $expression->expr instanceof Node\Expr\BinaryOp\LogicalAnd)) {
+            $sides = [$this->ciComparison($expression->expr->left, Node\Expr\BinaryOp\NotIdentical::class), $this->ciComparison($expression->expr->right, Node\Expr\BinaryOp\NotIdentical::class)];
+            sort($sides);
+
+            return $sides === ['empty', 'false'] ? ['CI'] : ['unrecognised guard condition'];
         }
 
         if ($expression instanceof Node\Expr\BinaryOp\Identical) {
@@ -83,5 +99,35 @@ final readonly class Tia
         }
 
         return ['unrecognised guard condition'];
+    }
+
+    /**
+     * 'false' or 'empty' when $expression compares getenv('CI') with false or '' using $operator.
+     *
+     * @param  class-string<Node\Expr\BinaryOp>  $operator
+     */
+    private function ciComparison(Node\Expr $expression, string $operator): ?string
+    {
+        if (! $expression instanceof $operator) {
+            return null;
+        }
+
+        foreach ([[$expression->left, $expression->right], [$expression->right, $expression->left]] as [$call, $value]) {
+            $argument = $call instanceof Node\Expr\FuncCall && $call->name instanceof Node\Name && $call->name->toString() === 'getenv' ? ($call->getArgs()[0]->value ?? null) : null;
+
+            if (! $argument instanceof Node\Scalar\String_ || $argument->value !== 'CI') {
+                continue;
+            }
+
+            if ($value instanceof Node\Expr\ConstFetch && strtolower($value->name->toString()) === 'false') {
+                return 'false';
+            }
+
+            if ($value instanceof Node\Scalar\String_ && $value->value === '') {
+                return 'empty';
+            }
+        }
+
+        return null;
     }
 }

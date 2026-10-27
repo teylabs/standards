@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.1 - 2026-10-27
+
+### Upgrading
+
+- `standards:check` now reports `preset laravel`, `preset security` and `preset php` findings that it silently passed before (see Fixed). If your Pest suite allowlists them already, the same entries cover the gate; otherwise expect new drift that the Pest suite was already reporting.
+- The `boost` rule now requires `agents` and `packages` in `boost.json`. Run `php artisan standards:install` to infer whichever is missing, and review them before the next `boost:install` or `boost:update`.
+- The default `boostSkills` map now requires `testing-best-practices` for `pestphp/pest` instead of `pest-testing`. Run `php artisan boost:install` (or `boost:update`) to generate it, or override `boostSkills`.
+
+### Fixed
+
+- `standards:check` ran the Pest preset rules as no-ops. Pest only verifies an architecture expectation while a test is running, so outside Pest every preset leaf passed. The gate now stands a test in while it verifies and restores the suite afterwards, and a new parity test runs the same fixture app through the gate and through Pest and expects identical findings.
+- `standards:install` honours `core.hooksPath`. It writes the pre-push hook there when the path is inside the repository, and when the path is outside it (a global hooks folder, say) it writes nothing and prints the line to add.
+- The `tia` rule accepts a non-empty CI check, `(getenv('CI') === false || getenv('CI') === '')` (or its negation `! (getenv('CI') !== false && getenv('CI') !== '')`), and recommends it, so a set-but-empty `CI=` no longer bypasses the local guard. The older `getenv('CI') === false` is still accepted.
+- `standards:install` fills in missing `agents` and `packages` in `boost.json` (agents from the app's agent folders, packages from required packages that ship `resources/boost`) and never changes either once set. Boost 2.10's `boost:update` refuses to run without them, and `boost:install` without `packages` deleted existing project skills.
+- The `boost` rule requires `inertia-vue-development` only for `@inertiajs/vue3` 1 and 2 and `tailwindcss-development` only for Tailwind 3 and 4. Boost 2.10.3 ships neither for Inertia 3 or Tailwind 5. A constraint it cannot read still requires the skill.
+- Default Boost skills match Boost 2.10.3: it ships `testing-best-practices`, not `pest-testing`. The other defaults were checked against Boost 2.10 (`laravel-best-practices`, `folio-routing`, `wayfinder-development`, `inertia-vue-development` and `tailwindcss-development` ship with Boost) or are shipped by their own packages' `resources/boost/skills` (`fortify-development`, for example).
+
 ## 0.11.0 - 2026-10-27
 
 ### Upgrading
