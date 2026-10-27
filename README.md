@@ -415,6 +415,31 @@ The generated test proves the contract against a table it creates if it's missin
 
 **Rule `operator` (advisory).** A command under the source roots (extending `Illuminate\Console\Command`) that writes needs a dry run and a production guard. It passes if its work runs through `Operator::run`, or if it hand-rolls both halves: an `--apply` or `--dry-run` option, and an `isProduction()` or `environment('production')` check. Writes are Eloquent and query-builder writes, `DB`/`Storage` writes, and file writes. Running writes through `Operator::report` is its own finding. The check is static, so a write made through another class is not seen, and a write-named call on something else (a cache `put`) is reported. That's why `standards:check` lists its findings as advisories (`~`, and an `advisories` key in `--json`) that never fail the check, until an app adds `operator` to `Configuration::optionalRules` to enforce it.
 
+## Integrations: inbound webhooks and API clients
+
+**Inbound webhooks** (`integrations.webhook`). Run `composer require spatie/laravel-webhook-client` first, then `php artisan standards:make webhook <Provider>` writes a receiver:
+- a signature validator: HMAC-SHA256 over `<timestamp>.<raw body>` with the secret from `<PROVIDER>_WEBHOOK_SECRET`, compared with `hash_equals`, with a ±300 s timestamp tolerance. A bad signature or an expired timestamp is a 403, and nothing is stored;
+- a profile that stores every signed event that has an id and a type;
+- `Process<Provider>Webhook`, whose `HANDLERS` map is the allow-list: an event with no handler is stored but not processed;
+- an example handler, the config entry, the route and a test.
+
+The first webhook also adds what all webhooks share:
+- `App\Models\WebhookCall`, unique by (webhook name, event id), so a provider's retry of an event is answered 2xx and processed once;
+- `App\Webhooks\ReceiveWebhook`;
+- a migration adding `event_id` and `processed_at` to `webhook_calls`;
+- `routes/webhooks.php`, loaded by `WebhookServiceProvider` outside the web group, with no session, cookies or CSRF, under a `webhooks` rate limit.
+
+The handler runs in the transaction that marks the call processed, so a handler that throws rolls back and the queue retries it without a double effect. In a multitenant app the job is `NotTenantAware`, so a handler that needs a tenant finds it from the payload. Never log the body or the secret. Match the validator to the provider's documented scheme (its header names and what it signs).
+
+**API clients** (`integrations.api-client`). `php artisan standards:make api-client <Provider> [--sdk|--http]` writes:
+- the contract `App\Services\<Provider>\<Provider>Client`, which is what the app depends on;
+- `App\Exceptions\<Provider>Exception`, carrying a status or class, never request data;
+- the real client: the official SDK (`--sdk`; name its class in the provider), or Laravel's Http through a `<provider>` macro with base URL, token, timeout and retries with backoff (`--http`);
+- `Fake<Provider>Client`, its provider, `services.<provider>` keys and `.env.example` lines;
+- tests that bind the Fake under `Http::preventStrayRequests()`, so no test reaches the service.
+
+**Rule `integrations` (advisory).** A route whose URI mentions `webhook` must reach a handler that verifies its sender: spatie/laravel-webhook-client with a configured validator, Cashier's controller, or a controller that verifies a signature. And an `Http::` call belongs in a class that implements a contract; a service provider defining macros is exempt. Both checks read names, not behaviour, so they are reported as advisories (`~` in `standards:check`) until an app lists `integrations` in `Configuration::optionalRules`.
+
 ## Self-enforcing conformance
 
 One command drives four layers: gates, agent guardrails, pattern lookup and a drift report. Nobody has to remember to run the checks.
