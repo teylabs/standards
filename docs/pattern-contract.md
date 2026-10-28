@@ -91,7 +91,9 @@ Returned by `find` at the end of a traversal or for a single match, and by `reci
 | `path` | list of answers from the root | experimental |
 | `next_question` | `{id, question}` of the parent, or null | experimental |
 | `siblings` | list of leaf ids, nearest recipes for `gap` and `byo` | experimental |
-| `conventions` | `{rules, notes}` for `gap` and `byo`, otherwise null | experimental |
+| `conventions` | `{rules, notes}` for `gap` and `byo`; for a `draft` leaf with its own rules, `{rules, notes}` where `notes` holds its graduation note; otherwise null | experimental |
+| `related` | list of `{id, recipe, make}`: leaves it composes or sits beside | experimental |
+| `graduate` | string or null: when the leaf becomes a generator or kit recipe | experimental |
 | `message` | for `gap`: "No recipe yet. Build to the nearest sibling `<id>` and flag it."; for `byo`: a note to proceed; otherwise null | experimental |
 | `demand` | for `gap` and `byo`: `{answers, criteria, unit_type, ts}`, otherwise null | experimental |
 

@@ -393,6 +393,9 @@ final class Installer
             'Kit: '.($leaf->kit === [] ? 'none' : implode(', ', $leaf->kit)).'.',
             ...array_map(fn (array $c): string => "- `{$c['kit_component']}` from `@kit/ui` for the {$c['name']}: {$c['use']} (props: {$c['props_hint']}).", $leaf->components),
             'Checks: '.($leaf->checks === [] ? 'none' : implode(', ', $leaf->checks)).'. Run `php artisan standards:check --changed` before committing.',
+            ...($leaf->rules === [] ? [] : ['', 'Conventions:', ...array_map(fn (string $rule): string => '- '.$rule, $leaf->rules)]),
+            ...($leaf->related === [] ? [] : ['', 'Related: '.implode(', ', array_map(fn (string $id): string => '`'.$id.'`', $leaf->related)).'.']),
+            ...($leaf->graduate === null ? [] : ['', 'Graduates: '.$leaf->graduate]),
             $parent instanceof Branch ? "\nNot sure this is the right leaf? It answers \"{$parent->question}\" Call bakery.find, or run `php artisan standards:pattern --recipe={$leaf->id}` to see its siblings." : '',
             '',
         ]);

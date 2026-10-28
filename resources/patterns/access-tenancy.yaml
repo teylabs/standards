@@ -14,7 +14,7 @@ nodes:
       - { answer: "A role permission or a record policy", next: access-tenancy.authorization }
       - { answer: "A purchase or plan (entitlement)", next: access-tenancy.entitlements }
       - { answer: "Workspace membership", next: access-tenancy.membership }
-      - { answer: "Login or request hardening", next: access-tenancy.hardening }
+      - { answer: "Login or request hardening, or a paired second device", next: access-tenancy.hardening }
       - { answer: "None of these", next: access-tenancy.user.byo }
   - id: access-tenancy.authorization
     question: Is it a role permission, or authorization on a record?
@@ -28,6 +28,7 @@ nodes:
     options:
       - { answer: "Login throttling, local login or two-factor", next: access-tenancy.auth-hardening }
       - { answer: "Host split or security headers on every request", next: access-tenancy.host-middleware }
+      - { answer: "A second device acts for a signed-in user (a phone remote, a paired screen)", next: access-tenancy.device-pairing }
       - { answer: "None of these", next: access-tenancy.hardening.byo }
   - id: access-tenancy.signed-link
     recipe: Signed recipient link
@@ -58,6 +59,13 @@ nodes:
     status: gap
     evidence: { apps: 3, count: 6, prs: 6 }
   - id: access-tenancy.membership
+    question: Who is being let in?
+    why: A workspace member sees the workspace; a scoped guest acts on one record and appears nowhere else.
+    options:
+      - { answer: "A workspace member (invites, roles, transfer)", next: access-tenancy.membership.workspace }
+      - { answer: "Someone invited to act on one record, with no other access", next: access-tenancy.membership.scoped-guest }
+      - { answer: "None of these", next: access-tenancy.membership.byo }
+  - id: access-tenancy.membership.workspace
     recipe: Workspace membership
     summary: Workspace membership.
     kit: []
@@ -119,6 +127,51 @@ nodes:
     status: ready
     evidence: { apps: 2, count: 2, prs: 2, past_apps: 13, past_count: 26 }
   - id: access-tenancy.authorization.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: access-tenancy.membership.scoped-guest
+    recipe: Scoped guest
+    summary: Invite someone to act on ONE record, with no other access. Build your own; there is no generator yet.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [scoped guest, one record, guest access, invite to a record, single record, share one, external collaborator]
+    status: draft
+    rules:
+      - "A role with zero grants plus a scope row: record, membership, email, invited_by, revoked_at."
+      - "ONE access class, used by routes, MCP tools and policies alike."
+      - "MCP tokens are limited to the record."
+      - "Feature-gated."
+      - "Scoped guests NEVER appear as transfer, admin or role-picker targets, or in member lists."
+      - "Revoke is immediate: it kills pending links and drops the guest membership on the last scope."
+      - "Acceptance is audited."
+    related: [access-tenancy.membership.workspace, access-tenancy.capability]
+    graduate: "To become a Concierge feature (invitation scope, teylabs/concierge issue 133)."
+  - id: access-tenancy.device-pairing
+    recipe: Device pairing
+    summary: A second device acts for a signed-in user (a phone remote, a paired screen) through a short-lived pairing link and a scoped cookie, re-authorised on every request. Build your own; there is no generator yet.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [pair a device, device pairing, pairing link, phone remote, paired screen, second device, remote control]
+    status: draft
+    rules:
+      - "Every remote request re-checks that the user may still perform the action."
+      - "The pairing link is a temporarySignedRoute (at most 2 minutes), minted only on an explicit user action, never rendered into the page ahead of time, and bound to a per-resource secret version."
+      - "Pairing sets an encrypted HttpOnly, Secure, SameSite=Lax (or Strict) cookie scoped to the remote path, carrying the resource, user, expiry (at most 12 hours) and secret version."
+      - "Revocation: rotating the secret ends every pairing and unused link, and the user can see the active pairings (pairedAt only)."
+      - "Throttles on pair, pairing and commands."
+      - "Command endpoints are CSRF-protected (or token-bound), and the feed is private, no-store."
+      - "No recording: commands are ephemeral (read since a cursor), and no device identity beyond pairedAt is stored."
+      - "Tests: an expired link, a reused link after rotation, a revoked cookie, lost permission, and the throttle."
+    related: [ui-page.remote, ui-page.signed-guest, access-tenancy.signed-link]
+    graduate: "Graduate to standards:make pairing when a second app needs it."
+  - id: access-tenancy.membership.byo
     recipe: Build your own
     summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
     kit: []

@@ -259,7 +259,9 @@ final class Lookup
             'path' => $path,
             'next_question' => $parent === null ? null : ['id' => $parent->id, 'question' => $parent->question],
             'siblings' => $siblings,
-            'conventions' => $open ? ['rules' => $this->rules($leaf, $siblings), 'notes' => self::NOTES] : null,
+            'conventions' => $open ? ['rules' => $this->rules($leaf, $siblings), 'notes' => self::NOTES] : ($leaf->rules === [] ? null : ['rules' => $leaf->rules, 'notes' => $leaf->graduate === null ? [] : [$leaf->graduate]]),
+            'related' => array_values(array_map(fn (string $id): array => ['id' => $id, 'recipe' => ($node = $this->catalog->node($id)) instanceof Leaf ? $node->recipe : $id, 'make' => $node instanceof Leaf ? $node->make : null], $leaf->related)),
+            'graduate' => $leaf->graduate,
             'message' => match ($leaf->status) {
                 'gap' => 'No recipe yet. Build to the nearest sibling '.($siblings[0] ?? 'recipe').' and flag it.',
                 'byo' => 'No recipe fits. Proceed: build to the nearest recipes'.($siblings === [] ? '' : ' ('.implode(', ', $siblings).')').' and the conventions, and stamp new files `standards-pattern: gap`.',
