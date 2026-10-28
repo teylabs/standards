@@ -836,3 +836,43 @@ test('related must name other leaves, and rules a list of strings', function () 
     });
     expect(fn () => Compiler::compile($rules))->toThrow(InvalidArgumentException::class, 'rules must be a list of non-empty strings');
 });
+
+test('real phrasings rank the right build-your-own leaf first', function (string $intent, string $leaf) {
+    $found = (new Lookup(TreeCatalog::shipped()))->find(['intent' => $intent]);
+    $first = match ($found['type']) {
+        'leaf' => $found['id'],
+        'plan' => 'plan:'.$found['feature']['id'],
+        default => $found['candidates'][0]['id'] ?? 'question:'.$found['id'],
+    };
+
+    expect($first)->toBe($leaf);
+})->with([
+    // A client app's phrasings that missed: a scoped guest is one record, not a CRUD plan or a signed-link page.
+    ['invite a guest to one resource', 'access-tenancy.membership.scoped-guest'],
+    ['invite a guest to one record', 'access-tenancy.membership.scoped-guest'],
+    ['scoped guest', 'access-tenancy.membership.scoped-guest'],
+    ['let someone into one record', 'access-tenancy.membership.scoped-guest'],
+    ['guest presenter', 'access-tenancy.membership.scoped-guest'],
+    ['guest reviewer', 'access-tenancy.membership.scoped-guest'],
+    ['share one record with an outsider', 'access-tenancy.membership.scoped-guest'],
+    ['phone remote', 'ui-page.remote'],
+    ['control slides from my phone', 'ui-page.remote'],
+    ['use my phone as a remote', 'ui-page.remote'],
+    ['remote control pairing link', 'access-tenancy.device-pairing'],
+    ['second device acts for me', 'access-tenancy.device-pairing'],
+    ['pairing link expires', 'access-tenancy.device-pairing'],
+    ['projector screen', 'ui-page.stage-display'],
+    ['tv display for the room', 'ui-page.stage-display'],
+    ['big screen output', 'ui-page.stage-display'],
+    ['audience voting on phones', 'ui-page.audience-live'],
+    ['live poll from the audience', 'ui-page.audience-live'],
+    ['guests react from their phones', 'ui-page.audience-live'],
+    ['import from google', 'ui-page.external-sync'],
+    ['sync from a service', 'ui-page.external-sync'],
+    ['connect an external account and sync', 'ui-page.external-sync'],
+    ['run a live session', 'ui-page.live-console'],
+    ['presenter console', 'ui-page.live-console'],
+    ['live show control room', 'ui-page.live-console'],
+    // A feature's own phrase still plans the feature.
+    ['manage records', 'plan:manage-records'],
+]);

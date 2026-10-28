@@ -415,7 +415,7 @@ nodes:
       - { name: "last run", kit_component: Alert, use: "The last run's status and result", props_hint: "variant, title" }
     checks: ['tenant-aware']
     paths: []
-    keywords: [sync, external source, sync with, connect a source, linked source, sync now, last sync, replace from source, import from, google, provider sync]
+    keywords: [sync, external source, sync with, connect a source, linked source, sync now, last sync, replace from source, import from, google, provider sync, import from google, sync from a service, connect an external account]
     status: draft
     rules:
       - "The page's actions are server action descriptors: Link; Sync now; and Unlink and Replace from source in the ⌄ menu. Each is confirmed, and Replace needs a typed confirmation (the user types the source's name)."
@@ -434,7 +434,7 @@ nodes:
       - { name: "panel", kit_component: Collapsible, use: "One side panel in the stack", props_hint: "title" }
     checks: []
     paths: []
-    keywords: [live session, console, presenter, run a session, control room, real time, stage and panels, live show]
+    keywords: [live session, console, presenter, run a session, control room, real time, stage and panels, live show, presenter console, control room]
     status: draft
     rules:
       - "Built on kit Workbench regions: the stage plus a panel stack of Sections or Collapsibles, with ActionBar descriptors. No hand-rolled layout."
@@ -452,7 +452,7 @@ nodes:
     kit: ['@kit/ui StageNotice']
     checks: []
     paths: []
-    keywords: [projector, stage display, kiosk tv, full screen output, big screen, audience screen, display screen]
+    keywords: [projector, stage display, kiosk tv, full screen output, big screen, audience screen, display screen, projector screen, tv display, room display, screen in the room]
     status: draft
     rules:
       - "Chrome-less: no shell, navigation or controls."
@@ -470,7 +470,7 @@ nodes:
     kit: ['@kit/ui Field', '@kit/ui FormCard']
     checks: []
     paths: []
-    keywords: [audience, join on phone, vote, react, live poll, guest chat, audience participation, join code]
+    keywords: [audience, join on phone, vote, react, live poll, guest chat, audience participation, join code, audience voting, vote on phones, guests react]
     status: draft
     rules:
       - "Anonymous: a per-session token, never an account."
@@ -487,7 +487,7 @@ nodes:
     kit: []
     checks: []
     paths: []
-    keywords: [remote, phone remote, pair a device, paired screen, second screen, clicker, pairing]
+    keywords: [remote, phone remote, pair a device, paired screen, second screen, clicker, pairing, control slides from my phone, from my phone, phone as a remote]
     status: draft
     rules:
       - "Pairing and its security follow access-tenancy.device-pairing."

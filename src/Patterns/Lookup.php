@@ -60,13 +60,31 @@ final class Lookup
             if (is_string($query['intent'] ?? null) && trim($query['intent']) !== '') {
                 $feature = $this->feature($query['intent']);
 
-                return $feature === null ? $this->match($query['intent'], 'intent') : $this->plan($feature);
+                // The more specific phrase wins: a leaf keyword longer than every feature keyword the intent contains ("invite a guest to one resource"
+                // over manage-records' "resource") answers with the leaf, not the feature's plan.
+                return $feature === null || ($feature->id !== strtolower(trim($query['intent'])) && self::longestPhrase($query['intent'], $this->leafKeywords()) > self::longestPhrase($query['intent'], $feature->keywords))
+                    ? $this->match($query['intent'], 'intent')
+                    : $this->plan($feature);
             }
 
             return $this->walk([]);
         } catch (InvalidArgumentException $error) {
             return self::error($error->getMessage());
         }
+    }
+
+    /** @return list<string> every leaf keyword */
+    private function leafKeywords(): array
+    {
+        return array_merge(...array_map(fn (Leaf $leaf): array => $leaf->keywords, $this->catalog->leaves()), ...[[]]);
+    }
+
+    /** @param  list<string>  $keywords  The length of the longest whole keyword phrase the intent contains, 0 for none. */
+    private static function longestPhrase(string $intent, array $keywords): int
+    {
+        $intent = strtolower($intent);
+
+        return max(0, ...array_map(fn (string $keyword): int => str_contains($intent, strtolower($keyword)) ? strlen($keyword) : 0, $keywords));
     }
 
     /** The best feature for an intent: an exact id, or at least one whole keyword phrase. */

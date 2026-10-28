@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Real phrasings find the new build-your-own leaves.** "invite a guest to one resource" planned the manage-records CRUD feature, and "guest presenter" or "guest reviewer" landed on the signed-link guest page; all now rank `access-tenancy.membership.scoped-guest` first.
+  - The scoped guest, paired remote, device pairing, stage display, live audience, external sync and live console leaves gain natural synonyms ("phone remote", "projector screen", "audience voting on phones", "import from Google" and the like). Each phrasing has a resolver test.
+  - **Specificity rule:** when a leaf matches a longer whole keyword phrase than any feature does, the leaf wins over the feature's plan. A feature's own id or phrase still plans it.
+
 ## 0.11.18 - 2026-10-28
 
 ### Added

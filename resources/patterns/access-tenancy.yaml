@@ -140,7 +140,7 @@ nodes:
     kit: []
     checks: []
     paths: []
-    keywords: [scoped guest, one record, guest access, invite to a record, single record, share one, external collaborator]
+    keywords: [scoped guest, one record, guest access, invite to a record, single record, share one, external collaborator, invite a guest to one record, invite a guest to one resource, guest to one resource, guest presenter, guest reviewer, share one record, share one record with an outsider, outsider, let someone into one record]
     status: draft
     rules:
       - "A role with zero grants plus a scope row: record, membership, email, invited_by, revoked_at."
@@ -158,7 +158,7 @@ nodes:
     kit: []
     checks: []
     paths: []
-    keywords: [pair a device, device pairing, pairing link, phone remote, paired screen, second device, remote control]
+    keywords: [pair a device, device pairing, pairing link, phone remote, paired screen, second device, remote control, pairing link, pair a second screen]
     status: draft
     rules:
       - "Every remote request re-checks that the user may still perform the action."
