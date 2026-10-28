@@ -19,6 +19,28 @@
 
 - `standards:make webhook` decided whether the app had spatie/laravel-multitenancy from this package's own environment. It now reads the app's composer.json or vendor.
 
+## 0.11.14 - 2026-10-28
+
+### Upgrading
+
+- **Every allowlist entry needs an `expires` date in the Pest suite too.** The Arch suite now fails an entry without one, as `standards:check` already did (`missing-expiry`), so the two agree. To date legacy entries in one go, run `php artisan standards:allowlist --stamp-expiry=YYYY-MM-DD --dry-run`, review it, then run it without `--dry-run`. It adds `'expires' => '…'` after each undated entry's `date` line and never changes an existing expiry.
+
+### Added
+
+- **`standards:allowlist --stamp-expiry=YYYY-MM-DD`**, with `--file`, `--dry-run` and `--json`.
+  - It finds the allowlist that `tests/Arch/configuration.php` requires, and stamps only undated entries.
+  - It refuses a date that isn't real or is already past.
+  - It reads the file back and refuses unless it holds the same entries, each now dated.
+
+### Fixed
+
+- **`[preset laravel] could not run: Typed property …ObjectDescriptionBase::$path must not be accessed before initialization`** in `standards:check`.
+  - A dev package that maps the app's namespace to its own folder (laravel/pint and laravel/cloud-cli map `App\` to theirs) put its classes into the Laravel preset's targets as vendor objects, which Pest describes without a path.
+  - When one failed an expectation (`App\Concerns` holding a class, `App\Enums` holding non-enums), there was no path to report and the whole preset errored.
+  - Vendor objects inside the app's own class-root namespaces are now left out of the presets; other vendor targets are unchanged.
+  - A parity fixture covers it: the gate and Pest agree, with no error.
+- **The pattern catalog's tey/kit export snapshot** is refreshed to v0.4.33's `@kit/ui` barrel: `Collapsible`, `PasskeyOffer`, `PasswordRules`, `StageNotice` and `Surface` were missing, so `standards:check` warned on current kits.
+
 ## 0.11.13 - 2026-10-28
 
 ### Added

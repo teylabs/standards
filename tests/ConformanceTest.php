@@ -82,13 +82,13 @@ test('media requires both the contract and disk measurement', function () {
 });
 
 test('an exact ratchet entry permits debt but cannot hide a second violation', function () {
-    $entry = ['rule' => '21', 'target' => 'src/Domain/Billing/Http/Controllers/InvoiceController.php', 'check' => 'method | InvoiceController::pay', 'reason' => 'Fixture debt', 'date' => '2026-10-12'];
+    $entry = ['rule' => '21', 'target' => 'src/Domain/Billing/Http/Controllers/InvoiceController.php', 'check' => 'method | InvoiceController::pay', 'reason' => 'Fixture debt', 'date' => '2026-10-12', 'expires' => '2099-12-31'];
 
     expect(fn () => (new Conformance(fixtureConfiguration('Bad', [$entry])))->assert('21'))->toThrow(AssertionFailedError::class, 'InvoiceController::middleware');
 });
 
 test('[rule 51] an exact dated CI exception permits debt and becomes stale after a fix', function () {
-    $entry = ['rule' => '51', 'target' => '.github/workflows/tests.yml', 'check' => 'test | timeout: set timeout-minutes on every job.', 'reason' => 'Fixture timeout debt', 'date' => '2026-10-13'];
+    $entry = ['rule' => '51', 'target' => '.github/workflows/tests.yml', 'check' => 'test | timeout: set timeout-minutes on every job.', 'reason' => 'Fixture timeout debt', 'date' => '2026-10-13', 'expires' => '2099-12-31'];
     (new Conformance(fixtureConfiguration('Bad', [$entry], ciEnforce: true)))->assert('51');
     expect(fn () => (new Conformance(fixtureConfiguration('Good', [$entry], ciEnforce: true)))->assert('51'))->toThrow(AssertionFailedError::class, 'stale exception');
 });
@@ -124,7 +124,7 @@ test('[rule 51] Configuration threads drafts through architecture enforcement', 
 });
 
 test('fixed and deleted ratchet entries fail as stale, including native presets', function (string $rule, string $target, string $check) {
-    $entry = compact('rule', 'target', 'check') + ['reason' => 'Fixture debt', 'date' => '2026-10-12'];
+    $entry = compact('rule', 'target', 'check') + ['reason' => 'Fixture debt', 'date' => '2026-10-12', 'expires' => '2099-12-31'];
     expect(fn () => (new Conformance(fixtureConfiguration('Good', [$entry])))->assert($rule))
         ->toThrow(AssertionFailedError::class, 'stale exception');
 })->with([
@@ -134,13 +134,13 @@ test('fixed and deleted ratchet entries fail as stale, including native presets'
 ]);
 
 test('the ratchet permits an exact seeded failure and forces its removal after a fix', function () {
-    $entry = ['rule' => '29', 'target' => 'src/Domain/Billing/Authentication.php', 'check' => 'Fortify::authenticateUsing is forbidden', 'reason' => 'Fixture debt', 'date' => '2026-10-12'];
+    $entry = ['rule' => '29', 'target' => 'src/Domain/Billing/Authentication.php', 'check' => 'Fortify::authenticateUsing is forbidden', 'reason' => 'Fixture debt', 'date' => '2026-10-12', 'expires' => '2099-12-31'];
     (new Conformance(fixtureConfiguration('Bad', [$entry])))->assert('29');
     expect(fn () => (new Conformance(fixtureConfiguration('Good', [$entry])))->assert('29'))->toThrow(AssertionFailedError::class, 'stale exception');
 });
 
 test('native preset debt is allowed only while the same failure still exists', function () {
-    $entry = ['rule' => 'preset security', 'target' => 'FixtureBad\\Domain\\Billing\\Tokens', 'check' => "Expecting 'md5' not to be used on 'FixtureBad\\Domain\\Billing\\Tokens'.", 'reason' => 'Fixture debt', 'date' => '2026-10-12'];
+    $entry = ['rule' => 'preset security', 'target' => 'FixtureBad\\Domain\\Billing\\Tokens', 'check' => "Expecting 'md5' not to be used on 'FixtureBad\\Domain\\Billing\\Tokens'.", 'reason' => 'Fixture debt', 'date' => '2026-10-12', 'expires' => '2099-12-31'];
     (new Conformance(fixtureConfiguration('Bad', [$entry])))->assert('preset security');
     expect(fn () => (new Conformance(fixtureConfiguration('Good', [$entry])))->assert('preset security'))->toThrow(AssertionFailedError::class, 'stale exception');
 });

@@ -27,7 +27,7 @@ afterEach(function () {
 test('MCP declaration findings support exact ratchets and stale entry detection', function () {
     $bad = (new McpParity(dirname(__DIR__).'/fixtures/Bad'))->violations();
     expect(array_column($bad, 'check'))->toBe(['capability 1 has a missing or incomplete MCP path', 'UI inventory entry 1 has missing or unmapped semantic variants']);
-    $ratchet = new Ratchet(array_map(fn (array $finding): array => ['rule' => '55', ...$finding, 'reason' => 'Fixture MCP debt', 'date' => '2026-10-24'], $bad));
+    $ratchet = new Ratchet(array_map(fn (array $finding): array => ['rule' => '55', ...$finding, 'reason' => 'Fixture MCP debt', 'date' => '2026-10-24', 'expires' => '2099-12-31'], $bad));
     expect($ratchet->failures('55', $bad))->toBe([])
         ->and($ratchet->failures('55', (new McpParity($this->base))->violations()))->toHaveCount(2);
 });

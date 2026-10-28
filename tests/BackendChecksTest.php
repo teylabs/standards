@@ -138,7 +138,7 @@ test('provider drift rejects root dev autoload namespaces and dynamic lists', fu
 
 test('every backend rule supports exact baselines and rejects stale entries', function (string $rule) {
     $bad = (new Conformance(fixtureConfiguration('Bad')))->violations($rule);
-    $entries = array_map(fn ($finding) => ['rule' => $rule, ...$finding, 'reason' => 'Seeded backend debt', 'date' => '2026-10-24'], $bad);
+    $entries = array_map(fn ($finding) => ['rule' => $rule, ...$finding, 'reason' => 'Seeded backend debt', 'date' => '2026-10-24', 'expires' => '2099-12-31'], $bad);
     expect($bad)->not->toBeEmpty();
     expect((new Ratchet($entries))->failures($rule, $bad))->toBe([]);
     expect((new Ratchet($entries))->failures($rule, []))->each->toStartWith('stale exception');
