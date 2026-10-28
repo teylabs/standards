@@ -1532,19 +1532,46 @@ test('secrets must be well-formed and are never printed', function (array $confi
     'empty resend key' => [['mail.default' => 'resend', 'mail.mailers.resend' => ['transport' => 'resend'], 'services.resend.key' => ''], 'services.resend.key (or its mailer override) is empty'],
 ]);
 
-test('passport keys need PEM headers and real newlines from env or key files', function () {
-    $pem = fn (string $kind): string => "-----BEGIN {$kind} KEY-----\nMIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Qu\n-----END {$kind} KEY-----\n";
+test('passport keys pass in any form Passport loads, and fail with the accepted forms otherwise', function () {
+    // Real keys: Passport hands them to OpenSSL (league/oauth2-server's CryptKey), so the check does too.
+    $pair = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
+    openssl_pkey_export($pair, $private);
+    $public = openssl_pkey_get_details($pair)['key'];
+    $escaped = fn (string $pem): string => str_replace("\n", '\n', $pem);
 
-    preflightWithPackages(['laravel/passport'], [], function () use ($pem) {
+    preflightWithPackages(['laravel/passport'], [], function () use ($private, $public, $escaped) {
         expect(preflightInstall($this->preflight)[0]['install.secrets']['message'])->toContain('the oauth-private.key file');
 
-        $this->preflight['config']->set(['passport.private_key' => str_replace("\n", '\n', $pem('PRIVATE')), 'passport.public_key' => $pem('PUBLIC')]);
-        [$results, , $display] = preflightInstall($this->preflight);
-        expect($results['install.secrets']['message'])->toStartWith('passport.private_key is not a PEM key with real newlines')->and($display)->not->toContain('MIIBOgIBAAJB');
+        $secrets = function (mixed $privateKey, mixed $publicKey): array {
+            $this->preflight['config']->set(['passport.private_key' => $privateKey, 'passport.public_key' => $publicKey]);
+            [$results, , $display] = preflightInstall($this->preflight);
 
-        $this->preflight['config']->set(['passport.private_key' => $pem('PRIVATE'), 'passport.public_key' => null]);
+            return [$results['install.secrets'], $display];
+        };
+
+        // Real newlines, a single-line env with literal \n escapes (Passport replaces them), and Windows line endings OpenSSL reads.
+        expect($secrets($private, $public)[0]['status'])->toBe('pass')
+            ->and($secrets($escaped($private), $escaped($public))[0]['status'])->toBe('pass')
+            ->and($secrets(str_replace("\n", "\r\n", $private), str_replace("\n", "\r\n", $public))[0]['status'])->toBe('pass')
+            ->and($secrets(str_replace("\n", '\r\n', $private), $public)[0]['status'])->toBe('fail');
+
+        // Base64 is not decoded by Passport, so it fails, with a hint; the key never reaches the output.
+        [$result, $display] = $secrets(base64_encode($private), $public);
+        expect($result['status'])->toBe('fail')
+            ->and($result['message'])->toStartWith('passport.private_key is not a PEM key Passport can load: it is base64-encoded, and Passport does not decode it')
+            ->and($result['message'])->toContain('with real newlines or on one line with \n escapes')
+            ->and($display)->not->toContain(substr(base64_encode($private), 20, 40));
+
+        // The public key is checked too; garbage, or a PEM with a broken body, fails.
+        expect($secrets($private, 'not a key')[0]['message'])->toStartWith('passport.public_key is not a PEM key Passport can load.')
+            ->and($secrets($private, "-----BEGIN PUBLIC KEY-----\nMIIBOgIBAAJB\n-----END PUBLIC KEY-----\n")[0]['status'])->toBe('fail');
+
+        // A key file is read as it is (Passport does not unescape it).
+        $this->preflight['config']->set(['passport.private_key' => $private, 'passport.public_key' => null]);
         mkdir($this->preflight->root.'/storage');
-        file_put_contents($this->preflight->root.'/storage/oauth-public.key', $pem('PUBLIC'));
+        file_put_contents($this->preflight->root.'/storage/oauth-public.key', $escaped($public));
+        expect(preflightInstall($this->preflight)[0]['install.secrets']['message'])->toStartWith('the oauth-public.key file is not a PEM key Passport can load');
+        file_put_contents($this->preflight->root.'/storage/oauth-public.key', $public);
         expect(preflightInstall($this->preflight)[0]['install.secrets']['status'])->toBe('pass');
     });
 });
