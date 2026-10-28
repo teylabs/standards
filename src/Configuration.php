@@ -42,6 +42,7 @@ final readonly class Configuration
      * @param  list<string>  $uiExternalLabelComponents  components that render the external icon themselves
      * @param  list<string>  $uiToastRenderers  project-relative files allowed to import the toast library
      * @param  list<string>  $testBasePaths
+     * @param  list<string>  $testRoots  where the test files live, for the php-tag rule (globs allowed)
      * @param  array<string, list<string>>  $boostSkills  Composer or npm package => required skills
      * @param  list<string>  $boostSkillRoots
      * @param  list<string>  $ciDefaultBranches
@@ -92,6 +93,7 @@ final readonly class Configuration
         public string $uiToastModule = 'app/UI/resources/js/Notification/NotificationCenter.vue',
         public string $uiNotificationCenter = 'app/UI/resources/js/Notification/NotificationCenter.vue',
         public array $testBasePaths = ['tests/TestCase.php'],
+        public array $testRoots = ['tests'],
         public array $boostSkills = [
             'laravel/framework' => ['laravel-best-practices'],
             'pestphp/pest' => ['testing-best-practices'],

@@ -44,6 +44,7 @@ final class Conformance
         '12' => '[rule 12] live PHP does not reference retired namespaces',
         '51' => '[rule 51] CI triggers conserve minutes without cancelling main',
         'pest-only' => '[pest-only] tests use Pest instead of PHPUnit test classes',
+        'php-tag' => '[php-tag] PHP files under the test and source roots open with <?php',
         'tia' => '[tia] local test runs require an explicit TIA choice',
         'boost' => '[boost] stack guidance and skills are present',
         '55' => '[rule 55] MCP capability declarations map UI, shared operations and parity tests',
@@ -142,9 +143,10 @@ final class Conformance
             return $check->violations();
         }
 
-        if (in_array($rule, ['pest-only', 'tia', 'boost'], true)) {
+        if (in_array($rule, ['pest-only', 'php-tag', 'tia', 'boost'], true)) {
             return match ($rule) {
                 'pest-only' => (new Checks\PestOnly($this->config))->violations(),
+                'php-tag' => (new Checks\PhpTag($this->config))->violations(),
                 'tia' => (new Checks\Tia($this->config))->violations(),
                 'boost' => (new Checks\Boost($this->config))->violations(),
             };
