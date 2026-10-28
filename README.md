@@ -61,7 +61,7 @@ These rules remain manual. Their Detect and Verify requirements depend on applic
 
 ## Add a Ratchet Entry
 
-Pass an explicit allow-list to `Configuration::allowlist`. Each entry has `rule`, `target` (exact relative path or class), `check` (exact diagnostic), `reason` and a real `Y-m-d` `date`. Inspect `$preset->violations('20')` when reviewing a failure. Never build the allow-list by discovering current violations at test time. Fixed, deleted, duplicate and unknown-rule entries fail.
+Pass an explicit allow-list to `Configuration::allowlist`. Each entry has `rule`, `target` (exact relative path or class), `check` (exact diagnostic), `reason`, a real `Y-m-d` `date` and a real `Y-m-d` `expires`. An entry without `expires` fails, in the Pest suite as in `standards:check` (`missing-expiry`). `php artisan standards:allowlist --stamp-expiry=YYYY-MM-DD` gives every undated entry that date in one go, written after its `date` line. It never changes an existing expiry, finds the file through `tests/Arch/configuration.php` (or `--file=`), and supports `--dry-run` and `--json`. Inspect `$preset->violations('20')` when reviewing a failure. Never build the allow-list by discovering current violations at test time. Fixed, deleted, duplicate and unknown-rule entries fail.
 
 ## Coverage and Limits
 
@@ -459,7 +459,7 @@ The gate reads `tests/Arch/configuration.php`, a file that returns the app's `Co
 
 - an unexcepted violation;
 - a stale allowlist entry;
-- an allowlist entry without `expires`. Every entry needs `rule`, `target`, `check`, `reason`, `date` and `expires`, all real `Y-m-d` dates. Pest ratchets still accept entries without `expires`; the gate does not;
+- an allowlist entry without `expires`. Every entry needs `rule`, `target`, `check`, `reason`, `date` and `expires`, all real `Y-m-d` dates. The Pest ratchet reports the same entries;
 - an expired entry;
 - a rule that cannot run, such as a missing configuration, missing dev tools or a crash. The gate fails closed;
 - a class that doesn't load (rule `load`). Before any rule runs, a separate PHP process loads every class in the class roots, so a fatal error (a missing abstract method, an unknown parent) becomes a finding with exit 1 instead of a crash. The other rules still run and skip that class.

@@ -72,7 +72,7 @@ test('frontend optional rules skip by default and enforce only selected keys', f
 test('frontend findings use exact ratchet entries and reject fixed debt', function () {
     foreach (['descriptors', 'js-imports', 'ui plus', 'ui new-tab', 'ui dropzone', 'ui toast'] as $rule) {
         $violations = (new Conformance(frontendConfiguration()))->violations($rule);
-        $allowlist = array_map(fn (array $entry): array => ['rule' => $rule, ...$entry, 'reason' => 'Fixture debt', 'date' => '2026-10-24'], $violations);
+        $allowlist = array_map(fn (array $entry): array => ['rule' => $rule, ...$entry, 'reason' => 'Fixture debt', 'date' => '2026-10-24', 'expires' => '2099-12-31'], $violations);
         (new Conformance(frontendConfiguration(overrides: ['allowlist' => $allowlist])))->assert($rule);
         expect(fn () => (new Conformance(frontendConfiguration('Good', ['allowlist' => $allowlist])))->assert($rule))->toThrow(AssertionFailedError::class, 'stale exception');
         array_pop($allowlist);

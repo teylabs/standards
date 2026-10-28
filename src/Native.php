@@ -89,7 +89,11 @@ final class Native
                 foreach ($leaves as $index => $leaf) {
                     $exclude = $ignored[$index] ?? [];
                     $scope = array_values(array_filter($classes, fn (string $class): bool => array_filter($ignoring, fn (string $namespace): bool => str_starts_with($class, rtrim($namespace, '\\').'\\')) === []));
+                    // A vendor package can map the app's own namespace to its folder (laravel/pint and laravel/cloud-cli map App\ to theirs). Pest describes
+                    // those classes as vendor objects with no path, and a preset expectation that fails on one has nothing to report and throws. They aren't
+                    // the app's code: leave vendor objects inside the app's namespaces out, and keep vendor targets elsewhere (Illuminate, say) as before.
                     $leaf->mergeExcludeCallbacks([fn (ObjectDescription $object): bool => in_array($object->name, $exclude, true)
+                        || ($object instanceof VendorObjectDescription && self::within($object->name, $namespaces))
                         || (! in_array($object->name, $scope, true) && ! $object instanceof FunctionDescription && ! $object instanceof VendorObjectDescription)]);
 
                     try {
@@ -118,6 +122,18 @@ final class Native
         }
 
         return array_values(array_unique($failures, SORT_REGULAR));
+    }
+
+    /** @param  list<string>  $namespaces */
+    private static function within(string $class, array $namespaces): bool
+    {
+        foreach ($namespaces as $namespace) {
+            if (str_starts_with($class, rtrim($namespace, '\\').'\\')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

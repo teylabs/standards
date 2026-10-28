@@ -82,10 +82,16 @@ final class Ratchet
     public function failures(string $rule, array $violations): array
     {
         $allowed = [];
+        $undated = [];
 
         foreach ($this->entries as $entry) {
             if ($entry['rule'] === $rule) {
                 $allowed[] = $entry['target'].' | '.$entry['check'];
+
+                // Expiry is required, as standards:check reports it (missing-expiry): an undated entry would allow its debt for good.
+                if ($entry['expires'] === null) {
+                    $undated[] = $entry['target'].' | '.$entry['check'];
+                }
             }
         }
 
@@ -94,6 +100,7 @@ final class Ratchet
         return [
             ...array_map(fn (string $key): string => "violation: {$key}", array_values(array_diff($actual, $allowed))),
             ...array_map(fn (string $key): string => "stale exception, delete it: {$key}", array_values(array_diff($allowed, $actual))),
+            ...array_map(fn (string $key): string => "exception has no expiry, give it an `expires` Y-m-d date (php artisan standards:allowlist --stamp-expiry=YYYY-MM-DD dates them all): {$key}", $undated),
         ];
     }
 

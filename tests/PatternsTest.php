@@ -742,3 +742,17 @@ test('make model emits a domain model with its migration, factory, enums and tes
         (new Filesystem)->deleteDirectory($base);
     }
 });
+
+test('the kit export snapshot is tey/kit v0.4.33\'s @kit/ui barrel: an app on that kit gets no mismatch warning', function () {
+    // The barrel as tey/kit v0.4.33 ships it (fixtures/KitExports), installed in a synthetic app.
+    $app = sys_get_temp_dir().'/standards-kit-exports-'.bin2hex(random_bytes(6));
+    mkdir(dirname($app.'/vendor/tey/kit/'.KitExports::BARREL), 0777, true);
+    copy(dirname(__DIR__).'/fixtures/KitExports/index-v0.4.33.ts.stub', $app.'/vendor/tey/kit/'.KitExports::BARREL);
+
+    try {
+        expect(KitExports::snapshot())->toContain('PasskeyOffer')->toContain('PasswordRules')->toContain('StageNotice')->toContain('Surface')->toContain('Collapsible')
+            ->and(KitExports::mismatch($app))->toBeNull();
+    } finally {
+        (new Illuminate\Filesystem\Filesystem)->deleteDirectory($app);
+    }
+});

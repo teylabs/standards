@@ -69,7 +69,7 @@ test('rule 21 reports each body concern separately, including private helper bod
 
 test('rule 21 body findings use the existing exact ratchet and reject stale entries', function () {
     $violations = bodyViolations('Bad');
-    $entries = array_map(fn (array $violation): array => $violation + ['rule' => '21', 'reason' => 'Fixture debt', 'date' => '2026-10-24'], $violations);
+    $entries = array_map(fn (array $violation): array => $violation + ['rule' => '21', 'reason' => 'Fixture debt', 'date' => '2026-10-24', 'expires' => '2099-12-31'], $violations);
     $ratchet = new Ratchet($entries);
     expect($ratchet->failures('21', $violations))->toBe([]);
     expect($ratchet->failures('21', bodyViolations('Good')))->toHaveCount(count($entries));
