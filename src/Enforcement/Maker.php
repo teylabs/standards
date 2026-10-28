@@ -44,7 +44,66 @@ final class Maker
         private readonly ?Closure $run = null,
         private readonly ?bool $kit = null,
         private readonly ?bool $media = null,
+        private readonly ?HostShape $host = null,
+        private readonly bool $dryRun = false,
     ) {}
+
+    /** What a dry run would write, or what a run wrote: project-relative path => contents. @var array<string, string> */
+    private array $overlay = [];
+
+    /** Each file written (or, in a dry run, planned): its path, its kind and whether it was created or modified. @var list<array{path: string, type: string, action: string}> */
+    private array $planned = [];
+
+    /** Names this run moved to the host's placement: a conventional class name, page render name or route-file path => the host's. @var array<string, string> */
+    private array $renames = [];
+
+    /** The namespace each placed PHP file declares instead of its conventional one: placed path => [conventional, placed]. @var array<string, array{0: string, 1: string}> */
+    private array $namespaces = [];
+
+    /**
+     * The files the last make() wrote, or planned in a dry run: path, kind (`class`, `test`, `page`, `routes`, `migration`, `config` and so on) and
+     * `created` or `modified`.
+     *
+     * @return list<array{path: string, type: string, action: string}>
+     */
+    public function planned(): array
+    {
+        return $this->planned;
+    }
+
+    /** The suffix each unit adds to the names it writes, so a name given with it is not doubled. */
+    public const SUFFIXES = ['workbench' => ['Workbench'], 'capability-tool' => ['Tool'], 'settings-section' => ['SettingsController', 'Controller', 'Settings'], 'page' => ['Controller', 'Page'], 'webhook' => ['Webhook'], 'api-client' => ['Client'], 'crud' => ['Controller', 'Resource']];
+
+    /** The name without the unit's own suffix (`SlideWorkbench` for a workbench is `Slide`); a name that is only the suffix is kept. */
+    public static function base(string $unit, string $name): string
+    {
+        foreach (self::SUFFIXES[$unit] ?? [] as $suffix) {
+            if (strlen($name) > strlen($suffix) && str_ends_with($name, $suffix)) {
+                return substr($name, 0, -strlen($suffix));
+            }
+        }
+
+        return $name;
+    }
+
+    /**
+     * The tey/kit features a unit's code uses: the workspace-owned recipes need workspaces and access, an MCP tool needs mcp, and the pages and settings
+     * sections the kit's core.
+     *
+     * @param  list<string>  $options
+     * @return list<string>
+     */
+    public static function features(string $unit, string $flavor, array $options): array
+    {
+        return match (true) {
+            $unit === 'crud' => ['core', 'workspaces', 'access', ...(in_array('mcp', $options, true) ? ['mcp'] : [])],
+            $unit === 'workbench' => ['core', 'workspaces', 'access'],
+            $unit === 'model' && $flavor === 'domain' && in_array('tenant', $options, true) => ['core', 'workspaces'],
+            $unit === 'capability-tool' => ['core', 'mcp'],
+            in_array($unit, ['page', 'settings-section'], true) => ['core'],
+            default => [],
+        };
+    }
 
     /** Whether a unit and flavor run tey/mod's generator: model --flavor=domain is standards' own. */
     public static function delegates(string $unit, string $flavor): bool
@@ -71,6 +130,8 @@ final class Maker
         if (preg_match('/^[A-Z][A-Za-z0-9]*$/D', $name) !== 1) {
             throw new InvalidArgumentException('Name must be StudlyCase, for example Invoices.');
         }
+        // A name that already carries the unit's suffix (SlideWorkbench, BillingSettings, ReadPostsTool) is the base name: the suffix is never doubled.
+        $name = self::base($unit, $name);
 
         $leaf = $leafId ?? $this->leaf($unit, $flavor);
 
@@ -91,6 +152,16 @@ final class Maker
 
         if ($unknown !== []) {
             throw new InvalidArgumentException('Unknown option --'.implode(', --', $unknown).' for '.$unit.($unit === 'model' ? ' --flavor='.$flavor : '').'.');
+        }
+
+        // Code is only emitted against tey/kit features the host has adopted.
+        $needed = self::features($unit, $flavor, $options);
+        $missing = $this->host?->missingFeatures($needed) ?? [];
+        if ($missing !== []) {
+            throw new InvalidArgumentException("{$unit} needs tey/kit's ".implode(' and ', $missing).' feature'.(count($missing) > 1 ? 's' : '').', which this app has not adopted. Add '.(count($missing) > 1 ? 'them' : 'it').' first: php artisan kit:add '.implode(' ', $missing));
+        }
+        if (! isset(self::DELEGATED[$unit]) || ($unit === 'model' && $flavor === 'domain')) {
+            $this->host?->requireModule();
         }
 
         if ($unit === 'model' && $flavor === 'domain') {
@@ -173,10 +244,8 @@ final class Maker
 
         if ($route !== null) {
             $routes = $this->paths['routes'] ?? 'routes/web.php';
-            $file = $this->base.'/'.$routes;
-            $current = is_file($file) ? (string) file_get_contents($file) : "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n";
-            $this->write($routes, rtrim($current)."\n\n// standards-pattern: {$leaf}\n{$route}\n");
-            $written[] = $routes;
+            $current = $this->exists($this->placed($routes)) ? $this->read($this->placed($routes)) : "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n";
+            $written[] = $this->write($routes, rtrim($current)."\n\n// standards-pattern: {$leaf}\n{$route}\n");
         }
 
         return $written;
@@ -191,9 +260,11 @@ final class Maker
      */
     private function emit(array $files, array $values): array
     {
+        $this->plan(array_keys($files));
         foreach ($files as $target => $stub) {
-            if (is_file($this->base.'/'.$target)) {
-                throw new InvalidArgumentException("{$target} already exists; standards:make never overwrites.");
+            $path = $this->placed($target);
+            if ($this->exists($path)) {
+                throw new InvalidArgumentException("{$path} already exists; standards:make never overwrites.");
             }
         }
 
@@ -202,10 +273,14 @@ final class Maker
         foreach ($files as $target => $stub) {
             [$stub, $overrides] = is_array($stub) ? $stub : [$stub, []];
             $contents = rtrim($this->render($stub, [...$values, ...$overrides]))."\n";
-            $contents = str_ends_with($target, 'Test.php') ? $this->covered($target, $contents) : $contents;
-            // Names that come from the unit's name sort differently per name, so the import block is sorted after rendering.
-            $this->write($target, str_ends_with($target, '.php') ? self::imports($contents) : $contents);
-            $written[] = $target;
+            $contents = str_ends_with($target, 'Test.php') ? $this->covered($this->placed($target), $contents) : $contents;
+            // Names that come from the unit's name sort differently per name, so the import block is sorted after rendering (and again once renamed).
+            $path = $this->write($target, str_ends_with($target, '.php') ? self::imports($contents) : $contents);
+            if (str_ends_with($path, '.php') && $this->renames !== []) {
+                $this->overlay[$path] = self::imports($this->overlay[$path]);
+                $this->dryRun || file_put_contents($this->base.'/'.$path, $this->overlay[$path]);
+            }
+            $written[] = $path;
         }
 
         return $written;
@@ -227,16 +302,16 @@ final class Maker
      */
     private function factoryAutoload(): array
     {
-        $file = $this->base.'/composer.json';
-        if (! is_file($file)) {
+        // A modular host's factories live in its modules, under the app's own PSR-4 root (tey/mod resolves them).
+        if ($this->host?->modular() || ! $this->exists('composer.json')) {
             return [];
         }
-        $composer = json_decode((string) file_get_contents($file), true);
+        $composer = json_decode($this->read('composer.json'), true);
         if (! is_array($composer) || isset($composer['autoload']['psr-4']['Database\\Factories\\'])) {
             return [];
         }
         $composer['autoload']['psr-4']['Database\\Factories\\'] = 'database/factories/';
-        file_put_contents($file, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+        $this->write('composer.json', json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
 
         return ['composer.json'];
     }
@@ -405,6 +480,11 @@ final class Maker
 
     private function requireWorkbench(): void
     {
+        // The page imports the kit's Workbench from the host's own copy of the kit components: one published before the Workbench would not compile.
+        $components = HostShape::kitComponents($this->base);
+        if ($components !== null && ! in_array('Workbench', $components, true)) {
+            throw new InvalidArgumentException("This app's copy of the kit components (resources/js/components/Kit) predates the Workbench. Update it first: php artisan kit:update plan --lineage=core");
+        }
         if (! ($this->kit ?? class_exists('Tey\\Kit\\Features\\Core\\ViewModels\\WorkbenchViewModel'))) {
             throw new InvalidArgumentException('workbench needs tey/kit 0.4.20 or later (its core feature owns the Workbench, and session-ui the layout endpoint). Install or update tey/kit and try again.');
         }
@@ -569,8 +649,8 @@ final class Maker
     private function provide(string $class, string $leaf): string
     {
         $providers = 'bootstrap/providers.php';
-        $file = $this->base.'/'.$providers;
-        $current = is_file($file) ? (string) file_get_contents($file) : "<?php\n\nreturn [\n];\n";
+        $class = ltrim($this->renamed('\\'.$class), '\\');
+        $current = $this->exists($providers) ? $this->read($providers) : "<?php\n\nreturn [\n];\n";
         if (str_contains($current, $class.'::class')) {
             return $providers;
         }
@@ -615,8 +695,8 @@ final class Maker
         $values += $tenancy
             ? ['tenant_use' => "use Spatie\\Multitenancy\\Jobs\\NotTenantAware;\n", 'tenant_implements' => ' implements NotTenantAware', 'tenant_note' => "\n *\n * Not tenant-aware: a webhook arrives with no tenant, so a handler that needs one finds it from the payload and runs inside it."]
             : ['tenant_use' => '', 'tenant_implements' => '', 'tenant_note' => ''];
-        $config = $this->base.'/config/webhook-client.php';
-        if (is_file($config) && preg_match("/'name'\\s*=>\\s*'".preg_quote($slug, '/')."'/", (string) file_get_contents($config)) === 1) {
+        $config = 'config/webhook-client.php';
+        if ($this->exists($config) && preg_match("/'name'\\s*=>\\s*'".preg_quote($slug, '/')."'/", $this->read($config)) === 1) {
             throw new InvalidArgumentException("config/webhook-client.php already has a {$slug} webhook; standards:make never overwrites.");
         }
         $files = [
@@ -635,20 +715,18 @@ final class Maker
         if (glob($this->base.'/database/migrations/*_add_event_id_to_webhook_calls_table.php') === []) {
             $shared['database/migrations/'.date('Y_m_d_His').'_add_event_id_to_webhook_calls_table.php'] = 'webhook/migration.stub';
         }
-        $written = $this->emit($files + array_filter($shared, fn (string $stub, string $target): bool => ! is_file($this->base.'/'.$target), ARRAY_FILTER_USE_BOTH), $values);
+        $written = $this->emit($files + array_filter($shared, fn (string $stub, string $target): bool => ! $this->exists($this->placed($target)), ARRAY_FILTER_USE_BOTH), $values);
 
-        $current = is_file($config) ? (string) file_get_contents($config) : $this->render('webhook/config.stub', $values);
+        $current = $this->exists($config) ? $this->read($config) : $this->render('webhook/config.stub', $values);
         $at = strpos($current, "'configs' => [");
         if ($at === false) {
             throw new InvalidArgumentException("config/webhook-client.php has no 'configs' => [ list; add the {$slug} entry yourself.");
         }
         $at += strlen("'configs' => [");
         $merged = substr($current, 0, $at)."\n".rtrim($this->render('webhook/config-entry.stub', $values), "\n").substr($current, $at);
-        $this->write('config/webhook-client.php', self::imports($merged, ["{$namespace}\\Models\\WebhookCall", "{$namespace}\\Webhooks\\{$name}\\{$name}SignatureValidator", "{$namespace}\\Webhooks\\{$name}\\{$name}WebhookProfile", "{$namespace}\\Webhooks\\{$name}\\Process{$name}Webhook"]));
-        $written[] = 'config/webhook-client.php';
-        $routes = (string) file_get_contents($this->base.'/routes/webhooks.php');
-        $this->write('routes/webhooks.php', rtrim($routes)."\n\n// standards-pattern: {$leaf}\nRoute::post('webhooks/{$slug}', ReceiveWebhook::class)->defaults('webhook', '{$slug}')->name('webhooks.{$slug}');\n");
-        $written[] = 'routes/webhooks.php';
+        $written[] = $this->write('config/webhook-client.php', self::imports($merged, ["{$namespace}\\Models\\WebhookCall", "{$namespace}\\Webhooks\\{$name}\\{$name}SignatureValidator", "{$namespace}\\Webhooks\\{$name}\\{$name}WebhookProfile", "{$namespace}\\Webhooks\\{$name}\\Process{$name}Webhook"]));
+        $routes = $this->read($this->placed('routes/webhooks.php'));
+        $written[] = $this->write('routes/webhooks.php', rtrim($routes)."\n\n// standards-pattern: {$leaf}\nRoute::post('webhooks/{$slug}', ReceiveWebhook::class)->defaults('webhook', '{$slug}')->name('webhooks.{$slug}');\n");
         $written[] = $this->env(["{$values['env_prefix']}_WEBHOOK_SECRET="], $leaf);
         $written[] = $this->provide("{$namespace}\\Providers\\WebhookServiceProvider", $leaf);
 
@@ -703,8 +781,7 @@ final class Maker
     /** Adds a `services.<slug>` entry to config/services.php (made if missing); an existing entry is refused, never overwritten. @param list<string> $keys */
     private function services(string $slug, array $keys, string $leaf): string
     {
-        $file = $this->base.'/config/services.php';
-        $current = is_file($file) ? (string) file_get_contents($file) : "<?php\n\nreturn [\n];\n";
+        $current = $this->exists('config/services.php') ? $this->read('config/services.php') : "<?php\n\nreturn [\n];\n";
         if (preg_match("/^\\s*'".preg_quote($slug, '/')."'\\s*=>/m", $current) === 1) {
             throw new InvalidArgumentException("config/services.php already has a {$slug} entry; standards:make never overwrites.");
         }
@@ -721,8 +798,7 @@ final class Maker
     /** Adds missing keys to .env.example, never a value: the secret goes in each environment. @param list<string> $lines */
     private function env(array $lines, string $leaf): string
     {
-        $file = $this->base.'/.env.example';
-        $current = is_file($file) ? (string) file_get_contents($file) : '';
+        $current = $this->exists('.env.example') ? $this->read('.env.example') : '';
         $missing = array_filter($lines, fn (string $line): bool => preg_match('/^'.preg_quote(strtok($line, '='), '/').'=/m', $current) !== 1);
         if ($missing !== []) {
             $this->write('.env.example', ltrim(rtrim($current)."\n\n# standards-pattern: {$leaf}\n".implode("\n", $missing)."\n", "\n"));
@@ -909,8 +985,18 @@ final class Maker
             throw new InvalidArgumentException("This unit delegates to tey/mod's {$generator}; install tey/mod (composer require tey/mod) and try again.");
         }
 
+        // tey/mod places it itself: the module goes through as its --in, and a dry run as its own --dry-run (it prints its plan; nothing is stamped).
+        $arguments = ['name' => $name, '--no-interaction' => true] + ($this->host?->module !== null && $this->host->modular() ? ['--in' => $this->host->module] : []);
+        if ($this->dryRun) {
+            $exit = ($this->run)($generator, $arguments + ['--dry-run' => true]);
+            if ($exit !== 0) {
+                throw new InvalidArgumentException("{$generator} {$name} --dry-run failed with exit code {$exit}.");
+            }
+
+            return [];
+        }
         $before = $this->files();
-        $exit = ($this->run)($generator, ['name' => $name, '--no-interaction' => true]);
+        $exit = ($this->run)($generator, $arguments);
 
         if ($exit !== 0) {
             throw new InvalidArgumentException("{$generator} {$name} failed with exit code {$exit}.");
@@ -978,17 +1064,119 @@ final class Maker
         $path = $custom !== null && is_file($this->base.'/'.$custom.'/'.$stub) ? $this->base.'/'.$custom.'/'.$stub : dirname(__DIR__, 2).'/resources/stubs/'.$stub;
         $contents = (string) file_get_contents($path);
 
+        $values += ['kit_ui' => $this->host->kitUi ?? '@kit/ui'];
+
         return (string) preg_replace_callback('/\{\{ ([a-z_]+) \}\}/', fn (array $m): string => $values[$m[1]] ?? throw new InvalidArgumentException("Stub {$stub} uses unknown {$m[1]}."), $contents);
     }
 
-    private function write(string $target, string $contents): void
+    /**
+     * Writes a conventionally named file where the host places it, with every name this run moved rewritten; in a dry run it is only recorded. Returns the
+     * path written.
+     */
+    private function write(string $target, string $contents): string
     {
-        $file = $this->base.'/'.$target;
+        $path = $this->placed($target);
+        $contents = $this->renamed($contents);
+        if (isset($this->namespaces[$path])) {
+            [$from, $to] = $this->namespaces[$path];
+            $contents = (string) preg_replace('/^namespace '.preg_quote($from, '/').';$/m', 'namespace '.$to.';', $contents, 1);
+        }
+        $this->planned[] = ['path' => $path, 'type' => self::kind($path), 'action' => $this->exists($path) ? 'modified' : 'created'];
+        $this->overlay[$path] = $contents;
+        if ($this->dryRun) {
+            return $path;
+        }
+        $file = $this->base.'/'.$path;
 
         if (! is_dir(dirname($file))) {
             mkdir(dirname($file), 0777, true);
         }
 
         file_put_contents($file, $contents);
+
+        return $path;
+    }
+
+    /** Where the host places a conventional path (unchanged without a modular tey/mod layout). */
+    private function placed(string $target): string
+    {
+        return $this->host?->place($target)[0] ?? $target;
+    }
+
+    /**
+     * Records how a set of conventional targets move in this host, before any is written: each class's name and namespace, each page's render name and
+     * each route file's path, so every file of the run (and what it appends to the host's own files) names them as placed.
+     *
+     * @param  list<string>  $targets
+     */
+    private function plan(array $targets): void
+    {
+        if ($this->host === null || ! $this->host->modular()) {
+            return;
+        }
+        $conventional = new HostShape(app: $this->paths['app'] ?? 'app', namespace: $this->paths['namespace'] ?? 'App');
+        foreach ($targets as $target) {
+            [$path, $render] = $this->host->place($target);
+            if ($render !== null && preg_match('#^resources/js/pages/(.+)\.vue$#', $target, $page) === 1) {
+                $this->renames["'".$page[1]."'"] = "'".$render."'";
+            }
+            if (str_starts_with($target, 'routes/') && $path !== $target) {
+                $this->renames["'".$target."'"] = "'".$path."'";
+            }
+            $from = $conventional->namespaceOf($target);
+            $to = $this->host->namespaceOf($path);
+            if ($from !== null && $to !== null && $from !== $to) {
+                $class = basename($target, '.php');
+                $this->renames[$from.'\\'.$class] = $to.'\\'.$class;
+                $this->namespaces[$path] = [$from, $to];
+            }
+        }
+    }
+
+    /** The contents with every name this run moved replaced, longest first so a name is never rewritten inside a longer one. */
+    private function renamed(string $contents): string
+    {
+        if ($this->renames === []) {
+            return $contents;
+        }
+        $renames = $this->renames;
+        uksort($renames, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        foreach ($renames as $from => $to) {
+            if (str_starts_with($from, "'")) {
+                $contents = str_replace($from, $to, $contents);
+
+                continue;
+            }
+            // A class name, with or without its leading backslash, and never the start of a longer name.
+            $contents = (string) preg_replace_callback('/(?<![A-Za-z0-9_\\\\])(\\\\?)'.preg_quote($from, '/').'(?![A-Za-z0-9_])/', fn (array $match): string => $match[1].$to, $contents);
+        }
+
+        return $contents;
+    }
+
+    private function exists(string $path): bool
+    {
+        return isset($this->overlay[$path]) || is_file($this->base.'/'.$path);
+    }
+
+    private function read(string $path): string
+    {
+        return $this->overlay[$path] ?? (string) file_get_contents($this->base.'/'.$path);
+    }
+
+    /** What a planned path is, for the dry-run listing. */
+    private static function kind(string $path): string
+    {
+        return match (true) {
+            str_ends_with($path, '.vue') => 'page',
+            str_starts_with($path, 'tests/') => 'test',
+            str_contains($path, '/routes/') || str_starts_with($path, 'routes/') => 'routes',
+            str_contains($path, 'igrations/') => 'migration',
+            str_starts_with($path, 'config/') => 'config',
+            $path === 'bootstrap/providers.php' => 'providers',
+            in_array($path, ['composer.json', '.env.example'], true) => 'project',
+            str_ends_with($path, '.php') => 'class',
+            default => 'file',
+        };
     }
 }

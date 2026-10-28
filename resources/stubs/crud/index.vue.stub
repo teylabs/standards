@@ -1,6 +1,6 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
-import { DataTable, Page, SectionHeader } from '@kit/ui';
+import { DataTable, Page, SectionHeader } from '{{ kit_ui }}';
 
 // The server decides everything here: rows, URL state, filter choices, row and bulk actions, and whether "New" shows at all.
 defineProps<{ title: string; create: { label: string; url: string; method: string; key?: string | null } | null; table: object }>();

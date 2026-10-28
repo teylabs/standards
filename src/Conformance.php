@@ -394,6 +394,7 @@ final class Conformance
             $paths[realpath($this->config->base.'/'.$path) ?: $this->config->base.'/'.$path] = $class;
         }
 
-        return Native::preset($type, array_values($this->config->classRoots), $paths);
+        // A modular app's module code is not stock Laravel: its namespaces in presetIgnores are left out of the Laravel preset only.
+        return Native::preset($type, array_values($this->config->classRoots), $paths, $rule === 'preset laravel' ? $this->config->presetIgnores : []);
     }
 }

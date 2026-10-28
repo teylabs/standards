@@ -1,7 +1,7 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { Dialog, Page, Section, SectionHeader } from '@kit/ui';
+import { Dialog, Page, Section, SectionHeader } from '{{ kit_ui }}';
 import { computed, ref } from 'vue';
 
 type Action = { label: string; url: string; method: string; key?: string | null; destructive?: boolean; confirm?: { title: string; description: string; label: string } | null };

@@ -1,7 +1,7 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
 import { Form } from '@inertiajs/vue3';
-import { Field, FormCard, Input, Page } from '@kit/ui';
+import { Field, FormCard, Input, Page } from '{{ kit_ui }}';
 
 // `lock_version` goes back with the save: a stale edit is refused with an error on it, never saved over someone else's change.
 defineProps<{ title: string; values: { name: string; lock_version: number | null }; submit: { label: string; url: string; method: string; key?: string | null }; cancelUrl: string }>();

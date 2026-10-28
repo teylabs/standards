@@ -1,0 +1,16 @@
+{
+    "name": "fixture/app",
+    "type": "project",
+    "require": {
+        "tey/standards": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "require-dev": {
+        "laravel/boost": "^2.0",
+        "pestphp/pest": "^5.0"
+    }
+}

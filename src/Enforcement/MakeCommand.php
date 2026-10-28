@@ -12,7 +12,7 @@ use Tey\Standards\Patterns\TreeCatalog;
 
 final class MakeCommand extends Command
 {
-    public $signature = 'standards:make {unit : crud, workbench, model, page, action, capability-tool, settings-section, command, webhook or api-client; policy, job or notification (and model --flavor=plain) through tey/mod} {name : StudlyCase name (crud: the singular record name)} {--flavor= : The leaf flavor, as standards:pattern prints it} {--leaf= : The leaf to stamp, when several leaves share this make command} {--bulk : crud: selectable rows and a bulk delete} {--mcp : crud: read and write capability tools} {--soft-deletes : crud or model: soft deletes (crud adds a restoration)} {--tenant : model: workspace-owned through tey/kit, with a stale-write guard and a policy} {--enum=* : model: field:Enum, a backed enum with a database check constraint (repeatable)} {--media : model: spatie/laravel-medialibrary attachments} {--sortable : model: a position column and an ordered scope} {--backfill : command: fill a column for rows that lack it (the default)} {--maintenance : command: delete stale rows} {--report : command: count, read-only} {--sdk : api-client: the official SDK behind the contract} {--http : api-client: Laravel\'s Http with timeout, retries and backoff (the default)}';
+    public $signature = 'standards:make {unit : crud, workbench, model, page, action, capability-tool, settings-section, command, webhook or api-client; policy, job or notification (and model --flavor=plain) through tey/mod} {name : StudlyCase name (crud: the singular record name)} {--flavor= : The leaf flavor, as standards:pattern prints it} {--leaf= : The leaf to stamp, when several leaves share this make command} {--bulk : crud: selectable rows and a bulk delete} {--mcp : crud: read and write capability tools} {--soft-deletes : crud or model: soft deletes (crud adds a restoration)} {--tenant : model: workspace-owned through tey/kit, with a stale-write guard and a policy} {--enum=* : model: field:Enum, a backed enum with a database check constraint (repeatable)} {--media : model: spatie/laravel-medialibrary attachments} {--sortable : model: a position column and an ordered scope} {--backfill : command: fill a column for rows that lack it (the default)} {--maintenance : command: delete stale rows} {--report : command: count, read-only} {--sdk : api-client: the official SDK behind the contract} {--http : api-client: Laravel\'s Http with timeout, retries and backoff (the default)} {--module= : A modular app (a tey/mod layout placed by module): the module the files go in} {--dry-run : List the files it would write, created or modified, and write nothing} {--json : With --dry-run (or on its own), print the files as JSON}';
 
     public $description = 'Scaffold conformant code for a pattern leaf';
 
@@ -50,7 +50,12 @@ final class MakeCommand extends Command
             $generators = InstalledVersions::isInstalled('tey/mod')
                 ? array_values(array_filter(array_keys($this->getApplication()?->all() ?? []), fn (string $name): bool => str_starts_with($name, 'make:')))
                 : [];
-            $files = (new Maker($this->laravel->basePath(), TreeCatalog::shipped(), (array) $config->get('standards.make', []), $generators, fn (string $command, array $arguments): int => $this->call($command, $arguments)))
+            $base = $this->laravel->basePath();
+            $dryRun = (bool) $this->option('dry-run');
+            // The host as it is: tey/mod's layout (files go in --module's tree in a modular app), its @kit/ui alias and its adopted tey/kit features.
+            $host = HostShape::detect($base, $this->option('module') === null ? null : (string) $this->option('module'));
+            $maker = new Maker($base, TreeCatalog::shipped(), (array) $config->get('standards.make', []), $generators, fn (string $command, array $arguments): int => $this->call($command, $arguments), host: $host, dryRun: $dryRun);
+            $files = $maker
                 ->make($unit, (string) $this->argument('name'), (string) $flavor, $this->option('leaf'), [...array_keys(array_filter(['bulk' => $this->option('bulk'), 'mcp' => $this->option('mcp'), 'soft-deletes' => $this->option('soft-deletes'), 'tenant' => $this->option('tenant'), 'media' => $this->option('media'), 'sortable' => $this->option('sortable')])), ...array_map(fn (string $enum): string => 'enum='.$enum, (array) $this->option('enum'))]);
         } catch (InvalidArgumentException $error) {
             $this->error($error->getMessage());
@@ -58,6 +63,19 @@ final class MakeCommand extends Command
             return 2;
         }
 
+        if ($this->option('json')) {
+            $this->line(json_encode(['dry_run' => $dryRun, 'files' => $maker->planned()], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+
+            return 0;
+        }
+        if ($dryRun) {
+            foreach ($maker->planned() as $file) {
+                $this->line('· '.$file['path'].' ('.$file['type'].', '.$file['action'].')');
+            }
+            $this->line('Dry run: nothing written.');
+
+            return 0;
+        }
         foreach ($files as $file) {
             $this->line('✓ '.$file);
         }

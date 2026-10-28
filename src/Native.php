@@ -59,10 +59,11 @@ final class Native
     /**
      * @param  class-string<AbstractPreset>  $type
      * @param  list<string>  $namespaces
+     * @param  list<string>  $ignoring  namespaces left out of the preset (Configuration::$presetIgnores, for the Laravel preset)
      * @param  array<string, string>  $classes  absolute source path => class
      * @return list<array{target: string, check: string}>
      */
-    public static function preset(string $type, array $namespaces, array $classes): array
+    public static function preset(string $type, array $namespaces, array $classes, array $ignoring = []): array
     {
         $failures = [];
         $ignored = [];
@@ -87,7 +88,7 @@ final class Native
 
                 foreach ($leaves as $index => $leaf) {
                     $exclude = $ignored[$index] ?? [];
-                    $scope = array_values($classes);
+                    $scope = array_values(array_filter($classes, fn (string $class): bool => array_filter($ignoring, fn (string $namespace): bool => str_starts_with($class, rtrim($namespace, '\\').'\\')) === []));
                     $leaf->mergeExcludeCallbacks([fn (ObjectDescription $object): bool => in_array($object->name, $exclude, true)
                         || (! in_array($object->name, $scope, true) && ! $object instanceof FunctionDescription && ! $object instanceof VendorObjectDescription)]);
 

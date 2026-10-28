@@ -92,3 +92,21 @@ test('standards:check and the Pest suite report the same findings for the same a
         (new Filesystem)->deleteDirectory($base);
     }
 });
+
+test('presetIgnores leaves a modular app\'s module namespaces out of the Laravel preset', function () {
+    $base = parityApp();
+
+    try {
+        $configuration = $base.'/tests/Arch/configuration.php';
+        file_put_contents($configuration, str_replace("    pageRoots:", "    presetIgnores: ['App\\\\Console', 'App\\\\Support'],\n    pageRoots:", (string) file_get_contents($configuration)));
+        expect(file_get_contents($configuration))->toContain('presetIgnores');
+        $gate = new Process([PHP_BINARY, $base.'/gate.php'], $base);
+        $gate->mustRun();
+        $report = json_decode($gate->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $laravel = array_column(array_filter($report['violations'], fn (array $finding): bool => $finding['rule'] === 'preset laravel'), 'target');
+
+        expect($laravel)->not->toContain('App\\Console\\FirstOwnerCommand')->not->toContain('App\\Support\\TypeScriptProvider');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});

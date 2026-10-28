@@ -538,6 +538,28 @@ Every path ends in a leaf. Gap and byo leaves return their nearest recipes, the 
 | `action` | `plain` | Action class and test |
 | `workbench` | `page` | a tey/kit Workbench page in a workspace (needs tey/kit 0.4.20+): provider (capability, permissions, routes, navigation, `stale_write` as 409), policy, page and order controllers, the order FormRequest, a principal-first `Reorder<Name>Workbench` Action guarded by a version, a stand-in item Query to replace with your model, a `WorkbenchViewModel`, `pages/<Names>/Workbench/Page.vue` with one inspector, and a feature test |
 
+**Generators fit the host.** Every `standards:make` unit reads the host before it writes anything:
+
+- **Placement:** in an app whose tey/mod layout places files by a dimension (a `modules` layout, or one extending it), files go where tey/mod places them in the module named by `--module=<Name>`, through `Mod::current()->place()`.
+  - Controllers, requests, policies, providers, models, actions, queries, view models, commands, enums and factories use the layout's own file types.
+  - A folder the layout has no type for (`Mcp/Tools`, `Services`, `Webhooks`) goes under the module's root.
+  - Tests go under the layout's test folder, keeping their subfolder. Pages go in the module's pages, rendered as `<Module>::<name>`. Route files and migrations go under the module.
+  - Every class name, namespace, page render name and route-file path in the generated files (and in what they append to `bootstrap/providers.php` and routes) follows. The module's route files load through the app's `Mod::routes()`, as tey/mod expects.
+  - Without `--module` such an app is refused, with the dimension named.
+  - An app on a layout with no dimension (`laravel`), or without tey/mod, gets exactly what it got before.
+- **Names:** a name that already ends in the unit's suffix is the base name, so `standards:make workbench SlideWorkbench` writes `SlideWorkbench*` files, not `SlideWorkbenchWorkbench*`. Likewise `BillingSettings` and `ReadPostsTool`.
+- **Frontend imports:** pages import the kit's components from `@kit/ui` only when the host's tsconfig or Vite config aliases it; otherwise from the kit's own barrel, `@/components/Kit`.
+- **tey/kit features:** a unit is refused, naming the command that adds what is missing, when the host has not adopted a tey/kit feature its code uses:
+  - crud and workbench need workspaces and access;
+  - a tenant model needs workspaces;
+  - a capability tool needs mcp;
+  - pages and settings sections need core.
+
+  Adoption is read from `kit.features`, else the app's installed lineages. A workbench is also refused while the host's own copy of the kit components (`resources/js/components/Kit`) predates the Workbench, with the `kit:update` command.
+- **`--dry-run` and `--json`:** `--dry-run` lists every file the unit would write (path, kind, `created` or `modified`) and writes nothing; `--json` prints the same list as JSON (`{dry_run, files}`), as tey/mod's `mod:*` generators do. A unit tey/mod generates gets `--dry-run`, and `--in` for the module, passed through.
+
+**A modular app's configuration.** Name the module roots in `tests/Arch/configuration.php`: for example `app/Modules/*/Http/Controllers` in `controllerRoots`, `app/Modules/*/routes` in `routeRoots`, the view-model mount in `viewModelRoots`, `app/Modules/*/resources/js/pages` in `pageRoots` (with `app` in `pageScaffolds`), and the module namespaces in `presetIgnores`. Pest's stock Laravel preset expects `App\Models`, `App\Http\Requests` and the like, so module code is left out of that preset only; rule 20 and the tey/mod layout still place it.
+
 **Kit exports.** Validation reads only the shipped snapshot, `resources/patterns/kit-exports.json`, so CI is deterministic. When an app has tey/kit installed, `standards:pattern` and `standards:check` compare its `@kit/ui` barrel with the snapshot. A mismatch prints a warning and never fails. To regenerate the snapshot from a kit checkout, run `php bin/standards kit-exports --refresh --from=../kit`, then `php bin/standards patterns:compile`.
 
 ### 4. Drift report
