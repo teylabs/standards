@@ -90,7 +90,7 @@ jobs:
               "type": "project",
               "repositories": [{ "type": "path", "url": "$GITHUB_WORKSPACE", "options": { "symlink": false } }],
               "require": { "tey/standards": "*@dev" },
-              "require-dev": { "pestphp/pest": "^5.0", "pestphp/pest-plugin-arch": "^5.0", "nikic/php-parser": "^5.0", "spatie/laravel-multitenancy": "^4.0" },
+              "require-dev": { "pestphp/pest": "^5.0", "pestphp/pest-plugin-arch": "^5.0", "nikic/php-parser": "^5.0", "spatie/laravel-multitenancy": "^4.0", "illuminate/database": "^12.0 || ^13.0", "illuminate/queue": "^12.0 || ^13.0" },
               "autoload-dev": { "psr-4": { "FixtureGood\\\\": "fixtures/Good/src/", "FixtureBad\\\\": "fixtures/Bad/src/" } },
               "scripts": { "test": "pest" },
               "minimum-stability": "dev",
