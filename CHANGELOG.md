@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`standards:install --extract`:** the migration path for an app whose Arch `ConformanceTest` builds its `Configuration` inline (the older pattern), which `standards:check` can't read.
+  - It moves the one `new Configuration(...)` into `tests/Arch/configuration.php`, with the file's `use` imports and the top-level variables the expression reads, and rewrites the test to `require` it. The Pest suite and the CLI gate then share one Configuration and report the same findings.
+  - It never overwrites. It refuses with the reason, writing nothing, when there are two inline Configurations, when the expression uses `$this` or a variable it can't carry, or when `__DIR__` would change meaning.
+  - `--dry-run` and `--json`, as `standards:make` has.
+
+### Changed
+
+- **When the configuration is missing, `standards:check` names the fix:** `standards:install --extract` when an Arch test builds the Configuration inline (naming that test), otherwise `standards:install` to scaffold one. It still fails closed.
+
 ## 0.11.12 - 2026-10-28
 
 ### Fixed
