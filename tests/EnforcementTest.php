@@ -467,7 +467,7 @@ test('the artisan commands are registered and print the lookup, gaps and a fail-
         expect($artisan->call('standards:pattern', ['--recipe' => 'ui-page.index']))->toBe(0)
             ->and($artisan->output())->toContain('- DataTable (rows)');
         expect($artisan->call('standards:pattern', ['--gaps' => true]))->toBe(0)
-            ->and($artisan->output())->toContain('- data-actions.tenant-model (fleet 4 apps × 11, past 17 apps × 190)')->not->toContain('- ui-page.crud-resource (');
+            ->and($artisan->output())->toContain('- ui-page.auth-override (')->not->toContain('- ui-page.crud-resource (')->not->toContain('- data-actions.domain-model (');
         expect(is_file($base.'/'.Tey\Standards\Enforcement\GapDemand::FILE))->toBeFalse();
         expect($artisan->call('standards:pattern', ['--answer' => ['3', 'None of these']]))->toBe(0)
             ->and($artisan->output())->toContain('No recipe fits. Proceed');

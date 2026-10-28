@@ -1,5 +1,40 @@
 # Changelog
 
+## Unreleased
+
+### Upgrading
+
+- Requires tey/kit ^0.4.15 for development: workspace-owned models use its `BelongsToWorkspace` and `GuardsStaleWrites` concerns. Code from `standards:make model --tenant` and `standards:make crud` needs tey/kit 0.4.15 or later in the app. Both refuse, with a message, when it is missing.
+- `standards:make model <Name>` now defaults to `--flavor=domain` (below). `--flavor=plain` still runs tey/mod's `make:model` and stamps the result.
+- crud resources generated from now on get their model from the domain-model generator, so their tests create and read rows inside a workspace. Existing generated code is unchanged.
+
+### Added
+
+- `standards:make model <Name> [--tenant] [--soft-deletes] [--enum=<field>:<Enum>]... [--media] [--sortable]` emits:
+  - the model;
+  - its migration: indexes, enum columns the database constrains (a check constraint on SQLite and PostgreSQL), and `lock_version`;
+  - a factory, and a backed enum per `--enum`;
+  - tests on the app's own database, never skipped: factory validity, and the database's refusal of a value outside each enum.
+- With `--tenant`, the model is workspace-owned through tey/kit's `BelongsToWorkspace` and `GuardsStaleWrites`. It gets:
+  - a `workspace_id` constrained with `restrictOnDelete`;
+  - a unique `(workspace_id, id)` as the target for child tables' composite foreign keys;
+  - workspace-first indexes, and a capability-gated policy;
+  - tests for cross-workspace isolation (read, save, delete, and `workspace_required` outside a workspace), the workspace foreign key, and the stale-write refusal.
+- The other flags:
+  - `--media` adds spatie/laravel-medialibrary attachments, and is refused without that package;
+  - `--sortable` adds a `position` column, an ordered scope, and puts new rows last.
+- An app whose `composer.json` does not map `Database\Factories\` gets the mapping added, and the command says to run `composer dump-autoload`.
+- `data-actions.domain-model` is a ready leaf that merges the workspace-model and enum/constraint clusters, with their combined evidence. It is part of the `manage-records` plan.
+
+### Changed
+
+- `standards:make crud` builds its model, migration, factory and policy with the domain-model generator (`--tenant`, plus `--soft-deletes` when asked). Its update action saves through `updateIfCurrent()`, its tests read stored rows past the workspace scope explicitly, and its index trail is rooted at the kit's home crumb.
+- Generated files end with exactly one newline, sortable models use `self::` and generated imports are sorted, so the output passes Pint's Laravel preset.
+
+### Removed
+
+- The `data-actions.tenant-model` and `data-actions.constraints` gap leaves. `data-actions.domain-model` replaces both.
+
 ## 0.11.6 - 2026-10-27
 
 ### Added

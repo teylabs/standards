@@ -40,7 +40,7 @@ final class Compiler
         'webhook' => ['signed'],
         'api-client' => ['sdk', 'http'],
         // Delegated to tey/mod's make:* generators; standards stamps the result.
-        'model' => ['plain'],
+        'model' => ['plain', 'domain'],
         'policy' => ['plain'],
         'job' => ['plain'],
         'notification' => ['plain'],

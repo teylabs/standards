@@ -5,8 +5,8 @@ it('deletes a selection only when every row is in the workspace', function () {
     $this->actingAs($this->owner);
 
     $this->deleteJson({{ var }}Url($this->workspace, '/selection'), ['ids' => [...$mine, $foreign]])->assertUnprocessable();
-    expect({{ name }}::query()->count())->toBe(3);
+    expect({{ name }}::withoutGlobalScope('workspace')->count())->toBe(3);
 
     $this->delete({{ var }}Url($this->workspace, '/selection'), ['ids' => $mine])->assertRedirect();
-    expect({{ name }}::query()->pluck('id')->all())->toBe([$foreign]);
+    expect({{ name }}::withoutGlobalScope('workspace')->pluck('id')->all())->toBe([$foreign]);
 });

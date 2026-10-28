@@ -1,0 +1,11 @@
+
+it('lets the database refuse a {{ enum_field }} outside {{ enum }}', function () {
+    ${{ var }} = {{ name }}::factory()->create();
+
+    expect(fn () => DB::table('{{ table }}')->where('id', ${{ var }}->id)->update(['{{ enum_field }}' => 'not-a-{{ enum_field }}']))->toThrow(QueryException::class)
+        ->and(DB::table('{{ table }}')->where('id', ${{ var }}->id)->value('{{ enum_field }}'))->toBe({{ enum }}::Draft->value);
+    foreach ({{ enum }}::cases() as $case) {
+        DB::table('{{ table }}')->where('id', ${{ var }}->id)->update(['{{ enum_field }}' => $case->value]);
+        expect(${{ var }}->fresh()->{{ enum_field }})->toBe($case);
+    }
+});

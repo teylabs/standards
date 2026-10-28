@@ -21,7 +21,7 @@ final class Create{{ name }}
         Gate::forUser(RequestMemo::user($principal->actorId))->authorize('create', [{{ name }}::class, Workspace::required()]);
 
         return DB::transaction(function () use ($principal, $workspace, $attributes): {{ name }} {
-            ${{ var }} = {{ name }}::query()->create(['workspace_id' => $workspace, 'name' => $attributes['name'], 'lock_version' => 1]);
+            ${{ var }} = {{ name }}::query()->create(['name' => $attributes['name']]);
             app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.create', ['id' => ${{ var }}->getKey()]);
 
             return ${{ var }};

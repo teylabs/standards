@@ -1,0 +1,22 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Models;
+
+{{ model_imports }}
+/** {{ model_doc }} */
+final class {{ name }} extends Model{{ model_implements }}
+{
+    use {{ model_traits }};
+
+    protected $table = '{{ table }}';
+
+    /** Set by the model itself, never mass-assigned. */
+    protected $guarded = [{{ model_guarded }}];
+
+    protected function casts(): array
+    {
+        return [{{ model_casts }}];
+    }
+{{ model_methods }}}

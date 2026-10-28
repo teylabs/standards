@@ -316,14 +316,15 @@ test('every ready leaf\'s make command emits code that passes standards:check in
         $calls = [];
         $files = (new Maker($base, $catalog, generators: array_values(Maker::DELEGATED), run: fakeModGenerator($base, $calls)))
             ->make($make[1], 'Ledger'.ucfirst(str_replace(['.', '-'], '', $id)), $make[2]);
-        expect(array_column($calls, 0))->toBe(isset(Maker::DELEGATED[$make[1]]) ? [Maker::DELEGATED[$make[1]]] : []);
+        expect(array_column($calls, 0))->toBe(Maker::delegates($make[1], $make[2]) ? [Maker::DELEGATED[$make[1]]] : []);
         $report = CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), $catalog);
 
         expect($files)->not->toBeEmpty()
             ->and($report['violations'])->toBe([])
             ->and($report['exit_code'])->toBe(0);
 
-        foreach ($files as $file) {
+        // composer.json is only ever an added autoload mapping (Database\\Factories), and JSON holds no stamp.
+        foreach (array_diff($files, ['composer.json']) as $file) {
             expect(file_get_contents($base.'/'.$file))->toContain('standards-pattern: ');
         }
     } finally {
@@ -636,8 +637,8 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
             'bootstrap/providers.php',
         );
         expect(file_get_contents($base.'/app/ViewModels/Invoices/InvoiceIndexViewModel.php'))->toContain('standards-pattern: ui-page.index')->toContain('extends ViewModel')->toContain("->bulk(new Action('Delete'")
-            ->and(file_get_contents($base.'/app/Actions/UpdateInvoice.php'))->toContain("->where('lock_version', \$version)")
-            ->and(file_get_contents($base.'/app/Models/Invoice.php'))->toContain('use SoftDeletes;')
+            ->and(file_get_contents($base.'/app/Actions/UpdateInvoice.php'))->toContain('->updateIfCurrent(')
+            ->and(file_get_contents($base.'/app/Models/Invoice.php'))->toContain('use BelongsToWorkspace, GuardsStaleWrites, HasFactory, SoftDeletes;')->toContain('standards-pattern: data-actions.domain-model')
             ->and(file_get_contents($base.'/routes/invoices.php'))->toContain("use App\\Http\\Controllers\\InvoiceSelectionController;\n")->toContain("prefix('invoices/selection')")
             ->and(file_get_contents($base.'/app/Mcp/Tools/UpdateInvoiceTool.php'))->toContain("#[Capability('invoices.write', scope: 'invoices.write')]")
             ->and(file_get_contents($base.'/bootstrap/providers.php'))->toContain("    // standards-pattern: ui-page.crud-resource\n    \\App\\Providers\\InvoiceServiceProvider::class,\n];")
@@ -654,6 +655,48 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
         expect(fn () => (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Invoice', 'resource'))->toThrow(InvalidArgumentException::class, 'never overwrites')
             ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Other', 'resource', null, ['archive']))->toThrow(InvalidArgumentException::class, 'Unknown option --archive')
             ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('page', 'Other', 'index', null, ['bulk']))->toThrow(InvalidArgumentException::class, 'Unknown option --bulk');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('make model emits a domain model with its migration, factory, enums and tests, and passes standards:check', function () {
+    $base = fixtureApp();
+
+    try {
+        $files = (new Maker($base, TreeCatalog::shipped()))->make('model', 'Invoice', 'domain', null, ['tenant', 'soft-deletes', 'sortable', 'media', 'enum=status:InvoiceStatus', 'enum=kind:InvoiceKind']);
+        $migration = (string) collect($files)->first(fn (string $file): bool => str_starts_with($file, 'database/migrations/'));
+
+        expect($files)->toContain('app/Models/Invoice.php', 'database/factories/InvoiceFactory.php', 'app/Enums/InvoiceStatus.php', 'app/Enums/InvoiceKind.php', 'app/Policies/InvoicePolicy.php', 'tests/Feature/Invoices/InvoiceModelTest.php')
+            ->and($migration)->toEndWith('_create_invoices_table.php')
+            ->and($files)->toContain('composer.json')
+            ->and(json_decode(file_get_contents($base.'/composer.json'), true)['autoload']['psr-4']['Database\\Factories\\'] ?? null)->toBe('database/factories/');
+        expect(file_get_contents($base.'/app/Models/Invoice.php'))->toContain('standards-pattern: data-actions.domain-model')
+            ->toContain('use BelongsToWorkspace, GuardsStaleWrites, HasFactory, InteractsWithMedia, SoftDeletes;')->not->toContain('use HasFactory, BelongsToWorkspace')
+            ->toContain("'status' => InvoiceStatus::class")->toContain('implements HasMedia')->toContain('function scopeOrdered')
+            ->toContain("protected \$guarded = ['id', 'lock_version', 'workspace_id', 'position'];");
+        expect(file_get_contents($base.'/'.$migration))->toContain("\$table->foreignId('workspace_id')->constrained()->restrictOnDelete();")
+            ->toContain("\$table->enum('status', ['draft', 'active', 'archived'])->default('draft');")->toContain("\$table->unique(['workspace_id', 'id']);")
+            ->toContain("\$table->index(['workspace_id', 'status']);")->toContain("\$table->unsignedInteger('lock_version')->default(1);")->toContain('$table->softDeletes();');
+        expect(file_get_contents($base.'/tests/Feature/Invoices/InvoiceModelTest.php'))->toContain('keeps invoices inside their workspace')->toContain('refuses a stale write to invoices')
+            ->toContain('lets the database refuse a status outside InvoiceStatus')->toContain('lets the database refuse a kind outside InvoiceKind')->not->toContain('->skip(')->not->toContain('markTestSkipped');
+        expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped())['violations'])->toBe([]);
+
+        // Without --tenant there is no workspace, no kit concern and no policy; the plain test proves the factory and the enum constraint.
+        $plain = (new Maker($base, TreeCatalog::shipped()))->make('model', 'Tag', 'domain', null, ['enum=state:TagState']);
+        expect($plain)->not->toContain('app/Policies/TagPolicy.php')
+            ->and(file_get_contents($base.'/app/Models/Tag.php'))->not->toContain('BelongsToWorkspace')->toContain('use HasFactory;')
+            ->and(file_get_contents($base.'/tests/Feature/Tags/TagModelTest.php'))->toContain('lets the database refuse a state outside TagState')->not->toContain('workspace');
+
+        expect(fn () => (new Maker($base, TreeCatalog::shipped(), kit: false))->make('model', 'Order', 'domain', null, ['tenant']))->toThrow(InvalidArgumentException::class, 'model --tenant needs tey/kit')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped(), kit: false))->make('crud', 'Order', 'resource'))->toThrow(InvalidArgumentException::class, 'crud needs tey/kit')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped(), media: false))->make('model', 'Order', 'domain', null, ['media']))->toThrow(InvalidArgumentException::class, '--media needs spatie/laravel-medialibrary')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('model', 'Order', 'domain', null, ['enum=Status']))->toThrow(InvalidArgumentException::class, 'must be --enum=<field>:<Enum>')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('model', 'Order', 'domain', null, ['enum=name:Named']))->toThrow(InvalidArgumentException::class, 'repeated or reserved')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('model', 'Order', 'domain', null, ['bulk']))->toThrow(InvalidArgumentException::class, 'Unknown option --bulk for model --flavor=domain')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('model', 'Invoice', 'domain'))->toThrow(InvalidArgumentException::class, 'never overwrites');
+        expect(is_file($base.'/app/Models/Order.php'))->toBeFalse();
+        expect(Maker::delegates('model', 'plain'))->toBeTrue()->and(Maker::delegates('model', 'domain'))->toBeFalse();
     } finally {
         (new Filesystem)->deleteDirectory($base);
     }

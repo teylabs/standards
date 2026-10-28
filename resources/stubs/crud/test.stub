@@ -66,7 +66,13 @@ function {{ var }}Inertia(): array
 
 function {{ var }}Make(int $workspace, string $name): {{ name }}
 {
-    return {{ name }}::query()->create(['workspace_id' => $workspace, 'name' => $name, 'lock_version' => 1]);
+    return app(TenantBoundary::class)->run($workspace, fn (): {{ name }} => {{ name }}::query()->create(['name' => $name]));
+}
+
+/** The row as stored, read past the workspace scope on purpose: what a request did, seen from outside any workspace. */
+function {{ var }}Stored(int $id): ?{{ name }}
+{
+    return {{ name }}::withoutGlobalScope('workspace')->find($id);
 }
 
 it('lists, creates, shows and edits {{ titles_lower }} for an owner', function () {
@@ -77,7 +83,7 @@ it('lists, creates, shows and edits {{ titles_lower }} for an owner', function (
     $this->get({{ var }}Url($this->workspace), {{ var }}Inertia())->assertOk()->assertJsonPath('component', '{{ plural }}/Index/Page')->assertJsonPath('props.table.rows.0.name', 'Bravo')->assertJsonCount(1, 'props.table.rows');
     $this->getJson({{ var }}Url($this->workspace, '?sort=secret'))->assertStatus(400);
     $this->post({{ var }}Url($this->workspace), ['name' => 'Alpha'])->assertRedirect()->assertSessionHasNoErrors();
-    $created = {{ name }}::query()->where('name', 'Alpha')->firstOrFail();
+    $created = {{ name }}::withoutGlobalScope('workspace')->where('name', 'Alpha')->firstOrFail();
     expect($created->workspace_id)->toBe($this->workspace)->and($created->lock_version)->toBe(1);
     $this->get({{ var }}Url($this->workspace, '/'.$created->id), {{ var }}Inertia())->assertOk()->assertJsonPath('props.record.name', 'Alpha');
     $this->get({{ var }}Url($this->workspace, '/'.$created->id.'/edit'), {{ var }}Inertia())->assertOk()->assertJsonPath('props.values.lock_version', 1);
@@ -90,7 +96,7 @@ it('refuses a stale save and keeps the newer one', function () {
     $this->put({{ var }}Url($this->workspace, '/'.${{ var }}->id), ['name' => 'Second', 'lock_version' => 1])->assertRedirect()->assertSessionHasNoErrors();
     $this->put({{ var }}Url($this->workspace, '/'.${{ var }}->id), ['name' => 'Stale', 'lock_version' => 1])->assertSessionHasErrors('lock_version');
 
-    expect(${{ var }}->fresh()->name)->toBe('Second')->and(${{ var }}->fresh()->lock_version)->toBe(2);
+    expect({{ var }}Stored(${{ var }}->id)->name)->toBe('Second')->and({{ var }}Stored(${{ var }}->id)->lock_version)->toBe(2);
 });
 
 it('keeps {{ titles_lower }} inside their workspace', function () {
@@ -100,7 +106,7 @@ it('keeps {{ titles_lower }} inside their workspace', function () {
     $this->get({{ var }}Url($this->workspace, '/'.$foreign->id), {{ var }}Inertia())->assertNotFound();
     $this->putJson({{ var }}Url($this->workspace, '/'.$foreign->id), ['name' => 'Moved', 'lock_version' => 1])->assertNotFound();
     $this->deleteJson({{ var }}Url($this->workspace, '/'.$foreign->id))->assertNotFound();
-    expect($foreign->fresh()->name)->toBe('Elsewhere');
+    expect({{ var }}Stored($foreign->id)->name)->toBe('Elsewhere');
 });
 
 it('refuses a signed-in person who is not a member of the workspace', function () {
@@ -111,7 +117,7 @@ it('refuses a signed-in person who is not a member of the workspace', function (
     expect($this->postJson({{ var }}Url($this->workspace), ['name' => 'Nope'])->status())->toBeIn([403, 404]);
     expect($this->putJson({{ var }}Url($this->workspace, '/'.${{ var }}->id), ['name' => 'Nope', 'lock_version' => 1])->status())->toBeIn([403, 404]);
     expect($this->deleteJson({{ var }}Url($this->workspace, '/'.${{ var }}->id))->status())->toBeIn([403, 404]);
-    expect({{ name }}::query()->count())->toBe(1)->and(${{ var }}->fresh()->name)->toBe('Bravo');
+    expect({{ name }}::withoutGlobalScope('workspace')->count())->toBe(1)->and({{ var }}Stored(${{ var }}->id)->name)->toBe('Bravo');
 });
 
 it('lets a viewer read but not write, and hides everything while the capability is off', function () {
@@ -124,6 +130,6 @@ it('lets a viewer read but not write, and hides everything while the capability 
 
     {{ var }}Capability($this->workspace, false);
     $this->get({{ var }}Url($this->workspace), {{ var }}Inertia())->assertNotFound();
-    expect(${{ var }}->fresh())->not->toBeNull();
+    expect({{ var }}Stored(${{ var }}->id))->not->toBeNull();
 });
 {{ bulk_test }}
