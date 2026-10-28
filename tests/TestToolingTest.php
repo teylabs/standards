@@ -204,7 +204,7 @@ test('php-tag allows only what PHP allows before the tag: a byte-order mark, the
 
 test('tooling rules honour exact ratchets and reject stale entries after a fix', function (string $rule) {
     $bad = new Conformance(toolingConfiguration('Bad'));
-    $entry = ['rule' => $rule, ...$bad->violations($rule)[0], 'reason' => 'Existing fixture adoption debt.', 'date' => '2026-10-24'];
+    $entry = ['rule' => $rule, ...$bad->violations($rule)[0], 'reason' => 'Existing fixture adoption debt.', 'date' => '2026-10-24', 'expires' => '2099-12-31'];
     (new Conformance(toolingConfiguration('Bad', [$entry])))->assert($rule);
     expect(fn () => (new Conformance(toolingConfiguration('Good', [$entry])))->assert($rule))->toThrow(AssertionFailedError::class, 'stale exception');
 })->with(['pest-only', 'php-tag', 'tia', 'boost']);

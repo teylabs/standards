@@ -110,3 +110,45 @@ test('presetIgnores leaves a modular app\'s module namespaces out of the Laravel
         (new Filesystem)->deleteDirectory($base);
     }
 });
+
+test('a vendor package squatting in the app\'s namespace (laravel/pint maps App\\ to its own app folder) is not the app\'s code: no crash, no finding, and the gate and Pest agree', function () {
+    $base = parityApp();
+
+    try {
+        // A dev tool that maps App\ to its own folder under vendor (as laravel/cloud-cli does), with a class in App\Concerns: the Laravel
+        // preset expects App\Concerns to hold traits, and Pest's vendor object for it has no path to report, which crashed the gate.
+        mkdir($base.'/vendor/acme/tool/app/Concerns', 0777, true);
+        file_put_contents($base.'/vendor/acme/tool/app/Concerns/Validates.php', "<?php\n\nnamespace App\\Concerns;\n\nclass Validates\n{\n}\n");
+        $autoload = (string) file_get_contents($base.'/vendor/autoload.php');
+        file_put_contents($base.'/vendor/autoload.php', str_replace('$loader->register(true);', '$loader->addPsr4(\'App\\\\\', '.var_export($base.'/vendor/acme/tool/app/', true).'); $loader->register(true);', $autoload));
+
+        $gate = new Process([PHP_BINARY, $base.'/gate.php'], $base);
+        $gate->mustRun();
+        $report = json_decode($gate->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $errors = array_values(array_filter($report['violations'], fn (array $finding): bool => $finding['kind'] === 'error'));
+
+        expect($errors)->toBe([])
+            ->and(array_column($report['violations'], 'target'))->not->toContain('App\\Concerns\\Validates');
+
+        $out = $base.'/pest-findings.json';
+        $pest = new Process([PHP_BINARY, $base.'/vendor/pestphp/pest/bin/pest', 'tests/Arch/ParityTest.php'], $base, ['STANDARDS_PARITY_OUT' => $out, 'CI' => false, 'PARATEST' => false, 'PEST_TIA' => false]);
+        $pest->run();
+        expect(is_file($out))->toBeTrue($pest->getOutput().$pest->getErrorOutput());
+        $viaPest = [];
+
+        foreach (json_decode((string) file_get_contents($out), true, flags: JSON_THROW_ON_ERROR) as $rule => $violations) {
+            if (! in_array((string) $rule, $report['skipped'], true)) {
+                foreach ($violations as $violation) {
+                    $viaPest[] = [(string) $rule, $violation['target'], $violation['check']];
+                }
+            }
+        }
+        $viaCheck = array_map(fn (array $finding): array => [$finding['rule'], $finding['target'], $finding['check']], $report['violations']);
+        sort($viaPest);
+        sort($viaCheck);
+
+        expect($viaCheck)->toBe($viaPest);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
