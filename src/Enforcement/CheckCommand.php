@@ -12,7 +12,7 @@ use Tey\Standards\Patterns\TreeCatalog;
 
 final class CheckCommand extends Command
 {
-    public $signature = 'standards:check {--changed : Only report findings in files changed against the base ref} {--file=* : Only report findings in these project-relative files} {--base= : Ref --changed compares against (default standards.base_ref)} {--json : Write the schema-1 drift JSON to stdout}';
+    public $signature = 'standards:check {--changed : Only report findings in files changed against the base ref} {--file=* : Only report findings in these project-relative files} {--base= : Ref --changed compares against (default standards.base_ref)} {--json : Write the schema-1 drift JSON to stdout} {--strict : Advisories fail too (exit 1), such as a rule that checked nothing}';
 
     public $description = 'Run every conformance rule and the allowlist; exit 1 on drift';
 
@@ -46,6 +46,10 @@ final class CheckCommand extends Command
             (int) $config->get('standards.expiring_days', 14),
             ChangedFiles::sha($base),
         );
+
+        if ($this->option('strict') && $report['advisories'] !== []) {
+            $report['exit_code'] = 1;
+        }
 
         if ($this->option('json')) {
             $this->line(json_encode($report, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));

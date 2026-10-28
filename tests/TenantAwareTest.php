@@ -98,9 +98,9 @@ test('a deliberate cross-tenant admin command is declared in the allowlist, with
 
 test('landlord housekeeping is not flagged: prune on a model with no tenant scope; the rule is off without the package', function () {
     $landlord = "use Illuminate\\Database\\Eloquent\\Builder;\nuse Illuminate\\Database\\Eloquent\\Model;\nuse Illuminate\\Database\\Eloquent\\Prunable;\n\nfinal class LoginAttempt extends Model\n{\n    use Prunable;\n\n    public function prunable(): Builder\n    {\n        return static::query()->where('old', true);\n    }\n}\n";
-    $base = tenantApp(['LoginAttempt.php' => $landlord]);
+    $base = tenantApp(['LoginAttempt.php' => $landlord, 'Ledger.php' => TENANT_MODEL]);
 
-    expect((new Conformance(tenantConfiguration($base)))->violations('tenant-aware'))->toBe([]);
+    expect((new Conformance(tenantConfiguration($base)))->violations('tenant-aware'))->toBe([], 'the landlord prune is not flagged (and a tenant model exists, so the rule checked something)');
 
     $plain = dirname(__DIR__).'/fixtures/Bad';
     file_put_contents($base.'/composer.json', '{}');
@@ -170,3 +170,83 @@ function fixtureAppForTenancy(): string
 
     return $base;
 }
+
+test('a single-database app scoped by a column is detected by default: fillable, migration column, global scope or tenant trait', function () {
+    $command = fn (string $model): string => "use Illuminate\\Console\\Command;\n\nfinal class Touch{$model}Command extends Command\n{\n    public function handle(): int\n    {\n        return {$model}::query()->count();\n    }\n}\n";
+    $model = fn (string $name, string $body = ''): string => "use Illuminate\\Database\\Eloquent\\Model;\n\nfinal class {$name} extends Model\n{\n{$body}}\n";
+    $base = tenantApp([
+        'Note.php' => $model('Note', "    protected \$fillable = ['workspace_id', 'body'];\n"),
+        'Invoice.php' => $model('Invoice'),
+        'Slide.php' => $model('Slide', "    protected static function booted(): void\n    {\n        static::addGlobalScope('workspace', fn (\$query) => \$query->where('workspace_id', 1));\n    }\n"),
+        'Deck.php' => "use Illuminate\\Database\\Eloquent\\Model;\nuse FixtureScratch\\Concerns\\BelongsToWorkspace;\n\nfinal class Deck extends Model\n{\n    use BelongsToWorkspace;\n}\n",
+        'Country.php' => $model('Country'),
+        'TouchNoteCommand.php' => $command('Note'),
+        'TouchInvoiceCommand.php' => $command('Invoice'),
+        'TouchSlideCommand.php' => $command('Slide'),
+        'TouchDeckCommand.php' => $command('Deck'),
+        'TouchCountryCommand.php' => $command('Country'),
+    ]);
+    file_put_contents($base.'/composer.json', json_encode(['require' => ['tey/kit' => '^0.4']]));
+    mkdir($base.'/database/migrations', 0777, true);
+    file_put_contents($base.'/database/migrations/2026_01_01_000000_create_invoices_table.php', "<?php\n\nreturn new class {\n    public function up(): void\n    {\n        Illuminate\\Support\\Facades\\Schema::create('invoices', function (\$table) {\n            \$table->id();\n            \$table->foreignId('workspace_id')->constrained();\n        });\n        Illuminate\\Support\\Facades\\Schema::create('countries', function (\$table) {\n            \$table->id();\n        });\n    }\n};\n");
+    $checks = array_column((new Conformance(tenantConfiguration($base)))->violations('tenant-aware'), 'check');
+    sort($checks);
+
+    expect($checks)->toBe([
+        'FixtureScratch\\TouchDeckCommand touches tenant-scoped FixtureScratch\\Deck without TenantAware',
+        'FixtureScratch\\TouchInvoiceCommand touches tenant-scoped FixtureScratch\\Invoice without TenantAware',
+        'FixtureScratch\\TouchNoteCommand touches tenant-scoped FixtureScratch\\Note without TenantAware',
+        'FixtureScratch\\TouchSlideCommand touches tenant-scoped FixtureScratch\\Slide without TenantAware',
+    ], 'fillable, migration column, global scope and tenant trait each detect; Country (no tenant key) does not');
+
+    // An explicit tenantModels is the whole answer: only Note.
+    expect(array_column((new Conformance(tenantConfiguration($base, ['tenantModels' => ['FixtureScratch\\Note']])))->violations('tenant-aware'), 'check'))
+        ->toBe(['FixtureScratch\\TouchNoteCommand touches tenant-scoped FixtureScratch\\Note without TenantAware']);
+});
+
+test('tenancy with no tenant-scoped model found is an advisory (checked nothing), never a silent pass; the gate fails it only under --strict', function () {
+    $base = tenantApp(['Country.php' => "use Illuminate\\Database\\Eloquent\\Model;\n\nfinal class Country extends Model\n{\n}\n"]);
+    $violations = (new Conformance(tenantConfiguration($base)))->violations('tenant-aware');
+
+    expect($violations)->toHaveCount(1)
+        ->and($violations[0])->toMatchArray(['advisory' => true, 'check' => 'tenant-aware checked nothing: no tenant-scoped model found'])
+        ->and($violations[0]['hint'])->toContain('Configuration::$tenantModels');
+
+    $gate = (new Tey\Standards\Enforcement\Gate(tenantConfiguration($base), new DateTimeImmutable('2026-10-28')))->run();
+    $advisories = array_values(array_filter($gate['advisories'], fn (array $a): bool => $a['rule'] === 'tenant-aware'));
+
+    expect(array_filter($gate['violations'], fn (array $v): bool => $v['rule'] === 'tenant-aware'))->toBe([])
+        ->and($advisories)->toHaveCount(1)
+        ->and($advisories[0]['check'])->toBe('tenant-aware checked nothing: no tenant-scoped model found');
+
+    // Without any tenancy package the rule is simply off: no advisory.
+    file_put_contents($base.'/composer.json', '{}');
+    expect((new Conformance(tenantConfiguration($base)))->violations('tenant-aware'))->toBe([]);
+});
+
+test('standards:check passes with the checked-nothing advisory, and fails it under --strict', function () {
+    $base = tenantApp(['Country.php' => "use Illuminate\\Database\\Eloquent\\Model;\n\nfinal class Country extends Model\n{\n}\n"]);
+    mkdir($base.'/tests/Arch', 0777, true);
+    $arguments = get_object_vars(tenantConfiguration($base));
+    unset($arguments['base']);
+    $export = implode('', array_map(fn (string $name, mixed $value): string => '    '.$name.': '.var_export($value, true).",\n", array_keys($arguments), $arguments));
+    file_put_contents($base.'/tests/Arch/configuration.php', "<?php\n\nreturn new Tey\\Standards\\Configuration(\n    base: dirname(__DIR__, 2),\n".$export.");\n");
+    $run = function (array $options) use ($base): Symfony\Component\Console\Tester\CommandTester {
+        $app = new Illuminate\Foundation\Application($base);
+        $app->instance('config', new Illuminate\Config\Repository(['standards' => ['base_ref' => 'origin/main']]));
+        $command = new Tey\Standards\Enforcement\CheckCommand;
+        $command->setLaravel($app);
+        $tester = new Symfony\Component\Console\Tester\CommandTester($command);
+        $tester->execute($options);
+
+        return $tester;
+    };
+
+    $plain = $run(['--json' => true]);
+    $report = json_decode($plain->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+    expect(array_column(array_filter($report['advisories'], fn (array $a): bool => $a['rule'] === 'tenant-aware'), 'check'))->toBe(['tenant-aware checked nothing: no tenant-scoped model found'])
+        ->and(array_filter($report['violations'], fn (array $v): bool => $v['rule'] === 'tenant-aware'))->toBe([]);
+
+    $strict = $run(['--json' => true, '--strict' => true]);
+    expect($strict->getStatusCode())->toBe(1)->and(json_decode($strict->getDisplay(), true, flags: JSON_THROW_ON_ERROR)['exit_code'])->toBe(1);
+});

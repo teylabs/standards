@@ -102,6 +102,13 @@ final class Conformance
             Assert::markTestSkipped('Rule ['.$rule.'] is advisory until listed in Configuration::optionalRules ('.count($violations).' findings).');
         }
 
+        // A finding the check marks advisory (a rule that checked nothing) is never a silent pass under Pest either: the test is skipped, saying why.
+        $advisory = array_values(array_filter($violations, fn (array $violation): bool => ($violation['advisory'] ?? false) === true));
+
+        if ($advisory !== []) {
+            Assert::markTestSkipped(implode("\n", array_map(fn (array $violation): string => $violation['check'].'. '.($violation['hint'] ?? ''), $advisory)));
+        }
+
         $failures = $this->ratchet->failures($rule, $violations);
         expect($failures)->toBe([], implode("\n", $failures));
     }

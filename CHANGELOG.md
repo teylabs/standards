@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Rule `tenant-aware` no longer fails open.** A single-database app scoped by a `workspace_id` column (no `UsesTenantConnection`) matched no model with the default `tenantModels`, so the rule reported zero findings while seven commands and jobs needed fixing.
+  - **Default detection now also finds** models with a tenant-style trait, a tenant global scope, or a tenant key in `$fillable` or in their table's migration. `Configuration::$tenantKeys` defaults to `workspace_id` and `tenant_id`.
+  - **`tenantModels`**, when set, stays the whole answer.
+  - **The rule is now on** for apps requiring tey/kit or tey/concierge, as well as spatie/laravel-multitenancy.
+  - **An active rule that finds no tenant-scoped model** reports the advisory "tenant-aware checked nothing", and the Pest test is skipped with the same reason, never a silent pass.
+
+### Added
+
+- **`standards:check --strict`:** advisories fail too (exit 1).
+- A check's finding can mark itself advisory. The gate lists it under `advisories`, outside the ratchet.
+- The README has a section for single-database, column-scoped apps.
+
+## Unreleased
+
 ### Added
 
 - **Preflight `deploy.migrate`:** every deploy must run `php artisan migrate --force`, since packages rely on `MigrationsEnded` and `NoPendingMigrations` firing on each deploy.

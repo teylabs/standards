@@ -466,8 +466,20 @@ The handler runs in the transaction that marks the call processed, so a handler 
 - **Nothing else enters a tenant for this rule:** app-side boundaries, `$tenant->execute()` or `makeCurrent()` in a plain command are still reported. The only exceptions:
   - a deliberate cross-tenant admin command, declared in the allowlist with a `reason` and an `expires`, so it stays visible and expires;
   - a landlord prune whose `prunable()` bypasses the scope.
-- **What counts as tenant-scoped:** a model that uses one of `Configuration::$tenantModels`' traits, or is or extends one of its classes. The default is `Spatie\Multitenancy\Models\Concerns\UsesTenantConnection`; add an app's own tenant-scope trait or base model there.
-- **When it runs:** the rule is on when the app requires spatie/laravel-multitenancy, or names its own `tenantModels`. Each finding gives the file and line (`path:line` in `standards:check`, `line` in `--json`) and a fix. The allowlist key stays target and check, so an entry survives edits to the file.
+- **What counts as tenant-scoped:** `Configuration::$tenantModels`, when the app sets it, is the whole answer (traits a model uses, or classes it is or extends). Otherwise the rule detects:
+  - Spatie's `UsesTenantConnection`;
+  - a tenant-style trait (`BelongsToTenant`, `BelongsToWorkspace`, `TenantScoped` and the like);
+  - a global scope that names a tenant (`addGlobalScope` with a tenant scope class or a closure on a tenant key, or `#[ScopedBy]` a tenant scope);
+  - a tenant key (`Configuration::$tenantKeys`, default `workspace_id` and `tenant_id`) in `$fillable`, or as a column of the model's table in `database/migrations`.
+- **When it runs:** when the app requires spatie/laravel-multitenancy, tey/kit or tey/concierge, or sets `tenantModels`.
+- **It never passes silently:** an active rule that finds no tenant-scoped model reports the advisory "tenant-aware checked nothing", because no command or job was checked. `standards:check` lists it (`~`); `standards:check --strict` fails on it, as on any advisory; the Pest test is skipped with the same reason.
+- **Findings:** each gives the file and line (`path:line` in `standards:check`, `line` in `--json`) and a fix. The allowlist key stays target and check, so an entry survives edits to the file.
+
+**Single-database, column-scoped apps.** An app whose tenants share one database and are told apart by a column (a `workspace_id` on each tenant table, with no `UsesTenantConnection`) is detected by default from that column: in `$fillable`, in its migrations, or in a tenant global scope or trait.
+
+- If its tenant key has another name, set `tenantKeys: ['account_id']`.
+- If detection still misses models (a key only in `$guarded`, a table made by raw SQL), name them: `tenantModels: [Note::class, Deck::class, ...]` or their shared trait or base class. That list then replaces detection entirely.
+- Run `php artisan standards:check --strict` once after upgrading. A "checked nothing" advisory means the rule saw no tenant models and needs one of these settings.
 
 `standards:make command` and `standards:make job` follow the same pattern in a multitenancy app.
 
