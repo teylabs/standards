@@ -7,6 +7,7 @@ use PHPUnit\Framework\AssertionFailedError;
 use Symfony\Component\Process\Process;
 use Tey\Standards\Checks\Boost;
 use Tey\Standards\Checks\PestOnly;
+use Tey\Standards\Checks\PhpTag;
 use Tey\Standards\Checks\Tia;
 use Tey\Standards\Configuration;
 use Tey\Standards\Conformance;
@@ -152,12 +153,61 @@ test('Boost reports missing guidelines and a missing generated block', function 
     expect(array_column((new Boost($this->toolingConfig))->violations(), 'target'))->toBe(['.ai/guidelines', 'AGENTS.md']);
 });
 
+test('php-tag fails a PHP file without the opening tag, which PHP would print instead of run, and passes a normal one', function () {
+    mkdir($this->toolingBase.'/tests/Feature', 0777, true);
+    file_put_contents($this->toolingBase.'/tests/Feature/FragmentTest.php', "it('never runs', function () {\n    expect(true)->toBeTrue();\n});\n");
+    file_put_contents($this->toolingBase.'/tests/Feature/NormalTest.php', "<?php\n\nit('runs', fn () => expect(true)->toBeTrue());\n");
+    expect((new PhpTag($this->toolingConfig))->violations())->toBe([['target' => 'tests/Feature/FragmentTest.php', 'check' => 'does not open with <?php: PHP prints it as text and runs nothing']]);
+
+    unlink($this->toolingBase.'/tests/Feature/FragmentTest.php');
+    expect((new PhpTag($this->toolingConfig))->violations())->toBe([]);
+
+    // Templates open with markup, not the tag, and are not checked: Blade anywhere (a module's views live under a source root), plain PHP under resources/views.
+    $views = $this->toolingBase.'/app/Modules/Billing/resources/views/invoices';
+    mkdir($views, 0777, true);
+    file_put_contents($views.'/show.blade.php', "<x-layout>\n    <h1>{{ \$invoice->number }}</h1>\n</x-layout>\n");
+    file_put_contents($views.'/receipt.php', "<p>Paid <?= e(\$amount) ?></p>\n");
+    mkdir($this->toolingBase.'/app/Modules/Billing/Http', 0777, true);
+    file_put_contents($this->toolingBase.'/tests/Feature/mail.blade.php', "<p>Hello</p>\n");
+    $modules = new Configuration(...array_replace(get_object_vars($this->toolingConfig), ['sourceRoots' => ['app']]));
+    expect((new PhpTag($modules))->violations())->toBe([]);
+    // A PHP class beside them is still checked.
+    file_put_contents($this->toolingBase.'/app/Modules/Billing/Http/InvoiceController.php', "namespace App\\Modules\\Billing\\Http;\n");
+    expect(array_column((new PhpTag($modules))->violations(), 'target'))->toBe(['app/Modules/Billing/Http/InvoiceController.php']);
+    // The Good fixture's own module view, under its `src` source root, passes as it is.
+    $good = new Configuration(...array_replace(get_object_vars($this->toolingConfig), ['sourceRoots' => ['src']]));
+    expect(is_file($this->toolingBase.'/src/Modules/Billing/resources/views/show.blade.php'))->toBeTrue()->and((new PhpTag($good))->violations())->toBe([]);
+    expect(PhpTag::template('resources/views/welcome.php'))->toBeTrue()->and(PhpTag::template('app/Views/Composer.php'))->toBeFalse()->and(PhpTag::template('lang/en/auth.php'))->toBeFalse();
+    // Nothing to check under a test root that does not exist yet.
+    $config = new Configuration(...array_replace(get_object_vars($this->toolingConfig), ['testRoots' => ['tests', 'spec']]));
+    expect((new PhpTag($config))->violations())->toBe([]);
+});
+
+test('php-tag allows only what PHP allows before the tag: a byte-order mark, then a shebang line', function (string $contents, bool $opens) {
+    expect(PhpTag::opens($contents))->toBe($opens);
+})->with([
+    'plain' => ["<?php\n", true],
+    'upper case' => ["<?PHP\nreturn 1;\n", true],
+    'tag at the end of the file' => ['<?php', true],
+    'byte-order mark' => ["\xEF\xBB\xBF<?php\n", true],
+    'shebang' => ["#!/usr/bin/env php\n<?php\n", true],
+    'byte-order mark and shebang' => ["\xEF\xBB\xBF#!/usr/bin/env php\n<?php\n", true],
+    'no tag' => ["it('x', fn () => true);\n", false],
+    'empty' => ['', false],
+    'leading blank line' => ["\n<?php\n", false],
+    'leading space' => [" <?php\n", false],
+    'short tag' => ["<?\necho 1;\n", false],
+    'short echo' => ["<?= 'x' ?>\n", false],
+    'tag glued to code' => ["<?phpecho 1;\n", false],
+    'shebang without a tag' => ["#!/usr/bin/env php\necho 1;\n", false],
+]);
+
 test('tooling rules honour exact ratchets and reject stale entries after a fix', function (string $rule) {
     $bad = new Conformance(toolingConfiguration('Bad'));
     $entry = ['rule' => $rule, ...$bad->violations($rule)[0], 'reason' => 'Existing fixture adoption debt.', 'date' => '2026-10-24'];
     (new Conformance(toolingConfiguration('Bad', [$entry])))->assert($rule);
     expect(fn () => (new Conformance(toolingConfiguration('Good', [$entry])))->assert($rule))->toThrow(AssertionFailedError::class, 'stale exception');
-})->with(['pest-only', 'tia', 'boost']);
+})->with(['pest-only', 'php-tag', 'tia', 'boost']);
 
 test('default Boost skills use the names Boost 2.10 ships', function () {
     $skills = (new ReflectionClass(Configuration::class))->getConstructor()->getParameters();
