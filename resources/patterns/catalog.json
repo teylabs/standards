@@ -1581,7 +1581,10 @@
                 "replace from source",
                 "import from",
                 "google",
-                "provider sync"
+                "provider sync",
+                "import from google",
+                "sync from a service",
+                "connect an external account"
             ],
             "status": "draft",
             "components": [
@@ -1632,7 +1635,9 @@
                 "control room",
                 "real time",
                 "stage and panels",
-                "live show"
+                "live show",
+                "presenter console",
+                "control room"
             ],
             "status": "draft",
             "components": [
@@ -1681,7 +1686,11 @@
                 "full screen output",
                 "big screen",
                 "audience screen",
-                "display screen"
+                "display screen",
+                "projector screen",
+                "tv display",
+                "room display",
+                "screen in the room"
             ],
             "status": "draft",
             "rules": [
@@ -1718,7 +1727,10 @@
                 "live poll",
                 "guest chat",
                 "audience participation",
-                "join code"
+                "join code",
+                "audience voting",
+                "vote on phones",
+                "guests react"
             ],
             "status": "draft",
             "rules": [
@@ -1750,7 +1762,10 @@
                 "paired screen",
                 "second screen",
                 "clicker",
-                "pairing"
+                "pairing",
+                "control slides from my phone",
+                "from my phone",
+                "phone as a remote"
             ],
             "status": "draft",
             "rules": [
@@ -3369,7 +3384,16 @@
                 "invite to a record",
                 "single record",
                 "share one",
-                "external collaborator"
+                "external collaborator",
+                "invite a guest to one record",
+                "invite a guest to one resource",
+                "guest to one resource",
+                "guest presenter",
+                "guest reviewer",
+                "share one record",
+                "share one record with an outsider",
+                "outsider",
+                "let someone into one record"
             ],
             "status": "draft",
             "rules": [
@@ -3402,7 +3426,9 @@
                 "phone remote",
                 "paired screen",
                 "second device",
-                "remote control"
+                "remote control",
+                "pairing link",
+                "pair a second screen"
             ],
             "status": "draft",
             "rules": [
