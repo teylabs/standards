@@ -119,7 +119,8 @@ final class Gate
                 $seen[$key] = true;
 
                 if (! isset($allowed[$key]) && $this->inScope($violation['target'], $paths)) {
-                    $violations[] = $this->finding($rule, 'violation', $violation['target'], $violation['check']);
+                    // A check may name the line and its own fix; the ratchet key stays target and check, so an allowlist entry survives edits.
+                    $violations[] = $this->finding($rule, 'violation', $violation['target'], $violation['check'], $violation['hint'] ?? null, $violation['line'] ?? null);
                 }
             }
 
@@ -212,9 +213,9 @@ final class Gate
     }
 
     /** @return array{rule: string, kind: string, target: string, check: string, hint: string} */
-    private function finding(string $rule, string $kind, string $target, string $check, ?string $hint = null): array
+    private function finding(string $rule, string $kind, string $target, string $check, ?string $hint = null, ?int $line = null): array
     {
-        return ['rule' => $rule, 'kind' => $kind, 'target' => $target, 'check' => $check, 'hint' => $hint ?? $this->hint($rule)];
+        return ['rule' => $rule, 'kind' => $kind, 'target' => $target, 'check' => $check, 'hint' => $hint ?? $this->hint($rule), ...($line === null ? [] : ['line' => $line])];
     }
 
     private function hint(string $rule): string
