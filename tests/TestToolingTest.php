@@ -161,6 +161,23 @@ test('php-tag fails a PHP file without the opening tag, which PHP would print in
 
     unlink($this->toolingBase.'/tests/Feature/FragmentTest.php');
     expect((new PhpTag($this->toolingConfig))->violations())->toBe([]);
+
+    // Templates open with markup, not the tag, and are not checked: Blade anywhere (a module's views live under a source root), plain PHP under resources/views.
+    $views = $this->toolingBase.'/app/Modules/Billing/resources/views/invoices';
+    mkdir($views, 0777, true);
+    file_put_contents($views.'/show.blade.php', "<x-layout>\n    <h1>{{ \$invoice->number }}</h1>\n</x-layout>\n");
+    file_put_contents($views.'/receipt.php', "<p>Paid <?= e(\$amount) ?></p>\n");
+    mkdir($this->toolingBase.'/app/Modules/Billing/Http', 0777, true);
+    file_put_contents($this->toolingBase.'/tests/Feature/mail.blade.php', "<p>Hello</p>\n");
+    $modules = new Configuration(...array_replace(get_object_vars($this->toolingConfig), ['sourceRoots' => ['app']]));
+    expect((new PhpTag($modules))->violations())->toBe([]);
+    // A PHP class beside them is still checked.
+    file_put_contents($this->toolingBase.'/app/Modules/Billing/Http/InvoiceController.php', "namespace App\\Modules\\Billing\\Http;\n");
+    expect(array_column((new PhpTag($modules))->violations(), 'target'))->toBe(['app/Modules/Billing/Http/InvoiceController.php']);
+    // The Good fixture's own module view, under its `src` source root, passes as it is.
+    $good = new Configuration(...array_replace(get_object_vars($this->toolingConfig), ['sourceRoots' => ['src']]));
+    expect(is_file($this->toolingBase.'/src/Modules/Billing/resources/views/show.blade.php'))->toBeTrue()->and((new PhpTag($good))->violations())->toBe([]);
+    expect(PhpTag::template('resources/views/welcome.php'))->toBeTrue()->and(PhpTag::template('app/Views/Composer.php'))->toBeFalse()->and(PhpTag::template('lang/en/auth.php'))->toBeFalse();
     // Nothing to check under a test root that does not exist yet.
     $config = new Configuration(...array_replace(get_object_vars($this->toolingConfig), ['testRoots' => ['tests', 'spec']]));
     expect((new PhpTag($config))->violations())->toBe([]);

@@ -5,6 +5,7 @@
 ### Added
 
 - **`php-tag` rule** (`standards:check`, `Conformance::TESTS`): every `*.php` file under the test roots and the source roots must open with `<?php`. Without the tag, PHP treats a test file as plain text: Pest prints it and runs nothing, so a whole spec goes dark without a failure. The rule allows only what PHP allows before the tag, a UTF-8 byte-order mark and then a `#!` line, and names each offending file as an error.
+  - Templates aren't checked: `*.blade.php` anywhere, and any `*.php` under a `resources/views` directory. A tey/mod module keeps its views under a source root (`app/Modules/<Module>/resources/views`).
   - The new `testRoots` setting (default `['tests']`) says where test files live. A root that doesn't exist yet is skipped.
   - Existing debt can be ratcheted like any rule.
 

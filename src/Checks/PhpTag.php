@@ -10,6 +10,8 @@ use Tey\Standards\Source;
 /**
  * Every PHP file under the test roots and the source roots opens with `<?php`. A file without it is plain text to PHP: Pest prints it and runs nothing, so a whole
  * spec goes dark without a failure. Only what PHP itself allows may come first: a UTF-8 byte-order mark, then a `#!` line (skipped in included files too).
+ * Templates are not checked: a `*.blade.php` file anywhere, and any `*.php` under a `resources/views` directory (a plain PHP template starts with its HTML).
+ * A module layout keeps both under the source roots (`app/Modules/<Module>/resources/views`).
  */
 final readonly class PhpTag
 {
@@ -27,6 +29,12 @@ final readonly class PhpTag
         return preg_match('/\A<\?php(?:\s|\z)/i', $contents) === 1;
     }
 
+    /** A view template, which legitimately opens with markup: Blade anywhere, or plain PHP under a `resources/views` directory. */
+    public static function template(string $path): bool
+    {
+        return str_ends_with($path, '.blade.php') || str_starts_with($path, 'resources/views/') || str_contains($path, '/resources/views/');
+    }
+
     /** @return list<array{target: string, check: string}> */
     public function violations(): array
     {
@@ -35,6 +43,9 @@ final readonly class PhpTag
         $violations = [];
 
         foreach ((new Source($this->config))->files($roots) as $path => $contents) {
+            if (self::template($path)) {
+                continue;
+            }
             if (! self::opens($contents)) {
                 $violations[] = ['target' => $path, 'check' => 'does not open with <?php: PHP prints it as text and runs nothing'];
             }
