@@ -18,7 +18,7 @@
 - A check's finding can mark itself advisory. The gate lists it under `advisories`, outside the ratchet.
 - The README has a section for single-database, column-scoped apps.
 
-## Unreleased
+## 0.11.17 - 2026-10-28
 
 ### Added
 
