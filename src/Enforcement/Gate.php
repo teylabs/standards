@@ -148,6 +148,12 @@ final class Gate
             }
         }
 
+        // A configured root that does not exist yet: each rule skips it; a full run reports it once here, as configuration, never as drift (a --changed
+        // run is about the changed files).
+        foreach ($paths === null ? (new Source($config))->missingRoots() : [] as $root) {
+            $advisories[] = $this->finding('configuration', 'advisory', $root, 'configured root does not exist; every rule skips it until it does', 'Create the folder when it gets its first file, or remove it from tests/Arch/configuration.php if it is not used.');
+        }
+
         return [
             'violations' => $violations,
             'allowlist' => ['count' => count($ratchet->entries()), 'expiring' => $expiring, 'expired' => $expired],

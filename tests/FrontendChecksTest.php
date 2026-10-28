@@ -174,7 +174,8 @@ test('frontend declarations and explicit missing roots are checked', function ()
     try {
         $preset = new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['client']]));
         expect($preset->violations('js-imports'))->toBe([['target' => 'client/types.d.ts', 'check' => 'undeclared package import: missing-types']]);
-        expect(fn () => (new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['missing']])))->violations('js-imports'))->toThrow(InvalidArgumentException::class, 'does not exist');
+        // A frontend root that does not exist yet has nothing to check (Gate reports it once as configuration).
+        expect((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['missing']])))->violations('js-imports'))->toBe([]);
         unlink($base.'/package.json');
         expect($preset->violations('js-imports'))->toBe([['target' => 'package.json', 'check' => 'missing package manifest for frontend imports']]);
     } finally {
