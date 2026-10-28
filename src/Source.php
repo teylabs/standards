@@ -20,6 +20,21 @@ final class Source
 
     public function __construct(private readonly Configuration $config) {}
 
+    /**
+     * The configured roots that name a folder that does not exist (globs that match nothing are not counted: they may match later), each once.
+     *
+     * @return list<string>
+     */
+    public function missingRoots(): array
+    {
+        $config = $this->config;
+        $roots = [...array_keys($config->classRoots), ...$config->sourceRoots, ...$config->uiRoots, ...$config->controllerRoots, ...$config->routeRoots, ...$config->viewModelRoots, ...$config->pageRoots, ...$config->discoveryRoots, ...($config->frontendRoots ?? [])];
+        $missing = array_filter(array_unique($roots), fn (string $root): bool => ! str_contains($root, '*') && ! is_dir($config->base.'/'.$root));
+        sort($missing);
+
+        return array_values($missing);
+    }
+
     /** @param list<string> $roots
      * @return array<string, string>
      */
@@ -30,9 +45,8 @@ final class Source
         foreach ($roots as $root) {
             $directories = glob($this->config->base.'/'.$root, GLOB_ONLYDIR) ?: [];
 
-            if ($directories === [] && ! str_contains($root, '*')) {
-                throw new InvalidArgumentException("Conformance root [{$root}] does not exist.");
-            }
+            // A configured root that does not exist yet (a fresh module with no controllers) has nothing to check: skipped, never a crash.
+            // Gate reports it once as a configuration advisory (Source::missingRoots()).
 
             foreach ($directories as $directory) {
                 foreach ((new Finder)->files()->in($directory)->name($pattern)->exclude(['vendor', 'node_modules']) as $file) {

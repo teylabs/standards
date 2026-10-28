@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- **A configured root that doesn't exist no longer crashes a rule.** A controller, ViewModel, page, source or frontend root naming a folder that isn't there yet (a fresh module with no controllers, an app before its first controller) made `Source` throw, so `standards:check` reported the toast, rule 21 and other rules as errors. Every rule now skips the missing root.
+  - A full run reports each missing root once as a `configuration` advisory, never as drift; a `--changed` run doesn't mention it.
+  - Globs that match nothing aren't counted.
+  - Tested with a fixture whose configuration names a missing module controller, ViewModel and page root, and no `app/Http/Controllers`.
+
+## Unreleased
+
+### Fixed
+
 - **`standards:make` generators fit any host**, not only a laravel app with the whole kit. Reported from a modular host: a tey/mod layout extending `modules`, kit core only. There, `standards:make workbench SlideWorkbench` wrote into the base `app/` folders, named every file `SlideWorkbenchWorkbench*`, imported the unaliased `@kit/ui`, and used kit workspaces the app had not adopted. Across every unit (crud, model, workbench, page, action, capability-tool, settings-section, command, webhook, api-client):
   - **Placement goes through tey/mod** in a layout that places by a dimension, with the new `--module=<Name>` (required there). Class names, namespaces, page render names (`<Module>::<name>`) and route-file paths follow in every generated file. A laravel host gets exactly the files it got before.
   - **A unit's suffix is never doubled.** `SlideWorkbench`, `BillingSettings` and `ReadPostsTool` are base names plus their suffix.
