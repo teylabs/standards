@@ -478,7 +478,7 @@ test('mod-generated units delegate to tey/mod and get stamped; stub units never 
 
 test('the kit export snapshot refreshes from a kit checkout and an installed kit that differs only warns', function () {
     $kit = sys_get_temp_dir().'/standards-kit-'.bin2hex(random_bytes(6));
-    $barrel = "export { default as Button } from './Button.vue';\nexport { default as DataTable, helper } from './DataTable.vue';\nexport { Sheet, SheetContent } from './Sheet';\nexport { useThing } from './x';\nexport { default as Zebra } from './Zebra.vue';\n";
+    $barrel = "export { default as Button } from './Button.vue';\nexport { default as DataTable, helper } from './DataTable.vue';\nexport { Sheet, SheetContent } from './Sheet';\nexport { useThing } from './x';\nexport { DOCUMENT, FALLBACK, type WorkbenchItem } from './Workbench/workbench';\nexport { default as Zebra } from './Zebra.vue';\n";
 
     try {
         mkdir(dirname($kit.'/'.KitExports::BARREL), 0777, true);
@@ -655,6 +655,44 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
         expect(fn () => (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Invoice', 'resource'))->toThrow(InvalidArgumentException::class, 'never overwrites')
             ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Other', 'resource', null, ['archive']))->toThrow(InvalidArgumentException::class, 'Unknown option --archive')
             ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('page', 'Other', 'index', null, ['bulk']))->toThrow(InvalidArgumentException::class, 'Unknown option --bulk');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('make workbench emits a Workbench page with its wiring, reorder guard, inspector and test, and passes standards:check', function () {
+    $base = fixtureApp();
+
+    try {
+        $files = (new Maker($base, TreeCatalog::shipped(), kit: true))->make('workbench', 'Deck', 'page');
+
+        expect($files)->toBe([
+            'app/Providers/DeckWorkbenchServiceProvider.php', 'app/Policies/DeckWorkbenchPolicy.php', 'routes/decks-workbench.php',
+            'app/Http/Controllers/DeckWorkbenchController.php', 'app/Http/Controllers/DeckWorkbenchOrderController.php', 'app/Http/Requests/UpdateDeckWorkbenchOrderRequest.php',
+            'app/Actions/ReorderDeckWorkbench.php', 'app/Queries/DeckWorkbenchItems.php', 'app/ViewModels/Decks/DeckWorkbenchViewModel.php',
+            'resources/js/pages/Decks/Workbench/Page.vue', 'resources/js/pages/Decks/Workbench/Inspectors/DeckItemInspector.vue', 'tests/Feature/Decks/DeckWorkbenchTest.php',
+            'bootstrap/providers.php',
+        ]);
+        foreach (array_slice($files, 0, -1) as $file) {
+            expect(file_get_contents($base.'/'.$file))->toContain('standards-pattern: '.($file === 'app/Actions/ReorderDeckWorkbench.php' ? 'data-actions.action' : 'ui-page.workbench'));
+        }
+        expect(file_get_contents($base.'/app/ViewModels/Decks/DeckWorkbenchViewModel.php'))->toContain('final class DeckWorkbenchViewModel extends WorkbenchViewModel')
+            ->toContain("return 'decks';")->toContain("new WorkbenchInspector('item', 'Deck')")->toContain("new Action('Reorder'")
+            ->and(file_get_contents($base.'/resources/js/pages/Decks/Workbench/Page.vue'))->toContain("import { Workbench, useWorkbench } from '@kit/ui';")->toContain("wb.defineInspector('item', DeckItemInspector);")
+                ->toContain('<Workbench :workbench-key="workbenchKey"')->toContain(':layout="workbenchLayout"')->toContain('<template #stage>')
+            ->and(file_get_contents($base.'/app/Actions/ReorderDeckWorkbench.php'))->toContain('public function handle(Principal $principal, int $workspace, array $order, int $version): int')->toContain("throw new RuntimeException('stale_write');")
+            ->and(file_get_contents($base.'/app/Providers/DeckWorkbenchServiceProvider.php'))->toContain("->errors(['stale_write' => 409])")->toContain("->routes(base_path('routes/decks-workbench.php'))")
+            ->and(file_get_contents($base.'/routes/decks-workbench.php'))->toContain("Route::put('order', 'update');")->toContain("WorkspaceRoutes::page(Route::get('', 'show')")
+            ->and(file_get_contents($base.'/bootstrap/providers.php'))->toContain("    // standards-pattern: ui-page.workbench\n    \\App\\Providers\\DeckWorkbenchServiceProvider::class,\n];")
+            ->and(file_get_contents($base.'/tests/Feature/Decks/DeckWorkbenchTest.php'))->toContain('refuses a stale one, which changes nothing')->toContain("assertJsonPath('error', 'stale_write')")
+                ->toContain('lets a viewer open the workbench but not rearrange it')->not->toContain('markTestSkipped')->not->toContain('->skip(')->not->toContain('fixture.php');
+        expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-28'), TreeCatalog::shipped())['violations'])->toBe([]);
+
+        expect(fn () => (new Maker($base, TreeCatalog::shipped(), kit: true))->make('workbench', 'Deck', 'page'))->toThrow(InvalidArgumentException::class, 'never overwrites')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped(), kit: false))->make('workbench', 'Slide', 'page'))->toThrow(InvalidArgumentException::class, 'workbench needs tey/kit 0.4.20')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped(), kit: true))->make('workbench', 'Slide', 'page', null, ['bulk']))->toThrow(InvalidArgumentException::class, 'Unknown option --bulk')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped(), kit: true))->make('workbench', 'Slide', 'editor'))->toThrow(InvalidArgumentException::class, 'Unknown unit or flavor');
+        expect(is_file($base.'/app/Queries/SlideWorkbenchItems.php'))->toBeFalse();
     } finally {
         (new Filesystem)->deleteDirectory($base);
     }

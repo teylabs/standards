@@ -34,6 +34,8 @@ final class Compiler
         'capability-tool' => ['read', 'write'],
         'settings-section' => ['form', 'toggles'],
         'crud' => ['resource'],
+        // A Workbench page (pattern ui-page.workbench): tey/kit's multi-pane editor over a sequence of items.
+        'workbench' => ['page'],
         // Operator commands (pattern background.command): stubs on Tey\Standards\Operator, not tey/mod's make:command.
         'command' => ['backfill', 'maintenance', 'report'],
         // Integrations (patterns integrations.webhook and integrations.api-client).

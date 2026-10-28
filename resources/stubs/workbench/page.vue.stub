@@ -1,0 +1,33 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+import { Workbench, useWorkbench } from '@kit/ui';
+import {{ name }}ItemInspector from './Inspectors/{{ name }}ItemInspector.vue';
+
+type Item = { id: string; label: string; type: string | null; description: string | null };
+type Descriptor = { label: string; url: string; method: string; key?: string | null };
+const props = defineProps<{
+    title: string;
+    workbenchKey: string;
+    items: Item[];
+    current: string | null;
+    actions: Descriptor[];
+    reorder: Descriptor | null;
+    version: string | number | null;
+    workbenchLayout: { state: { layout: Record<string, unknown> | null; version: number } | null; preference: { url: string; method: string } | null };
+}>();
+
+// The inspector follows the stage's selection: one per item type; nothing selected shows the `@document` inspector (register one for the whole page).
+const wb = useWorkbench(props.workbenchKey);
+wb.defineInspector('item', {{ name }}ItemInspector);
+</script>
+
+<template>
+    <Workbench :workbench-key="workbenchKey" :label="title" :items="items" :current="current" :reorder="reorder" :version="version" :layout="workbenchLayout" :actions="actions">
+        <template #stage>
+            <div class="grid h-full place-items-center p-6" data-{{ slug }}-stage>
+                <button v-if="wb.currentItem" type="button" class="rounded-lg border border-border bg-card px-6 py-10 text-lg font-medium" @click="wb.select(wb.currentItem.id, $event)">{{ wb.currentItem.label }}</button>
+                <p v-else class="text-sm text-muted-foreground">Choose an item in the navigator.</p>
+            </div>
+        </template>
+    </Workbench>
+</template>

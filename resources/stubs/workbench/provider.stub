@@ -1,0 +1,30 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Providers;
+
+use {{ namespace }}\Policies\{{ name }}WorkbenchPolicy;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\ServiceProvider;
+use Tey\Kit\Features\Core\Registry;
+
+/**
+ * Wires the {{ title_lower }} workbench into the kit: the `{{ perm }}` capability (off until switched on, in `kit.capabilities` or per workspace), a permission to
+ * view it and one to rearrange it, the routes and the navigation entry. A stale reorder is the `stale_write` refusal, answered 409 (the page rolls back).
+ */
+final class {{ name }}WorkbenchServiceProvider extends ServiceProvider
+{
+    public function boot(Registry $registry): void
+    {
+        Gate::define('{{ perm }}.workbench.view', [{{ name }}WorkbenchPolicy::class, 'view']);
+        Gate::define('{{ perm }}.workbench.reorder', [{{ name }}WorkbenchPolicy::class, 'reorder']);
+        $registry->capabilities([{{ name }}WorkbenchPolicy::CAPABILITY])
+            ->permission('{{ perm }}.view', ['owner', 'admin', 'viewer'], {{ name }}WorkbenchPolicy::CAPABILITY, ['{{ perm }}.read'])
+            ->permission('{{ perm }}.update', ['owner', 'admin'], {{ name }}WorkbenchPolicy::CAPABILITY, ['{{ perm }}.write'])
+            ->abilities(['{{ perm }}.read' => {{ name }}WorkbenchPolicy::CAPABILITY])
+            ->errors(['stale_write' => 409])
+            ->routes(base_path('routes/{{ slug }}-workbench.php'))
+            ->navigation('{{ perm }}.read', '{{ titles }}', '{{ slug }}/workbench', active: '{{ slug }}');
+    }
+}

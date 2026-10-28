@@ -1,0 +1,120 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Policies\{{ name }}WorkbenchPolicy;
+use {{ namespace }}\Queries\{{ name }}WorkbenchItems;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Tey\Concierge\Actions\AcceptInvitation;
+use Tey\Concierge\Actions\EstablishWorkspace;
+use Tey\Concierge\Actions\InviteMember;
+use Tey\Concierge\Support\GrantSet;
+use Tey\Kit\Features\Access\Capabilities;
+use Tey\Kit\Features\SessionUi\Http\Middleware\HandleInertiaRequests;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+use Tey\Kit\Features\Workspaces\TenantBoundary;
+
+// The {{ title_lower }} workbench over HTTP. Self-contained: each test migrates the app's empty test database (SQLite memory by default) and makes its own people.
+// Two workspaces, each with an owner; the first also has a viewer; and one signed-in person who belongs to neither. Nothing here reads a seeded fixture.
+
+beforeEach(function () {
+    // No provider side effects: the viewer's invitation is accepted in place, never delivered.
+    config(['concierge.invitations.deliver' => false]);
+    Cache::flush();
+    Artisan::call('migrate', ['--force' => true, '--no-interaction' => true]);
+    Artisan::call('concierge:sync-roles', ['--no-interaction' => true]);
+    Artisan::call('kit:permissions:sync', ['--no-interaction' => true]);
+    $person = fn (string $name): Authenticatable => config('auth.providers.users.model')::query()->forceCreate(['name' => $name, 'email' => strtolower($name).'@example.test', 'email_verified_at' => now(), 'password' => Hash::make(Str::random(40))]);
+    $this->owner = $person('Owner');
+    $this->viewer = $person('Viewer');
+    $this->stranger = $person('Stranger');
+    $open = function (string $name, Authenticatable $owner): int {
+        $workspace = Workspace::query()->create(['name' => $name, 'slug' => strtolower($name)]);
+        EstablishWorkspace::run($workspace, $owner);
+
+        return (int) $workspace->getKey();
+    };
+    $this->workspace = $open('Alpha', $this->owner);
+    $this->otherWorkspace = $open('Beta', $person('Other'));
+    AcceptInvitation::run($this->viewer, InviteMember::run($this->owner, Workspace::query()->findOrFail($this->workspace), $this->viewer->email, new GrantSet(['viewer']))->token);
+    foreach ([$this->workspace, $this->otherWorkspace] as $workspace) {
+        {{ var }}WorkbenchCapability($workspace, true);
+    }
+});
+
+function {{ var }}WorkbenchCapability(int $workspace, bool $on): void
+{
+    app(TenantBoundary::class)->run($workspace, fn () => app(Capabilities::class)->setForWorkspace({{ name }}WorkbenchPolicy::CAPABILITY, Workspace::query()->findOrFail($workspace), $on));
+}
+
+/** The full-form URL of the workbench in a workspace: `/@<slug>/{{ slug }}/workbench...`. */
+function {{ var }}WorkbenchUrl(int $workspace, string $path = ''): string
+{
+    return '/@'.Workspace::query()->findOrFail($workspace)->slug.'/{{ slug }}/workbench'.$path;
+}
+
+/** @return array<string, string> the headers of an Inertia visit, so the page answers with its props */
+function {{ var }}WorkbenchInertia(): array
+{
+    return ['X-Inertia' => 'true', 'Accept' => 'text/html', 'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')) ?? ''];
+}
+
+/** @return list<string> the stored order of a workspace's items */
+function {{ var }}WorkbenchOrder(int $workspace): array
+{
+    return array_column(app({{ name }}WorkbenchItems::class)->read($workspace)['items'], 'id');
+}
+
+it('opens the workbench with its items, inspectors, reorder action, version and remembered layout', function () {
+    $this->actingAs($this->owner);
+
+    $this->get({{ var }}WorkbenchUrl($this->workspace), {{ var }}WorkbenchInertia())->assertOk()
+        ->assertJsonPath('component', '{{ plural }}/Workbench/Page')
+        ->assertJsonPath('props.workbenchKey', '{{ slug }}')
+        ->assertJsonCount(3, 'props.items')
+        ->assertJsonPath('props.current', 'first')
+        ->assertJsonPath('props.inspectors.1.type', 'item')
+        ->assertJsonPath('props.reorder.method', 'put')
+        ->assertJsonPath('props.version', 0)
+        ->assertJsonPath('props.workbenchLayout.preference.url', '/me/workbenches/{{ slug }}');
+});
+
+it('saves a new order at the current version and refuses a stale one, which changes nothing', function () {
+    $this->actingAs($this->owner);
+
+    $this->putJson({{ var }}WorkbenchUrl($this->workspace, '/order'), ['order' => ['third', 'first', 'second'], 'version' => 0])->assertOk()->assertJsonPath('version', 1);
+    expect({{ var }}WorkbenchOrder($this->workspace))->toBe(['third', 'first', 'second']);
+
+    $this->putJson({{ var }}WorkbenchUrl($this->workspace, '/order'), ['order' => ['first', 'second', 'third'], 'version' => 0])->assertStatus(409)->assertJsonPath('error', 'stale_write');
+    expect({{ var }}WorkbenchOrder($this->workspace))->toBe(['third', 'first', 'second']);
+
+    $this->putJson({{ var }}WorkbenchUrl($this->workspace, '/order'), ['order' => ['first', 'second'], 'version' => 1])->assertStatus(422);
+    $this->putJson({{ var }}WorkbenchUrl($this->workspace, '/order'), ['order' => ['first', 'first', 'second'], 'version' => 1])->assertStatus(422);
+    expect({{ var }}WorkbenchOrder($this->workspace))->toBe(['third', 'first', 'second'])
+        ->and({{ var }}WorkbenchOrder($this->otherWorkspace))->toBe(['first', 'second', 'third']);
+});
+
+it('lets a viewer open the workbench but not rearrange it', function () {
+    $this->actingAs($this->viewer);
+
+    $this->get({{ var }}WorkbenchUrl($this->workspace), {{ var }}WorkbenchInertia())->assertOk()->assertJsonPath('props.reorder', null);
+    $this->putJson({{ var }}WorkbenchUrl($this->workspace, '/order'), ['order' => ['third', 'first', 'second'], 'version' => 0])->assertForbidden();
+    expect({{ var }}WorkbenchOrder($this->workspace))->toBe(['first', 'second', 'third']);
+});
+
+it('refuses a signed-in person who is not a member, and hides the workbench while the capability is off', function () {
+    $this->actingAs($this->stranger);
+    expect($this->getJson({{ var }}WorkbenchUrl($this->workspace))->status())->toBeIn([403, 404]);
+    expect($this->putJson({{ var }}WorkbenchUrl($this->workspace, '/order'), ['order' => ['third', 'first', 'second'], 'version' => 0])->status())->toBeIn([403, 404]);
+
+    $this->actingAs($this->owner);
+    {{ var }}WorkbenchCapability($this->workspace, false);
+    $this->get({{ var }}WorkbenchUrl($this->workspace), {{ var }}WorkbenchInertia())->assertNotFound();
+    $this->putJson({{ var }}WorkbenchUrl($this->workspace, '/order'), ['order' => ['third', 'first', 'second'], 'version' => 0])->assertNotFound();
+    expect({{ var }}WorkbenchOrder($this->workspace))->toBe(['first', 'second', 'third']);
+});

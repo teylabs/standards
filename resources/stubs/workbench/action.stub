@@ -1,0 +1,42 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Actions;
+
+use {{ namespace }}\Queries\{{ name }}WorkbenchItems;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
+use Tey\Kit\Features\Core\Principal;
+
+/**
+ * The one place the workbench's order changes; the controller and an MCP tool call it. It takes the order only at the version it was made against: a stale
+ * version is refused (`stale_write`, 409) and nothing changes. The order must name every item exactly once.
+ */
+final class Reorder{{ name }}Workbench
+{
+    public function __construct(private readonly {{ name }}WorkbenchItems $items) {}
+
+    /**
+     * @param  list<string>  $order
+     * @return int the new version
+     */
+    public function handle(Principal $principal, int $workspace, array $order, int $version): int
+    {
+        return Cache::lock({{ name }}WorkbenchItems::key($workspace).'.lock', 10)->block(5, function () use ($workspace, $order, $version): int {
+            $current = $this->items->read($workspace);
+            if ($version !== $current['version']) {
+                throw new RuntimeException('stale_write');
+            }
+            $byId = array_column($current['items'], null, 'id');
+            if (count($order) !== count($byId) || array_diff($order, array_keys($byId)) !== []) {
+                throw ValidationException::withMessages(['order' => 'The order must name every item exactly once.']);
+            }
+            $next = ['items' => array_map(fn (string $id): array => $byId[$id], $order), 'version' => $current['version'] + 1];
+            Cache::forever({{ name }}WorkbenchItems::key($workspace), $next);
+
+            return $next['version'];
+        });
+    }
+}

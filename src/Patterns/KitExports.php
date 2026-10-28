@@ -40,7 +40,8 @@ final class KitExports
                 $parts = preg_split('/\s+as\s+/', trim($part)) ?: [];
                 $name = trim((string) end($parts));
 
-                if (preg_match('/^[A-Z][A-Za-z0-9]*$/D', $name) === 1) {
+                // Components are PascalCase; an all-caps export is a constant (a reserved type name), not a component.
+                if (preg_match('/^[A-Z][A-Za-z0-9]*$/D', $name) === 1 && preg_match('/[a-z]/', $name) === 1) {
                     $names[] = $name;
                 }
             }

@@ -53,7 +53,7 @@ nodes:
     question: Is it a full set of CRUD screens, or a workflow page beyond CRUD?
     options:
       - { answer: "Index, form and show screens for one record type", next: ui-page.crud-resource }
-      - { answer: "A bespoke workflow page", next: ui-page.workbench }
+      - { answer: "A workbench: edit a sequence of items with a live preview", next: ui-page.workbench }
       - { answer: "An activity stream", next: ui-page.activity-feed }
       - { answer: "None of these", next: ui-page.larger.byo }
   - id: ui-page.public
@@ -215,16 +215,24 @@ nodes:
     status: ready
     evidence: { apps: 7, count: 15, prs: 15, past_apps: 33, past_count: 312 }
   - id: ui-page.workbench
-    recipe: Workflow page
-    summary: A bespoke workflow page beyond CRUD still gets route, controller, typed ViewModel, page and test from one skeleton.
-    kit: []
+    recipe: Workbench page
+    summary: >-
+      A multi-pane editor for a sequence of items with a live preview (slides and their blocks, a valuation and its comparables) on tey/kit's Workbench (0.4.20+):
+      a navigator, the stage (an optional sticky toolbar and a resizable footer) and an inspector that follows the stage's selection; three resizable columns from
+      xl, the inspector in a drawer at lg and tabs below, the layout remembered per person. `standards:make workbench <Name>` emits the kit wiring (capability,
+      permissions, routes, navigation), a policy, the page and order controllers, a principal-first Reorder Action guarded by a version (a stale one is 409 and
+      the page rolls back), a stand-in item Query to replace with your model, a typed WorkbenchViewModel, Page.vue with one inspector, and a feature test.
+    kit: ['@kit/ui Workbench', '@kit/ui WorkbenchNavigator', '@kit/ui WorkbenchInspector', '@kit/ui WorkbenchZoom']
     components:
-      - { name: "panes", kit_component: SplitPane, use: "A list beside its detail", props_hint: "default slots" }
-      - { name: "tabs", kit_component: PaneTabs, use: "Tabs inside a pane", props_hint: "tabs" }
-    checks: ['20', '21']
-    paths: []
-    keywords: [workflow, workbench, wizard, bespoke page]
-    status: gap
+      - { name: "workbench", kit_component: Workbench, use: "The navigator, stage, footer and inspector regions with the actions bar", props_hint: "workbench-key, items, layout, reorder, version, actions" }
+      - { name: "navigator", kit_component: WorkbenchNavigator, use: "The items as a filterable, reorderable listbox (the default navigator)", props_hint: "workbench-key, label" }
+      - { name: "inspector", kit_component: WorkbenchInspector, use: "The inspector registered for the selection's type (the default inspector)", props_hint: "workbench-key" }
+      - { name: "zoom", kit_component: WorkbenchZoom, use: "Fit to width, fit to page and zoom steps for the stage", props_hint: "workbench-key" }
+    make: standards:make workbench --flavor=page
+    checks: ['20', '21', 'actions', 'descriptors', 'js-imports']
+    paths: ['resources/js/pages/**/Workbench/Page.vue', 'app/**/Queries/**WorkbenchItems.php']
+    keywords: [workflow, workbench, editor, slide editor, sequence, live preview, inspector, multi-pane, bespoke page]
+    status: ready
     evidence: { apps: 5, count: 25, prs: 25, past_apps: 10, past_count: 40 }
   - id: ui-page.dashboard-widget
     recipe: Dashboard widget

@@ -1,0 +1,20 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Http\Controllers\{{ name }}WorkbenchController;
+use {{ namespace }}\Http\Controllers\{{ name }}WorkbenchOrderController;
+use Illuminate\Support\Facades\Route;
+use Tey\Kit\Features\Workspaces\WorkspaceRoutes;
+
+// The {{ title_lower }} workbench: a workspace page in the full (`/@{workspace}/{{ slug }}/workbench`) and short forms, and its order. Loaded through the kit Registry.
+WorkspaceRoutes::define(function (bool $full): void {
+    Route::prefix('{{ slug }}/workbench')->group(function () use ($full): void {
+        Route::controller({{ name }}WorkbenchController::class)->group(function () use ($full): void {
+            WorkspaceRoutes::page(Route::get('', 'show'), $full, 'app', '{{ slug }}.workbench', '{{ titles }}', ['session-ui', 'home']);
+        });
+        Route::controller({{ name }}WorkbenchOrderController::class)->group(function (): void {
+            Route::put('order', 'update');
+        });
+    });
+});

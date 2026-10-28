@@ -1,0 +1,34 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Queries;
+
+use Illuminate\Support\Facades\Cache;
+
+/**
+ * The workbench's items and their version, per workspace. A stand-in to replace with your own model (a deck's slides, a valuation's comparables): it keeps the
+ * order in the cache so the generated page and tests run before you have one. Read only; Reorder{{ name }}Workbench writes.
+ */
+final class {{ name }}WorkbenchItems
+{
+    /** The starting items, until you read your own. @var list<array{id: string, label: string, type: string}> */
+    public const DEFAULT = [
+        ['id' => 'first', 'label' => 'First item', 'type' => 'item'],
+        ['id' => 'second', 'label' => 'Second item', 'type' => 'item'],
+        ['id' => 'third', 'label' => 'Third item', 'type' => 'item'],
+    ];
+
+    /** @return array{items: list<array{id: string, label: string, type: string}>, version: int} */
+    public function read(int $workspace): array
+    {
+        $stored = Cache::get(self::key($workspace));
+
+        return is_array($stored) ? $stored : ['items' => self::DEFAULT, 'version' => 0];
+    }
+
+    public static function key(int $workspace): string
+    {
+        return '{{ slug }}.workbench.'.$workspace;
+    }
+}

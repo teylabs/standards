@@ -1,0 +1,44 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Policies;
+
+use Illuminate\Auth\Access\Response;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Tey\Kit\Features\Access\Capabilities;
+use Tey\Kit\Features\Access\Entitlements;
+use Tey\Kit\Features\Access\Permissions;
+use Tey\Kit\Features\Core\Users;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+
+/**
+ * Who may open the {{ title_lower }} workbench and rearrange it. The `{{ perm }}` capability gates first: while it is off or out of the plan every answer is a
+ * 404, so the page, its link and its tool are absent. Then the member's permission in the workspace decides. Capability, entitlement and permission stay separate.
+ */
+final class {{ name }}WorkbenchPolicy
+{
+    public const CAPABILITY = '{{ perm }}';
+
+    public function view(Authenticatable $user, Workspace $workspace): Response|bool
+    {
+        return $this->allows($user, '{{ perm }}.view', $workspace);
+    }
+
+    public function reorder(Authenticatable $user, Workspace $workspace): Response|bool
+    {
+        return $this->allows($user, '{{ perm }}.update', $workspace);
+    }
+
+    private function allows(Authenticatable $user, string $permission, ?Workspace $workspace): Response|bool
+    {
+        if ($workspace === null || ! Users::is($user)) {
+            return Response::denyAsNotFound();
+        }
+        if (! app(Capabilities::class)->active(self::CAPABILITY, $workspace, $user) || ! app(Entitlements::class)->included(self::CAPABILITY, $workspace)) {
+            return Response::denyAsNotFound();
+        }
+
+        return app(Permissions::class)->allows($user, $permission, $workspace);
+    }
+}

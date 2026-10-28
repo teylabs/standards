@@ -1,0 +1,12 @@
+id: sequence-editor
+summary: Edit a sequence of items with a live preview. People pick an item in a navigator, work on it in the stage and change its settings in an inspector that follows the selection.
+keywords: [edit a sequence, live preview, slide editor, deck editor, workbench, reorder items, inspector, multi-pane editor]
+questions:
+  - { id: records, question: "Is each item a record of its own (a model per item)?", options: ["yes", "no"] }
+  - { id: mcp, question: "Should an AI assistant be able to read it?", options: ["yes", "no"] }
+composition:
+  - { unit_leaf_id: ui-page.workbench, role: "scaffold: standards:make workbench" }
+  - { unit_leaf_id: data-actions.action, role: reorder and edits }
+  - { unit_leaf_id: ui-page.toast, role: save confirmation }
+  - { unit_leaf_id: data-actions.domain-model, role: "items: replace the stand-in item Query with a domain model", when: records=yes }
+  - { unit_leaf_id: mcp.read, role: "assistant read access (tey/kit's WorkbenchReadTool)", when: mcp=yes }
