@@ -54,7 +54,7 @@ final class CheckCommand extends Command
         }
 
         foreach ($report['violations'] as $violation) {
-            $this->line("<fg=red>✗</> [{$violation['rule']}] {$violation['kind']}: {$violation['target']} — {$violation['check']}");
+            $this->line("<fg=red>✗</> [{$violation['rule']}] {$violation['kind']}: {$violation['target']}".(isset($violation['line']) ? ':'.$violation['line'] : '')." — {$violation['check']}");
             $this->line('    fix: '.$violation['hint']);
         }
 

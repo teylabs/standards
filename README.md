@@ -440,6 +440,26 @@ The handler runs in the transaction that marks the call processed, so a handler 
 - `Fake<Provider>Client`, its provider, `services.<provider>` keys and `.env.example` lines;
 - tests that bind the Fake under `Http::preventStrayRequests()`, so no test reaches the service.
 
+**Rule `tenant-aware`.** In an app on spatie/laravel-multitenancy, work that touches tenant-scoped models runs inside a tenant, and only one pattern counts: the package's own. A job that runs outside any tenant does not fail; it silently finds nothing.
+
+- **Commands:** an artisan command (extending `Illuminate\Console\Command`) that names a tenant-scoped model uses `Spatie\Multitenancy\Commands\Concerns\TenantAware`, with `{--tenant=*}` in its signature, so it runs once per tenant.
+- **Queued jobs:** a job (`ShouldQueue`) that names one must be tenant-aware as the app's `config/multitenancy.php` decides.
+  - It implements `Spatie\Multitenancy\Jobs\TenantAware`, or is listed in `tenant_aware_jobs`, or queues are tenant-aware by default (`queues_are_tenant_aware_by_default`, true unless set) and it isn't listed in `not_tenant_aware_jobs`.
+  - A job that implements `NotTenantAware` and touches a tenant-scoped model is reported.
+- **`model:prune`:** it runs outside any tenant, so a tenant-scoped `Prunable` or `MassPrunable` model must have `prunable()` bypass the scope (`withoutGlobalScopes()`). That marks it as landlord or cross-tenant housekeeping by design; otherwise it prunes nothing.
+- **Dispatching inside `execute()`:** `$tenant->execute(fn () => dispatch(…))` or `fn () => Job::dispatch(…)` loses the tenant. A `PendingDispatch` queues when it is destroyed, which is after `execute()` has restored the previous tenant. Use a block closure (`function () { Job::dispatch(…); }`), or `Bus::dispatch($job)`.
+- **Nothing else enters a tenant for this rule:** app-side boundaries, `$tenant->execute()` or `makeCurrent()` in a plain command are still reported. The only exceptions:
+  - a deliberate cross-tenant admin command, declared in the allowlist with a `reason` and an `expires`, so it stays visible and expires;
+  - a landlord prune whose `prunable()` bypasses the scope.
+- **What counts as tenant-scoped:** a model that uses one of `Configuration::$tenantModels`' traits, or is or extends one of its classes. The default is `Spatie\Multitenancy\Models\Concerns\UsesTenantConnection`; add an app's own tenant-scope trait or base model there.
+- **When it runs:** the rule is on when the app requires spatie/laravel-multitenancy, or names its own `tenantModels`. Each finding gives the file and line (`path:line` in `standards:check`, `line` in `--json`) and a fix. The allowlist key stays target and check, so an entry survives edits to the file.
+
+`standards:make command` and `standards:make job` follow the same pattern in a multitenancy app.
+
+- A command gets `use TenantAware;` and `{--tenant=*}`.
+- A job gets `implements ShouldQueue, TenantAware`.
+- With `--landlord`, a command gets neither, and a job implements `NotTenantAware` so it never waits for a tenant. Both carry a comment saying they're landlord-only and must not touch tenant-scoped models.
+
 **Rule `integrations` (advisory).** A route whose URI mentions `webhook` must reach a handler that verifies its sender: spatie/laravel-webhook-client with a configured validator, Cashier's controller, or a controller that verifies a signature. And an `Http::` call belongs in a class that implements a contract; a service provider defining macros is exempt. Both checks read names, not behaviour, so they are reported as advisories (`~` in `standards:check`) until an app lists `integrations` in `Configuration::optionalRules`.
 
 ## Self-enforcing conformance

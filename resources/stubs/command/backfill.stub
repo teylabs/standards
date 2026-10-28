@@ -6,7 +6,7 @@ namespace {{ namespace }}\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Tey\Standards\Operator\Operator;
+{{ tenant_use }}use Tey\Standards\Operator\Operator;
 use Tey\Standards\Operator\OperatorRun;
 
 /**
@@ -14,13 +14,13 @@ use Tey\Standards\Operator\OperatorRun;
  * name typed back; one run at a time; a re-run skips rows already done. Edit TABLE, COLUMN and value() for the real backfill: the operator contract
  * (Operator::run) stays as it is.
  */
-final class {{ name }} extends Command
+{{ tenant_note }}final class {{ name }} extends Command
 {
-    public const TABLE = '{{ table }}';
+{{ tenant_trait }}    public const TABLE = '{{ table }}';
 
     public const COLUMN = '{{ column }}';
 
-    protected $signature = 'app:{{ slug }} {--apply : Write the changes (without it, a dry run)} {--force : Allow --apply in production, after typing the command name} {--chunk=500 : Rows per batch}';
+    protected $signature = 'app:{{ slug }} {--apply : Write the changes (without it, a dry run)} {--force : Allow --apply in production, after typing the command name} {--chunk=500 : Rows per batch}{{ tenant_option }}';
 
     protected $description = 'Backfill '.self::TABLE.'.'.self::COLUMN.' (dry run unless --apply)';
 

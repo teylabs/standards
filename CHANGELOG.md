@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Upgrading
+
+- **New rule `tenant-aware`, on in apps that require spatie/laravel-multitenancy.** A command or queued job that touches tenant-scoped models without Spatie's `TenantAware` (or a tenant-aware queue config) now fails the gate. So do a `NotTenantAware` job that touches them, a tenant-scoped prunable model whose `prunable()` keeps the scope, and `execute(fn () => dispatch(…))`. Fix each one the package's way (README), or declare a deliberate cross-tenant admin command in the allowlist with a reason and an expiry.
+
+### Added
+
+- **Rule `tenant-aware`** (README): spatie/laravel-multitenancy's `TenantAware` command trait and `TenantAware`/`NotTenantAware` job interfaces, read with the app's `queues_are_tenant_aware_by_default`, `tenant_aware_jobs` and `not_tenant_aware_jobs`.
+  - It also checks landlord prunes, and the dispatch-in-an-arrow-fn gotcha inside `execute()`.
+  - Findings give the file and line, and a fix.
+  - `Configuration::$tenantModels` names what makes a model tenant-scoped (default: Spatie's `UsesTenantConnection`).
+- **`standards:make command` and `job` emit Spatie's `TenantAware`** in a multitenancy app. `--landlord` opts out: the class says it's landlord-only, and a job implements `NotTenantAware`.
+- A check's finding may carry a `line` and its own `hint`. `standards:check` prints `path:line`, and `--json` adds `line`. Allowlist keys are unchanged.
+
+### Fixed
+
+- `standards:make webhook` decided whether the app had spatie/laravel-multitenancy from this package's own environment. It now reads the app's composer.json or vendor.
+
 ## 0.11.14 - 2026-10-28
 
 ### Upgrading
