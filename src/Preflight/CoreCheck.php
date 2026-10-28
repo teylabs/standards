@@ -18,7 +18,7 @@ use Throwable;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate'];
 
     /**
      * SHA-256 of upstream public/favicon.ico, favicon.svg and apple-touch-icon.png.
@@ -127,6 +127,7 @@ final readonly class CoreCheck implements Check
             'brand.favicon' => $this->favicon(),
             'ci.triggers' => $this->ciTriggers(),
             'nightwatch.ready' => $this->nightwatchReady(),
+            'deploy.migrate' => $this->deployMigrate(),
             default => throw new InvalidArgumentException('Unknown core check: '.$this->check),
         };
     }
@@ -163,6 +164,84 @@ final readonly class CoreCheck implements Check
         }
 
         return Result::pass('Nightwatch runtime dependency, config and sampling rates are ready. Laravel Cloud → Connect Nightwatch is the only remaining deploy step.');
+    }
+
+    /**
+     * Every deploy runs `php artisan migrate --force`: packages rely on Laravel's MigrationsEnded / NoPendingMigrations events firing on each deploy.
+     * Read from what the repo commits: the configured preflight.deploy.script, a Laravel Cloud config (cloud.yml, .cloud/), Forge or Envoyer scripts
+     * (deploy.sh, .forge/, .envoyer/, Envoy.blade.php), a deploy workflow, or a composer `deploy` script. Laravel Cloud's dashboard isn't readable from
+     * the repo, so finding nothing is a warning naming how to declare the script, never a pass.
+     */
+    private function deployMigrate(): Result
+    {
+        $distribution = (new CiTriggers($this->base, distribution: $this->config->get('preflight.ci.distribution')))->distribution();
+
+        if ($distribution === 'package') {
+            return new Result(Status::Skipped, 'Not applicable to packages.');
+        }
+
+        $sources = [];
+
+        foreach ((array) $this->config->get('preflight.deploy.script', []) as $configured) {
+            if (is_string($configured) && $configured !== '') {
+                $path = $this->base.'/'.ltrim($configured, '/');
+                $sources[$configured] = is_file($path) ? (string) file_get_contents($path) : null;
+            }
+        }
+
+        $patterns = ['cloud.yml', 'cloud.yaml', '.cloud/*', 'deploy.sh', 'deploy', '.forge/*', 'forge-deploy.sh', '.envoyer/*', 'Envoy.blade.php', 'envoy.blade.php', 'scripts/deploy*', 'bin/deploy*', '.github/workflows/*deploy*.yml', '.github/workflows/*deploy*.yaml'];
+
+        foreach ($patterns as $pattern) {
+            foreach (glob($this->base.'/'.$pattern) ?: [] as $file) {
+                if (is_file($file)) {
+                    $sources[substr($file, strlen($this->base) + 1)] = (string) file_get_contents($file);
+                }
+            }
+        }
+
+        $composer = is_readable($this->base.'/composer.json') ? json_decode((string) file_get_contents($this->base.'/composer.json'), true) : null;
+
+        foreach ((is_array($composer) ? $composer['scripts'] ?? [] : []) as $script => $commands) {
+            if (is_string($script) && str_contains(strtolower($script), 'deploy')) {
+                $sources['composer.json scripts.'.$script] = implode("\n", array_map('strval', (array) $commands));
+            }
+        }
+
+        $missing = array_keys(array_filter($sources, fn (?string $text): bool => $text === null));
+
+        if ($missing !== []) {
+            return Result::fail('preflight.deploy.script names '.implode(', ', $missing).', which is not in the repository. Point it at the committed deploy script.');
+        }
+
+        if ($sources === []) {
+            return Result::warn('Unknown: no deploy script found in the repository (a Laravel Cloud deploy is configured in its dashboard, which preflight cannot read). Make sure the deploy runs `php artisan migrate --force`, then commit the deploy commands (for example scripts/deploy.sh) and set preflight.deploy.script (PREFLIGHT_DEPLOY_SCRIPT) to it.');
+        }
+
+        $migrating = array_keys(array_filter($sources, fn (string $text): bool => self::migrates($text)));
+
+        if ($migrating !== []) {
+            return Result::pass('The deploy runs `php artisan migrate --force` ('.implode(', ', $migrating).').');
+        }
+
+        return Result::fail('The deploy ('.implode(', ', array_keys($sources)).') never runs `php artisan migrate --force`. Add it, so every deploy migrates and Laravel fires MigrationsEnded / NoPendingMigrations.');
+    }
+
+    /** Whether a script runs `artisan migrate` (not migrate:fresh, :rollback or the like) with --force, uncommented. */
+    private static function migrates(string $text): bool
+    {
+        foreach (preg_split('/\R|&&|;/', $text) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || str_starts_with($line, '#') || str_starts_with($line, '//')) {
+                continue;
+            }
+
+            if (preg_match('/\bartisan\s+migrate(?![:\w-])(?=[^\n]*\s--force\b)/', $line) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function ciTriggers(): Result

@@ -161,6 +161,21 @@ Rule 54 applies only to running (deployed) applications, never packages; CI chec
 
 `nightwatch.ready` requires `laravel/nightwatch` in Composer `require`, a readable `config/nightwatch.php`, and effective `nightwatch.sampling` rates: requests between 0 and 0.1, exceptions, commands and scheduled tasks at 1.0. It is advisory-level and needs no token: failures exit 0 normally and 1 under `--strict`, including in CI. Select it with `php artisan standards:preflight --only=nightwatch --ci --strict`.
 
+`deploy.migrate` checks that every deploy runs `php artisan migrate --force`. Packages rely on Laravel's `MigrationsEnded` and `NoPendingMigrations` events firing on each deploy.
+
+- **Where it looks:** only at what the repository commits:
+  - the paths in `preflight.deploy.script` (`PREFLIGHT_DEPLOY_SCRIPT`, comma-separated);
+  - a Laravel Cloud config (`cloud.yml`, `cloud.yaml`, `.cloud/`);
+  - Forge or Envoyer scripts (`deploy.sh`, `deploy`, `.forge/`, `forge-deploy.sh`, `.envoyer/`, `Envoy.blade.php`);
+  - `scripts/deploy*` or `bin/deploy*`;
+  - a `.github/workflows/*deploy*` workflow;
+  - a composer script whose name contains `deploy`.
+- **What counts:** `artisan migrate … --force`, uncommented. `migrate` without `--force`, and `migrate:fresh` or other subcommands, don't.
+- **Outcomes:**
+  - It passes when a found script has the step, and fails when found scripts don't (or a declared path isn't committed).
+  - It warns when nothing is found, which is the case for a Laravel Cloud deploy configured only in its dashboard, which preflight can't read. The hint is to commit the deploy commands and declare the path.
+- **Level:** advisory, so it exits 1 only under `--strict`. Packages are skipped. Select it with `php artisan standards:preflight --only=deploy`.
+
 Run without sampling overrides to check defaults, and against cached production config to check deployed rates. The app must commit the config, default requests to 0.1, cap overrides at 0.1 and stay dormant without `NIGHTWATCH_TOKEN`; prove those source and boot contracts in the app's tests. Preflight does not inspect Git tracking or prove ingestion. Deploy notes should say Laravel Cloud → Connect Nightwatch is the only remaining step. The check arrived in 0.7.0.
 
 ## Installed drivers

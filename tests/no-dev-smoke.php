@@ -149,6 +149,8 @@ try {
     mkdir($app->directory.'/resources/views', 0777, true);
     mkdir($app->directory.'/config');
     file_put_contents($app->directory.'/config/nightwatch.php', '<?php return [];');
+    @mkdir($app->directory.'/scripts');
+    file_put_contents($app->directory.'/scripts/deploy.sh', "#!/bin/sh\nphp artisan migrate --force\n");
     file_put_contents($app->directory.'/composer.json', '{"require":{"laravel/nightwatch":"^1.30"}}');
     file_put_contents($app->directory.'/public/favicon.ico', pack('vvv', 0, 1, 2).pack('CCCCvvVV', 16, 16, 0, 0, 1, 32, 0, 38).pack('CCCCvvVV', 32, 32, 0, 0, 1, 32, 0, 38));
     file_put_contents($app->directory.'/public/favicon.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>');
@@ -187,10 +189,10 @@ try {
         return;
     }
 
-    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'install.mail', 'install.filesystems', 'install.drivers', 'install.tables', 'install.extensions', 'install.secrets', 'install.vite', 'install.sessions'];
+    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate', 'install.mail', 'install.filesystems', 'install.drivers', 'install.tables', 'install.extensions', 'install.secrets', 'install.vite', 'install.sessions'];
 
     if ($exit !== 0 || $json['exit_code'] !== 0 || array_column($json['results'], 'check') !== $expected
-        || array_column($json['results'], 'status') !== [...array_fill(0, 12, 'pass'), 'skipped', ...array_fill(0, 9, 'pass')]) {
+        || array_column($json['results'], 'status') !== [...array_fill(0, 12, 'pass'), 'skipped', ...array_fill(0, 10, 'pass')]) {
         throw new RuntimeException('Registered preflight did not pass deployment checks and skip CI: '.$stdout);
     }
 
