@@ -43,6 +43,7 @@ final readonly class Configuration
      * @param  list<string>  $uiToastRenderers  project-relative files allowed to import the toast library
      * @param  list<string>  $testBasePaths
      * @param  list<string>  $testRoots  where the test files live, for the php-tag rule (globs allowed)
+     * @param  list<string>  $presetIgnores  namespaces the stock Laravel preset does not apply to: a modular app's module roots (App\\Modules), whose own placement rule 20 and the tey/mod layout enforce
      * @param  array<string, list<string>>  $boostSkills  Composer or npm package => required skills
      * @param  list<string>  $boostSkillRoots
      * @param  list<string>  $ciDefaultBranches
@@ -94,6 +95,7 @@ final readonly class Configuration
         public string $uiNotificationCenter = 'app/UI/resources/js/Notification/NotificationCenter.vue',
         public array $testBasePaths = ['tests/TestCase.php'],
         public array $testRoots = ['tests'],
+        public array $presetIgnores = [],
         public array $boostSkills = [
             'laravel/framework' => ['laravel-best-practices'],
             'pestphp/pest' => ['testing-best-practices'],

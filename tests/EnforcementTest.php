@@ -480,6 +480,12 @@ test('the artisan commands are registered and print the lookup, gaps and a fail-
             ->and($check['gaps']['demand'])->toBe(['total' => 1, 'by_unit_type' => ['mcp' => 1]]);
         expect($artisan->call('standards:make', ['unit' => 'action', 'name' => 'Archive']))->toBe(0)
             ->and(file_get_contents($base.'/app/Actions/Archive.php'))->toContain('standards-pattern: data-actions.action');
+        // --dry-run --json: the plan, as mod:* generators print theirs, and nothing written.
+        expect($artisan->call('standards:make', ['unit' => 'action', 'name' => 'Draft', '--dry-run' => true, '--json' => true]))->toBe(0)
+            ->and(json_decode($artisan->output(), true))->toBe(['dry_run' => true, 'files' => [['path' => 'app/Actions/Draft.php', 'type' => 'class', 'action' => 'created'], ['path' => 'tests/Feature/Actions/DraftTest.php', 'type' => 'test', 'action' => 'created']]])
+            ->and(is_file($base.'/app/Actions/Draft.php'))->toBeFalse();
+        expect($artisan->call('standards:make', ['unit' => 'action', 'name' => 'Draft', '--dry-run' => true]))->toBe(0)
+            ->and($artisan->output())->toContain('· app/Actions/Draft.php (class, created)')->toContain('Dry run: nothing written.');
         expect($artisan->call('standards:make', ['unit' => 'command', 'name' => 'PruneVisits', '--maintenance' => true]))->toBe(0)
             ->and(file_get_contents($base.'/app/Console/Commands/PruneVisitsCommand.php'))->toContain('standards-pattern: background.command')->toContain('{--days=30')
             ->and(is_file($base.'/tests/Feature/Console/PruneVisitsCommandTest.php'))->toBeTrue();

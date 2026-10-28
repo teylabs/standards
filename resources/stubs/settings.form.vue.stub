@@ -1,6 +1,6 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
-import { Field, FormActions, FormCard, Input, SettingsFrame } from '@kit/ui';
+import { Field, FormActions, FormCard, Input, SettingsFrame } from '{{ kit_ui }}';
 import { useForm } from '@inertiajs/vue3';
 
 const form = useForm({ name: '' });
@@ -9,8 +9,8 @@ const form = useForm({ name: '' });
 <template>
     <SettingsFrame title="{{ title }}">
         <FormCard title="{{ title }}" @submit="form.patch('/settings/{{ slug }}')">
-            <Field label="Name" :error="form.errors.name">
-                <Input v-model="form.name" name="name" />
+            <Field id="{{ slug }}-name" label="Name" :error="form.errors.name">
+                <Input id="{{ slug }}-name" v-model="form.name" name="name" />
             </Field>
             <FormActions :processing="form.processing" />
         </FormCard>

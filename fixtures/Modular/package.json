@@ -1,0 +1,8 @@
+{
+    "private": true,
+    "dependencies": {
+        "@inertiajs/vue3": "^2.0",
+        "@kit/ui": "^1.0",
+        "vue": "^3.5"
+    }
+}

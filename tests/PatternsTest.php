@@ -437,10 +437,13 @@ test('components name only what the kit exports, and recipe() returns them', fun
     expect(array_column($recipe['components'], 'kit_component'))->toContain('DataTable', 'IndexToolbar', 'RowActions')
         ->and(array_keys($recipe['components'][0]))->toBe(['name', 'kit_component', 'use', 'props_hint']);
 
-    foreach ([...glob(dirname(__DIR__).'/resources/stubs/*.vue.stub'), ...glob(dirname(__DIR__).'/resources/stubs/crud/*.vue.stub')] as $stub) {
-        preg_match_all("/import \{([^}]*)\} from '@kit\/ui'/", file_get_contents($stub), $imports);
+    // The stubs import the kit's components from the host's alias (`{{ kit_ui }}`: `@kit/ui` where the host has it, else `@/components/Kit`).
+    foreach ([...glob(dirname(__DIR__).'/resources/stubs/*.vue.stub'), ...glob(dirname(__DIR__).'/resources/stubs/*/*.vue.stub')] as $stub) {
+        expect(file_get_contents($stub))->not->toContain("from '@kit/ui'");
+        preg_match_all("/import \{([^}]*)\} from '\{\{ kit_ui \}\}'/", file_get_contents($stub), $imports);
 
-        foreach (array_map('trim', explode(',', implode(',', $imports[1]))) as $name) {
+        // Components only: the snapshot lists PascalCase exports, so a composable (useWorkbench) is not checked here.
+        foreach (array_filter(array_map('trim', explode(',', implode(',', $imports[1]))), fn (string $name): bool => preg_match('/^[A-Z]/', $name) === 1) as $name) {
             expect($exports)->toContain($name);
         }
     }

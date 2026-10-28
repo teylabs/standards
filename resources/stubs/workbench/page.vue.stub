@@ -1,6 +1,6 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
-import { Workbench, useWorkbench } from '@kit/ui';
+import { Workbench, useWorkbench } from '{{ kit_ui }}';
 import {{ name }}ItemInspector from './Inspectors/{{ name }}ItemInspector.vue';
 
 type Item = { id: string; label: string; type: string | null; description: string | null };

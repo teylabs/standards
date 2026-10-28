@@ -1,6 +1,6 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
-import { Page, Section, SectionHeader } from '@kit/ui';
+import { Page, Section, SectionHeader } from '{{ kit_ui }}';
 
 defineProps<{ record: Record<string, unknown> }>();
 </script>
