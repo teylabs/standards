@@ -30,6 +30,10 @@ return [
         // True when an OAuth consent screen runs without laravel/passport (for example an MCP consent screen).
         'consent' => false,
     ],
+    'deploy' => [
+        // The committed deploy script(s), relative to base_path(), when they live somewhere deploy.migrate does not look (a copy of the Laravel Cloud deploy commands, say).
+        'script' => array_values(array_filter(explode(',', (string) env('PREFLIGHT_DEPLOY_SCRIPT', '')))),
+    ],
     'queue' => [
         // Sync until needed, then a scale-to-zero managed queue (Laravel Cloud managed queues).
         // A worker means whatever drains the queue, normally the managed queue, not an always-on process.

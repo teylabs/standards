@@ -81,6 +81,9 @@ function preflightWorld(): Container
     file_put_contents($app->root.'/resources/views/app.blade.php', '<link rel="icon" href="/favicon.svg">');
     mkdir($app->root.'/config');
     file_put_contents($app->root.'/config/nightwatch.php', '<?php return [];');
+    // A committed deploy script that migrates (deploy.migrate).
+    @mkdir($app->root.'/scripts');
+    file_put_contents($app->root.'/scripts/deploy.sh', "#!/bin/sh\nset -e\nphp artisan migrate --force\n");
     file_put_contents($app->root.'/composer.json', '{"type":"project","require":{"laravel/nightwatch":"^1.30"}}');
     $config = new Repository([
         'nightwatch' => ['sampling' => ['requests' => 0.1, 'exceptions' => 1.0, 'commands' => 1.0, 'scheduled_tasks' => 1.0]],
@@ -167,7 +170,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -626,7 +629,7 @@ test('every selected check and the final summary are logged on the standards or 
 test('[regression] a non-interactive deploy run prints only the checks that need attention and never the word warning', function () {
     $quiet = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false);
     expect($quiet->getStatusCode())->toBe(0)
-        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 22 checks, 21 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
+        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 23 checks, 22 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
 
     $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => null]);
     $attention = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false)->getDisplay();
@@ -1626,4 +1629,34 @@ test('install failures keep skip records until the check passes', function () {
 
     $this->preflight['config']->set('app.key', 'base64:'.base64_encode(str_repeat('n', 32)));
     expect(preflightInstall($this->preflight)[1])->toBe(0)->and(file_exists($path))->toBeFalse();
+});
+
+test('deploy.migrate: the deploy runs migrate --force, read from what the repo commits', function (array $files, ?array $configured, string $status, string $message) {
+    $root = $this->preflight->root;
+    unlink($root.'/scripts/deploy.sh');
+    file_put_contents($root.'/composer.json', json_encode(['type' => 'project'], JSON_THROW_ON_ERROR));
+    foreach ($files as $path => $contents) {
+        is_dir(dirname($root.'/'.$path)) || mkdir(dirname($root.'/'.$path), 0777, true);
+        file_put_contents($root.'/'.$path, $contents);
+    }
+    $this->preflight['config']->set('preflight.deploy.script', $configured ?? []);
+
+    $result = preflightResults(preflightCommand($this->preflight, ['--only' => 'deploy', '--json' => true, '--stderr' => true]))['deploy.migrate'];
+
+    expect($result['level'])->toBe('advisory')->and($result['status'])->toBe($status)->and($result['message'])->toContain($message);
+})->with([
+    'a Forge-style deploy.sh' => [['deploy.sh' => "cd /home/forge/app\ncomposer install --no-dev\nphp artisan migrate --force\n"], null, 'pass', '(deploy.sh)'],
+    'a Laravel Cloud config' => [['cloud.yml' => "deploy:\n  - php artisan migrate --force --isolated\n"], null, 'pass', '(cloud.yml)'],
+    'a composer deploy script' => [['composer.json' => json_encode(['type' => 'project', 'scripts' => ['deploy' => ['@php artisan optimize', '@php artisan migrate --force']]])], null, 'pass', 'composer.json scripts.deploy'],
+    'a declared script path' => [['ops/release.sh' => "php artisan migrate --force && php artisan optimize\n"], ['ops/release.sh'], 'pass', '(ops/release.sh)'],
+    'a deploy without the step' => [['deploy.sh' => "composer install --no-dev\nphp artisan optimize\n"], null, 'fail', 'never runs `php artisan migrate --force`'],
+    'migrate without --force, migrate:fresh, or a comment does not count' => [['.forge/deploy.sh' => "php artisan migrate\nphp artisan migrate:fresh --force\n# php artisan migrate --force\n"], null, 'fail', '.forge/deploy.sh'],
+    'a declared path that is not committed' => [[], ['ops/missing.sh'], 'fail', 'ops/missing.sh, which is not in the repository'],
+    'nothing committed (a Cloud dashboard deploy)' => [[], null, 'warn', 'set preflight.deploy.script (PREFLIGHT_DEPLOY_SCRIPT)'],
+]);
+
+test('deploy.migrate skips packages', function () {
+    file_put_contents($this->preflight->root.'/composer.json', json_encode(['type' => 'library'], JSON_THROW_ON_ERROR));
+
+    expect(preflightResults(preflightCommand($this->preflight, ['--only' => 'deploy', '--json' => true, '--stderr' => true]))['deploy.migrate']['status'])->toBe('skipped');
 });

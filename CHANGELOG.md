@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Preflight `deploy.migrate`:** every deploy must run `php artisan migrate --force`, since packages rely on `MigrationsEnded` and `NoPendingMigrations` firing on each deploy.
+  - It reads what the repo commits: `preflight.deploy.script` (`PREFLIGHT_DEPLOY_SCRIPT`), Laravel Cloud's `cloud.yml` or `.cloud/`, Forge or Envoyer scripts, deploy workflows, and composer `deploy` scripts.
+  - It passes when the step is there, and fails when a found script lacks it. When nothing is found (a Cloud dashboard deploy), it warns with a hint to commit the deploy commands and declare the path.
+  - It's advisory-level, and packages are skipped.
+
 ## 0.11.15 - 2026-10-28
 
 ### Upgrading
