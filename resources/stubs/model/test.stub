@@ -1,0 +1,19 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+{{ test_imports }}
+// {{ titles }} at the database: each test migrates the app's empty test database (SQLite memory by default) and makes its own rows. Never skipped.
+
+beforeEach(function () {
+    Artisan::call('migrate', ['--force' => true, '--no-interaction' => true]);
+});
+
+it('makes valid {{ titles_lower }} from the factory', function () {
+    ${{ var }} = {{ name }}::factory()->create();
+
+    expect(${{ var }}->fresh())->not->toBeNull()
+        ->and(${{ var }}->fresh()->name)->toBe(${{ var }}->name)
+        ->and(${{ var }}->fresh()->lock_version)->toBe(1);
+});
+{{ enum_tests }}

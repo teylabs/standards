@@ -1,0 +1,21 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Enums;
+
+/**
+ * The values `{{ table }}.{{ enum_field }}` may hold. The migration lists the same values, and the database refuses any other (a check constraint on
+ * SQLite and PostgreSQL). Adding a case needs a migration that widens that constraint.
+ */
+enum {{ enum }}: string
+{
+    case Draft = 'draft';
+    case Active = 'active';
+    case Archived = 'archived';
+
+    public function label(): string
+    {
+        return ucfirst($this->value);
+    }
+}

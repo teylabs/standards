@@ -123,6 +123,10 @@
                     "role": "scaffold: standards:make crud, with --bulk and --mcp from the answers"
                 },
                 {
+                    "unit_leaf_id": "data-actions.domain-model",
+                    "role": "model: crud builds it with the domain-model generator (standards:make model --tenant), one implementation"
+                },
+                {
                     "unit_leaf_id": "ui-page.index",
                     "role": "list"
                 },
@@ -1420,15 +1424,11 @@
         },
         "data-actions.model": {
             "id": "data-actions.model",
-            "question": "Does the model need composite-FK tenancy and a lock_version stale-write guard?",
+            "question": "What kind of model?",
             "options": [
                 {
-                    "answer": "Yes, it is workspace-scoped",
-                    "next": "data-actions.tenant-model"
-                },
-                {
-                    "answer": "No; it needs enum and check-constraint conventions",
-                    "next": "data-actions.constraints"
+                    "answer": "A domain model or table: workspace-scoped or not, with enum or check-constraint fields, files or an order",
+                    "next": "data-actions.domain-model"
                 },
                 {
                     "answer": "Its history must be append-only",
@@ -1509,53 +1509,44 @@
                 "past_count": 73
             }
         },
-        "data-actions.tenant-model": {
-            "id": "data-actions.tenant-model",
-            "recipe": "Workspace-scoped model",
-            "summary": "A model with composite tenancy foreign keys, a lock_version stale-write guard and its policy.",
+        "data-actions.domain-model": {
+            "id": "data-actions.domain-model",
+            "recipe": "Domain model",
+            "summary": "`standards:make model <Name>` emits the model, its migration, a factory and tests that run on the app's own database. Answer two questions with flags. Does it need composite-FK tenancy and a lock_version stale-write guard? `--tenant` makes it workspace-owned through tey/kit's BelongsToWorkspace (every query scoped to the current workspace, workspace_required outside one, workspace_mismatch for another workspace's row) and GuardsStaleWrites (updateIfCurrent refuses a stale lock_version), with a constrained workspace_id that restricts deletes, a unique (workspace_id, id) as the target of child tables' composite foreign keys, and a capability-gated policy. Enum or check-constraint fields? `--enum=<field>:<Enum>` adds a backed enum and an enum column that the database itself constrains (a check constraint on SQLite and PostgreSQL). `--soft-deletes`, `--media` (spatie/laravel-medialibrary) and `--sortable` (a position column) add to it. The tests prove factory validity, the database's refusal of a value outside each enum, and with `--tenant` cross-workspace isolation, the workspace foreign key and the stale-write refusal. `standards:make crud` builds its model through this generator.",
             "kit": [],
-            "make": null,
-            "checks": [],
-            "paths": [],
+            "make": "standards:make model --flavor=domain",
+            "checks": [
+                "20",
+                "actions"
+            ],
+            "paths": [
+                "app/Models/**",
+                "app/Enums/**",
+                "database/migrations/**",
+                "database/factories/**"
+            ],
             "keywords": [
                 "model",
+                "table",
+                "migration",
+                "factory",
                 "tenant",
                 "workspace",
                 "lock_version",
                 "composite key",
                 "concurrent edit",
-                "edit lock"
-            ],
-            "status": "gap",
-            "evidence": {
-                "apps": 4,
-                "count": 11,
-                "prs": 11,
-                "past_apps": 17,
-                "past_count": 190
-            }
-        },
-        "data-actions.constraints": {
-            "id": "data-actions.constraints",
-            "recipe": "Enum and constraint conventions",
-            "summary": "Backed enums and database check constraints for a domain model's states.",
-            "kit": [],
-            "make": null,
-            "checks": [],
-            "paths": [],
-            "keywords": [
+                "edit lock",
                 "enum",
                 "check constraint",
-                "status column",
-                "migration"
+                "status column"
             ],
-            "status": "gap",
+            "status": "ready",
             "evidence": {
-                "apps": 3,
-                "count": 28,
-                "prs": 28,
-                "past_apps": 18,
-                "past_count": 169
+                "apps": 7,
+                "count": 39,
+                "prs": 39,
+                "past_apps": 35,
+                "past_count": 359
             }
         },
         "data-actions.ledger": {

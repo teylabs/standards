@@ -13,8 +13,8 @@ use Tey\Kit\Features\Core\Principal;
 use Tey\Kit\Features\Core\RequestMemo;
 
 /**
- * The one place a {{ title_lower }} changes. A stale write fails closed: the update only lands while `lock_version` is still the one the editor loaded,
- * and bumps it in the same statement, so two saves from the same version cannot both succeed.
+ * The one place a {{ title_lower }} changes. A stale write fails closed: updateIfCurrent (GuardsStaleWrites) lands only while `lock_version` is still the one
+ * the editor loaded, and bumps it in the same statement, so two saves from the same version cannot both succeed; the second is a validation error on it.
  */
 final class Update{{ name }}
 {
@@ -24,16 +24,18 @@ final class Update{{ name }}
         ${{ var }} = {{ name }}::query()->where('workspace_id', $workspace)->findOrFail($id);
         Gate::forUser(RequestMemo::user($principal->actorId))->authorize('update', ${{ var }});
 
-        return DB::transaction(function () use ($principal, $workspace, $id, $attributes): {{ name }} {
-            $version = (int) $attributes['lock_version'];
-            $changed = {{ name }}::query()->where('workspace_id', $workspace)->whereKey($id)->where('lock_version', $version)
-                ->update(['name' => $attributes['name'], 'lock_version' => $version + 1]);
-            if ($changed !== 1) {
-                throw ValidationException::withMessages(['lock_version' => 'This {{ title_lower }} changed since you opened it. Reload to see the latest, then save again.']);
-            }
-            app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.update', ['id' => $id, 'lock_version' => $version + 1]);
+        try {
+            return DB::transaction(function () use ($principal, $workspace, $id, $attributes, ${{ var }}): {{ name }} {
+                $saved = ${{ var }}->updateIfCurrent((int) $attributes['lock_version'], ['name' => $attributes['name']]);
+                app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.update', ['id' => $id, 'lock_version' => $saved->lock_version]);
 
-            return {{ name }}::query()->findOrFail($id);
-        });
+                return $saved;
+            });
+        } catch (\RuntimeException $error) {
+            if ($error->getMessage() !== 'stale_write') {
+                throw $error;
+            }
+            throw ValidationException::withMessages(['lock_version' => 'This {{ title_lower }} changed since you opened it. Reload to see the latest, then save again.']);
+        }
     }
 }

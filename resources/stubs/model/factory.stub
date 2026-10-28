@@ -1,0 +1,27 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace Database\Factories;
+
+use {{ namespace }}\Models\{{ name }};
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
+{{ factory_imports }}
+/**
+ * Valid {{ titles_lower }}, with no external data.{{ factory_doc }}
+ *
+ * @extends Factory<{{ name }}>
+ */
+final class {{ name }}Factory extends Factory
+{
+    protected $model = {{ name }}::class;
+
+    /** @return array<string, mixed> */
+    public function definition(): array
+    {
+        return [
+            'name' => '{{ title }} '.Str::random(8),
+{{ factory_fields }}        ];
+    }
+}

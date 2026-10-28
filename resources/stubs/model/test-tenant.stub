@@ -1,0 +1,75 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+{{ test_imports }}
+// {{ titles }} at the database and the model: each test migrates the app's empty test database (SQLite memory by default) and makes its own two
+// workspaces. Never skipped. Rows are only ever read and written inside a workspace (TenantBoundary), as the app does.
+
+beforeEach(function () {
+    Artisan::call('migrate', ['--force' => true, '--no-interaction' => true]);
+    Artisan::call('concierge:sync-roles', ['--no-interaction' => true]);
+    $open = function (string $name): int {
+        $owner = config('auth.providers.users.model')::query()->forceCreate(['name' => $name, 'email' => strtolower($name).'@example.test', 'email_verified_at' => now(), 'password' => Hash::make(Str::random(40))]);
+        $workspace = Workspace::query()->create(['name' => $name, 'slug' => strtolower($name)]);
+        EstablishWorkspace::run($workspace, $owner);
+
+        return (int) $workspace->getKey();
+    };
+    $this->workspace = $open('Alpha');
+    $this->otherWorkspace = $open('Beta');
+});
+
+/** Runs `$run` inside workspace `$workspace`, as a request or MCP call there would. */
+function {{ var }}In(int $workspace, callable $run): mixed
+{
+    return app(TenantBoundary::class)->run($workspace, $run);
+}
+
+/** A string RuntimeException's message, or null when `$run` did not throw one. */
+function {{ var }}Refusal(callable $run): ?string
+{
+    try {
+        $run();
+    } catch (RuntimeException $error) {
+        return $error->getMessage();
+    }
+
+    return null;
+}
+
+it('makes valid {{ titles_lower }} from the factory, in the current workspace', function () {
+    ${{ var }} = {{ var }}In($this->workspace, fn () => {{ name }}::factory()->create());
+
+    expect(${{ var }}->workspace_id)->toBe($this->workspace)
+        ->and(${{ var }}->lock_version)->toBe(1)
+        ->and(DB::table('{{ table }}')->where('id', ${{ var }}->id)->value('name'))->toBe(${{ var }}->name);
+});
+
+it('keeps {{ titles_lower }} inside their workspace', function () {
+    ${{ var }} = {{ var }}In($this->workspace, fn () => {{ name }}::factory()->create());
+    $theirs = {{ var }}In($this->otherWorkspace, fn () => {{ name }}::factory()->create());
+    $stored = ${{ var }}->name;
+
+    expect({{ var }}In($this->otherWorkspace, fn () => {{ name }}::query()->pluck('id')->all()))->toBe([$theirs->id])
+        ->and({{ var }}In($this->otherWorkspace, fn () => {{ name }}::query()->find(${{ var }}->id)))->toBeNull()
+        ->and({{ var }}Refusal(fn () => {{ var }}In($this->otherWorkspace, fn () => ${{ var }}->fill(['name' => 'Moved'])->save())))->toBe('workspace_mismatch')
+        ->and({{ var }}Refusal(fn () => {{ var }}In($this->otherWorkspace, fn () => ${{ var }}->delete())))->toBe('workspace_mismatch')
+        ->and({{ var }}Refusal(fn () => {{ name }}::query()->count()))->toBe('workspace_required')
+        ->and(DB::table('{{ table }}')->where('id', ${{ var }}->id)->value('name'))->toBe($stored);
+});
+
+it('lets the database refuse {{ titles_lower }} in a workspace that does not exist', function () {
+    expect(fn () => DB::table('{{ table }}')->insert({{ name }}::factory()->raw(['workspace_id' => 999999])))->toThrow(QueryException::class);
+});
+
+it('refuses a stale write to {{ titles_lower }} and keeps the newer one', function () {
+    ${{ var }} = {{ var }}In($this->workspace, fn () => {{ name }}::factory()->create());
+
+    {{ var }}In($this->workspace, fn () => {{ name }}::query()->findOrFail(${{ var }}->id)->updateIfCurrent(1, ['name' => 'Second']));
+
+    expect({{ var }}Refusal(fn () => {{ var }}In($this->workspace, fn () => {{ name }}::query()->findOrFail(${{ var }}->id)->updateIfCurrent(1, ['name' => 'Stale']))))->toBe('stale_write')
+        ->and(DB::table('{{ table }}')->where('id', ${{ var }}->id)->value('name'))->toBe('Second')
+        ->and(DB::table('{{ table }}')->where('id', ${{ var }}->id)->value('lock_version'))->toBe(2);
+});
+{{ enum_tests }}

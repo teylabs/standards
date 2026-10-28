@@ -42,7 +42,18 @@ final class Maker
         private readonly array $paths = [],
         private readonly array $generators = [],
         private readonly ?Closure $run = null,
+        private readonly ?bool $kit = null,
+        private readonly ?bool $media = null,
     ) {}
+
+    /** Whether a unit and flavor run tey/mod's generator: model --flavor=domain is standards' own. */
+    public static function delegates(string $unit, string $flavor): bool
+    {
+        return isset(self::DELEGATED[$unit]) && ! ($unit === 'model' && $flavor === 'domain');
+    }
+
+    /** model --flavor=domain flags; `enum=<field>:<Enum>` may repeat. */
+    public const MODEL_OPTIONS = ['tenant', 'soft-deletes', 'media', 'sortable'];
 
     /** crud options: the flags that add to the resource. */
     public const CRUD_OPTIONS = ['bulk', 'mcp', 'soft-deletes'];
@@ -71,8 +82,19 @@ final class Maker
             }
         }
 
-        if (array_diff($options, $unit === 'crud' ? self::CRUD_OPTIONS : []) !== []) {
-            throw new InvalidArgumentException('Unknown option --'.implode(', --', array_diff($options, $unit === 'crud' ? self::CRUD_OPTIONS : [])).' for '.$unit.'.');
+        $allowed = match (true) {
+            $unit === 'crud' => self::CRUD_OPTIONS,
+            $unit === 'model' && $flavor === 'domain' => self::MODEL_OPTIONS,
+            default => [],
+        };
+        $unknown = array_values(array_filter($options, fn (string $option): bool => ! in_array($option, $allowed, true) && ! ($unit === 'model' && $flavor === 'domain' && str_starts_with($option, 'enum='))));
+
+        if ($unknown !== []) {
+            throw new InvalidArgumentException('Unknown option --'.implode(', --', $unknown).' for '.$unit.($unit === 'model' ? ' --flavor='.$flavor : '').'.');
+        }
+
+        if ($unit === 'model' && $flavor === 'domain') {
+            return $this->emitModel($name, $options, $leaf);
         }
 
         if (isset(self::DELEGATED[$unit])) {
@@ -80,6 +102,8 @@ final class Maker
         }
 
         if ($unit === 'crud') {
+            $this->requireKit('crud');
+
             return $this->crud($name, $options);
         }
 
@@ -171,7 +195,7 @@ final class Maker
 
         foreach ($files as $target => $stub) {
             [$stub, $overrides] = is_array($stub) ? $stub : [$stub, []];
-            $contents = $this->render($stub, [...$values, ...$overrides]);
+            $contents = rtrim($this->render($stub, [...$values, ...$overrides]))."\n";
             $contents = str_ends_with($target, 'Test.php') ? $this->covered($target, $contents) : $contents;
             // Names that come from the unit's name sort differently per name, so the import block is sorted after rendering.
             $this->write($target, str_ends_with($target, '.php') ? self::imports($contents) : $contents);
@@ -179,6 +203,198 @@ final class Maker
         }
 
         return $written;
+    }
+
+    /** @param  list<string>  $options */
+    private function emitModel(string $name, array $options, string $leaf): array
+    {
+        [$files, $values] = $this->domainModel($name, $options, $leaf);
+
+        return [...$this->emit($files, $values), ...$this->factoryAutoload()];
+    }
+
+    /**
+     * The generated factory lives in `Database\Factories` (database/factories), where Eloquent looks for it. An app whose composer.json does not map that
+     * namespace gets the mapping added (composer.json is then listed as changed; run composer dump-autoload). Any other autoload entry is kept as it is.
+     *
+     * @return list<string>
+     */
+    private function factoryAutoload(): array
+    {
+        $file = $this->base.'/composer.json';
+        if (! is_file($file)) {
+            return [];
+        }
+        $composer = json_decode((string) file_get_contents($file), true);
+        if (! is_array($composer) || isset($composer['autoload']['psr-4']['Database\\Factories\\'])) {
+            return [];
+        }
+        $composer['autoload']['psr-4']['Database\\Factories\\'] = 'database/factories/';
+        file_put_contents($file, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+
+        return ['composer.json'];
+    }
+
+    /**
+     * A domain model and everything that makes it safe to use: the model, its migration (indexes, enum check constraints, a constrained workspace with an
+     * explicit on-delete, lock_version), a factory, an enum class per `enum=<field>:<Enum>`, and tests on the app's own database. `tenant` makes it
+     * workspace-owned through tey/kit's BelongsToWorkspace and GuardsStaleWrites, with a policy; `soft-deletes`, `media` (spatie/laravel-medialibrary)
+     * and `sortable` (a `position`) add to it. crud builds its model through here, so there is one implementation.
+     *
+     * @param  list<string>  $options
+     * @return array{0: array<string, string|array{0: string, 1: array<string, string>}>, 1: array<string, string>}
+     */
+    private function domainModel(string $name, array $options, string $leaf, bool $withTests = true): array
+    {
+        $tenant = in_array('tenant', $options, true);
+        $soft = in_array('soft-deletes', $options, true);
+        $media = in_array('media', $options, true);
+        $sortable = in_array('sortable', $options, true);
+        if ($tenant) {
+            $this->requireKit('model --tenant');
+        }
+        if ($media && ! ($this->media ?? interface_exists('Spatie\\MediaLibrary\\HasMedia'))) {
+            throw new InvalidArgumentException('--media needs spatie/laravel-medialibrary; install it (composer require spatie/laravel-medialibrary) and try again.');
+        }
+        $enums = [];
+        foreach ($options as $option) {
+            if (! str_starts_with($option, 'enum=')) {
+                continue;
+            }
+            if (preg_match('/^enum=([a-z][a-z0-9_]*):([A-Z][A-Za-z0-9]*)$/D', $option, $match) !== 1) {
+                throw new InvalidArgumentException("--{$option} must be --enum=<field>:<Enum>, for example --enum=status:InvoiceStatus.");
+            }
+            if (isset($enums[$match[1]]) || in_array($match[1], ['id', 'name', 'workspace_id', 'lock_version', 'position'], true)) {
+                throw new InvalidArgumentException("--enum field {$match[1]} is repeated or reserved.");
+            }
+            $enums[$match[1]] = $match[2];
+        }
+
+        $app = $this->paths['app'] ?? 'app';
+        $tests = $this->paths['tests'] ?? 'tests/Feature';
+        $namespace = $this->paths['namespace'] ?? 'App';
+        $plural = Str::plural($name);
+        $table = Str::snake($plural);
+        $title = ucfirst(str_replace('-', ' ', Str::kebab($name)));
+        $titles = ucfirst(str_replace('-', ' ', Str::kebab($plural)));
+        $migration = date('Y_m_d_His').'_create_'.$table.'_table.php';
+
+        $imports = ['Illuminate\\Database\\Eloquent\\Factories\\HasFactory', 'Illuminate\\Database\\Eloquent\\Model'];
+        $traits = ['HasFactory'];
+        $implements = '';
+        $guarded = ["'id'", "'lock_version'"];
+        $casts = ["'lock_version' => 'integer'"];
+        $methods = [];
+        $doc = $tenant ? "A {$title}, owned by one workspace: read and written only inside it (BelongsToWorkspace), and edited through updateIfCurrent() so a stale write is refused (GuardsStaleWrites)." : "A {$title}. `lock_version` counts its edits: an edit that sends back an older one must be refused.";
+        if ($tenant) {
+            array_push($imports, 'Tey\\Kit\\Features\\Workspaces\\Concerns\\BelongsToWorkspace', 'Tey\\Kit\\Features\\Workspaces\\Concerns\\GuardsStaleWrites');
+            array_push($traits, 'BelongsToWorkspace', 'GuardsStaleWrites');
+            $guarded[] = "'workspace_id'";
+            $casts[] = "'workspace_id' => 'integer'";
+        }
+        if ($soft) {
+            $imports[] = 'Illuminate\\Database\\Eloquent\\SoftDeletes';
+            $traits[] = 'SoftDeletes';
+        }
+        if ($media) {
+            array_push($imports, 'Spatie\\MediaLibrary\\HasMedia', 'Spatie\\MediaLibrary\\InteractsWithMedia');
+            $traits[] = 'InteractsWithMedia';
+            $implements = ' implements HasMedia';
+            $methods[] = "\n    /** Files on a {$title}: one collection, `attachments`, on the default disk. Serve them only to someone who may view the {$title}. */\n    public function registerMediaCollections(): void\n    {\n        \$this->addMediaCollection('attachments');\n    }\n";
+        }
+        if ($sortable) {
+            $imports[] = 'Illuminate\\Database\\Eloquent\\Builder';
+            $casts[] = "'position' => 'integer'";
+            $guarded[] = "'position'";
+            $methods[] = "\n    protected static function booted(): void\n    {\n        // A new row goes last".($tenant ? ' in its workspace' : '').".\n        self::creating(fn (self \$model) => \$model->position = (int) self::query()->max('position') + 1);\n    }\n\n    /** @param  Builder<self>  \$query */\n    public function scopeOrdered(Builder \$query): void\n    {\n        \$query->orderBy('position')->orderBy('id');\n    }\n";
+        }
+        $columns = ['            $table->id();'];
+        if ($tenant) {
+            $columns[] = '            // The owning workspace: a workspace with '.strtolower($titles).' cannot be deleted until they are.';
+            $columns[] = '            $table->foreignId(\'workspace_id\')->constrained()->restrictOnDelete();';
+        }
+        $columns[] = '            $table->string(\'name\');';
+        $factory = [];
+        $factoryImports = [];
+        $enumFiles = [];
+        foreach ($enums as $field => $enum) {
+            $imports[] = "{$namespace}\\Enums\\{$enum}";
+            $casts[] = "'{$field}' => {$enum}::class";
+            $columns[] = "            // {$enum}'s values; the database refuses any other (a check constraint on SQLite and PostgreSQL).";
+            $columns[] = "            \$table->enum('{$field}', ['draft', 'active', 'archived'])->default('draft');";
+            $factoryImports[] = "use {$namespace}\\Enums\\{$enum};";
+            $factory[] = "            '{$field}' => {$enum}::Draft,";
+            $enumFiles["{$app}/Enums/{$enum}.php"] = ['model/enum.stub', ['enum' => $enum, 'enum_field' => $field]];
+        }
+        if ($sortable) {
+            $columns[] = '            $table->unsignedInteger(\'position\')->default(0);';
+        }
+        $columns[] = '            $table->unsignedInteger(\'lock_version\')->default(1);';
+        $columns[] = '            $table->timestamps();';
+        if ($soft) {
+            $columns[] = '            $table->softDeletes();';
+        }
+        $scope = $tenant ? "'workspace_id', " : '';
+        if ($tenant) {
+            $columns[] = '            // The target of a composite foreign key from a child table, which keeps a child in its parent\'s workspace.';
+            $columns[] = '            $table->unique([\'workspace_id\', \'id\']);';
+        }
+        $columns[] = "            \$table->index([{$scope}'name']);";
+        foreach (array_keys($enums) as $field) {
+            $columns[] = "            \$table->index([{$scope}'{$field}']);";
+        }
+        if ($sortable) {
+            $columns[] = "            \$table->index([{$scope}'position']);";
+        }
+        sort($imports);
+        // Pint's ordered_traits.
+        sort($traits);
+        $values = [
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'table' => $table, 'perm' => $table, 'var' => Str::camel($name), 'slug' => Str::kebab($plural),
+            'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'titles_lower' => strtolower($titles), 'leaf' => $leaf, 'migration' => $migration,
+            'model_imports' => implode('', array_map(fn (string $class): string => "use {$class};\n", array_unique($imports))),
+            'model_doc' => $doc, 'model_implements' => $implements, 'model_traits' => implode(', ', $traits), 'model_guarded' => implode(', ', $guarded),
+            'model_casts' => implode(', ', $casts), 'model_methods' => implode('', $methods),
+            'migration_columns' => implode("\n", $columns)."\n",
+            'factory_imports' => implode("\n", $factoryImports).($factoryImports === [] ? '' : "\n"),
+            'factory_doc' => $tenant ? ' Create them inside a workspace (TenantBoundary): the model takes the current one.' : '',
+            'factory_fields' => implode("\n", $factory).($factory === [] ? '' : "\n"),
+        ];
+        $enumTests = '';
+        foreach ($enums as $field => $enum) {
+            $enumTests .= $this->render($tenant ? 'model/test-enum-tenant.stub' : 'model/test-enum.stub', [...$values, 'enum' => $enum, 'enum_field' => $field]);
+        }
+        $values['enum_tests'] = $enumTests;
+        $testImports = ["{$namespace}\\Models\\{$name}", 'Illuminate\\Support\\Facades\\Artisan', ...array_map(fn (string $enum): string => "{$namespace}\\Enums\\{$enum}", array_values($enums))];
+        if ($tenant) {
+            array_push($testImports, 'Illuminate\\Database\\QueryException', 'Illuminate\\Support\\Facades\\DB', 'Illuminate\\Support\\Facades\\Hash', 'Illuminate\\Support\\Str', 'Tey\\Concierge\\Actions\\EstablishWorkspace', 'Tey\\Kit\\Features\\Workspaces\\Models\\Workspace', 'Tey\\Kit\\Features\\Workspaces\\TenantBoundary');
+        } elseif ($enums !== []) {
+            array_push($testImports, 'Illuminate\\Database\\QueryException', 'Illuminate\\Support\\Facades\\DB');
+        }
+        usort($testImports, fn (string $a, string $b): int => strcasecmp(str_replace('\\', ' ', $a), str_replace('\\', ' ', $b)));
+        $values['test_imports'] = implode('', array_map(fn (string $class): string => "use {$class};\n", array_unique($testImports)));
+        $files = [
+            "{$app}/Models/{$name}.php" => 'model/model.stub',
+            "database/migrations/{$migration}" => 'model/migration.stub',
+            "database/factories/{$name}Factory.php" => 'model/factory.stub',
+            ...$enumFiles,
+        ];
+        if ($tenant) {
+            $files["{$app}/Policies/{$name}Policy.php"] = ['crud/policy.stub', ['leaf' => $leaf]];
+        }
+        if ($withTests) {
+            $files["{$tests}/{$plural}/{$name}ModelTest.php"] = $tenant ? 'model/test-tenant.stub' : 'model/test.stub';
+        }
+
+        return [$files, $values];
+    }
+
+    /** Workspace tenancy is tey/kit's: without it, refuse rather than emit code that cannot load. */
+    private function requireKit(string $what): void
+    {
+        if (! ($this->kit ?? trait_exists('Tey\\Kit\\Features\\Workspaces\\Concerns\\BelongsToWorkspace'))) {
+            throw new InvalidArgumentException("{$what} needs tey/kit 0.4.15 or later (its Workspaces feature owns workspace tenancy). Install tey/kit and adopt workspaces, or leave out --tenant for a model with no workspace.");
+        }
     }
 
     /**
@@ -202,15 +418,16 @@ final class Maker
         $title = ucfirst(str_replace('-', ' ', Str::kebab($name)));
         $titles = ucfirst(str_replace('-', ' ', $slug));
         [$viewModel, $viewModels] = $this->viewModels($app, $namespace);
-        $migration = date('Y_m_d_His').'_create_'.$table.'_table.php';
         $bulk = in_array('bulk', $options, true);
         $soft = in_array('soft-deletes', $options, true);
-        $values = [
+        // The model is the domain-model generator's (workspace-owned, stale-write guarded), so crud and model share one implementation.
+        [$modelFiles, $modelValues] = $this->domainModel($name, $soft ? ['tenant', 'soft-deletes'] : ['tenant'], 'data-actions.domain-model');
+        $modelFiles = array_map(fn (string|array $stub): array => is_array($stub) ? [$stub[0], ['leaf' => 'data-actions.domain-model', ...$stub[1]]] : [$stub, ['leaf' => 'data-actions.domain-model']], $modelFiles);
+        $migration = $modelValues['migration'];
+        $values = [...$modelValues,
             'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'table' => $table, 'perm' => $table,
             'var' => Str::camel($name), 'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'titles_lower' => strtolower($titles),
             'view_model' => ltrim($viewModel, '\\'), 'view_model_base' => class_basename($viewModel), 'vm_namespace' => $viewModels[1].'\\'.$plural, 'migration' => $migration, 'leaf' => 'ui-page.crud-resource',
-            'soft_import' => $soft ? "\nuse Illuminate\\Database\\Eloquent\\SoftDeletes;" : '', 'soft_use' => $soft ? "\n    use SoftDeletes;\n" : '',
-            'soft_column' => $soft ? "\n            \$table->softDeletes();" : '',
             'bulk_table' => $bulk ? "            ->bulk(new Action('Delete', WorkspaceUrl::to(\$this->workspace, '{$slug}/selection'), 'delete', confirm: ['title' => 'Delete the selected ".strtolower($titles)."?', 'description' => 'Every selected ".strtolower($title)." will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true))\n" : '',
             'extra_routes' => '',
             'bulk_test' => '',
@@ -227,9 +444,7 @@ final class Maker
         }
         $form = ['leaf' => 'ui-page.form'];
         $files = [
-            "{$app}/Models/{$name}.php" => 'crud/model.stub',
-            "database/migrations/{$migration}" => 'crud/migration.stub',
-            "{$app}/Policies/{$name}Policy.php" => 'crud/policy.stub',
+            ...$modelFiles,
             "{$app}/Providers/{$name}ServiceProvider.php" => 'crud/provider.stub',
             "routes/{$slug}.php" => 'crud/routes.stub',
             "{$app}/Http/Controllers/{$name}Controller.php" => 'crud/controller.stub',
@@ -265,6 +480,7 @@ final class Maker
         $written = $this->emit($files, $values);
 
         $written[] = $this->provide("{$namespace}\\Providers\\{$name}ServiceProvider", 'ui-page.crud-resource');
+        $written = [...$written, ...$this->factoryAutoload()];
 
         return $written;
     }

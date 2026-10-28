@@ -8,7 +8,7 @@ defineProps<{ title: string; values: { name: string; lock_version: number | null
 </script>
 
 <template>
-    <Page :title="title" md>
+    <Page md :title="title">
         <Form :action="submit.url" :method="submit.method as never" :options="{ preserveScroll: true }">
             <template #default="{ errors }">
                 <FormCard :title="title" :submit="submit" :cancel-url="cancelUrl" busy-label="Saving…">

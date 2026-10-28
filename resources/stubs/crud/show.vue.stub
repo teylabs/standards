@@ -23,7 +23,7 @@ function perform(action: Action) {
 </script>
 
 <template>
-    <Page :title="title" md>
+    <Page md :title="title">
         <SectionHeader :title="title" :actions="actions" @action="perform" />
         <Section title="Details">
             <dl class="grid gap-2 text-sm sm:grid-cols-[10rem_1fr]">

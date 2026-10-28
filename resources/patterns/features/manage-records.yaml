@@ -7,6 +7,7 @@ questions:
   - { id: notify, question: "Should someone be told when a record changes?", options: ["yes", "no"] }
 composition:
   - { unit_leaf_id: ui-page.crud-resource, role: "scaffold: standards:make crud, with --bulk and --mcp from the answers" }
+  - { unit_leaf_id: data-actions.domain-model, role: "model: crud builds it with the domain-model generator (standards:make model --tenant), one implementation" }
   - { unit_leaf_id: ui-page.index, role: list }
   - { unit_leaf_id: ui-page.form, role: create and edit }
   - { unit_leaf_id: ui-page.show, role: detail }
