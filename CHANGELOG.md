@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.15 - 2026-10-28
 
 ### Upgrading
 
