@@ -397,7 +397,9 @@ final readonly class InstallCheck implements Check
 
         if (InstalledVersions::isInstalled('laravel/passport')) {
             foreach (['private' => 'passport.private_key', 'public' => 'passport.public_key'] as $kind => $name) {
+                // Exactly what Passport loads (PassportServiceProvider::makeCryptKey): the config value with literal \n escapes made newlines, else the key file as it is.
                 $value = $this->config->get($name);
+                $value = is_string($value) ? str_replace('\\n', "\n", $value) : $value;
                 $source = $name;
 
                 if (! $this->filled($value)) {
@@ -406,8 +408,10 @@ final readonly class InstallCheck implements Check
                     $source = 'the oauth-'.$kind.'.key file';
                 }
 
-                if (! is_string($value) || ! str_contains($value, '-----BEGIN ') || ! str_contains($value, "\n") || str_contains($value, '\n')) {
-                    return Result::fail($source.' is not a PEM key with real newlines (php artisan passport:keys, or quote the env value).');
+                if (! $this->loadableKey($value)) {
+                    $base64 = is_string($value) && str_contains((string) base64_decode(trim($value), true), '-----BEGIN ');
+
+                    return Result::fail($source.' is not a PEM key Passport can load'.($base64 ? ': it is base64-encoded, and Passport does not decode it' : '').'. Use the PEM itself, with real newlines or on one line with \\n escapes (php artisan passport:keys).');
                 }
             }
         }
@@ -547,6 +551,23 @@ final readonly class InstallCheck implements Check
         $data = is_file($path) && is_readable($path) ? json_decode((string) file_get_contents($path), true) : null;
 
         return is_array($data) ? $data : null;
+    }
+
+    /** Whether league/oauth2-server's CryptKey accepts it: OpenSSL reads it as a private key, else a public one (no passphrase, as Passport passes none). */
+    private function loadableKey(mixed $value): bool
+    {
+        if (! is_string($value) || ! str_contains($value, '-----BEGIN ')) {
+            return false;
+        }
+        if (! function_exists('openssl_pkey_get_private')) {
+            return preg_match('/^-----BEGIN [A-Z ]+KEY-----\R.+\R-----END [A-Z ]+KEY-----\R?$/s', $value) === 1 && ! str_contains($value, '\\');
+        }
+        $key = @openssl_pkey_get_private($value) ?: @openssl_pkey_get_public($value);
+        while (openssl_error_string() !== false) {
+            // Drain OpenSSL's error queue so a refused key leaves no stale errors behind.
+        }
+
+        return $key !== false;
     }
 
     private function filled(mixed $value): bool

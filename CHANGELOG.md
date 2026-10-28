@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Preflight accepts the Passport keys Passport loads.** The install check refused a `PASSPORT_PRIVATE_KEY` or `PASSPORT_PUBLIC_KEY` written on one line with literal `\n` escapes, though Passport turns those into newlines (`PassportServiceProvider::makeCryptKey`). The check now normalises the config value exactly as Passport does, then asks OpenSSL to read it as league/oauth2-server's `CryptKey` would. It checks both keys. Key files are read as they are.
+  - Accepted: real newlines (including Windows `\r\n`) and literal `\n` escapes.
+  - Refused: base64 (Passport doesn't decode it; the message says so), garbage, and a PEM OpenSSL can't read.
+  - The failure message names the accepted forms.
+
 ## 0.11.7 - 2026-10-27
 
 ### Upgrading
