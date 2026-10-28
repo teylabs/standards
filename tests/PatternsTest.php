@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Filesystem\Filesystem;
 use Symfony\Component\Yaml\Yaml;
 use Tey\Standards\Enforcement\CheckReport;
+use Tey\Standards\Enforcement\Installer;
 use Tey\Standards\Enforcement\Maker;
 use Tey\Standards\Patterns\Branch;
 use Tey\Standards\Patterns\Compiler;
@@ -755,4 +756,83 @@ test('the kit export snapshot is tey/kit v0.4.33\'s @kit/ui barrel: an app on th
     } finally {
         (new Illuminate\Filesystem\Filesystem)->deleteDirectory($app);
     }
+});
+
+test('build-your-own leaves composed of existing patterns resolve by intent, and carry their conventions, related leaves and graduation', function (string $intent, string $leaf, array $related, string $rule, string $graduate) {
+    $lookup = new Lookup(TreeCatalog::shipped());
+    $found = $lookup->find(['intent' => $intent]);
+    $first = $found['type'] === 'leaf' ? $found['id'] : ($found['candidates'][0]['id'] ?? null);
+
+    expect($first)->toBe($leaf, json_encode($found['candidates'] ?? $found));
+
+    $recipe = $lookup->recipe($leaf);
+
+    expect($recipe['status'])->toBe('draft')
+        ->and($recipe['make'])->toBeNull()
+        ->and(array_column($recipe['related'], 'id'))->toBe($related)
+        ->and(implode("\n", $recipe['conventions']['rules']))->toContain($rule)
+        ->and($recipe['graduate'])->toBe($graduate)
+        ->and($recipe['conventions']['notes'])->toBe([$graduate]);
+})->with([
+    'external sync' => ['sync with an external source', 'ui-page.external-sync', ['background.job', 'ui-page.external-link'], 'Replace needs a typed confirmation', 'Graduate to a kit recipe when a second app needs it.'],
+    'live console' => ['run a live session', 'ui-page.live-console', ['ui-page.workbench', 'ui-page.stage-display'], 'One realtime writer per session', 'Graduate to a kit LiveConsole layout when a second app needs it.'],
+    'stage display' => ['projector stage display', 'ui-page.stage-display', ['ui-page.kiosk', 'ui-page.live-console'], 'stale frames are refused', 'Graduate to a kit recipe when a second app needs it.'],
+    'live audience' => ['guests vote on their phone', 'ui-page.audience-live', ['ui-page.stage-display', 'ui-page.live-console'], 'a per-session token, never an account', 'Graduate to a kit recipe when a second app needs it.'],
+    'paired remote' => ['pair a phone remote', 'ui-page.remote', ['access-tenancy.device-pairing', 'ui-page.signed-guest'], 'Commands are ephemeral', 'Graduate to standards:make pairing when a second app needs it.'],
+    'scoped guest' => ['invite someone to one record', 'access-tenancy.membership.scoped-guest', ['access-tenancy.membership.workspace', 'access-tenancy.capability'], 'NEVER appear as transfer, admin or role-picker targets', 'To become a Concierge feature (invitation scope, teylabs/concierge issue 133).'],
+]);
+
+test('device pairing holds the pairing rules, and the signed-guest, workbench and kiosk leaves link back to their new neighbours', function () {
+    $lookup = new Lookup(TreeCatalog::shipped());
+    $pairing = $lookup->recipe('access-tenancy.device-pairing');
+
+    expect(implode("\n", $pairing['conventions']['rules']))->toContain('temporarySignedRoute (at most 2 minutes)')->toContain('rotating the secret ends every pairing')->toContain('pairedAt only')
+        ->and(array_column($pairing['related'], 'id'))->toBe(['ui-page.remote', 'ui-page.signed-guest', 'access-tenancy.signed-link'])
+        ->and(array_column($lookup->recipe('ui-page.signed-guest')['related'], 'id'))->toBe(['ui-page.remote', 'access-tenancy.device-pairing'])
+        ->and(array_column($lookup->recipe('ui-page.workbench')['related'], 'id'))->toBe(['ui-page.live-console'])
+        ->and(array_column($lookup->recipe('ui-page.kiosk')['related'], 'id'))->toBe(['ui-page.stage-display']);
+
+    // The tree reaches each by its question.
+    expect($lookup->find(['answers' => ['A page people open in the browser', 'Someone arriving by a signed link, or a paired second device', 'Yes, a paired device acts for a signed-in user']])['id'])->toBe('ui-page.remote')
+        ->and($lookup->find(['answers' => ['A page people open in the browser', 'A signed-in user of the app', 'Several CRUD screens at once, or a bespoke workflow', 'A workflow page beyond CRUD (a workbench, a live console, a synced source, an activity stream)', 'Connect an outside source and sync it on demand']])['id'])->toBe('ui-page.external-sync')
+        ->and($lookup->find(['answers' => ['Who can see or do something', 'No, a signed-in user', 'Workspace membership', 'Someone invited to act on one record, with no other access']])['id'])->toBe('access-tenancy.membership.scoped-guest');
+});
+
+test('a draft leaf\'s conventions reach its generated skill', function () {
+    $base = sys_get_temp_dir().'/standards-skill-'.bin2hex(random_bytes(6));
+    mkdir($base);
+
+    try {
+        (new Installer($base, TreeCatalog::shipped()))->skills();
+        $skill = (string) file_get_contents($base.'/.ai/skills/standards-ui-page-external-sync/SKILL.md');
+
+        expect($skill)->toContain("Conventions:\n- The page's actions are server action descriptors")
+            ->toContain('Related: `background.job`, `ui-page.external-link`.')
+            ->toContain('Graduates: Graduate to a kit recipe when a second app needs it.');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('related must name other leaves, and rules a list of strings', function () {
+    $unknown = mutatedPatterns('ui-page', function (array $source): array {
+        $source['nodes'][nodeAt($source, 'ui-page.external-sync')]['related'][] = 'ui-page.nowhere';
+
+        return $source;
+    });
+    expect(fn () => Compiler::compile($unknown))->toThrow(InvalidArgumentException::class, 'relates to ui-page.nowhere, which is not another leaf');
+
+    $branch = mutatedPatterns('ui-page', function (array $source): array {
+        $source['nodes'][nodeAt($source, 'ui-page.external-sync')]['related'] = ['ui-page.workflow'];
+
+        return $source;
+    });
+    expect(fn () => Compiler::compile($branch))->toThrow(InvalidArgumentException::class, 'relates to ui-page.workflow, which is not another leaf');
+
+    $rules = mutatedPatterns('ui-page', function (array $source): array {
+        $source['nodes'][nodeAt($source, 'ui-page.external-sync')]['rules'] = ['ok', ''];
+
+        return $source;
+    });
+    expect(fn () => Compiler::compile($rules))->toThrow(InvalidArgumentException::class, 'rules must be a list of non-empty strings');
 });

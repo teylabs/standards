@@ -7,7 +7,7 @@ nodes:
     options:
       - { answer: "A signed-in user of the app", next: ui-page.app }
       - { answer: "A guest on a public page", next: ui-page.public }
-      - { answer: "A recipient arriving by a signed link", next: ui-page.signed-guest }
+      - { answer: "Someone arriving by a signed link, or a paired second device", next: ui-page.signed }
       - { answer: "A user of a Filament panel", next: ui-page.filament }
       - { answer: "None of these", next: ui-page.byo }
   - id: ui-page.app
@@ -50,20 +50,42 @@ nodes:
       - { answer: "A file upload field", next: ui-page.upload }
       - { answer: "None of these", next: ui-page.actions.byo }
   - id: ui-page.larger
-    question: Is it a full set of CRUD screens, or a workflow page beyond CRUD?
+    question: Is it a full set of CRUD screens, a workflow page beyond CRUD, or a full-screen display?
     options:
       - { answer: "Index, form and show screens for one record type", next: ui-page.crud-resource }
-      - { answer: "A workbench: edit a sequence of items with a live preview", next: ui-page.workbench }
-      - { answer: "An activity stream", next: ui-page.activity-feed }
+      - { answer: "A workflow page beyond CRUD (a workbench, a live console, a synced source, an activity stream)", next: ui-page.workflow }
+      - { answer: "A full-screen output another screen drives (projector, kiosk TV)", next: ui-page.stage-display }
       - { answer: "None of these", next: ui-page.larger.byo }
+  - id: ui-page.workflow
+    question: Which workflow page?
+    why: A workbench edits records, a console runs a live session, a synced page mirrors an outside source, and a stream shows activity; each has its own regions and tests.
+    options:
+      - { answer: "A workbench: edit a sequence of items with a live preview", next: ui-page.workbench }
+      - { answer: "Run a live session: a stage plus side panels that act on it in real time", next: ui-page.live-console }
+      - { answer: "Connect an outside source and sync it on demand", next: ui-page.external-sync }
+      - { answer: "An activity stream", next: ui-page.activity-feed }
+      - { answer: "None of these", next: ui-page.workflow.byo }
+  - id: ui-page.signed
+    question: Does a second device act for a signed-in user (a phone remote, a paired screen)?
+    why: A signed-link recipient is a guest acting for themselves; a paired device acts for a signed-in user and must be re-authorised on every request.
+    options:
+      - { answer: "No, a recipient arriving by a signed link", next: ui-page.signed-guest }
+      - { answer: "Yes, a paired device acts for a signed-in user", next: ui-page.remote }
+      - { answer: "None of these", next: ui-page.signed.byo }
   - id: ui-page.public
     question: Which public or shared page?
     options:
       - { answer: "Marketing, product or legal (privacy, terms)", next: ui-page.public-legal }
-      - { answer: "A per-visitor demo exhibit", next: ui-page.exhibit }
       - { answer: "An error page anyone can hit", next: ui-page.error }
-      - { answer: "A kiosk-style entry flow", next: ui-page.kiosk }
+      - { answer: "A live or in-person experience (a demo exhibit, a kiosk, a live audience)", next: ui-page.public.live }
       - { answer: "None of these", next: ui-page.public.byo }
+  - id: ui-page.public.live
+    question: Which live or in-person experience?
+    options:
+      - { answer: "A per-visitor demo exhibit", next: ui-page.exhibit }
+      - { answer: "A kiosk-style entry flow", next: ui-page.kiosk }
+      - { answer: "Guests join a live session on their phone and interact (react, vote, chat)", next: ui-page.audience-live }
+      - { answer: "None of these", next: ui-page.public.live.byo }
   - id: ui-page.index
     recipe: Inertia index page
     summary: A CRUDDY index controller passes a typed ViewModel to resources/js/pages/<Area>/Index/Page.vue; its table is a TableQuery (search, declared filters and sorts from the URL, an unknown one a 400) with each row's actions decided on the server.
@@ -234,6 +256,7 @@ nodes:
     keywords: [workflow, workbench, editor, slide editor, sequence, live preview, inspector, multi-pane, bespoke page]
     status: ready
     evidence: { apps: 5, count: 25, prs: 25, past_apps: 10, past_count: 40 }
+    related: [ui-page.live-console]
   - id: ui-page.dashboard-widget
     recipe: Dashboard widget
     summary: Register a widget with its order and placement; never fork the kit dashboard page.
@@ -281,6 +304,7 @@ nodes:
     keywords: [signed link, guest, token, client portal, recipient]
     status: gap
     evidence: { apps: 2, count: 8, prs: 8 }
+    related: [ui-page.remote, access-tenancy.device-pairing]
   - id: ui-page.error
     recipe: Error page
     summary: A branded Inertia error page for 4xx and 5xx responses.
@@ -372,6 +396,7 @@ nodes:
     keywords: [kiosk, check in, self service, entry]
     status: gap
     evidence: { apps: 0, count: 0, prs: 0, past_apps: 1, past_count: 1 }
+    related: [ui-page.stage-display]
   - id: ui-page.activity-feed
     recipe: activity-stream adoption
     summary: Publish activity through the activity-stream service's verb guide and authoriser, and render its feed; never a hand-built activity table.
@@ -381,3 +406,116 @@ nodes:
     keywords: [activity, feed, stream, timeline, publish activity]
     status: draft
     evidence: { apps: 4, count: 11, prs: 11, past_apps: 1, past_count: 1 }
+  - id: ui-page.external-sync
+    recipe: External source sync
+    summary: Connect an outside source, sync it on demand, show the last run and its result, and replace from the source behind a typed confirmation. Build your own from existing patterns; there is no generator yet.
+    kit: ['@kit/ui ActionBar', '@kit/ui DropdownConfirm', '@kit/ui Alert', '@kit/ui StageNotice', '@kit/ui Toaster']
+    components:
+      - { name: "page actions", kit_component: ActionBar, use: "Server action descriptors: Link, Sync now, and Unlink and Replace from source in the ⌄ menu", props_hint: "actions" }
+      - { name: "last run", kit_component: Alert, use: "The last run's status and result", props_hint: "variant, title" }
+    checks: ['tenant-aware']
+    paths: []
+    keywords: [sync, external source, sync with, connect a source, linked source, sync now, last sync, replace from source, import from, google, provider sync]
+    status: draft
+    rules:
+      - "The page's actions are server action descriptors: Link; Sync now; and Unlink and Replace from source in the ⌄ menu. Each is confirmed, and Replace needs a typed confirmation (the user types the source's name)."
+      - "Sync runs as a queued TenantAware job (background.job), and answers a run token the page polls (or a broadcast it listens to)."
+      - "The last run's status and result show with kit Feedback (Alert or StageNotice), completion raises a toast, and the page has an empty state while nothing is linked."
+      - "The outside source's credentials and tokens live server-side only: never in page props, the run token or the client."
+      - "Tests: a sync that succeeds and one that fails, a typed confirmation refused, unlink, and the job failing loudly with no tenant."
+    related: [background.job, ui-page.external-link]
+    graduate: "Graduate to a kit recipe when a second app needs it."
+  - id: ui-page.live-console
+    recipe: Live console
+    summary: Run a live session from a stage plus side panels that act on it in real time. Workbench edits records; a console runs a session. Build your own on kit Workbench regions; there is no generator yet.
+    kit: ['@kit/ui Workbench', '@kit/ui Section', '@kit/ui Collapsible', '@kit/ui ActionBar']
+    components:
+      - { name: "console", kit_component: Workbench, use: "The stage and its panel regions", props_hint: "workbench-key, label" }
+      - { name: "panel", kit_component: Collapsible, use: "One side panel in the stack", props_hint: "title" }
+    checks: []
+    paths: []
+    keywords: [live session, console, presenter, run a session, control room, real time, stage and panels, live show]
+    status: draft
+    rules:
+      - "Built on kit Workbench regions: the stage plus a panel stack of Sections or Collapsibles, with ActionBar descriptors. No hand-rolled layout."
+      - "One realtime writer per session, held by a lock or lease."
+      - "A documented keyboard transport map, with its keys announced in the help."
+      - "A ready or empty state while no session is open."
+      - "Live counts sit in polite aria-live regions."
+      - "Frames relayed to other screens carry only public fields; a test proves private totals and names never reach a public screen."
+      - "Presenter-only authorization, re-checked on every action."
+    related: [ui-page.workbench, ui-page.stage-display]
+    graduate: "Graduate to a kit LiveConsole layout when a second app needs it."
+  - id: ui-page.stage-display
+    recipe: Stage display
+    summary: A full-screen output another screen drives (a projector, a kiosk TV). Chrome-less, unauthenticated, and fed only public frames. Build your own; there is no generator yet.
+    kit: ['@kit/ui StageNotice']
+    checks: []
+    paths: []
+    keywords: [projector, stage display, kiosk tv, full screen output, big screen, audience screen, display screen]
+    status: draft
+    rules:
+      - "Chrome-less: no shell, navigation or controls."
+      - "Overlays only through kit StageNotice."
+      - "A versioned message protocol with epoch and sequence ordering; stale frames are refused, and a contract test pins the protocol."
+      - "Reduced motion is honoured and tested."
+      - "No input except entering fullscreen."
+      - "Only public frame fields reach it."
+      - "The room is never authenticated: it holds no user session."
+    related: [ui-page.kiosk, ui-page.live-console]
+    graduate: "Graduate to a kit recipe when a second app needs it."
+  - id: ui-page.audience-live
+    recipe: Live audience
+    summary: Guests join a live session on their phone and interact (react, vote, chat), anonymously, with a per-session token and no account. Build your own; there is no generator yet.
+    kit: ['@kit/ui Field', '@kit/ui FormCard']
+    checks: []
+    paths: []
+    keywords: [audience, join on phone, vote, react, live poll, guest chat, audience participation, join code]
+    status: draft
+    rules:
+      - "Anonymous: a per-session token, never an account."
+      - "Throttled join, avatar and interaction endpoints."
+      - "A freshness and offline state on the guest's screen."
+      - "A retention purge that covers uploaded media."
+      - "No tracking beyond the session feed."
+      - "Joining uses kit Form and Field; use kit RadioCard and EmojiTray once they ship (queued as kit gaps)."
+    related: [ui-page.stage-display, ui-page.live-console]
+    graduate: "Graduate to a kit recipe when a second app needs it."
+  - id: ui-page.remote
+    recipe: Paired-device remote
+    summary: A second device (a phone remote, a paired screen) acts for a signed-in user through a short-lived pairing, re-authorised on every request. Build your own on access-tenancy.device-pairing; there is no generator yet.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [remote, phone remote, pair a device, paired screen, second screen, clicker, pairing]
+    status: draft
+    rules:
+      - "Pairing and its security follow access-tenancy.device-pairing."
+      - "Command endpoints are CSRF-protected (or token-bound), and the feed is private, no-store."
+      - "Commands are ephemeral, read since a cursor; nothing is recorded."
+    related: [access-tenancy.device-pairing, ui-page.signed-guest]
+    graduate: "Graduate to standards:make pairing when a second app needs it."
+  - id: ui-page.workflow.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.signed.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.public.live.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo

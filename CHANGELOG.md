@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Seven build-your-own leaves** in the pattern tree (README: Build-your-own recipes). They are `draft` leaves with rules but no generator, each from patterns one app has, each saying when it graduates:
+  - `ui-page.external-sync`;
+  - `ui-page.live-console`;
+  - `ui-page.stage-display`;
+  - `ui-page.audience-live`;
+  - `ui-page.remote` with `access-tenancy.device-pairing`;
+  - `access-tenancy.membership.scoped-guest`.
+  - For example, `standards:pattern "sync with an external source"` resolves to `ui-page.external-sync`, which links `background.job` and `ui-page.external-link`.
+- **Leaves can carry `rules`, `related` and `graduate`.** The compiler validates them (`related` must name other leaves), the lookup returns them, and the generated skill lists them.
+
+### Changed
+
+- **Tree paths moved for a few answers:**
+  - Workbench and activity stream now sit under a new "A workflow page beyond CRUD" question.
+  - The signed-link guest page is reached through "Does a second device act for a signed-in user?".
+  - Exhibit and kiosk sit under "A live or in-person experience".
+  - Workspace membership is now `access-tenancy.membership.workspace`, under a new "Who is being let in?" question. Its evidence moved with it.
+  - Leaf ids are unchanged except for that last one. Stamps aren't checked against leaf ids, so files stamped `access-tenancy.membership` keep passing.
+
 ## 0.11.16 - 2026-10-28
 
 ### Fixed

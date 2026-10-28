@@ -551,8 +551,22 @@ A hosted recipe MCP (`bakery.find`, `bakery.recipe`, `bakery.scaffold`, `bakery.
 - **Features** (`resources/patterns/features/*.yaml`) compose unit leaves into a plan. Each is `{id, summary, keywords, questions?, composition: [{unit_leaf_id, role, when?}]}`. Seven ship: manage records, workspace settings, personal preferences, an MCP-exposed operation, document send, operator maintenance and file import.
 - **Units** form a decision tree. It starts at "What are you building?" and branches into `ui-page`, `data-actions`, `mcp`, `settings`, `mail-notifications`, `background`, `access-tenancy` and `integrations` (`resources/patterns/<branch>.yaml`).
   - A branch is `{id, question, why?, options: [{answer, next}]}`, with 2–5 options and a "None of these" exit.
-  - A leaf is `{id, recipe, summary, kit, components?, make?, recipe_make?, checks, paths, keywords, status, evidence?}`, where `status` is `ready`, `draft`, `gap` or `byo`.
+  - A leaf is `{id, recipe, summary, kit, components?, make?, recipe_make?, checks, paths, keywords, status, evidence?, rules?, related?, graduate?}`, where `status` is `ready`, `draft`, `gap` or `byo`.
+  - A `draft` leaf without a generator carries its conventions as `rules`, the leaves it composes or sits beside as `related` (each must be another leaf), and `graduate`: when it becomes a generator or kit recipe. The lookup returns them (`conventions`, `related`, `graduate`), and the generated skill lists them.
 - **Components** list the `@kit/ui` components a leaf is built from, as `{name, kit_component, use, props_hint}`. `resources/patterns/kit-exports.json` snapshots the kit's `@kit/ui` barrel, and the validator rejects any name it doesn't export.
+
+**Build-your-own recipes.** Some pages and access patterns exist in only one app so far. They are `draft` leaves, with rules but no generator yet, and each says when it graduates:
+
+| Leaf | For | Built from | Graduates |
+| --- | --- | --- | --- |
+| `ui-page.external-sync` | Connect an outside source, sync on demand, show the last run, replace behind a typed confirmation | `background.job`, `ui-page.external-link` | to a kit recipe, when a second app needs it |
+| `ui-page.live-console` | Run a live session: a stage plus side panels that act on it in real time | `ui-page.workbench` (a workbench edits records; a console runs a session) | to a kit LiveConsole layout |
+| `ui-page.stage-display` | A full-screen output another screen drives (projector, kiosk TV) | `ui-page.kiosk` | to a kit recipe |
+| `ui-page.audience-live` | Guests join a live session on their phone and interact | `ui-page.stage-display` | to a kit recipe |
+| `ui-page.remote` and `access-tenancy.device-pairing` | A second device acts for a signed-in user (a phone remote, a paired screen) | `ui-page.signed-guest`, `access-tenancy.signed-link` | to `standards:make pairing` |
+| `access-tenancy.membership.scoped-guest` | Invite someone to act on one record, with no other access | `access-tenancy.membership.workspace` | to a Concierge feature (invitation scope) |
+
+`php artisan standards:pattern "sync with an external source"` (or bakery.find) resolves to `ui-page.external-sync`, with its rules and related leaves.
 
 `php bin/standards patterns:compile` validates the sources into `catalog.json`, and the suite fails if the two differ. The validator rejects these:
 

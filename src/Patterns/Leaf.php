@@ -29,6 +29,12 @@ final readonly class Leaf
         public ?array $evidence = null,
         /** @var list<array{name: string, kit_component: string, use: string, props_hint: string}> */
         public array $components = [],
+        /** @var list<string> the conventions a draft leaf is built to, until it has a generator */
+        public array $rules = [],
+        /** @var list<string> leaf ids it composes or sits beside */
+        public array $related = [],
+        /** when it becomes a generator or kit recipe */
+        public ?string $graduate = null,
     ) {}
 
     /** Demand: fleet apps × changes plus past apps × changes, 0 without evidence. */
@@ -40,6 +46,6 @@ final readonly class Leaf
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return ['type' => 'leaf', 'id' => $this->id, 'recipe' => $this->recipe, 'summary' => $this->summary, 'kit' => $this->kit, 'make' => $this->make, 'checks' => $this->checks, 'paths' => $this->paths, 'keywords' => $this->keywords, 'status' => $this->status, 'recipe_make' => $this->recipeMake, 'evidence' => $this->evidence, 'components' => $this->components];
+        return ['type' => 'leaf', 'id' => $this->id, 'recipe' => $this->recipe, 'summary' => $this->summary, 'kit' => $this->kit, 'make' => $this->make, 'checks' => $this->checks, 'paths' => $this->paths, 'keywords' => $this->keywords, 'status' => $this->status, 'recipe_make' => $this->recipeMake, 'evidence' => $this->evidence, 'components' => $this->components, 'rules' => $this->rules, 'related' => $this->related, 'graduate' => $this->graduate];
     }
 }

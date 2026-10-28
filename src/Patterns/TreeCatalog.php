@@ -27,7 +27,7 @@ final class TreeCatalog implements PatternCatalog
         foreach ($catalog['nodes'] as $id => $node) {
             $this->nodes[$id] = isset($node['question'])
                 ? new Branch($id, $node['question'], $node['options'], $node['why'] ?? null)
-                : new Leaf($id, $node['recipe'], $node['summary'], $node['kit'], $node['make'], $node['checks'], $node['paths'], $node['keywords'], $node['status'], $node['recipe_make'] ?? null, $node['evidence'] ?? null, $node['components'] ?? []);
+                : new Leaf($id, $node['recipe'], $node['summary'], $node['kit'], $node['make'], $node['checks'], $node['paths'], $node['keywords'], $node['status'], $node['recipe_make'] ?? null, $node['evidence'] ?? null, $node['components'] ?? [], $node['rules'] ?? [], $node['related'] ?? [], $node['graduate'] ?? null);
 
             foreach ($node['options'] ?? [] as $option) {
                 $this->parents[$option['next']] = $id;

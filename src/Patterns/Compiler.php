@@ -280,19 +280,40 @@ final class Compiler
             }
         }
 
-        $extra = array_diff(array_keys($node), ['id', 'recipe', 'summary', 'kit', 'make', 'recipe_make', 'checks', 'paths', 'keywords', 'status', 'evidence', 'components']);
+        // A leaf without a generator yet (draft) carries its conventions as rules, the leaves it composes or sits beside, and when it graduates.
+        foreach (['rules', 'related'] as $field) {
+            $list = $node[$field] ?? [];
+
+            if (! is_array($list) || ! array_is_list($list) || array_filter($list, fn (mixed $item): bool => is_string($item) && trim($item) !== '') !== $list) {
+                throw new InvalidArgumentException("Leaf {$id} {$field} must be a list of non-empty strings.");
+            }
+        }
+
+        $graduate = $node['graduate'] ?? null;
+
+        if ($graduate !== null && (! is_string($graduate) || trim($graduate) === '')) {
+            throw new InvalidArgumentException("Leaf {$id} graduate must be a non-empty string.");
+        }
+
+        $extra = array_diff(array_keys($node), ['id', 'recipe', 'summary', 'kit', 'make', 'recipe_make', 'checks', 'paths', 'keywords', 'status', 'evidence', 'components', 'rules', 'related', 'graduate']);
 
         if ($extra !== []) {
             throw new InvalidArgumentException("Leaf {$id} has unknown fields: ".implode(', ', $extra).'.');
         }
 
-        return ['id' => $id, 'recipe' => $node['recipe'], 'summary' => $node['summary'], 'kit' => $node['kit'], 'make' => $make, 'checks' => $node['checks'], 'paths' => $node['paths'], 'keywords' => $node['keywords'], 'status' => $node['status'], ...($recipeMake === null ? [] : ['recipe_make' => $recipeMake]), ...($evidence === null ? [] : ['evidence' => $evidence]), ...($components === [] ? [] : ['components' => $components])];
+        return ['id' => $id, 'recipe' => $node['recipe'], 'summary' => $node['summary'], 'kit' => $node['kit'], 'make' => $make, 'checks' => $node['checks'], 'paths' => $node['paths'], 'keywords' => $node['keywords'], 'status' => $node['status'], ...($recipeMake === null ? [] : ['recipe_make' => $recipeMake]), ...($evidence === null ? [] : ['evidence' => $evidence]), ...($components === [] ? [] : ['components' => $components]), ...(($node['rules'] ?? []) === [] ? [] : ['rules' => $node['rules']]), ...(($node['related'] ?? []) === [] ? [] : ['related' => $node['related']]), ...($graduate === null ? [] : ['graduate' => $graduate])];
     }
 
     /** @param array<string, array<string, mixed>> $nodes */
     private static function validate(array $nodes): void
     {
         foreach ($nodes as $id => $node) {
+            foreach ($node['related'] ?? [] as $related) {
+                if (! isset($nodes[$related]) || isset($nodes[$related]['options']) || $related === $id) {
+                    throw new InvalidArgumentException("Leaf {$id} relates to {$related}, which is not another leaf.");
+                }
+            }
+
             foreach ($node['options'] ?? [] as $option) {
                 if (! isset($nodes[$option['next']])) {
                     throw new InvalidArgumentException("Branch {$id} points to missing node {$option['next']}.");
