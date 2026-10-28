@@ -6,7 +6,7 @@ namespace {{ namespace }}\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Tey\Standards\Operator\Operator;
+{{ tenant_use }}use Tey\Standards\Operator\Operator;
 use Tey\Standards\Operator\OperatorRun;
 
 /**
@@ -14,13 +14,13 @@ use Tey\Standards\Operator\OperatorRun;
  * with the name typed back; one run at a time; a re-run finds nothing left to delete. Edit TABLE, COLUMN and the cutoff for the real sweep: the operator
  * contract (Operator::run) stays as it is.
  */
-final class {{ name }} extends Command
+{{ tenant_note }}final class {{ name }} extends Command
 {
-    public const TABLE = '{{ table }}';
+{{ tenant_trait }}    public const TABLE = '{{ table }}';
 
     public const COLUMN = '{{ column }}';
 
-    protected $signature = 'app:{{ slug }} {--apply : Delete (without it, a dry run)} {--force : Allow --apply in production, after typing the command name} {--days=30 : Keep rows newer than this} {--chunk=500 : Rows per batch}';
+    protected $signature = 'app:{{ slug }} {--apply : Delete (without it, a dry run)} {--force : Allow --apply in production, after typing the command name} {--days=30 : Keep rows newer than this} {--chunk=500 : Rows per batch}{{ tenant_option }}';
 
     protected $description = 'Delete stale '.self::TABLE.' rows (dry run unless --apply)';
 

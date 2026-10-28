@@ -145,6 +145,7 @@ final class Maker
 
         $allowed = match (true) {
             $unit === 'crud' => self::CRUD_OPTIONS,
+            $unit === 'command', $unit === 'job' => ['landlord'],
             $unit === 'model' && $flavor === 'domain' => self::MODEL_OPTIONS,
             default => [],
         };
@@ -169,7 +170,9 @@ final class Maker
         }
 
         if (isset(self::DELEGATED[$unit])) {
-            return $this->delegate(self::DELEGATED[$unit], $name, $leaf);
+            $created = $this->delegate(self::DELEGATED[$unit], $name, $leaf);
+
+            return $unit === 'job' ? $this->tenantJob($created, in_array('landlord', $options, true)) : $created;
         }
 
         if ($unit === 'crud') {
@@ -218,9 +221,11 @@ final class Maker
             ], null],
             // An operator command on Tey\Standards\Operator (dry run unless --apply, idempotent, refused in production unless forced) and the test that proves it.
             // The class is suffixed Command (Laravel's preset expects it); the artisan name and the table come from the name without it.
-            'command' => (function () use ($app, $tests, $flavor, $name): array {
+            // In a spatie/laravel-multitenancy app the command is tenant-aware by default (Spatie's TenantAware trait: it runs once per tenant);
+            // --landlord makes it a landlord-only command, and says so.
+            'command' => (function () use ($app, $tests, $flavor, $name, $options): array {
                 $base = Str::beforeLast(Str::finish($name, 'Command'), 'Command');
-                $values = ['name' => $base.'Command', 'slug' => Str::kebab($base), 'table' => Str::snake($base), 'column' => $flavor === 'maintenance' ? 'created_at' : 'processed_at'];
+                $values = ['name' => $base.'Command', 'slug' => Str::kebab($base), 'table' => Str::snake($base), 'column' => $flavor === 'maintenance' ? 'created_at' : 'processed_at', ...$this->tenantCommand(in_array('landlord', $options, true))];
 
                 return [[
                     "{$app}/Console/Commands/{$base}Command.php" => ["command/{$flavor}.stub", $values],
@@ -691,7 +696,7 @@ final class Maker
             'example_event' => $slug.'.updated', 'example_class' => $name.'Updated',
         ];
         // A webhook arrives with no tenant: in a multitenant app its job must not wait for one (the handler finds the tenant from the payload).
-        $tenancy = interface_exists('Spatie\\Multitenancy\\Jobs\\NotTenantAware') || is_dir($this->base.'/vendor/spatie/laravel-multitenancy');
+        $tenancy = $this->tenancy();
         $values += $tenancy
             ? ['tenant_use' => "use Spatie\\Multitenancy\\Jobs\\NotTenantAware;\n", 'tenant_implements' => ' implements NotTenantAware', 'tenant_note' => "\n *\n * Not tenant-aware: a webhook arrives with no tenant, so a handler that needs one finds it from the payload and runs inside it."]
             : ['tenant_use' => '', 'tenant_implements' => '', 'tenant_note' => ''];
@@ -979,6 +984,69 @@ final class Maker
      *
      * @return list<string>
      */
+    /** Whether the app (not this package) has spatie/laravel-multitenancy: required in its composer.json, or installed in its vendor. */
+    private function tenancy(): bool
+    {
+        $file = $this->base.'/composer.json';
+        $composer = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+        $packages = is_array($composer) ? [...array_keys($composer['require'] ?? []), ...array_keys($composer['require-dev'] ?? [])] : [];
+
+        return in_array('spatie/laravel-multitenancy', $packages, true) || is_dir($this->base.'/vendor/spatie/laravel-multitenancy');
+    }
+
+    /** @return array{tenant_use: string, tenant_trait: string, tenant_option: string, tenant_note: string} the command stub's tenancy parts */
+    private function tenantCommand(bool $landlord): array
+    {
+        if (! $this->tenancy()) {
+            return ['tenant_use' => '', 'tenant_trait' => '', 'tenant_option' => '', 'tenant_note' => ''];
+        }
+
+        if ($landlord) {
+            return ['tenant_use' => '', 'tenant_trait' => '', 'tenant_option' => '', 'tenant_note' => "// Landlord-only (made with --landlord): it runs outside any tenant, so it must not touch tenant-scoped models.\n"];
+        }
+
+        return [
+            'tenant_use' => "use Spatie\\Multitenancy\\Commands\\Concerns\\TenantAware;\n",
+            'tenant_trait' => "    use TenantAware;\n\n",
+            'tenant_option' => ' {--tenant=* : The tenants to run for (all of them by default)}',
+            'tenant_note' => "// Tenant-aware (spatie/laravel-multitenancy): it runs once per tenant; --tenant=<id> picks some.\n",
+        ];
+    }
+
+    /**
+     * A job tey/mod made, made tenant-aware the spatie/laravel-multitenancy way: `implements ShouldQueue, TenantAware`. With --landlord it
+     * implements NotTenantAware instead (it never waits for a tenant) and says it is landlord-only. Without the package the job is left as made.
+     *
+     * @param  list<string>  $created
+     * @return list<string>
+     */
+    private function tenantJob(array $created, bool $landlord): array
+    {
+        if (! $this->tenancy() || $this->dryRun) {
+            return $created;
+        }
+
+        foreach ($created as $file) {
+            $contents = (string) file_get_contents($this->base.'/'.$file);
+
+            if (! str_ends_with($file, '.php') || preg_match('/\bimplements\s+([^{]*\bShouldQueue\b[^{]*)\{/', $contents) !== 1) {
+                continue;
+            }
+
+            $interface = $landlord ? 'NotTenantAware' : 'TenantAware';
+            $contents = (string) preg_replace('/^use Illuminate\\\\Contracts\\\\Queue\\\\ShouldQueue;$/m', "use Illuminate\\Contracts\\Queue\\ShouldQueue;\nuse Spatie\\Multitenancy\\Jobs\\{$interface};", $contents, 1);
+            $contents = (string) preg_replace('/\bimplements(\s+)([^{]*?)\bShouldQueue\b/', 'implements$1$2ShouldQueue, '.$interface, $contents, 1);
+
+            if ($landlord) {
+                $contents = (string) preg_replace('/^((?:final |abstract |readonly )*class\s)/m', "// Landlord-only (made with --landlord): it runs outside any tenant, so it must not touch tenant-scoped models.\n$1", $contents, 1);
+            }
+
+            file_put_contents($this->base.'/'.$file, $contents);
+        }
+
+        return $created;
+    }
+
     private function delegate(string $generator, string $name, string $leaf): array
     {
         if (! in_array($generator, $this->generators, true) || $this->run === null) {

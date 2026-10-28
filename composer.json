@@ -38,7 +38,8 @@
         "symfony/finder": "^7.0 || ^8.0",
         "tey/kit": "^0.4.20",
         "laravel/mcp": "^0.6 || ^1.0",
-        "spatie/laravel-webhook-client": "^3.7"
+        "spatie/laravel-webhook-client": "^3.7",
+        "spatie/laravel-multitenancy": "^4.3"
     },
     "suggest": {
         "nikic/php-parser": "Required for architecture checks (^5.0); install in the app's require-dev.",

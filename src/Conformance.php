@@ -33,6 +33,7 @@ final class Conformance
         'ui toast' => '[ui toast] notifications use one configured toast path',
         'operator' => '[operator] commands that write offer a dry run and a production guard',
         'integrations' => '[integrations] webhooks verify their sender and API calls go through a contract',
+        'tenant-aware' => '[tenant-aware] commands and queued jobs that touch tenant-scoped models run per tenant (spatie/laravel-multitenancy)',
 
         '14' => '[rule 14] UI does not build host routes',
         '22' => '[rule 22] UI has no host PHP dependencies',
@@ -150,6 +151,10 @@ final class Conformance
                 'tia' => (new Checks\Tia($this->config))->violations(),
                 'boost' => (new Checks\Boost($this->config))->violations(),
             };
+        }
+
+        if ($rule === 'tenant-aware') {
+            return (new Checks\TenantAware($this->config, $this->source))->violations();
         }
 
         if ($rule === '55') {
