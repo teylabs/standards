@@ -11,7 +11,8 @@ return [
     'expiring_days' => 14,
 
     // The branch --changed compares against when no --base is given.
-    'base_ref' => env('STANDARDS_BASE_REF', 'origin/main'),
+    // Null: the remote's default branch (origin/HEAD), else origin/main, else main. Set it when the trunk is found elsewhere.
+    'base_ref' => env('STANDARDS_BASE_REF'),
 
     // Namespace and roots standards:make writes into.
     'make' => [

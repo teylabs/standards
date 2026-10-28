@@ -11,6 +11,21 @@ use Symfony\Component\Process\Process;
 final class ChangedFiles
 {
     /** @return list<string> */
+    /**
+     * The ref --changed compares against when none is given: the remote's default branch (refs/remotes/origin/HEAD, so a trunk named `live`
+     * is found), else origin/main when it exists, else main.
+     */
+    public static function defaultRef(string $base): string
+    {
+        $head = self::git($base, ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], allowFailure: true);
+
+        if ($head !== null && str_starts_with(trim($head), 'refs/remotes/')) {
+            return substr(trim($head), strlen('refs/remotes/'));
+        }
+
+        return self::git($base, ['rev-parse', '--verify', '--quiet', 'origin/main'], allowFailure: true) !== null ? 'origin/main' : 'main';
+    }
+
     public static function since(string $base, string $ref): array
     {
         $mergeBase = self::git($base, ['merge-base', 'HEAD', $ref], allowFailure: true);

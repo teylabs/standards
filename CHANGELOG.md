@@ -10,6 +10,8 @@
   - **The rule is now on** for apps requiring tey/kit or tey/concierge, as well as spatie/laravel-multitenancy.
   - **An active rule that finds no tenant-scoped model** reports the advisory "tenant-aware checked nothing", and the Pest test is skipped with the same reason, never a silent pass.
 
+- **`--changed` finds the trunk.** It defaulted to `origin/main`, so in an app whose trunk is another branch (`live`) it reported every file and blocked pushes. The default is now the remote's default branch (`refs/remotes/origin/HEAD`), else `origin/main`, else `main`. `STANDARDS_BASE_REF` and `--base` still override, and the ref used is printed on stderr.
+
 ### Added
 
 - **`standards:check --strict`:** advisories fail too (exit 1).

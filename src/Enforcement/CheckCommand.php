@@ -12,7 +12,7 @@ use Tey\Standards\Patterns\TreeCatalog;
 
 final class CheckCommand extends Command
 {
-    public $signature = 'standards:check {--changed : Only report findings in files changed against the base ref} {--file=* : Only report findings in these project-relative files} {--base= : Ref --changed compares against (default standards.base_ref)} {--json : Write the schema-1 drift JSON to stdout} {--strict : Advisories fail too (exit 1), such as a rule that checked nothing}';
+    public $signature = 'standards:check {--changed : Only report findings in files changed against the base ref} {--file=* : Only report findings in these project-relative files} {--base= : Ref --changed compares against (default STANDARDS_BASE_REF, else the remote\'s default branch, else origin/main, else main)} {--json : Write the schema-1 drift JSON to stdout} {--strict : Advisories fail too (exit 1), such as a rule that checked nothing}';
 
     public $description = 'Run every conformance rule and the allowlist; exit 1 on drift';
 
@@ -30,7 +30,10 @@ final class CheckCommand extends Command
             $paths = array_map(fn (string $file): string => (string) preg_replace('#^(\./)+#', '', str_replace('\\', '/', str_starts_with($file, $base.'/') ? substr($file, strlen($base) + 1) : $file)), $files);
         } elseif ($this->option('changed')) {
             $scope = 'changed';
-            $paths = ChangedFiles::since($base, (string) ($this->option('base') ?? $config->get('standards.base_ref', 'origin/main')));
+            $ref = (string) ($this->option('base') ?? $config->get('standards.base_ref') ?? ChangedFiles::defaultRef($base));
+            // On stderr, so --json output stays parseable.
+            fwrite(STDERR, "standards:check: --changed against {$ref}\n");
+            $paths = ChangedFiles::since($base, $ref);
         } else {
             $scope = 'full';
             $paths = null;
