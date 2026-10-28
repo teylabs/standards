@@ -1,14 +1,5 @@
 # Changelog
 
-## 0.11.11 - 2026-10-28
-
-### Fixed
-
-- **A configured root that doesn't exist no longer crashes a rule.** A controller, ViewModel, page, source or frontend root naming a folder that isn't there yet (a fresh module with no controllers, an app before its first controller) made `Source` throw, so `standards:check` reported the toast, rule 21 and other rules as errors. Every rule now skips the missing root.
-  - A full run reports each missing root once as a `configuration` advisory, never as drift; a `--changed` run doesn't mention it.
-  - Globs that match nothing aren't counted.
-  - Tested with a fixture whose configuration names a missing module controller, ViewModel and page root, and no `app/Http/Controllers`.
-
 ## Unreleased
 
 ### Fixed
@@ -25,6 +16,15 @@
 - **`standards:make --dry-run` and `--json`:** the files a unit would write (path, kind, created or modified) with nothing written, as JSON with `--json`, matching tey/mod's generators.
 - **`Configuration::$presetIgnores`:** namespaces Pest's stock Laravel preset doesn't apply to, such as a modular app's module roots.
 - The README documents a modular app's configuration.
+
+## 0.11.11 - 2026-10-28
+
+### Fixed
+
+- **A configured root that doesn't exist no longer crashes a rule.** A controller, ViewModel, page, source or frontend root naming a folder that isn't there yet (a fresh module with no controllers, an app before its first controller) made `Source` throw, so `standards:check` reported the toast, rule 21 and other rules as errors. Every rule now skips the missing root.
+  - A full run reports each missing root once as a `configuration` advisory, never as drift; a `--changed` run doesn't mention it.
+  - Globs that match nothing aren't counted.
+  - Tested with a fixture whose configuration names a missing module controller, ViewModel and page root, and no `app/Http/Controllers`.
 
 ## 0.11.10 - 2026-10-28
 
