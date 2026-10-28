@@ -535,6 +535,7 @@ Every path ends in a leaf. Gap and byo leaves return their nearest recipes, the 
 | `capability-tool` | `read`, `write` | tey/kit `CapabilityTool` with `#[Capability]`, `rules()` and `call(Principal, int, array $validated)`, matching the kit's abstract methods, plus a Pest test |
 | `settings-section` | `form`, `toggles` | settings controller, FormRequest, Action, `pages/settings/<Name>/Page.vue`, routes, test |
 | `action` | `plain` | Action class and test |
+| `workbench` | `page` | a tey/kit Workbench page in a workspace (needs tey/kit 0.4.20+): provider (capability, permissions, routes, navigation, `stale_write` as 409), policy, page and order controllers, the order FormRequest, a principal-first `Reorder<Name>Workbench` Action guarded by a version, a stand-in item Query to replace with your model, a `WorkbenchViewModel`, `pages/<Names>/Workbench/Page.vue` with one inspector, and a feature test |
 
 **Kit exports.** Validation reads only the shipped snapshot, `resources/patterns/kit-exports.json`, so CI is deterministic. When an app has tey/kit installed, `standards:pattern` and `standards:check` compare its `@kit/ui` barrel with the snapshot. A mismatch prints a warning and never fails. To regenerate the snapshot from a kit checkout, run `php bin/standards kit-exports --refresh --from=../kit`, then `php bin/standards patterns:compile`.
 

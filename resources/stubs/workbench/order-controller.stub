@@ -1,0 +1,30 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Http\Controllers;
+
+use {{ namespace }}\Actions\Reorder{{ name }}Workbench;
+use {{ namespace }}\Http\Requests\Update{{ name }}WorkbenchOrderRequest;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Core\Users;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+use Tey\Kit\Features\Workspaces\TenantBoundary;
+
+/** The workbench's navigator order: the page sends `{ order, version }`; a stale version is `stale_write` (409) and the page rolls back. */
+final class {{ name }}WorkbenchOrderController
+{
+    public function update(Update{{ name }}WorkbenchOrderRequest $request, int $workspace, Reorder{{ name }}Workbench $reorder): JsonResponse
+    {
+        abort_unless(Users::is($request->user()), 401);
+        $version = app(TenantBoundary::class)->run($workspace, function () use ($request, $workspace, $reorder): int {
+            Gate::forUser($request->user())->authorize('{{ perm }}.workbench.reorder', Workspace::required());
+
+            return $reorder->handle(new Principal((int) $request->user()->getAuthIdentifier()), $workspace, $request->validated('order'), (int) $request->validated('version'));
+        });
+
+        return response()->json(['version' => $version]);
+    }
+}

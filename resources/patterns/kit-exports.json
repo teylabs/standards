@@ -1,5 +1,5 @@
 {
-    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.4.10",
+    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.4.19",
     "module": "@kit/ui",
     "components": [
         "ActionBar",
@@ -80,6 +80,10 @@
         "Textarea",
         "TimezoneSelect",
         "Toaster",
-        "Toolbar"
+        "Toolbar",
+        "Workbench",
+        "WorkbenchInspector",
+        "WorkbenchNavigator",
+        "WorkbenchZoom"
     ]
 }

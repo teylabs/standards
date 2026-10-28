@@ -12,7 +12,7 @@ use Tey\Standards\Patterns\TreeCatalog;
 
 final class MakeCommand extends Command
 {
-    public $signature = 'standards:make {unit : crud, model, page, action, capability-tool, settings-section, command, webhook or api-client; policy, job or notification (and model --flavor=plain) through tey/mod} {name : StudlyCase name (crud: the singular record name)} {--flavor= : The leaf flavor, as standards:pattern prints it} {--leaf= : The leaf to stamp, when several leaves share this make command} {--bulk : crud: selectable rows and a bulk delete} {--mcp : crud: read and write capability tools} {--soft-deletes : crud or model: soft deletes (crud adds a restoration)} {--tenant : model: workspace-owned through tey/kit, with a stale-write guard and a policy} {--enum=* : model: field:Enum, a backed enum with a database check constraint (repeatable)} {--media : model: spatie/laravel-medialibrary attachments} {--sortable : model: a position column and an ordered scope} {--backfill : command: fill a column for rows that lack it (the default)} {--maintenance : command: delete stale rows} {--report : command: count, read-only} {--sdk : api-client: the official SDK behind the contract} {--http : api-client: Laravel\'s Http with timeout, retries and backoff (the default)}';
+    public $signature = 'standards:make {unit : crud, workbench, model, page, action, capability-tool, settings-section, command, webhook or api-client; policy, job or notification (and model --flavor=plain) through tey/mod} {name : StudlyCase name (crud: the singular record name)} {--flavor= : The leaf flavor, as standards:pattern prints it} {--leaf= : The leaf to stamp, when several leaves share this make command} {--bulk : crud: selectable rows and a bulk delete} {--mcp : crud: read and write capability tools} {--soft-deletes : crud or model: soft deletes (crud adds a restoration)} {--tenant : model: workspace-owned through tey/kit, with a stale-write guard and a policy} {--enum=* : model: field:Enum, a backed enum with a database check constraint (repeatable)} {--media : model: spatie/laravel-medialibrary attachments} {--sortable : model: a position column and an ordered scope} {--backfill : command: fill a column for rows that lack it (the default)} {--maintenance : command: delete stale rows} {--report : command: count, read-only} {--sdk : api-client: the official SDK behind the contract} {--http : api-client: Laravel\'s Http with timeout, retries and backoff (the default)}';
 
     public $description = 'Scaffold conformant code for a pattern leaf';
 
@@ -42,6 +42,7 @@ final class MakeCommand extends Command
             'capability-tool' => 'read',
             'settings-section' => 'form',
             'crud' => 'resource',
+            'workbench' => 'page',
             default => 'plain',
         };
 

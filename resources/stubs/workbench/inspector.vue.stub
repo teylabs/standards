@@ -1,0 +1,14 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+// The inspector for `item`: the Workbench gives it the selected ids and items (several when more than one is selected).
+defineProps<{ ids: string[]; items: { id: string; label: string; type: string | null }[]; types: string[]; current: string | null }>();
+</script>
+
+<template>
+    <dl class="grid gap-2 text-sm" data-{{ slug }}-inspector>
+        <template v-for="item in items" :key="item.id">
+            <dt class="text-muted-foreground">{{ item.id }}</dt>
+            <dd class="font-medium">{{ item.label }}</dd>
+        </template>
+    </dl>
+</template>

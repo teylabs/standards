@@ -1,0 +1,27 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Http\Controllers;
+
+use {{ namespace }}\Queries\{{ name }}WorkbenchItems;
+use {{ vm_namespace }}\{{ name }}WorkbenchViewModel;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Inertia\Inertia;
+use Inertia\Response;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+use Tey\Kit\Features\Workspaces\TenantBoundary;
+
+/** The {{ title_lower }} workbench page, inside the workspace's tenant boundary, after the policy. */
+final class {{ name }}WorkbenchController
+{
+    public function show(Request $request, int $workspace, {{ name }}WorkbenchItems $items): Response
+    {
+        return app(TenantBoundary::class)->run($workspace, function () use ($request, $workspace, $items): Response {
+            Gate::forUser($request->user())->authorize('{{ perm }}.workbench.view', Workspace::required());
+
+            return Inertia::render('{{ plural }}/Workbench/Page', new {{ name }}WorkbenchViewModel($workspace, $items->read($workspace), Gate::forUser($request->user())->allows('{{ perm }}.workbench.reorder', Workspace::required())));
+        });
+    }
+}

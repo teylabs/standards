@@ -1,0 +1,22 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+/** A new navigator order: every item id once, and the version it was made against. Access is the controller's policy check. */
+final class Update{{ name }}WorkbenchOrderRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /** @return array<string, mixed> */
+    public function rules(): array
+    {
+        return ['order' => ['required', 'array', 'max:500'], 'order.*' => ['required', 'string', 'max:64', 'distinct'], 'version' => ['required', 'integer', 'min:0']];
+    }
+}

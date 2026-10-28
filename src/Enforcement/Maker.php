@@ -107,6 +107,12 @@ final class Maker
             return $this->crud($name, $options);
         }
 
+        if ($unit === 'workbench') {
+            $this->requireWorkbench();
+
+            return $this->workbench($name);
+        }
+
         if ($unit === 'webhook') {
             return $this->webhook($name, $leaf);
         }
@@ -395,6 +401,56 @@ final class Maker
         if (! ($this->kit ?? trait_exists('Tey\\Kit\\Features\\Workspaces\\Concerns\\BelongsToWorkspace'))) {
             throw new InvalidArgumentException("{$what} needs tey/kit 0.4.15 or later (its Workspaces feature owns workspace tenancy). Install tey/kit and adopt workspaces, or leave out --tenant for a model with no workspace.");
         }
+    }
+
+    private function requireWorkbench(): void
+    {
+        if (! ($this->kit ?? class_exists('Tey\\Kit\\Features\\Core\\ViewModels\\WorkbenchViewModel'))) {
+            throw new InvalidArgumentException('workbench needs tey/kit 0.4.20 or later (its core feature owns the Workbench, and session-ui the layout endpoint). Install or update tey/kit and try again.');
+        }
+    }
+
+    /**
+     * A Workbench page in a workspace (tey/kit's multi-pane editor, docs/workbench.md in the kit): the kit wiring (capability, a view and an update permission,
+     * routes, navigation, `stale_write` as 409), a policy, the page and order controllers, the order FormRequest, a principal-first Reorder Action guarded by
+     * the version, a stand-in item Query to replace with the app's own model, the typed WorkbenchViewModel, Page.vue with the navigator, stage and inspector
+     * regions and one registered inspector, and a feature test on the app's own empty database.
+     *
+     * @return list<string>
+     */
+    private function workbench(string $name): array
+    {
+        $app = $this->paths['app'] ?? 'app';
+        $pages = $this->paths['pages'] ?? 'resources/js/pages';
+        $tests = $this->paths['tests'] ?? 'tests/Feature';
+        $namespace = $this->paths['namespace'] ?? 'App';
+        $plural = Str::plural($name);
+        $slug = Str::kebab($plural);
+        [, $viewModels] = $this->viewModels($app, $namespace);
+        $title = ucfirst(str_replace('-', ' ', Str::kebab($name)));
+        $titles = ucfirst(str_replace('-', ' ', $slug));
+        $values = [
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'perm' => Str::snake($plural), 'var' => Str::camel($name),
+            'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'vm_namespace' => $viewModels[1].'\\'.$plural, 'leaf' => 'ui-page.workbench',
+        ];
+        $files = [
+            "{$app}/Providers/{$name}WorkbenchServiceProvider.php" => 'workbench/provider.stub',
+            "{$app}/Policies/{$name}WorkbenchPolicy.php" => 'workbench/policy.stub',
+            "routes/{$slug}-workbench.php" => 'workbench/routes.stub',
+            "{$app}/Http/Controllers/{$name}WorkbenchController.php" => 'workbench/controller.stub',
+            "{$app}/Http/Controllers/{$name}WorkbenchOrderController.php" => 'workbench/order-controller.stub',
+            "{$app}/Http/Requests/Update{$name}WorkbenchOrderRequest.php" => 'workbench/order-request.stub',
+            "{$app}/Actions/Reorder{$name}Workbench.php" => ['workbench/action.stub', ['leaf' => 'data-actions.action']],
+            "{$app}/Queries/{$name}WorkbenchItems.php" => 'workbench/query.stub',
+            "{$viewModels[0]}/{$plural}/{$name}WorkbenchViewModel.php" => 'workbench/view-model.stub',
+            "{$pages}/{$plural}/Workbench/Page.vue" => 'workbench/page.vue.stub',
+            "{$pages}/{$plural}/Workbench/Inspectors/{$name}ItemInspector.vue" => 'workbench/inspector.vue.stub',
+            "{$tests}/{$plural}/{$name}WorkbenchTest.php" => 'workbench/test.stub',
+        ];
+        $written = $this->emit($files, $values);
+        $written[] = $this->provide("{$namespace}\\Providers\\{$name}WorkbenchServiceProvider", 'ui-page.workbench');
+
+        return $written;
     }
 
     /**

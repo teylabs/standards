@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Upgrading
+
+- Requires tey/kit ^0.4.20 for development: `standards:make workbench` emits code on its `WorkbenchViewModel` and `<Workbench>`. The generator refuses, with a message, when the app's tey/kit is older.
+
+### Added
+
+- **`standards:make workbench <Name>`** scaffolds a tey/kit Workbench page in a workspace, a multi-pane editor for a sequence of items with a live preview. It writes:
+  - a provider for the kit wiring (capability, a view and an update permission, routes, navigation, and `stale_write` as 409), and a policy (capability, then entitlement, then permission);
+  - the page controller and the order controller, with its FormRequest;
+  - a principal-first `Reorder<Name>Workbench` Action that takes an order only at the version it was made against;
+  - a stand-in item Query to replace with your own model;
+  - a `WorkbenchViewModel`;
+  - `Page.vue` with the navigator, stage and inspector regions and one registered inspector;
+  - a self-contained feature test: the page and its props, a reorder at the current version, a stale reorder refused with 409 and nothing changed, a viewer who can't reorder, a non-member, and the capability switched off.
+- **The `ui-page.workbench` leaf is ready** (it was a gap; evidence: 5 apps × 25 changes, 10 past apps × 40), built on `@kit/ui` Workbench, WorkbenchNavigator, WorkbenchInspector and WorkbenchZoom. The tree's answer now reads "A workbench: edit a sequence of items with a live preview".
+- **Feature plan `sequence-editor`**, "Edit a sequence of items with a live preview": the workbench scaffold, the reorder Action and the save toast; with each item a record of its own, the domain model; and with assistant access, `mcp.read` (tey/kit's `WorkbenchReadTool`).
+
+### Changed
+
+- `kit-exports.json` is refreshed from tey/kit's barrel, which now exports the Workbench components. The snapshot counts only PascalCase exports as components, so an all-caps constant the barrel exports (the Workbench's reserved `DOCUMENT` and `FALLBACK` types) isn't taken for one.
+
 ## 0.11.8 - 2026-10-27
 
 ### Fixed
