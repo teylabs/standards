@@ -40,7 +40,7 @@ final class CheckReport
                 ['violations' => $violations, 'allowlist' => $allowlist, 'skipped' => $skipped] = $result;
                 $advisories = $result['advisories'] ?? [];
             } catch (Throwable $error) {
-                $violations = [['rule' => 'standards', 'kind' => 'error', 'target' => $configurationFile, 'check' => $error->getMessage(), 'hint' => 'Create '.$configurationFile.' returning the app\'s Tey\Standards\Configuration, or set standards.configuration. The gate fails closed until it can run.']];
+                $violations = [['rule' => 'standards', 'kind' => 'error', 'target' => $configurationFile, 'check' => $error->getMessage(), 'hint' => self::missingHint($base, $configurationFile)]];
             }
         }
 
@@ -64,6 +64,23 @@ final class CheckReport
             ],
             'exit_code' => $violations === [] ? 0 : 1,
         ];
+    }
+
+    /**
+     * What to do when the configuration can't be read: the gate fails closed until it can run. When it is missing and an Arch test builds the
+     * Configuration inline (the older pattern), extraction moves it; otherwise standards:install scaffolds one.
+     */
+    public static function missingHint(string $base, string $configurationFile): string
+    {
+        if (! is_file($base.'/'.$configurationFile) && $configurationFile === Extractor::TARGET && ($test = (new Extractor($base))->inlineTest()) !== null) {
+            return $test.' builds the Configuration inline. Run php artisan standards:install --extract to move it into '.$configurationFile.' (the test then requires it), so standards:check reads the same Configuration. The gate fails closed until it can run.';
+        }
+
+        if (! is_file($base.'/'.$configurationFile)) {
+            return 'Run php artisan standards:install to scaffold '.$configurationFile.' (inferred from composer.json and the app\'s folders), or set standards.configuration to the file that returns the app\'s Tey\Standards\Configuration. The gate fails closed until it can run.';
+        }
+
+        return 'Make '.$configurationFile.' return the app\'s Tey\Standards\Configuration, or set standards.configuration. The gate fails closed until it can run.';
     }
 
     public static function configuration(string $base, string $file): Configuration
