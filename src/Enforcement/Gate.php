@@ -94,6 +94,14 @@ final class Gate
                 continue;
             }
 
+            // A check may mark a finding advisory itself (a rule that could check nothing says so): reported, never failing, and outside the ratchet.
+            foreach ($actual as $index => $violation) {
+                if (($violation['advisory'] ?? false) === true) {
+                    $advisories[] = $this->finding($rule, 'advisory', $violation['target'], $violation['check'], $violation['hint'] ?? null);
+                    unset($actual[$index]);
+                }
+            }
+
             if (in_array($rule, self::ADVISORY, true) && ! in_array($rule, $this->config->optionalRules, true)) {
                 foreach ($actual as $violation) {
                     if ($this->inScope($violation['target'], $paths)) {

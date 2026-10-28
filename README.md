@@ -466,8 +466,20 @@ The handler runs in the transaction that marks the call processed, so a handler 
 - **Nothing else enters a tenant for this rule:** app-side boundaries, `$tenant->execute()` or `makeCurrent()` in a plain command are still reported. The only exceptions:
   - a deliberate cross-tenant admin command, declared in the allowlist with a `reason` and an `expires`, so it stays visible and expires;
   - a landlord prune whose `prunable()` bypasses the scope.
-- **What counts as tenant-scoped:** a model that uses one of `Configuration::$tenantModels`' traits, or is or extends one of its classes. The default is `Spatie\Multitenancy\Models\Concerns\UsesTenantConnection`; add an app's own tenant-scope trait or base model there.
-- **When it runs:** the rule is on when the app requires spatie/laravel-multitenancy, or names its own `tenantModels`. Each finding gives the file and line (`path:line` in `standards:check`, `line` in `--json`) and a fix. The allowlist key stays target and check, so an entry survives edits to the file.
+- **What counts as tenant-scoped:** `Configuration::$tenantModels`, when the app sets it, is the whole answer (traits a model uses, or classes it is or extends). Otherwise the rule detects:
+  - Spatie's `UsesTenantConnection`;
+  - a tenant-style trait (`BelongsToTenant`, `BelongsToWorkspace`, `TenantScoped` and the like);
+  - a global scope that names a tenant (`addGlobalScope` with a tenant scope class or a closure on a tenant key, or `#[ScopedBy]` a tenant scope);
+  - a tenant key (`Configuration::$tenantKeys`, default `workspace_id` and `tenant_id`) in `$fillable`, or as a column of the model's table in `database/migrations`.
+- **When it runs:** when the app requires spatie/laravel-multitenancy, tey/kit or tey/concierge, or sets `tenantModels`.
+- **It never passes silently:** an active rule that finds no tenant-scoped model reports the advisory "tenant-aware checked nothing", because no command or job was checked. `standards:check` lists it (`~`); `standards:check --strict` fails on it, as on any advisory; the Pest test is skipped with the same reason.
+- **Findings:** each gives the file and line (`path:line` in `standards:check`, `line` in `--json`) and a fix. The allowlist key stays target and check, so an entry survives edits to the file.
+
+**Single-database, column-scoped apps.** An app whose tenants share one database and are told apart by a column (a `workspace_id` on each tenant table, with no `UsesTenantConnection`) is detected by default from that column: in `$fillable`, in its migrations, or in a tenant global scope or trait.
+
+- If its tenant key has another name, set `tenantKeys: ['account_id']`.
+- If detection still misses models (a key only in `$guarded`, a table made by raw SQL), name them: `tenantModels: [Note::class, Deck::class, ...]` or their shared trait or base class. That list then replaces detection entirely.
+- Run `php artisan standards:check --strict` once after upgrading. A "checked nothing" advisory means the rule saw no tenant models and needs one of these settings.
 
 `standards:make command` and `standards:make job` follow the same pattern in a multitenancy app.
 
@@ -485,10 +497,12 @@ One command drives four layers: gates, agent guardrails, pattern lookup and a dr
 
 ```sh
 php artisan standards:check                 # every rule, exit 1 on drift
-php artisan standards:check --changed       # findings in files changed against standards.base_ref (origin/main)
+php artisan standards:check --changed       # findings in files changed against the base ref (printed; see below)
 php artisan standards:check --file=app/Http/Controllers/InvoicesController.php
 php artisan standards:check --json          # stable schema 1, see below
 ```
+
+`--changed` compares against `--base`, else `STANDARDS_BASE_REF` (`standards.base_ref`), else the remote's default branch (`refs/remotes/origin/HEAD`, so a trunk named `live` is found), else `origin/main`, else `main`. It prints the ref it used on stderr, so `--json` stays parseable. `standards:check --strict` makes advisories fail too.
 
 The gate reads `tests/Arch/configuration.php`, a file that returns the app's `Configuration` (change the path with `standards.configuration`; publish with `--tag=standards-config`). When the file is missing, `standards:install` scaffolds one inferred from composer.json and the app's folders: class roots, the Inertia pages folder, a typed ViewModel base, and whether tey/kit and tey/mod are present. With tey/mod, the layout in `config/mod.php` adds module controller, ViewModel and page roots (for example `app/Modules/*/Http/Controllers*`), and a controller found in a module folder outside them is generalised over its module name. It prints what it inferred, then adds `tests/Arch/ConformanceTest.php` requiring that file, unless a test already uses `Conformance::TESTS`. It never overwrites either file. Review the scaffold, since it is yours from then on. An app whose `ConformanceTest` builds its `Configuration` inline (the older pattern) has nothing for the gate to read, so `standards:check` fails closed and names the fix: `php artisan standards:install --extract` moves that `new Configuration(...)` into `tests/Arch/configuration.php` with the file's `use` imports and the top-level variables it reads, then rewrites the test to `require` it, so the Pest suite and the gate share one Configuration. It refuses, with the reason and nothing written, when the file already exists, when there are two inline Configurations, or when the expression reads `$this` or a variable it can't carry. `--dry-run` shows the two files and writes nothing, and `--json` prints the plan. The gate runs every `Conformance::TESTS` rule outside Pest, including placement and the Pest presets, and reports the same findings the Pest suite does for the same app. Disabled optional UI rules and rule 51 (until `ciEnforce`) are listed under `skipped`, never reported as passes. Drift means any of these:
 

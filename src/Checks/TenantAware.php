@@ -23,9 +23,13 @@ use Tey\Standards\Source;
  * - Anywhere: `$tenant->execute(fn () => dispatch(...))` loses the tenant. A PendingDispatch queues when it is destroyed, after
  *   execute() has restored the previous tenant. Use a block closure, or dispatch a resolved job through Bus::dispatch.
  *
- * A model is tenant-scoped when it uses one of Configuration::$tenantModels' traits, or is or extends one of its classes. Deliberate
- * cross-tenant admin commands are declared in the allowlist (a reason and an expiry), never by a marker. Active only when the app
- * requires spatie/laravel-multitenancy or configures $tenantModels beyond the default.
+ * Which models are tenant-scoped: Configuration::$tenantModels, when the app sets it, is the whole answer (traits a model uses, or classes it is
+ * or extends). Otherwise they are detected: Spatie's UsesTenantConnection; a tenant-style trait (BelongsToTenant, BelongsToWorkspace and the like);
+ * a global scope that names a tenant (a scope class or a closure on a tenant key); or, for a single-database app scoped by a column, a tenant key
+ * (Configuration::$tenantKeys, default workspace_id and tenant_id) in $fillable or in the model's table in database/migrations. Active when the
+ * app requires spatie/laravel-multitenancy, tey/kit or tey/concierge, or sets $tenantModels. An active rule that finds no tenant-scoped model at
+ * all reports an advisory, never a silent pass: it checked nothing. Deliberate cross-tenant admin commands are declared in the allowlist (a
+ * reason and an expiry), never by a marker.
  */
 final class TenantAware
 {
@@ -64,6 +68,12 @@ final class TenantAware
         }
 
         $tenantModels = $this->tenantModels($classes);
+
+        if ($tenantModels === []) {
+            return [['target' => 'tests/Arch/configuration.php', 'check' => 'tenant-aware checked nothing: no tenant-scoped model found', 'advisory' => true,
+                'hint' => 'This app has tenancy, but no model was recognised as tenant-scoped, so no command or job was checked. Set Configuration::$tenantModels to the app\'s tenant-scoped models (or their trait or base class), or $tenantKeys to the column it scopes by.']];
+        }
+
         $queue = $this->queueConfig();
         $violations = [];
 
@@ -127,14 +137,14 @@ final class TenantAware
         return array_values(array_unique($violations, SORT_REGULAR));
     }
 
-    /** spatie/laravel-multitenancy is required, or the app named its own tenant-model traits or classes. */
+    /** spatie/laravel-multitenancy, tey/kit or tey/concierge (workspaces) is required, or the app named its own tenant-model traits or classes. */
     private function active(): bool
     {
         $file = $this->config->base.'/composer.json';
         $composer = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
         $packages = is_array($composer) ? [...array_keys($composer['require'] ?? []), ...array_keys($composer['require-dev'] ?? [])] : [];
 
-        return in_array('spatie/laravel-multitenancy', $packages, true) || array_values($this->config->tenantModels) !== self::DEFAULT_MODELS;
+        return array_intersect(['spatie/laravel-multitenancy', 'tey/kit', 'tey/concierge'], $packages) !== [] || $this->configured();
     }
 
     /**
@@ -142,6 +152,38 @@ final class TenantAware
      * @return array<string, true>
      */
     private function tenantModels(array $classes): array
+    {
+        if ($this->configured()) {
+            return $this->configuredModels($classes);
+        }
+
+        $models = $this->configuredModels($classes);
+        $tables = $this->migratedTables();
+
+        foreach ($classes as $name => [, $class]) {
+            if (isset($models[$name]) || ! $this->isModel($class, $classes)) {
+                continue;
+            }
+
+            if ($this->tenantTrait($class, $classes) || $this->tenantScope($class) || $this->fillsTenantKey($class) || isset($tables[$this->table($class)])) {
+                $models[$name] = true;
+            }
+        }
+
+        return $models;
+    }
+
+    /** Whether the app set $tenantModels itself (then it is the whole answer). */
+    private function configured(): bool
+    {
+        return array_values($this->config->tenantModels) !== self::DEFAULT_MODELS;
+    }
+
+    /**
+     * @param  array<string, array{0: string, 1: Node\Stmt\Class_}>  $classes
+     * @return array<string, true>
+     */
+    private function configuredModels(array $classes): array
     {
         $models = [];
 
@@ -158,6 +200,140 @@ final class TenantAware
         }
 
         return $models;
+    }
+
+    /** @param  array<string, array{0: string, 1: Node\Stmt\Class_}>  $classes */
+    private function isModel(Node\Stmt\Class_ $class, array $classes): bool
+    {
+        $ancestors = $this->ancestors($class, $classes);
+
+        return in_array('Illuminate\\Database\\Eloquent\\Model', $ancestors, true) || in_array('Illuminate\\Foundation\\Auth\\User', $ancestors, true)
+            || in_array('Illuminate\\Database\\Eloquent\\Relations\\Pivot', $ancestors, true);
+    }
+
+    /**
+     * A trait named for a tenant: BelongsToTenant, BelongsToWorkspace, TenantScoped, HasTenant and the like.
+     *
+     * @param  array<string, array{0: string, 1: Node\Stmt\Class_}>  $classes
+     */
+    private function tenantTrait(Node\Stmt\Class_ $class, array $classes): bool
+    {
+        foreach ([$class, ...array_map(fn (string $parent): ?Node\Stmt\Class_ => $classes[$parent][1] ?? null, $this->ancestors($class, $classes))] as $node) {
+            foreach ($node?->getTraitUses() ?? [] as $use) {
+                foreach ($use->traits as $trait) {
+                    if (preg_match('/^(BelongsTo|Has|ScopedTo|ScopedBy|For)(Tenant|Workspace)s?$|^(Tenant|Workspace)(Scoped|Owned|Aware)$/', $trait->getLast()) === 1) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** A global scope that names a tenant: addGlobalScope() with a scope class or closure naming a tenant or a tenant key, or #[ScopedBy] a tenant scope. */
+    private function tenantScope(Node\Stmt\Class_ $class): bool
+    {
+        $finder = new NodeFinder;
+        $tenantish = fn (Node $node): bool => $finder->findFirst([$node], fn (Node $inner): bool => ($inner instanceof Node\Name && preg_match('/(Tenant|Workspace)/', $inner->getLast()) === 1)
+            || ($inner instanceof Node\Scalar\String_ && (in_array($inner->value, $this->config->tenantKeys, true) || preg_match('/(tenant|workspace)/i', $inner->value) === 1))) !== null;
+
+        foreach ($finder->find($class->stmts, fn (Node $node): bool => ($node instanceof Node\Expr\StaticCall || $node instanceof Node\Expr\MethodCall) && $node->name instanceof Node\Identifier && $node->name->toString() === 'addGlobalScope') as $call) {
+            if ($tenantish($call)) {
+                return true;
+            }
+        }
+
+        foreach ($class->attrGroups as $group) {
+            foreach ($group->attrs as $attribute) {
+                if ($attribute->name->getLast() === 'ScopedBy' && $tenantish($attribute)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function fillsTenantKey(Node\Stmt\Class_ $class): bool
+    {
+        foreach ($class->getProperties() as $property) {
+            foreach ($property->props as $prop) {
+                if ($prop->name->toString() === 'fillable' && $prop->default instanceof Node\Expr\Array_) {
+                    foreach ($prop->default->items as $item) {
+                        if ($item?->value instanceof Node\Scalar\String_ && in_array($item->value->value, $this->config->tenantKeys, true)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** The model's table: its `$table`, else Laravel's convention (snake plural of the class name). */
+    private function table(Node\Stmt\Class_ $class): string
+    {
+        foreach ($class->getProperties() as $property) {
+            foreach ($property->props as $prop) {
+                if ($prop->name->toString() === 'table' && $prop->default instanceof Node\Scalar\String_) {
+                    return $prop->default->value;
+                }
+            }
+        }
+
+        return \Illuminate\Support\Str::snake(\Illuminate\Support\Str::pluralStudly((string) $class->name));
+    }
+
+    /**
+     * Tables a migration under database/migrations gives a tenant key column: Schema::create or Schema::table with a tenant key (or a foreignIdFor a
+     * Tenant or Workspace model).
+     *
+     * @return array<string, true>
+     */
+    private function migratedTables(): array
+    {
+        $tables = [];
+        $directory = $this->config->base.'/database/migrations';
+
+        if (! is_dir($directory)) {
+            return [];
+        }
+
+        $finder = new NodeFinder;
+        $parser = (new \PhpParser\ParserFactory)->createForNewestSupportedVersion();
+
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
+            if (! str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+
+            try {
+                $nodes = $parser->parse((string) file_get_contents($file->getPathname())) ?? [];
+            } catch (\PhpParser\Error) {
+                continue;
+            }
+
+            foreach ($finder->find($nodes, fn (Node $node): bool => $node instanceof Node\Expr\StaticCall && $node->name instanceof Node\Identifier && in_array($node->name->toString(), ['create', 'table'], true)) as $call) {
+                $arguments = $call->getArgs();
+                $table = $arguments[0]->value ?? null;
+
+                if (! $table instanceof Node\Scalar\String_ || ! isset($arguments[1])) {
+                    continue;
+                }
+
+                $keyed = $finder->findFirst([$arguments[1]->value], fn (Node $node): bool => $node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier
+                    && ((($node->getArgs()[0]->value ?? null) instanceof Node\Scalar\String_ && in_array($node->getArgs()[0]->value->value, $this->config->tenantKeys, true))
+                        || ($node->name->toString() === 'foreignIdFor' && ($node->getArgs()[0]->value ?? null) instanceof Node\Expr\ClassConstFetch && preg_match('/(Tenant|Workspace)$/', $node->getArgs()[0]->value->class instanceof Node\Name ? $node->getArgs()[0]->value->class->getLast() : '') === 1)));
+
+                if ($keyed !== null) {
+                    $tables[$table->value] = true;
+                }
+            }
+        }
+
+        return $tables;
     }
 
     /** @param  array<string, array{0: string, 1: Node\Stmt\Class_}>  $classes */
