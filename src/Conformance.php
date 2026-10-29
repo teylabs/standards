@@ -207,8 +207,12 @@ final class Conformance
     private function dependencies(array $roots, array $banned, array $allowed = [], bool $attributesOnly = false): array
     {
         $violations = [];
+        $gated = $attributesOnly ? $this->devGated($banned) : [];
 
         foreach ($this->source->files($roots) as $path => $text) {
+            if (isset($gated[$path])) {
+                continue;
+            }
             $names = (new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Name::class);
             // no-dev: a reference that only runs when its class exists is safe, and so is the import of a class every use of which is guarded.
             $unguarded = [];
@@ -237,6 +241,55 @@ final class Conformance
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    /**
+     * no-dev: the files of app classes that only ever load on a dev install. Such a class (a provider extending a dev package's provider, say) is
+     * registered only in bootstrap/providers.php, and only under `class_exists(D::class)` for a development class D that its own file extends or
+     * references. Fail closed: any other reference to the class, in a source or discovery root, bootstrap/, config/ or routes/ (config/app.php
+     * providers, a register() call, a string), and it is checked as usual.
+     *
+     * @param  list<string>  $banned
+     * @return array<string, true> path => true
+     */
+    private function devGated(array $banned): array
+    {
+        $roots = array_values(array_unique(array_filter([...$this->config->sourceRoots, ...$this->config->discoveryRoots, 'bootstrap', 'config', 'routes'],
+            fn (string $root): bool => (glob($this->config->base.'/'.$root, GLOB_ONLYDIR) ?: []) !== [])));
+        $files = $this->source->files($roots);
+        $declared = [];
+        foreach ($files as $path => $text) {
+            foreach ((new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Stmt\Class_::class) as $class) {
+                if (isset($class->namespacedName)) {
+                    $declared[$class->namespacedName->toString()] = $path;
+                }
+            }
+        }
+        $references = fn (string $path): array => array_map(fn (Node\Name $name): string => $name->toString(), (new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Name::class));
+
+        $guarded = [];
+        $refused = [];
+        foreach ($files as $path => $text) {
+            foreach ((new NodeFinder)->find($this->source->nodes($path), fn (Node $node): bool => $node instanceof Node\Name || $node instanceof Node\Scalar\String_) as $node) {
+                $class = $node instanceof Node\Name ? $node->toString() : ltrim($node->value, '\\');
+                if (! isset($declared[$class]) || $declared[$class] === $path || $node->getAttribute('parent') instanceof Node\UseItem) {
+                    continue;
+                }
+                $dev = array_filter(Checks\Providers::guardsAround($node), fn (string $guard): bool => Source::within($guard, $banned) && in_array($guard, $references($declared[$class]), true));
+                if ($path === 'bootstrap/providers.php' && $node instanceof Node\Name && $dev !== []) {
+                    $guarded[$class] = true;
+                } else {
+                    $refused[$class] = true;
+                }
+            }
+        }
+
+        $gated = [];
+        foreach (array_keys(array_diff_key($guarded, $refused)) as $class) {
+            $gated[$declared[$class]] = true;
+        }
+
+        return $gated;
     }
 
     /** @return list<array{target: string, check: string}> */
