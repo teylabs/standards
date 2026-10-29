@@ -5,6 +5,7 @@
 ### Fixed
 
 - **`tenant-aware` no longer treats tey/kit's `HasWorkspaces` as a tenant scope.** The trait-name pattern matched `HasWorkspaces`, the user model's memberships and team roles, so every User query was reported as tenant work. Kit's non-scoping traits `HasWorkspaces`, `HasWorkspace`, `IsKitWorkspace` and `GuardsStaleWrites` are now excluded by name. Every other tenant- or workspace-named trait detects as before (`BelongsToWorkspace`, kit's scoping trait `Tey\Kit\Features\Workspaces\Concerns\BelongsToWorkspace`; `WorkspaceScoped`, `ScopedToWorkspace`, `BelongsToTenant` and the like), and a model using `HasWorkspaces` with a scoping trait is still scoped.
+- **Rule 21 skips `response negotiation` on a vendor-parent override under the same conditions as the name allowance.** A public method whose parent resolves under `vendor/` through composer's `autoload_classmap.php` or `autoload_psr4.php`, where that parent or a vendor ancestor declares the same-named method (`authorize()` on a controller extending Passport's `AuthorizationController`), may branch its response on `wantsJson()`, `expectsJson()`, `ajax()` or `acceptsJson()`. It reuses rule 21's resolver. An app-owned parent, an unresolvable parent or a vendor parent without the method still fails, and every other body check (validation, persistence, multiple operations) still applies to the override.
 
 ## 0.11.46 - 2026-10-29
 
