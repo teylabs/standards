@@ -6,6 +6,10 @@
 
 - **README: fixture CI on older PHP or Laravel.** A package that can't `require-dev` tey/standards (PHP < 8.4.1 or Illuminate < 13) runs `bin/standards adoption` from an isolated `tools/standards` Composer project. The README gives the layout, the install and scan commands, and a sample GitHub Actions job (PHP 8.4 on ubuntu-latest, a 10-minute timeout, a Composer cache keyed on `tools/standards/composer.lock`, a loop over the fixtures). The job is `fixtures/CI/adoption-fixtures.yml`, which the suite checks against rule 51 with `bin/standards ci` and against the README byte for byte. The README also says in one line why there is no PHAR yet.
 
+### Changed
+
+- **Pattern `ui-page.kit-adoption` carries the migration recipe.** `standards:pattern "ui-page.kit-adoption"` now lists the steps in dependency order, shell, then layout, then actions and toast, then forms, then data: the hand-rolled signal each surface reads, the tey/kit feature and components that replace it, and how to verify (the `standards:adoption` row reads adopted with no signals, then `--ci` and `--compliance` pass). It also says what the tool can't see (Blade, Livewire and Filament UI among it) and what to do where kit has no component yet. The leaf stays `draft`: it has no generator.
+
 ### Fixed
 
 - **`standards:adoption`: route analyses follow route files a group includes.** A group whose callback `require`s or `include`s another route file, or `->group(base_path('routes/x.php'))` / `->group(__DIR__.'/x.php')`, now applies its middleware and prefix to that file's routes, through chains of includes, with loops cut off. An auth group that requires `routes/app.php` with `Inertia::render` pages makes `signed-in-pages` true, and those routes are no longer `public-pages`; under an `api` group they never count. Only literal paths (`__DIR__.'/…'`, `base_path('…')`, a quoted string) are resolved; a non-literal include is not read and is reported as a warning (a blind spot).
