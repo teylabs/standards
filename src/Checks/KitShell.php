@@ -45,7 +45,7 @@ final class KitShell
 
     private const SIGNALS = [
         'a sign-out link' => '~\b(?:log|sign)[\s_-]?out\b~i',
-        'an account menu' => '~<(?:[A-Z]\w*)?(?:User|Account|Profile)(?:Menu|Dropdown|Nav|Navigation)\b|<NavUser\b|<(?:user|account|profile)-(?:menu|dropdown|nav)\b~',
+        'an account menu' => '~<(?:[A-Z]\w*)?(?:User|Account|Profile)(?:Menu\w*|(?:Dropdown|Nav|Navigation)\b)|<NavUser\b|<(?:user|account|profile)-(?:menu|dropdown|nav)\b~',
         'a workspace switcher' => '~<(?:[A-Z]\w*)?(?:Workspace|Team|Tenant|Organization|Organisation|Org)(?:Switcher|Picker|Selector)\b|<(?:workspace|team|tenant|org|organization)-(?:switcher|picker|selector)\b~',
     ];
 

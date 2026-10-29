@@ -72,6 +72,13 @@ test('[ui.kit-shell] a host header with an account menu and a sign-out fails, on
     ]);
 });
 
+test('[ui.kit-shell] a starter-kit header whose account menu is a Menu-prefixed component (UserMenuContent, user-menu-content) fails; MenuButton and NavigationMenu links do not', function () {
+    expect(kitShellFindings('starter-header'))->toBe([
+        ['target' => 'resources/js/components/AppHeader.vue', 'check' => KIT_SHELL_HEADER, 'line' => 10],
+        ['target' => 'resources/js/components/TopNav.vue', 'check' => "signed-in <nav> outside kit's shell", 'line' => 2],
+    ]);
+});
+
 test('[ui.kit-shell] PublicShell, GuestShell, marketing headers and public-named layouts pass', function () {
     expect(kitShellFindings('public'))->toBe([]);
 });
