@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`ui-page.public-legal` has a recipe**: the kit's PublicShell, PublicMeta and Public/Markdown page, as a `draft` leaf with its rules (no generator yet, so not `ready`). It answers "marketing, product or legal (privacy, terms)" and replaces the `gap` it was.
+
 ## 0.11.36 - 2026-10-29
 
 ### Fixed
