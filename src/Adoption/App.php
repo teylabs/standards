@@ -63,7 +63,7 @@ final class App
     {
         $this->kit = KitOwnership::of($config ?? self::bare($base));
         $this->frontendRoots = array_values(array_unique(array_map(fn (string $root): string => trim($root, '/'), $config === null ? ['resources/js'] : ($config->frontendRoots ?? ['resources/js', ...$config->uiRoots]))));
-        $this->phpRoots = array_values(array_unique(array_map(fn (string $root): string => trim($root, '/'), ['app', 'src', 'modules', 'routes', 'database/migrations', 'config', ...array_keys($config?->classRoots ?? []), ...($config?->sourceRoots ?? [])])));
+        $this->phpRoots = array_values(array_unique(array_map(fn (string $root): string => trim($root, '/'), ['app', 'src', 'modules', 'app-modules', 'routes', 'database/migrations', 'config', ...array_keys($config?->classRoots ?? []), ...($config?->sourceRoots ?? [])])));
         $this->routeRoots = array_values(array_unique(array_map(fn (string $root): string => trim($root, '/'), ['routes', ...($config?->routeRoots ?? []), ...self::MODULE_ROUTES])));
     }
 
@@ -85,7 +85,7 @@ final class App
         return array_values(array_filter($this->frontend(), fn (string $path): bool => str_ends_with($path, '.vue')));
     }
 
-    /** @return list<string> project-relative PHP files (app, src, modules, routes, migrations, config and the configured roots), sorted */
+    /** @return list<string> project-relative PHP files (app, src, modules, app-modules, routes, migrations, config and the configured roots), sorted */
     public function php(): array
     {
         return $this->php ??= array_values(array_filter($this->files($this->phpRoots, ['php']), fn (string $path): bool => ! str_ends_with($path, '.blade.php')));

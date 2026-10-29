@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Tey\Standards\Adoption\App;
+use Tey\Standards\Adoption\Code;
 use Tey\Standards\Adoption\Facts;
 use Tey\Standards\Adoption\Inventory;
 use Tey\Standards\Adoption\Lists;
@@ -136,4 +137,21 @@ test('Storybook files are excluded from every signal, fact and gap scan: *.stori
         ->and(calibrationEvidence($report)['workbench'])->toBe(['resources/js/pages/stories/Index.vue'])
         ->and(App::storybook('resources/js/components/Card.stories.vue'))->toBeTrue()
         ->and(App::storybook('resources/js/components/Stories.vue'))->toBeFalse();
+});
+
+test('facts that never fired: a kebab-case header button counts for has-page-actions, and a module model counts for has-workspaces', function () {
+    $facts = [
+        ['id' => 'has-page-actions', 'description' => 'A header holds buttons.', 'computed' => ['signals' => [['kind' => 'vue-root', 'tags' => ['header'], 'requires' => ['components' => ['Button', '*Button', 'Link'], 'min' => 1]]]]],
+        ['id' => 'has-workspaces', 'description' => 'A team model.', 'computed' => ['analysis' => 'workspace-model']],
+    ];
+    $read = fn (string $case): array => calibrationReport('facts/'.$case, calibrationInventory(['layout.page' => [['kind' => 'file-name', 'globs' => ['Nothing.vue']]]], $facts))['facts']['tey/kit'];
+
+    // Positive: <primary-button> is <PrimaryButton>; app-modules/*/src is app code.
+    expect($read('positive')['has-page-actions'])->toMatchArray(['value' => true, 'evidence' => 'resources/js/pages/Orders/Header.vue:2 root <header> with <primary-button>'])
+        ->and($read('positive')['has-workspaces'])->toMatchArray(['value' => true, 'evidence' => 'app-modules/teams/src/Models/Team.php:7'])
+        // Negative: a header with no button, and a TeamInvitation class, are neither.
+        ->and($read('negative')['has-page-actions']['value'])->toBeFalse()
+        ->and($read('negative')['has-workspaces']['value'])->toBeFalse()
+        ->and(Code::pascal('primary-button'))->toBe('PrimaryButton')
+        ->and(Code::pascal('header'))->toBe('header');
 });

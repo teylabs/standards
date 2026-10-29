@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- **`standards:adoption`: two causes of facts that never fired.** A `vue-root` signal's `requires.components` globs now match a kebab-case tag through its PascalCase form (`<primary-button>` matches `*Button`), which `has-page-actions` needs on apps that write kebab-case tags; and app PHP includes `app-modules/`, so a module's `Team` model counts for `workspace-model`. The README lists the Blade, Livewire and Filament blind spot.
 - **`standards:adoption`: Storybook files are excluded from every signal, fact and gap scan.** `*.stories.*`, anything under `.storybook/`, and a lowercase `stories/` folder outside `pages/` (a component library's story set). A story file had fired `has-page-actions` and a shell signal on its own.
 - **`standards:adoption`: Laravel Mix and webpack-era build tooling is not a library gap.** The tooling list (`Lists::VERSION` 2) adds laravel-mix\*, any `*-loader`, webpack\*, @babel/\*, @vue/compiler-sfc, vue-template-compiler, vue-eslint-parser, globals and cross-env, and widens eslint, prettier and postcss to prefixes. A leading `*` in the list is a suffix match.
 - **`standards:adoption`: `signed-in-pages` no longer fires on API routes.** It counts only an auth-middleware route statement or group that renders a page (`Inertia::render`, `inertia()`, `view()`, `Route::inertia`/`Route::view`, or an app controller whose class renders one). `routes/api.php`, an `api` middleware group and an `api/` prefix never count. Before, `routes/api.php` with `auth:sanctum` turned on every signed-in surface.

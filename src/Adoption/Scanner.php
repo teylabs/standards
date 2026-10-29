@@ -354,7 +354,8 @@ final class Scanner
                         }
                         foreach ($requires['components'] ?? [] as $glob) {
                             foreach (Code::tags($source) as $tag) {
-                                if (App::glob($glob, $tag['tag'])) {
+                                // A kebab-case tag (<primary-button>) is the same component as its PascalCase form (<PrimaryButton>).
+                                if (App::glob($glob, $tag['tag']) || App::glob($glob, Code::pascal($tag['tag']))) {
                                     $hits[] = '<'.$tag['tag'].'>';
                                     break;
                                 }
