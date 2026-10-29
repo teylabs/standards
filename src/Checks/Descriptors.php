@@ -11,6 +11,19 @@ use Tey\Standards\Source;
 
 final class Descriptors
 {
+    /** Role names an auth check compares against; a comparison with anything else (an ARIA role, a domain role) is not an auth check. */
+    public const ROLE_NAMES = ['owner', 'admin', 'administrator', 'superadmin', 'super-admin', 'super_admin', 'member', 'editor', 'viewer', 'manager', 'moderator', 'staff', 'guest'];
+
+    private static function isString(string $token): bool
+    {
+        return str_starts_with($token, "'") || str_starts_with($token, '"') || str_starts_with($token, '`');
+    }
+
+    private static function normalise(string $code): string
+    {
+        return str_replace(['= = =', '= =', '! = =', '! ='], ['===', '==', '!==', '!='], $code);
+    }
+
     /** @return list<array{target: string, check: string}> */
     public function violations(Configuration $config): array
     {
@@ -25,20 +38,30 @@ final class Descriptors
                 }
             }
 
+            // Comparisons keep their string values ('role' === 'admin' is auth; role === 'textbox' is ARIA, role === 'actor' a domain role).
+            $compared = self::normalise(implode(' ', array_map(fn (string $token): string => self::isString($token) ? 'str:'.strtolower(substr($token, 1, -1)) : $token, $tokens)));
+
             foreach ($tokens as $index => $token) {
-                if (str_starts_with($token, "'") || str_starts_with($token, '"') || str_starts_with($token, '`')) {
+                if (self::isString($token)) {
                     $tokens[$index] = ($tokens[$index - 1] ?? '') === '[' || ($tokens[$index + 1] ?? '') === ':' ? substr($token, 1, -1) : '__string';
                 }
             }
-            $code = implode(' ', $tokens);
+            $code = self::normalise(implode(' ', $tokens));
             $patterns = [
-                'role or permission check' => '~\b(?:hasRole|hasPermission|hasPermissionTo|is_?admin)\b|\bcan\s*\(|(?:\.|\?\.|\[)\s*roles\b|\bpermissions\s*(?:\?\.|\.|\[)|\brole\s*(?:===|==|!==|!=)~i',
+                // Auth-shaped only: role and permission helpers, can()/cannot(), a user's roles or permissions, an admin flag. A template `role=` attribute,
+                // an ARIA role, a domain role (FeedRole, node[role]) or an identifier that merely contains "role" is not one.
+                'role or permission check' => '~\b(?:hasRole|hasAnyRole|hasAllRoles|hasPermission|hasPermissionTo|hasAnyPermission|is_?admin|is_?super_?admin)\b|\b(?:can|cannot)\s*\(|(?:\.|\?\.|\[)\s*roles\b|\bpermissions\s*(?:\?\.|\.|\[)~i',
                 'boolean can-map' => '~\bcan\s*(?:\?\.|\.|\[|:\s*\{)|\bcan_[a-zA-Z]\w*\b~',
             ];
             foreach ($patterns as $check => $pattern) {
-                if (preg_match($pattern, str_replace(['= = =', '= =', '! = =', '! ='], ['===', '==', '!==', '!='], $code))) {
+                if (preg_match($pattern, $code)) {
                     $violations[] = ['target' => $path, 'check' => $check];
                 }
+            }
+            // A role or permission compared against a known role name (user.role === 'admin', 'owner' !== role).
+            $names = implode('|', array_map(fn (string $name): string => preg_quote($name, '~'), self::ROLE_NAMES));
+            if (preg_match('~\b(?:role|permission)\s*(?:===|==|!==|!=)\s*str:(?:'.$names.')\b|\bstr:(?:'.$names.')\s*(?:===|==|!==|!=)\s*(?:[\w$]+\s*(?:\?\.|\.)\s*)*(?:role|permission)\b~', $compared)) {
+                $violations[] = ['target' => $path, 'check' => 'role or permission check'];
             }
         }
 

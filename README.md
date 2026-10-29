@@ -674,7 +674,15 @@ PHP checks resolve imports and aliases and ignore comments and strings. Toast an
 
 ## Frontend source checks
 
-The `descriptors` rule rejects role/permission checks and boolean can-maps in frontend source and PHP response arrays. The `js-imports` rule checks bare package imports against dependencies, devDependencies and peerDependencies in `package.json`. Four UI checks are opt-in through `Configuration::optionalRules`: `ui plus`, `ui new-tab`, `ui dropzone` and `ui toast`. These are static source checks; runtime authorization and response contracts still need application tests.
+The `descriptors` rule rejects role/permission checks and boolean can-maps in frontend source and PHP response arrays. A role/permission check is auth-shaped:
+
+- `hasRole(`, `hasPermission(` and the like;
+- `can(`/`cannot(`;
+- a user's `.roles` or `permissions` lookups (`$page.props.auth…roles` included);
+- an admin flag (`is_admin`, `isAdmin`);
+- a `role` or `permission` compared against a known role name (`owner`, `admin`, `member`, `editor`, `viewer` and the like).
+
+A template `role=` attribute, an ARIA role (`role: 'textbox'`, `el.role === 'group'`), a domain role (`FeedRole`, `node[role]`, `role === 'actor'`) and an identifier that merely contains "role" are not flagged. The `js-imports` rule checks bare package imports against dependencies, devDependencies and peerDependencies in `package.json`. Four UI checks are opt-in through `Configuration::optionalRules`: `ui plus`, `ui new-tab`, `ui dropzone` and `ui toast`. These are static source checks; runtime authorization and response contracts still need application tests.
 
 | Rule          | Source contract                                                                                                                                                                                                                                                                                                                         |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
