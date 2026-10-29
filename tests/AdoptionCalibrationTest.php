@@ -95,3 +95,13 @@ test('route analyses read module route files: tey/mod app/Modules/*/routes, app-
         ->toBe(['app-modules/reports/routes/web.php', 'app/Modules/Billing/Http/Controllers/InvoiceController.php', 'app/Modules/Billing/routes/web.php', 'routes/web.php'])
         ->and((new Facts(new App(calibrationBase('page-case'))))->analysis('destructive-routes')['value'])->toBeFalse();
 });
+
+test('signed-in-pages counts only auth routes that render a page, never routes/api.php or an api group', function () {
+    $evidence = fn (string $case): ?string => (new Facts(new App(calibrationBase('signed-in/'.$case))))->analysis('signed-in-pages')['evidence'];
+
+    // Negative: routes/api.php, an `api` middleware group, an `api/...` prefix and an auth route whose controller renders nothing.
+    expect($evidence('api-only'))->toBeNull()
+        // Positive: an auth group whose controller calls Inertia::render, and a chained ->middleware('auth') on a view() route.
+        ->and($evidence('controller'))->toBe('routes/web.php:6')
+        ->and($evidence('chained'))->toBe('routes/web.php:5');
+});

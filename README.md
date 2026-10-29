@@ -737,7 +737,7 @@ Exit 2 means it fails closed: an unreadable or invalid inventory, an unknown for
 
 | Analysis | True when |
 | --- | --- |
-| `signed-in-pages` | a route file applies the auth middleware (`'auth'`, `'auth:<guard>'`, `Authenticate::class`) |
+| `signed-in-pages` | a route statement or group behind the auth middleware (`'auth'`, `'auth:<guard>'`, `Authenticate::class`) renders a page: `Inertia::render`, `inertia()`, `view()`, `Route::inertia`/`Route::view`, or an app controller (`Name::class`) whose class file renders one. `routes/api.php`, an `api` middleware group and an `api/` prefix never count |
 | `public-pages` | a route file has a top-level `Route::get`/`view`/`inertia` outside any group, with no middleware in its statement and not an auth screen's URI; or a page path names Public, Marketing, Landing, Welcome, Legal or Docs |
 | `auth-routes` | composer.json requires laravel/fortify, breeze, ui or jetstream, or a route file names a login, forgot-password, `password.request`/`password.reset`, `verification.notice` or `email/verify` route |
 | `workspace-model` | an app class is named Workspace, Team, Organisation or Organization, or a migration creates such a table |

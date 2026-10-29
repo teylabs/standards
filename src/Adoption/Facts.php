@@ -23,6 +23,12 @@ final class Facts
 
     private const AUTH_URIS = '~^/?(?:login|logout|register|forgot-password|reset-password|password|email/verify|verify-email|two-factor|confirm-password|user/confirm-password)~';
 
+    /** Code that renders a page: Inertia::render, inertia(), view(), Route::inertia or Route::view. */
+    private const RENDERS = '~\bInertia::render\s*\(|\binertia\s*\(|\bview\s*\(~';
+
+    /** An API route group: the `api` middleware (alone or with others) or an `api` URI prefix. */
+    private const API = '~[\'"]api[\'"]|\bprefix\s*\(\s*[\'"]/?api(?:/|[\'"])~';
+
     /** @var array<string, array{value: bool, evidence: ?string}> */
     private array $values = [];
 
@@ -85,8 +91,10 @@ final class Facts
     public function analysis(string $name): array
     {
         $evidence = match ($name) {
-            // A route file applies the auth middleware (`'auth'`, `'auth:sanctum'`, Authenticate::class).
-            'signed-in-pages' => $this->firstMatch($this->app->routes(), '~[\'"]auth(?::[\w,-]+)?[\'"]|\bAuthenticate::class~'),
+            // A route statement or group behind the auth middleware (`'auth'`, `'auth:<guard>'`, Authenticate::class) that renders a page:
+            // Inertia::render, inertia(), view(), Route::inertia/Route::view, or an app controller whose class renders one. API routes
+            // (routes/api.php, an `api` middleware group or an `api` prefix) never count.
+            'signed-in-pages' => $this->signedInPage(),
             // A top-level GET, view or inertia route in a route file outside any group, with no auth middleware in its statement and
             // not an auth screen's URI; or a page whose path names a public surface other than sign-in (Public, Marketing, Landing, Welcome, Legal, Docs).
             'public-pages' => $this->publicRoute() ?? $this->firstPath($this->app->frontend(), fn (string $path): bool => $this->app->page($path) && preg_match('~/(?:[Pp]ublic|[Mm]arketing|[Ll]anding|[Ww]elcome|[Ll]egal|[Dd]ocs)(?![a-z])~', $path) === 1),
@@ -197,6 +205,95 @@ final class Facts
         }
 
         return null;
+    }
+
+    /** The first auth-middleware route statement or group, outside the API, that renders a page directly or through an app controller. */
+    private function signedInPage(): ?string
+    {
+        foreach ($this->app->routes() as $path) {
+            if (basename($path) === 'api.php') {
+                continue;
+            }
+            $source = $this->app->source($path);
+            $code = Code::withoutComments($source);
+            preg_match_all('~[\'"]auth(?::[\w,-]+)?[\'"]|\bAuthenticate::class~', $code, $matches, PREG_OFFSET_CAPTURE);
+            foreach ($matches[0] as [, $offset]) {
+                $statement = self::statement($code, $offset);
+                if (preg_match(self::API, $statement) === 1) {
+                    continue;
+                }
+                if (preg_match(self::RENDERS, $statement) === 1 || $this->rendersThroughController($statement)) {
+                    return $path.':'.App::line($source, $offset);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /** Whether the statement names an app controller (`Name::class`) whose class file renders a page. */
+    private function rendersThroughController(string $statement): bool
+    {
+        preg_match_all('~\b([A-Z]\w*)::class\b~', $statement, $classes);
+        $names = array_diff(array_unique($classes[1]), ['Route', 'Authenticate']);
+        if ($names === []) {
+            return false;
+        }
+        foreach ($this->phpApp() as $path) {
+            if (in_array(basename($path, '.php'), $names, true) && preg_match(self::RENDERS, Code::withoutComments($this->app->source($path))) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The whole PHP statement around $offset: back to the `;` or opening `{` that starts it and forward to its closing `;`, skipping
+     * nested brackets, so a group closure is read in full and a chained `->middleware('auth')` sees the route before it.
+     */
+    private static function statement(string $code, int $offset): string
+    {
+        $start = 0;
+        $depth = 0;
+        for ($i = $offset - 1; $i >= 0; $i--) {
+            $char = $code[$i];
+            if ($char === ')' || $char === '}' || $char === ']') {
+                $depth++;
+            } elseif ($char === '(' || $char === '{' || $char === '[') {
+                if ($depth === 0) {
+                    if ($char === '{') {
+                        $start = $i + 1;
+                        break;
+                    }
+
+                    continue;
+                }
+                $depth--;
+            } elseif ($char === ';' && $depth === 0) {
+                $start = $i + 1;
+                break;
+            }
+        }
+        $end = strlen($code);
+        $depth = 0;
+        for ($i = $offset, $length = strlen($code); $i < $length; $i++) {
+            $char = $code[$i];
+            if ($char === '(' || $char === '{' || $char === '[') {
+                $depth++;
+            } elseif ($char === ')' || $char === '}' || $char === ']') {
+                if ($depth === 0 && $char === '}') {
+                    $end = $i;
+                    break;
+                }
+                $depth = max(0, $depth - 1);
+            } elseif ($char === ';' && $depth === 0) {
+                $end = $i;
+                break;
+            }
+        }
+
+        return substr($code, $start, $end - $start);
     }
 
     /** A top-level (ungrouped) GET/view/inertia route statement with no `auth` in it and not an auth screen's URI. */
