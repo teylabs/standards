@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Documentation
+
+- **Helper or feature roots and `preset laravel`** (README, "A modular app's configuration"). An `app/Helpers/*` layout's models, requests and controllers are left out of the stock Laravel preset by adding `App\Helpers` to `presetIgnores` (since 0.11.11). The README gives the trade-off (the whole preset, with placement left to rule 20) and the stale-allowlist cleanup.
+
+## Unreleased
+
 ### Fixed
 
 - **`standards:install --dry-run` dry-runs the whole install.** Without `--extract` the flag was ignored and the install wrote skills, hooks and `tests/Arch/configuration.php`. Now every write goes through one place: a dry run lists each file it would write (`created` or `modified`) and writes nothing, and `--json` prints `{dry_run, installed, files}`.
