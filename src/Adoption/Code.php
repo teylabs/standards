@@ -67,6 +67,15 @@ final class Code
         return null;
     }
 
+    /** Whether the element starting at $offset (its `<`) is an `<input>` with a static `type` of hidden, in any quoting or case. */
+    public static function hiddenInput(string $source, int $offset): bool
+    {
+        $end = strpos($source, '>', $offset);
+        $element = substr($source, $offset, $end === false ? null : $end - $offset);
+
+        return preg_match('~\A<input\b~i', $element) === 1 && preg_match('~(?<![:\w-])type\s*=\s*(["\']?)hidden\1(?![\w-])~i', $element) === 1;
+    }
+
     /** Whether a template tag matches a name: exact, or the kebab-case form of a PascalCase name. */
     public static function tagIs(string $tag, string $name): bool
     {

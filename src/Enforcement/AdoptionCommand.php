@@ -40,10 +40,10 @@ final class AdoptionCommand extends Command
             }
             [$tables, $source] = $this->adoptedTables();
             if ($source !== null) {
-                fwrite(STDERR, 'Note: '.$source.PHP_EOL);
+                fwrite(STDERR, 'Warning: '.$source.PHP_EOL);
             }
             $app = new App($base, $configuration);
-            $report = (new Scanner($app, Scanner::inventories($base, array_values(array_filter((array) $this->option('inventory'), 'is_string'))), $configuration, new DateTimeImmutable('today'), $tables, $file))->report($mode);
+            $report = (new Scanner($app, Scanner::inventories($base, array_values(array_filter((array) $this->option('inventory'), 'is_string'))), $configuration, new DateTimeImmutable('today'), $tables, $file, $source !== null))->report($mode);
         } catch (AdoptionError $error) {
             if ($this->option('json')) {
                 $this->line(json_encode(['format' => Scanner::FORMAT, 'mode' => $mode, 'error' => $error->getMessage(), 'exit_code' => 2], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
@@ -145,7 +145,7 @@ final class AdoptionCommand extends Command
                 $lines[] = "standards:adoption --{$report['mode']}: ".count($report['blocking']).' blocking, in order:';
                 foreach ($report['blocking'] as $item) {
                     $where = $item['evidence'] === [] ? 'expects '.$item['expects'] : implode(', ', array_map(fn (array $e): string => $e['file'].($e['line'] === null ? '' : ':'.$e['line']), $item['evidence']));
-                    $lines[] = '  '.$item['kind'].'  '.($item['package'] === null ? '' : $item['package'].' ').$item['subject'].'  '.$where.(isset($item['problem']) ? ' — '.$item['problem'] : '');
+                    $lines[] = '  '.$item['kind'].'  '.($item['package'] === null ? '' : $item['package'].' ').$item['subject'].'  '.$where.(isset($item['problem']) ? ' — '.$item['problem'] : '').($item['cause'] === null ? '' : ' — cause: '.$item['cause']);
                 }
             }
         }

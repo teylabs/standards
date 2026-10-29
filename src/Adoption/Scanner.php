@@ -39,6 +39,9 @@ final class Scanner
 
     public const GAP_RULE = 'adoption.gap';
 
+    /** The cause a blocking row carries when a migration signal fired but `kit_adoptions` could not be read. */
+    public const UNREADABLE_ADOPTIONS = 'adoption records unreadable (kit_adoptions)';
+
     private const MAIL_VIEW = '~^resources/views/(?:.+/)?(?:mail|mails|email|emails)/~';
 
     private readonly Facts $facts;
@@ -53,6 +56,7 @@ final class Scanner
      * @param  list<Inventory>  $inventories
      * @param  list<string>  $adoptedTables  tables recorded in tey/kit's `kit_adoptions` (adopted in place, not hand-rolled)
      * @param  ?string  $configurationFile  project-relative file the allowlist lives in, for file:line citations
+     * @param  bool  $adoptionRecordsUnreadable  `kit_adoptions` exists but could not be read: a created table reads hand-rolled, with that cause
      */
     public function __construct(
         private readonly App $app,
@@ -61,6 +65,7 @@ final class Scanner
         private readonly DateTimeImmutable $today,
         private readonly array $adoptedTables = [],
         private readonly ?string $configurationFile = null,
+        private readonly bool $adoptionRecordsUnreadable = false,
     ) {
         $this->facts = new Facts($app, fn (array $signal): array => $this->signal($signal)[0]);
         $this->versions = self::installedVersions($app->base);
@@ -106,6 +111,19 @@ final class Scanner
             throw new AdoptionError('No adoption inventory to read: no installed package ships '.Inventory::FILE.' and no --inventory was given.');
         }
 
+        // --inventory may only add packages the app doesn't install (a calibration scan). Replacing an installed package's file could pass
+        // a gate on a hand-written inventory, so --ci and --compliance refuse it; the plain report allows it and says so.
+        $overridden = [];
+        foreach ($this->inventories as $inventory) {
+            if ($inventory->origin === 'option' && self::installedIn($this->app->base, $inventory->composer())) {
+                $vendor = 'vendor/'.$inventory->composer().'/'.Inventory::FILE;
+                $overridden[] = ['package' => $inventory->composer(), 'by' => $this->relative($inventory->source), 'vendor' => is_file($this->app->base.'/'.$vendor) ? $vendor : null];
+            }
+        }
+        if ($overridden !== [] && $mode !== 'report') {
+            throw new AdoptionError(implode(' ', array_map(fn (array $o): string => "--inventory {$o['by']} describes {$o['package']}, which the app installs; --{$mode} reads only the installed package's own inventory (--inventory may only add packages that aren't installed).", $overridden)));
+        }
+
         $exemptions = $this->exemptions();
         $candidates = $this->candidates();
         $rows = [];
@@ -133,19 +151,19 @@ final class Scanner
         }
         $invalid = array_values(array_filter(array_map(fn (array $entry): ?array => $entry['problem'] === null ? null : [...self::cite($entry), 'problem' => $entry['problem']], $exemptions['all'])));
 
-        $warnings = [];
+        $warnings = array_map(fn (array $o): string => ($o['vendor'] === null ? "inventory for {$o['package']} (installed)" : "vendor inventory for {$o['package']}").' overridden by '.$o['by'].'; --ci and --compliance refuse this.', $overridden);
         $blocking = ['ci' => [], 'compliance' => []];
         foreach ($rows as $row) {
             $subject = ['package' => $row['package'], 'subject' => $row['id']];
             if ($row['status'] === 'exempt') {
-                $blocking['compliance'][] = ['kind' => 'exempt', ...$subject, 'evidence' => [self::where($row['exemption'])], 'expects' => null];
+                $blocking['compliance'][] = ['kind' => 'exempt', ...$subject, 'evidence' => [self::where($row['exemption'])], 'expects' => null, 'cause' => $row['cause']];
 
                 continue;
             }
             if (! in_array($row['status'], ['hand-rolled', 'missing'], true)) {
                 continue;
             }
-            $item = ['kind' => $row['status'], ...$subject, 'evidence' => $row['status'] === 'missing' ? [] : array_map(self::where(...), $row['evidence']), 'expects' => $row['status'] === 'missing' ? self::expects($row['uses']) : null];
+            $item = ['kind' => $row['status'], ...$subject, 'evidence' => $row['status'] === 'missing' ? [] : array_map(self::where(...), $row['evidence']), 'expects' => $row['status'] === 'missing' ? self::expects($row['uses']) : null, 'cause' => $row['cause']];
             $blocking['compliance'][] = $item;
             if ($row['status'] === 'missing' && $row['new'] && $this->stillNew($row)) {
                 $warnings[] = "{$row['package']} {$row['id']} is missing; it is new in {$row['since']}, so --ci only warns for that release (--compliance blocks it).";
@@ -154,14 +172,14 @@ final class Scanner
             }
         }
         foreach ($gaps as $gap) {
-            $item = ['kind' => $gap['exemption'] === null ? 'gap' : 'exempt', 'package' => null, 'subject' => $gap['subject'], 'evidence' => [$gap['exemption'] === null ? self::where($gap) : self::where($gap['exemption'])], 'expects' => null];
+            $item = ['kind' => $gap['exemption'] === null ? 'gap' : 'exempt', 'package' => null, 'subject' => $gap['subject'], 'evidence' => [$gap['exemption'] === null ? self::where($gap) : self::where($gap['exemption'])], 'expects' => null, 'cause' => null];
             $blocking['compliance'][] = $item;
             if ($gap['exemption'] === null) {
                 $blocking['ci'][] = $item;
             }
         }
         foreach ([...$invalid, ...$unused] as $entry) {
-            $item = ['kind' => 'exempt', 'package' => null, 'subject' => $entry['rule'].' '.$entry['target'], 'evidence' => [self::where($entry)], 'expects' => null, 'problem' => $entry['problem']];
+            $item = ['kind' => 'exempt', 'package' => null, 'subject' => $entry['rule'].' '.$entry['target'], 'evidence' => [self::where($entry)], 'expects' => null, 'cause' => null, 'problem' => $entry['problem']];
             $blocking['ci'][] = $item;
             $blocking['compliance'][] = $item;
         }
@@ -189,6 +207,7 @@ final class Scanner
             'generated_at' => $this->today->format('Y-m-d'),
             'mode' => $mode,
             'lists' => Lists::VERSION,
+            'overridden' => $overridden,
             'inventories' => array_map(fn (Inventory $inventory): array => [
                 'package' => $inventory->composer(),
                 'npm' => $inventory->package['npm'] ?? null,
@@ -196,7 +215,7 @@ final class Scanner
                 'origin' => $inventory->origin,
                 'source' => $this->relative($inventory->source),
                 'version' => $this->versions[$inventory->composer()] ?? null,
-                'installed' => $this->installed($inventory->composer()),
+                'installed' => self::installedIn($this->app->base, $inventory->composer()),
                 'surfaces' => count($inventory->surfaces),
             ], $this->inventories),
             'facts' => $facts,
@@ -225,16 +244,18 @@ final class Scanner
     {
         $package = $inventory->composer();
         $applies = $this->facts->holds($surface['applies'], $inventory->facts);
-        $installed = $this->installed($package) && $this->featureInstalled($package, $surface['feature']);
+        $installed = self::installedIn($this->app->base, $package) && $this->featureInstalled($package, $surface['feature']);
         $signals = [];
         $uses = [];
         $note = null;
+        $migrationFired = false;
 
         if ($applies) {
             foreach ($surface['handRolled'] as $signal) {
                 [$fired, $adoptedBy] = $this->signal($signal);
                 array_push($signals, ...$fired);
                 array_push($uses, ...$adoptedBy);
+                $migrationFired = $migrationFired || ($signal['kind'] === 'migration' && $fired !== []);
             }
             array_push($uses, ...$this->uses($inventory, $surface['uses']));
         }
@@ -249,7 +270,7 @@ final class Scanner
             default => 'missing',
         };
         if ($applies && ! $installed) {
-            $note = $this->installed($package) ? "feature {$surface['feature']} is not installed" : "{$package} is not installed";
+            $note = self::installedIn($this->app->base, $package) ? "feature {$surface['feature']} is not installed" : "{$package} is not installed";
         }
         $evidence = match ($status) {
             'hand-rolled' => $signals !== [] ? $signals : $replaced,
@@ -280,6 +301,8 @@ final class Scanner
             'new' => $surface['status'] === 'new',
             'since' => $surface['since'] ?? null,
             'note' => $note,
+            // A created table reads hand-rolled because the adoption records could not be read, not because they say so.
+            'cause' => $status === 'hand-rolled' && $migrationFired && $this->adoptionRecordsUnreadable ? self::UNREADABLE_ADOPTIONS : null,
             'evidence' => $evidence,
             // Both sides, whatever the status, so precedence is visible: hand-rolled signals that fired, and the `uses` that matched.
             'signals' => $signals,
@@ -372,7 +395,11 @@ final class Scanner
                         continue;
                     }
                     $source = $this->app->source($path);
-                    $matching = array_values(array_filter(Code::tags($source), function (array $tag) use ($signal): bool {
+                    $matching = array_values(array_filter(Code::tags($source), function (array $tag) use ($signal, $source): bool {
+                        // CSRF and method-spoofing fields are not hand-rolled inputs: <input type="hidden"> never counts (v1 has no attribute filter).
+                        if (strtolower($tag['tag']) === 'input' && Code::hiddenInput($source, $tag['offset'])) {
+                            return false;
+                        }
                         foreach ($signal['tags'] as $name) {
                             if (Code::tagIs($tag['tag'], $name)) {
                                 return true;
@@ -680,9 +707,15 @@ final class Scanner
         return array_values(array_filter($paths, fn (string $path): bool => ! $this->app->kitOwned($path)));
     }
 
-    private function installed(string $package): bool
+    /** Whether the app installs the package: its vendor directory exists, or composer.json requires it. */
+    public static function installedIn(string $base, string $package): bool
     {
-        return is_dir($this->app->base.'/vendor/'.$package) || array_key_exists($package, $this->app->composerPackages());
+        if (is_dir($base.'/vendor/'.$package)) {
+            return true;
+        }
+        $composer = is_file($base.'/composer.json') ? json_decode((string) file_get_contents($base.'/composer.json'), true) : null;
+
+        return is_array($composer) && (isset($composer['require'][$package]) || isset($composer['require-dev'][$package]));
     }
 
     /**

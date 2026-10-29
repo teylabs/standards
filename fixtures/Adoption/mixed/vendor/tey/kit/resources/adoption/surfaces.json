@@ -1,0 +1,79 @@
+{
+    "format": 1,
+    "package": { "composer": "tey/kit", "alias": "@/components/Kit" },
+    "facts": [
+        { "id": "has-signed-in-pages", "description": "The app serves at least one page behind auth middleware.", "computed": { "analysis": "signed-in-pages" } },
+        { "id": "has-search", "description": "The app has a search route.", "computed": { "analysis": "search-route" } },
+        { "id": "has-forms", "description": "An app-owned page posts, puts or patches a form.", "computed": { "signals": [{ "kind": "template-tag", "tags": ["form", "input", "select", "textarea"], "min": 1 }, { "kind": "import", "specifiers": ["@/components/Kit#Input", "@/components/Kit#Field", "vue-multiselect"] }] } },
+        { "id": "has-index-pages", "description": "An app-owned page lists records.", "computed": { "signals": [{ "kind": "template-tag", "tags": ["table"], "min": 1 }, { "kind": "import", "specifiers": ["@/components/Kit#DataTable"] }, { "kind": "file-name", "globs": ["resources/js/**/*Pagination*.vue"] }] } },
+        { "id": "has-page-actions", "description": "A signed-in header holds page action buttons.", "computed": { "signals": [{ "kind": "vue-root", "tags": ["header"], "requires": { "components": ["*UserMenu", "*Button"], "min": 1 }, "scope": "signed-in" }] } },
+        { "id": "sends-mail", "description": "The app defines a Mailable or a mail notification.", "computed": { "analysis": "mail-notifications" } },
+        { "id": "has-workspaces", "description": "The app has a team, organisation or workspace model.", "computed": { "analysis": "workspace-model" } },
+        { "id": "has-mcp-server", "description": "The app requires laravel/mcp or registers an MCP server.", "computed": { "analysis": "mcp-server" } }
+    ],
+    "surfaces": [
+        {
+            "id": "shell.workspace", "layer": "ui", "group": "layout", "label": "Workspace shell", "feature": "shell", "applies": "has-signed-in-pages",
+            "uses": { "files": ["resources/js/pages/Workspace/Layout.vue"], "components": ["PrimaryNav"] },
+            "handRolled": [{ "kind": "vue-root", "tags": ["header", "nav", "aside"], "requires": { "routes": ["logout"], "components": ["*UserMenu"], "min": 1 }, "scope": "signed-in" }],
+            "replaces": { "components": ["*AppLayout*"] },
+            "docs": "docs/shell.md", "status": "stable"
+        },
+        {
+            "id": "layout.page", "layer": "ui", "group": "layout", "label": "Page frame", "feature": "core", "applies": "has-signed-in-pages",
+            "uses": { "imports": ["@/components/Kit:Page", "@/components/Kit:PageEnd"] },
+            "handRolled": [{ "kind": "rule", "rule": "ui.kit-shell" }],
+            "docs": "docs/page.md", "status": "stable"
+        },
+        {
+            "id": "navigation.search", "layer": "ui", "group": "navigation", "label": "Search box", "feature": "core", "applies": "has-search",
+            "uses": { "imports": ["@/components/Kit:SearchBox"] },
+            "handRolled": [{ "kind": "file-name", "globs": ["resources/js/**/*Search*.vue"] }],
+            "replaces": { "npm": ["cmdk-vue"], "components": ["*SearchBar*"] },
+            "docs": "docs/search.md", "status": "stable"
+        },
+        {
+            "id": "form.inputs", "layer": "ui", "group": "form", "label": "Form inputs", "feature": "core", "applies": "has-forms",
+            "uses": { "imports": ["@/components/Kit:Input", "@/components/Kit:Field"] },
+            "handRolled": [{ "kind": "import", "specifiers": ["vue-multiselect", "@headlessui/vue#Combobox"] }],
+            "replaces": { "npm": ["vue-multiselect", "@headlessui/vue#Combobox"], "components": ["Input*", "Select*"] },
+            "docs": "docs/forms.md", "status": "stable"
+        },
+        {
+            "id": "data.table", "layer": "ui", "group": "data", "label": "Data table", "feature": "core", "applies": "has-index-pages",
+            "uses": { "imports": ["@/components/Kit:DataTable"] },
+            "handRolled": [{ "kind": "template-tag", "tags": ["table"], "min": 1 }],
+            "replaces": { "npm": ["@tanstack/vue-table"], "components": ["Table", "DataTable"] },
+            "docs": "docs/data-table.md", "status": "stable"
+        },
+        {
+            "id": "feedback.toast", "layer": "ui", "group": "feedback", "label": "Toasts", "feature": "core", "applies": "has-signed-in-pages",
+            "uses": { "imports": ["@/components/Kit:Toaster"] },
+            "handRolled": [{ "kind": "import", "specifiers": ["vue-toastification"] }],
+            "replaces": { "npm": ["vue-toastification"], "components": ["Toast*"] },
+            "docs": "docs/toast.md", "status": "new", "since": "0.7.0"
+        },
+        {
+            "id": "mail.layout", "layer": "backend", "group": "mail", "label": "Branded mail", "feature": "core", "applies": "sends-mail",
+            "uses": { "classes": ["Tey\\Kit\\Mail\\FluentMailMessage"] },
+            "handRolled": [{ "kind": "mail-view", "without": ["kit::mail"] }],
+            "docs": "docs/mail.md", "status": "stable"
+        },
+        {
+            "id": "workspaces.tenancy", "layer": "backend", "group": "workspace", "label": "Workspace tenancy", "feature": "workspaces", "applies": "has-workspaces",
+            "uses": { "classes": ["Tey\\Kit\\Features\\Workspaces\\Concerns\\HasWorkspaces"] },
+            "handRolled": [{ "kind": "migration", "tables": ["workspaces", "teams"] }, { "kind": "composer", "packages": ["stancl/tenancy"] }],
+            "replaces": { "composer": ["laravel/jetstream"] },
+            "docs": "docs/workspaces.md", "status": "stable"
+        },
+        {
+            "id": "mcp.server", "layer": "backend", "group": "platform", "label": "MCP server", "feature": "mcp", "applies": "has-mcp-server",
+            "uses": { "files": ["resources/js/pages/Mcp/Authorize/Page.vue"] },
+            "handRolled": [{ "kind": "php-class", "extends": ["Laravel\\Mcp\\Server"] }],
+            "docs": "docs/mcp.md", "status": "stable"
+        }
+    ],
+    "nonSurfaces": [
+        { "ref": "@/components/Kit:cn", "reason": "A class-name helper, not a surface." }
+    ]
+}

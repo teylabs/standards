@@ -26,14 +26,25 @@ function adoptionConfiguration(string $base, array $allowlist = []): Configurati
     ]));
 }
 
-/** @param list<string>|null $inventories fixture inventory names; null reads kit.json */
-function adoptionReport(string $case, string $mode = 'report', ?array $inventories = null, array $adoptedTables = [], ?Configuration $config = null): array
+/**
+ * A fixture inventory reads as the installed (vendor) copy when the fixture app installs its package, as it would in a real app, and as an
+ * explicit --inventory otherwise.
+ *
+ * @param list<string>|null $inventories fixture inventory names; null reads kit.json
+ */
+function adoptionReport(string $case, string $mode = 'report', ?array $inventories = null, array $adoptedTables = [], ?Configuration $config = null, bool $recordsUnreadable = false): array
 {
     $base = adoptionFixture($case);
     $config ??= is_file($base.'/tests/Arch/configuration.php') ? CheckReport::configuration($base, 'tests/Arch/configuration.php') : adoptionConfiguration($base);
-    $paths = array_map(fn (string $name): string => adoptionFixture('inventories/'.$name.'.json'), $inventories ?? ['kit']);
+    $loaded = [];
+    foreach ($inventories ?? ['kit'] as $name) {
+        $path = adoptionFixture('inventories/'.$name.'.json');
+        $inventory = Inventory::load($path, 'option');
+        $loaded[] = Scanner::installedIn($base, $inventory->composer()) ? Inventory::load($path, 'vendor') : $inventory;
+    }
+    usort($loaded, fn (Inventory $a, Inventory $b): int => $a->composer() <=> $b->composer());
 
-    return (new Scanner(new App($base, $config), Scanner::inventories($base, $paths), $config, new DateTimeImmutable('2026-10-29'), $adoptedTables, 'tests/Arch/configuration.php'))->report($mode);
+    return (new Scanner(new App($base, $config), $loaded, $config, new DateTimeImmutable('2026-10-29'), $adoptedTables, 'tests/Arch/configuration.php', $recordsUnreadable))->report($mode);
 }
 
 /** @param array<string, mixed> $mutations surface id => field overrides, or '*' => top-level overrides */
@@ -257,7 +268,7 @@ test('--ci accepts valid exemptions and only warns on a missing surface new in t
     // An app whose only failing row is a new surface: --ci passes with the warning, --compliance fails on it, the plain report exits 0.
     $base = adoptionFixture('adopted');
     $config = adoptionConfiguration($base);
-    $inventory = Inventory::fromArray(adoptionInventory(['feedback.toast' => ['uses' => ['imports' => ['@/components/Kit:Sonner']]]]), 'kit.json');
+    $inventory = Inventory::fromArray(adoptionInventory(['feedback.toast' => ['uses' => ['imports' => ['@/components/Kit:Sonner']]]]), 'kit.json', 'vendor');
     $run = fn (string $mode): array => (new Scanner(new App($base, $config), [$inventory], $config, new DateTimeImmutable('2026-10-29')))->report($mode);
 
     expect($run('ci'))->toMatchArray(['exit_code' => 0, 'blocking' => []])
@@ -283,8 +294,8 @@ test('two inventories are read side by side, sorted by package, each with its ve
     $report = adoptionReport('adopted', 'report', ['reports', 'kit']);
 
     expect(array_map(fn (array $i): array => [$i['package'], $i['origin'], $i['installed'], $i['surfaces']], $report['inventories']))->toBe([
-        ['acme/reports', 'option', true, 2],
-        ['tey/kit', 'option', true, 9],
+        ['acme/reports', 'vendor', true, 2],
+        ['tey/kit', 'vendor', true, 9],
     ])
         ->and(fn () => Scanner::inventories(adoptionFixture('adopted'), [adoptionFixture('inventories/kit.json'), adoptionFixture('inventories/kit.json')]))
         ->toThrow(AdoptionError::class, 'Two --inventory files describe tey/kit');
@@ -357,7 +368,7 @@ test('tey/kit\'s real inventory (feat/adoption-surfaces 791fadb) reads with the 
 
     $base = adoptionFixture('adopted');
     $config = adoptionConfiguration($base);
-    $report = (new Scanner(new App($base, $config), [$inventory], $config, new DateTimeImmutable('2026-10-29')))->report('compliance');
+    $report = (new Scanner(new App($base, $config), [Inventory::load(adoptionFixture('inventories/kit-791fadb.json'), 'vendor')], $config, new DateTimeImmutable('2026-10-29')))->report('compliance');
 
     expect($report['rows'])->toHaveCount(count($data['surfaces']))
         ->and(array_keys($report['facts']['tey/kit']))->toBe(array_column($data['facts'], 'id'))
@@ -367,11 +378,11 @@ test('tey/kit\'s real inventory (feat/adoption-surfaces 791fadb) reads with the 
 test('--json is a stable format-1 document with rows, evidence, gaps, facts, inventories and the blocking list', function () {
     $report = adoptionReport('mixed', 'ci', ['kit', 'reports']);
 
-    expect(array_keys($report))->toBe(['format', 'app', 'generated_at', 'mode', 'lists', 'inventories', 'facts', 'adopted_tables', 'rows', 'gaps', 'exemptions', 'warnings', 'summary', 'blocking', 'exit_code'])
+    expect(array_keys($report))->toBe(['format', 'app', 'generated_at', 'mode', 'lists', 'overridden', 'inventories', 'facts', 'adopted_tables', 'rows', 'gaps', 'exemptions', 'warnings', 'summary', 'blocking', 'exit_code'])
         ->and($report)->toMatchArray(['format' => 1, 'app' => 'fixture/mixed', 'generated_at' => '2026-10-29', 'mode' => 'ci', 'lists' => 1])
-        ->and(array_keys($report['rows'][0]))->toBe(['package', 'id', 'layer', 'group', 'label', 'feature', 'installed', 'applies', 'status', 'underlying', 'new', 'since', 'note', 'evidence', 'signals', 'matches', 'replaced', 'uses', 'docs', 'exemption'])
+        ->and(array_keys($report['rows'][0]))->toBe(['package', 'id', 'layer', 'group', 'label', 'feature', 'installed', 'applies', 'status', 'underlying', 'new', 'since', 'note', 'cause', 'evidence', 'signals', 'matches', 'replaced', 'uses', 'docs', 'exemption'])
         ->and(array_keys($report['gaps'][0]))->toBe(['subject', 'kind', 'file', 'line', 'detail', 'exemption'])
-        ->and(array_keys($report['blocking'][0]))->toBe(['kind', 'package', 'subject', 'evidence', 'expects'])
+        ->and(array_keys($report['blocking'][0]))->toBe(['kind', 'package', 'subject', 'evidence', 'expects', 'cause'])
         ->and(array_keys($report['inventories'][0]))->toBe(['package', 'npm', 'alias', 'origin', 'source', 'version', 'installed', 'surfaces'])
         ->and(array_keys($report['facts']))->toBe(['acme/reports', 'tey/kit'])
         ->and(array_keys($report['facts']['tey/kit']))->toBe(['has-signed-in-pages', 'has-search', 'has-forms', 'has-index-pages', 'has-page-actions', 'sends-mail', 'has-workspaces', 'has-mcp-server'])
@@ -442,7 +453,8 @@ test('the standards:adoption command prints the table, --json and the exit codes
         $provider->boot();
         $artisan = new Illuminate\Console\Application($container, new Illuminate\Events\Dispatcher($container), 'test');
         $artisan->resolveCommands([Tey\Standards\Enforcement\AdoptionCommand::class]);
-        $inventory = ['--inventory' => [adoptionFixture('inventories/kit.json')]];
+        // mixed ships kit's inventory in vendor/tey/kit, as an installed kit would.
+        $inventory = [];
 
         expect($artisan->call('standards:adoption', $inventory))->toBe(0)
             ->and($artisan->output())->toContain('tey/kit')->toContain('shell.workspace')->toContain('hand-rolled')->toContain('GAPS')
@@ -462,6 +474,27 @@ test('the standards:adoption command prints the table, --json and the exit codes
         $json = json_decode($artisan->output(), true);
         expect($json)->toMatchArray(['format' => 1, 'exit_code' => 2])
             ->and($json['error'])->toContain('Cannot read the adoption inventory');
+        // --inventory for an installed package: the gates fail closed; the plain report uses it and warns.
+        $override = ['--inventory' => [adoptionFixture('inventories/kit.json')]];
+        expect($artisan->call('standards:adoption', $override + ['--ci' => true]))->toBe(2)
+            ->and($artisan->output())->toContain('describes tey/kit, which the app installs; --ci reads only the installed package\'s own inventory');
+        expect($artisan->call('standards:adoption', $override + ['--compliance' => true]))->toBe(2);
+        expect($artisan->call('standards:adoption', $override))->toBe(0)
+            ->and($artisan->output())->toContain('Warning: vendor inventory for tey/kit overridden by '.adoptionFixture('inventories/kit.json'));
+        expect($artisan->call('standards:adoption', $override + ['--json' => true]))->toBe(0);
+        $json = json_decode($artisan->output(), true);
+        expect($json['overridden'])->toBe([['package' => 'tey/kit', 'by' => adoptionFixture('inventories/kit.json'), 'vendor' => 'vendor/tey/kit/resources/adoption/surfaces.json']])
+            ->and($json['inventories'][0]['origin'])->toBe('option');
+        // A package the app doesn't install may be added in every mode (the calibration case).
+        $add = ['--inventory' => [adoptionFixture('inventories/reports.json')], '--json' => true];
+        foreach ([[], ['--ci' => true], ['--compliance' => true]] as $mode) {
+            $artisan->call('standards:adoption', $add + $mode);
+            $json = json_decode($artisan->output(), true);
+            expect($json['exit_code'])->toBeIn([0, 1])
+                ->and($json['overridden'])->toBe([])
+                ->and(array_column($json['inventories'], 'package'))->toBe(['acme/reports', 'tey/kit'])
+                ->and(array_column($json['rows'], 'status', 'id')['export.pdf'])->toBe('missing');
+        }
         $config->set('standards.configuration', 'tests/Arch/missing.php');
         expect($artisan->call('standards:adoption', $inventory))->toBe(2)
             ->and($artisan->output())->toContain('failed closed')->toContain('not found');
@@ -520,3 +553,65 @@ test('kit\'s shell reads installed when session-ui is, from a features list or a
         rmdir($directory);
     }
 })->with(['features', 'lineage']);
+
+test('an --inventory replacing an installed package fails closed under --ci and --compliance, and warns in the plain report', function () {
+    $base = adoptionFixture('missing');
+    $config = adoptionConfiguration($base);
+    $run = fn (string $mode, array $paths): array => (new Scanner(new App($base, $config), Scanner::inventories($base, $paths), $config, new DateTimeImmutable('2026-10-29')))->report($mode);
+    $kit = adoptionFixture('inventories/kit.json');
+
+    expect(fn () => $run('ci', [$kit]))->toThrow(AdoptionError::class, 'describes tey/kit, which the app installs; --ci reads only')
+        ->and(fn () => $run('compliance', [$kit]))->toThrow(AdoptionError::class, '--compliance reads only the installed package\'s own inventory');
+
+    $report = $run('report', [$kit]);
+    expect($report['overridden'])->toBe([['package' => 'tey/kit', 'by' => $kit, 'vendor' => null]])
+        ->and($report['warnings'][0])->toBe('inventory for tey/kit (installed) overridden by '.$kit.'; --ci and --compliance refuse this.')
+        ->and($report['rows'])->not->toBe([]);
+
+    // acme/reports is not installed here: adding it is the calibration case, allowed in every mode.
+    foreach (['report', 'ci', 'compliance'] as $mode) {
+        expect($run($mode, [adoptionFixture('inventories/reports.json')]))->toMatchArray(['overridden' => []]);
+    }
+});
+
+test('a created table reads hand-rolled with its cause when kit_adoptions could not be read', function () {
+    $report = adoptionReport('migrations', 'compliance', recordsUnreadable: true);
+    $item = array_values(array_filter($report['blocking'], fn (array $item): bool => $item['subject'] === 'workspaces.tenancy'))[0];
+
+    expect(array_column($report['rows'], null, 'id')['workspaces.tenancy'])->toMatchArray(['status' => 'hand-rolled', 'cause' => 'adoption records unreadable (kit_adoptions)'])
+        ->and($item['cause'])->toBe('adoption records unreadable (kit_adoptions)')
+        ->and(Tey\Standards\Enforcement\AdoptionCommand::text($report))->toContain('  hand-rolled  tey/kit workspaces.tenancy  database/migrations/2026_01_01_000000_create_workspaces_table.php:11 — cause: adoption records unreadable (kit_adoptions)')
+        // Readable records: no cause; another hand-rolled row never carries it.
+        ->and(array_column(adoptionReport('migrations', 'compliance')['blocking'], 'cause'))->each->toBeNull()
+        ->and(array_column(adoptionReport('hand-rolled', 'compliance', recordsUnreadable: true)['rows'], 'cause', 'id')['mcp.server'])->toBeNull();
+});
+
+test('template-tag never counts <input type="hidden">, in any quoting or case', function () {
+    $directory = sys_get_temp_dir().'/adoption-'.bin2hex(random_bytes(4));
+    mkdir($directory.'/resources/js/pages/Orders', 0777, true);
+    file_put_contents($directory.'/composer.json', '{"name": "fixture/hidden", "require": {"tey/kit": "^0.7"}}');
+    $page = $directory.'/resources/js/pages/Orders/Page.vue';
+    $inventory = Inventory::fromArray(adoptionInventory(['*' => ['facts' => [], 'surfaces' => [[
+        'id' => 'form.inputs', 'layer' => 'ui', 'group' => 'form', 'label' => 'Inputs', 'feature' => 'core', 'applies' => true,
+        'uses' => ['imports' => ['@/components/Kit:Input']], 'handRolled' => [['kind' => 'template-tag', 'tags' => ['input'], 'min' => 1]], 'docs' => 'x', 'status' => 'stable',
+    ]]]]), 'kit.json', 'vendor');
+    $status = function () use ($directory, $inventory): string {
+        $config = adoptionConfiguration($directory);
+
+        return (new Scanner(new App($directory, $config), [$inventory], $config, new DateTimeImmutable('2026-10-29')))->report()['rows'][0]['status'];
+    };
+
+    try {
+        file_put_contents($page, "<template>\n    <form>\n        <input type=\"hidden\" name=\"_token\">\n        <INPUT TYPE='HIDDEN' name=\"_method\" value=\"PUT\">\n        <input name=\"x\" type=hidden />\n        <input :value=\"id\" Type = \"Hidden\">\n    </form>\n</template>\n");
+        expect($status())->toBe('missing');
+
+        file_put_contents($page, "<template>\n    <form>\n        <input type=\"hidden\" name=\"_token\">\n        <input type=\"text\" name=\"hidden\" data-type=\"hidden\">\n    </form>\n</template>\n");
+        expect($status())->toBe('hand-rolled');
+    } finally {
+        unlink($page);
+        unlink($directory.'/composer.json');
+        foreach (['resources/js/pages/Orders', 'resources/js/pages', 'resources/js', 'resources', ''] as $path) {
+            rmdir($directory.($path === '' ? '' : '/'.$path));
+        }
+    }
+});
