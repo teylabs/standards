@@ -126,3 +126,75 @@ test('standards:allowlist --stamp-expiry --dry-run --json plans without writing;
 
     expect($run(['--stamp-expiry' => 'soon'])->getStatusCode())->toBe(2);
 });
+
+/** An allowlist file at tests/Arch/conformance-allowlist.php (the default) with the given body. */
+function allowlistFile(string $body): string
+{
+    $base = sys_get_temp_dir().'/standards-allowlist-'.bin2hex(random_bytes(6));
+    mkdir($base.'/tests/Arch', 0777, true);
+    AllowlistTemp::$dirs[] = $base;
+    file_put_contents($base.'/tests/Arch/conformance-allowlist.php', $body);
+
+    return $base;
+}
+
+test('--stamp-expiry dates one-line entries straight after their date pair, alone and mixed with multi-line ones', function () {
+    $base = allowlistFile(<<<'PHP'
+        <?php
+
+        return [
+            ['rule' => '21', 'target' => 'a.php', 'check' => 'method | A::b', 'reason' => 'Later.', 'date' => '2026-10-13'],
+            ['rule' => '21', 'target' => 'b.php', 'check' => 'method | B::c', 'date' => '2026-10-13', 'reason' => 'Date mid-line.'],
+            [
+                'rule' => '20',
+                'target' => 'c.vue',
+                'check' => 'page path must use PascalCase',
+                'reason' => 'Starter scaffold.',
+                'date' => '2026-10-13',
+            ],
+            ['rule' => '21', 'target' => 'd.php', 'check' => 'method | D::e', 'reason' => 'Dated.', 'date' => '2026-10-13', 'expires' => '2027-01-31'],
+        ];
+
+        PHP);
+    $stamper = new AllowlistStamper($base);
+    $plan = $stamper->plan('2027-03-31', today: new DateTimeImmutable('2026-10-28'));
+    $stamper->apply($plan);
+    $after = (string) file_get_contents($base.'/tests/Arch/conformance-allowlist.php');
+
+    expect(count($plan['stamped']))->toBe(3)
+        ->and($plan['kept'])->toBe(1)
+        ->and($plan['skipped'])->toBe([])
+        ->and(array_column(require $base.'/tests/Arch/conformance-allowlist.php', 'expires'))->toBe(['2027-03-31', '2027-03-31', '2027-03-31', '2027-01-31'])
+        ->and($after)->toContain("'reason' => 'Later.', 'date' => '2026-10-13', 'expires' => '2027-03-31'],")
+        ->toContain("'date' => '2026-10-13', 'expires' => '2027-03-31', 'reason' => 'Date mid-line.'],")
+        ->toContain("        'date' => '2026-10-13',\n        'expires' => '2027-03-31',\n");
+});
+
+test('an entry with no literal date is skipped and reported; the run stamps the rest instead of aborting', function () {
+    $base = allowlistFile(<<<'PHP'
+        <?php
+
+        $today = '2026-10-13';
+
+        return [
+            ['rule' => '21', 'target' => 'a.php', 'check' => 'method | A::b', 'reason' => 'Later.', 'date' => '2026-10-13'],
+            ['rule' => '21', 'target' => 'b.php', 'check' => 'method | B::c', 'reason' => 'Computed date.', 'date' => $today],
+        ];
+
+        PHP);
+    $command = new AllowlistCommand;
+    $command->setLaravel(new Illuminate\Foundation\Application($base));
+    $tester = new CommandTester($command);
+    $tester->execute(['--stamp-expiry' => '2099-12-31']);
+    $entries = require $base.'/tests/Arch/conformance-allowlist.php';
+
+    expect($tester->getStatusCode())->toBe(0)
+        ->and($tester->getDisplay())->toContain('Stamped 1 entry')->toContain("skipped [21] b.php: no literal 'date' => '…' to stamp after; date it by hand")
+        ->and($entries[0]['expires'] ?? null)->toBe('2099-12-31')
+        ->and(array_key_exists('expires', $entries[1]))->toBeFalse();
+
+    $json = new CommandTester($command);
+    $json->execute(['--stamp-expiry' => '2099-12-31', '--dry-run' => true, '--json' => true]);
+
+    expect(json_decode($json->getDisplay(), true, flags: JSON_THROW_ON_ERROR)['skipped'])->toBe([['rule' => '21', 'target' => 'b.php', 'check' => 'method | B::c', 'reason' => "no literal 'date' => '…' to stamp after; date it by hand"]]);
+});

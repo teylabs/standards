@@ -292,3 +292,22 @@ test('descriptors ignores ARIA roles, domain roles, identifiers that merely cont
     'a command chain .can()' => ['x.ts', "const ok = editor.chain().focus().can().toggleBold().run();\nconst c = chain.can();"],
     'can() on a Vue ref' => ['x.vue', "<script setup>\nconst ok = editorRef.value?.can().undo();\n</script>\n<template><button :disabled=\"!editor.can().redo()\"/></template>"],
 ]);
+
+test('js-imports hints the parent\'s range for an undeclared package another declared one depends on (@inertiajs/core under @inertiajs/vue3)', function () {
+    $base = dirname(__DIR__).'/.phpunit.cache/inertia-'.bin2hex(random_bytes(5));
+    mkdir($base.'/client', 0777, true);
+    mkdir($base.'/node_modules/@inertiajs/vue3', 0777, true);
+    file_put_contents($base.'/package.json', json_encode(['dependencies' => ['@inertiajs/vue3' => '^3.0.0']]));
+    file_put_contents($base.'/node_modules/@inertiajs/vue3/package.json', json_encode(['name' => '@inertiajs/vue3', 'dependencies' => ['@inertiajs/core' => '3.6.1']]));
+    file_put_contents($base.'/client/Link.ts', "import type { Method } from '@inertiajs/core';\nimport x from 'left-pad';");
+
+    try {
+        $findings = (new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['client']])))->violations('js-imports');
+
+        expect(array_column($findings, 'check'))->toBe(['undeclared package import: @inertiajs/core', 'undeclared package import: left-pad'])
+            ->and($findings[0]['hint'])->toContain('@inertiajs/vue3, which depends on @inertiajs/core@3.6.1', '"@inertiajs/core": "3.6.1"', '`overrides`', '`npm ls @inertiajs/core`')
+            ->and($findings[1])->not->toHaveKey('hint');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});

@@ -43,12 +43,16 @@ final class AllowlistCommand extends Command
         }
 
         if ($this->option('json')) {
-            $this->line(json_encode(['dry_run' => $dryRun, 'file' => $plan['file'], 'expires' => $plan['expires'], 'stamped' => count($plan['stamped']), 'kept' => $plan['kept'], 'entries' => $plan['stamped']], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+            $this->line(json_encode(['dry_run' => $dryRun, 'file' => $plan['file'], 'expires' => $plan['expires'], 'stamped' => count($plan['stamped']), 'kept' => $plan['kept'], 'entries' => $plan['stamped'], 'skipped' => $plan['skipped']], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
             return 0;
         }
 
         $this->line(sprintf('%s %d %s in %s with expires %s; %d already dated, unchanged.', $dryRun ? 'Would stamp' : 'Stamped', count($plan['stamped']), count($plan['stamped']) === 1 ? 'entry' : 'entries', $plan['file'], $plan['expires'], $plan['kept']));
+
+        foreach ($plan['skipped'] as $entry) {
+            $this->warn("  skipped [{$entry['rule']}] {$entry['target']}: {$entry['reason']}");
+        }
 
         if ($dryRun) {
             $this->line('Dry run: nothing written.');
