@@ -10,7 +10,7 @@ namespace Tey\Standards\Adoption;
  */
 final class Lists
 {
-    public const VERSION = 1;
+    public const VERSION = 2;
 
     /**
      * App component file names (without `.vue`) that are generic UI building blocks. A trailing `*` is a prefix match; anything else is
@@ -25,14 +25,17 @@ final class Lists
     public const FRAMEWORK_RUNTIMES = ['vue', '@inertiajs/*', '@vueuse/*'];
 
     /**
-     * package.json dependencies that are build, type, lint or test tooling, not UI/JS libraries an app renders with. Never gap
-     * candidates. A trailing `*` is a prefix match.
+     * package.json dependencies that are build, bundler, compiler, type, lint, format or test tooling, not UI/JS libraries an app renders
+     * with. Never gap candidates. A trailing `*` is a prefix match and a leading `*` a suffix match (`*-loader` is any webpack loader).
+     * Version 2 adds the Laravel Mix / webpack era (laravel-mix, loaders, webpack, Babel, the Vue 2 and 3 SFC compilers, vue-eslint-parser,
+     * globals, cross-env).
      */
     public const TOOLING = [
-        'vite', '@vitejs/*', 'laravel-vite-plugin', 'typescript', 'vue-tsc', '@types/*', '@vue/tsconfig', 'eslint', 'eslint-*', '@eslint/*',
-        'typescript-eslint', '@typescript-eslint/*', 'prettier', 'prettier-*', '@prettier/*', 'tailwindcss', '@tailwindcss/*', 'postcss',
-        'postcss-*', 'autoprefixer', 'sass', 'sass-embedded', 'concurrently', 'vitest', '@vitest/*', '@vue/test-utils', 'jsdom',
-        'happy-dom', '@playwright/test', 'playwright', 'husky', 'lint-staged', '@laravel/vite-plugin-wayfinder',
+        'vite', '@vitejs/*', 'laravel-vite-plugin', 'laravel-mix', 'laravel-mix-*', '*-loader', 'webpack*', '@babel/*', '@vue/compiler-sfc',
+        'vue-template-compiler', 'vue-eslint-parser', 'globals', 'cross-env', 'typescript', 'vue-tsc', '@types/*', '@vue/tsconfig', 'eslint*',
+        '@eslint/*', 'typescript-eslint', '@typescript-eslint/*', 'prettier*', '@prettier/*', 'tailwindcss', '@tailwindcss/*', 'postcss*',
+        'autoprefixer', 'sass', 'sass-embedded', 'concurrently', 'vitest', '@vitest/*', '@vue/test-utils', 'jsdom', 'happy-dom',
+        '@playwright/test', 'playwright', 'husky', 'lint-staged', '@laravel/vite-plugin-wayfinder',
     ];
 
     public static function generic(string $name): bool
@@ -54,7 +57,12 @@ final class Lists
     private static function matchesAny(string $value, array $patterns): bool
     {
         foreach ($patterns as $pattern) {
-            if (str_ends_with($pattern, '*') ? str_starts_with($value, substr($pattern, 0, -1)) : $value === $pattern) {
+            $matches = match (true) {
+                str_ends_with($pattern, '*') => str_starts_with($value, substr($pattern, 0, -1)),
+                str_starts_with($pattern, '*') => str_ends_with($value, substr($pattern, 1)),
+                default => $value === $pattern,
+            };
+            if ($matches) {
                 return true;
             }
         }

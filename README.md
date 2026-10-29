@@ -751,7 +751,7 @@ Exit 2 means it fails closed: an unreadable or invalid inventory, an unknown for
 
 - generic names: Button, Input\*, Select\*, Modal, Dialog, Dropdown\*, Table, DataTable, Tabs, Toast, Tooltip, Badge, Card, Avatar, Pagination, DatePicker, Combobox, Menu\*;
 - framework runtimes: vue, @inertiajs/\*, @vueuse/\*;
-- tooling: vite, @vitejs/\*, laravel-vite-plugin, typescript, vue-tsc, @types/\*, ESLint, Prettier, Tailwind, PostCSS, Sass, Vitest, Playwright, husky, lint-staged and similar.
+- tooling: vite, @vitejs/\*, laravel-vite-plugin, laravel-mix\*, any `*-loader`, webpack\*, @babel/\*, @vue/compiler-sfc, vue-template-compiler, vue-eslint-parser, globals, cross-env, typescript, vue-tsc, @types/\*, eslint\*, prettier\*, postcss\*, autoprefixer, sass, Tailwind, Vitest, Playwright, husky, lint-staged and similar (a trailing `*` is a prefix, a leading `*` a suffix). List version 2 added the Laravel Mix / webpack era.
 
 **Exemptions.** These are allowlist entries in the same Configuration `allowlist`. For a surface the rule is `adoption.<composer>.<surface-id>` (for example `adoption.tey/kit.layout.page`); for a gap it is `adoption.gap` with the component path or `npm:<package>` as `target`. Each also needs `target`, `check`, `reason` and `date`, as every entry does, plus an `expires` date. An expired or undated entry exempts nothing and blocks `--ci`, and so does a stale one (its row is adopted or n/a, or its gap is gone). `standards:check` accepts `adoption.*` rules and still reports an entry without an expiry. n/a comes only from `applies`, never from an exemption.
 

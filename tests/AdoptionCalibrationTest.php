@@ -105,3 +105,16 @@ test('signed-in-pages counts only auth routes that render a page, never routes/a
         ->and($evidence('controller'))->toBe('routes/web.php:6')
         ->and($evidence('chained'))->toBe('routes/web.php:5');
 });
+
+test('Laravel Mix and webpack-era build tooling is never a library gap; a UI library with a tooling-like name still is', function () {
+    $report = calibrationReport('tooling', calibrationInventory(['layout.page' => [['kind' => 'file-name', 'globs' => ['Nothing.vue']]]]));
+
+    // Negative: every devDependency in the fixture is tooling. Positive: chart.js, and vue-loading-overlay, which only resembles
+    // `*-loader`.
+    expect(array_column($report['gaps'], 'subject'))->toBe(['npm:chart.js', 'npm:vue-loading-overlay'])
+        ->and($report['lists'])->toBe(2)
+        ->and(Lists::tooling('resolve-url-loader'))->toBeTrue()
+        ->and(Lists::tooling('loader'))->toBeFalse()
+        ->and(Lists::tooling('@babel/runtime'))->toBeTrue()
+        ->and(Lists::tooling('axios'))->toBeFalse();
+});
