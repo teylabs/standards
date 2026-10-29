@@ -8,6 +8,7 @@
 
 ### Changed
 
+- **The kit export snapshot is tey/kit v0.6.11's `@kit/ui` barrel** (kit `974fa4a`), regenerated with `bin/standards kit-exports --refresh`. Adds `FormStatus` and `InputRichText`; nothing removed. `HeaderActions` is not in it, because kit's barrel doesn't export it (Page renders it internally). The snapshot test's fixture is now v0.6.11's barrel. catalog.json is unchanged.
 - **Pattern `ui-page.kit-adoption` carries the migration recipe.** `standards:pattern "ui-page.kit-adoption"` now lists the steps in dependency order, shell, then layout, then actions and toast, then forms, then data: the hand-rolled signal each surface reads, the tey/kit feature and components that replace it, and how to verify (the `standards:adoption` row reads adopted with no signals, then `--ci` and `--compliance` pass). It also says what the tool can't see (Blade, Livewire and Filament UI among it) and what to do where kit has no component yet. The leaf stays `draft`: it has no generator.
 
 ### Fixed
