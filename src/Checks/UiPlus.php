@@ -12,7 +12,7 @@ final class UiPlus
     public function violations(Configuration $config): array
     {
         $violations = [];
-        foreach ((new FrontendSource($config))->files() as $path => $source) {
+        foreach ((new FrontendSource($config))->appFiles() as $path => $source) {
             if (! str_ends_with($path, '.vue')) {
                 continue;
             }

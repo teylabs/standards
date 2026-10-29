@@ -96,6 +96,25 @@ test('a deliberate cross-tenant admin command is declared in the allowlist, with
     expect((new Ratchet([$entry]))->failures('tenant-aware', array_map(fn (array $v): array => ['target' => $v['target'], 'check' => $v['check']], $violations)))->toBe([]);
 });
 
+test('a landlord command is declared in Configuration::$landlordCommands with a reason; nothing else is skipped', function () {
+    $command = fn (string $name): string => "use Illuminate\\Console\\Command;\n\nfinal class {$name} extends Command\n{\n    public function handle(): int\n    {\n        return Ledger::query()->count();\n    }\n}\n";
+    $base = tenantApp(['Ledger.php' => TENANT_MODEL, 'CreateOwnerCommand.php' => $command('CreateOwnerCommand'), 'InviteCommand.php' => $command('InviteCommand'), 'ReportCommand.php' => $command('ReportCommand')]);
+    $run = fn (array $landlord): array => array_column((new Conformance(tenantConfiguration($base, ['landlordCommands' => $landlord])))->violations('tenant-aware'), 'check');
+    $touch = fn (string $name): string => "FixtureScratch\\{$name} touches tenant-scoped FixtureScratch\\Ledger without TenantAware";
+
+    expect($run([]))->toEqualCanonicalizing([$touch('CreateOwnerCommand'), $touch('InviteCommand'), $touch('ReportCommand')], 'nothing is skipped without a declaration')
+        ->and($run(['FixtureScratch\\CreateOwnerCommand' => 'Creates the first owner before any workspace exists.', 'FixtureScratch\\InviteCommand' => 'Invites an owner before their workspace exists.']))
+        ->toBe([$touch('ReportCommand')], 'the declared landlord commands pass; the undeclared one is still checked')
+        ->and($run(['FixtureScratch\\CreateOwnerCommand' => '  ']))
+        ->toEqualCanonicalizing(['FixtureScratch\\CreateOwnerCommand is declared a landlord command without a reason', $touch('CreateOwnerCommand'), $touch('InviteCommand'), $touch('ReportCommand')], 'an empty reason is a finding, and skips nothing')
+        ->and($run(['FixtureScratch\\Ledger' => 'Not a command.', 'FixtureScratch\\GoneCommand' => 'Deleted.']))
+        ->toContain('landlord command FixtureScratch\\Ledger is not a command in the source roots', 'landlord command FixtureScratch\\GoneCommand is not a command in the source roots');
+
+    $aware = "use Illuminate\\Console\\Command;\nuse Spatie\\Multitenancy\\Commands\\Concerns\\TenantAware;\n\nfinal class InviteCommand extends Command\n{\n    use TenantAware;\n\n    public function handle(): int\n    {\n        return Ledger::query()->count();\n    }\n}\n";
+    file_put_contents($base.'/src/InviteCommand.php', "<?php\n\nnamespace FixtureScratch;\n\n".$aware);
+    expect($run(['FixtureScratch\\InviteCommand' => 'Invites an owner before their workspace exists.']))->toContain('FixtureScratch\\InviteCommand is declared a landlord command but is TenantAware');
+});
+
 test('landlord housekeeping is not flagged: prune on a model with no tenant scope; the rule is off without the package', function () {
     $landlord = "use Illuminate\\Database\\Eloquent\\Builder;\nuse Illuminate\\Database\\Eloquent\\Model;\nuse Illuminate\\Database\\Eloquent\\Prunable;\n\nfinal class LoginAttempt extends Model\n{\n    use Prunable;\n\n    public function prunable(): Builder\n    {\n        return static::query()->where('old', true);\n    }\n}\n";
     $base = tenantApp(['LoginAttempt.php' => $landlord, 'Ledger.php' => TENANT_MODEL]);

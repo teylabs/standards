@@ -10,19 +10,20 @@ use Tey\Standards\Enforcement\HostShape;
 /**
  * A new-tab action carries an exact `noopener` rel token and an external icon. Two kit shapes pass the rel half: a kit component (imported from
  * `@/components/Kit` or the `@kit/ui` alias) renders `rel="noopener noreferrer"` itself whenever its `target` is `_blank`, so the tag needs no rel of its
- * own; the external icon is still required. The kit's own copy under `resources/js/components/Kit/` is not scanned: tey/kit owns it, `kit:update`
- * replaces it, and its row and menu actions label new-tab links by their action label rather than an icon.
+ * own; the external icon is still required. Files tey/kit owns (KitOwnership) are not scanned: `kit:update` replaces them, and the kit's row
+ * and menu actions label new-tab links by their action label rather than an icon.
  */
 final class UiNewTab
 {
-    public const KIT_TREE = 'resources/js/components/Kit/';
+    /** @deprecated use KitOwnership::KIT_TREE */
+    public const KIT_TREE = KitOwnership::KIT_TREE;
 
     /** @return list<array{target: string, check: string}> */
     public function violations(Configuration $config): array
     {
         $violations = [];
-        foreach ((new FrontendSource($config))->files() as $path => $source) {
-            if (! str_ends_with($path, '.vue') || str_starts_with($path, self::KIT_TREE)) {
+        foreach ((new FrontendSource($config))->appFiles() as $path => $source) {
+            if (! str_ends_with($path, '.vue')) {
                 continue;
             }
             $kit = self::kitComponents(FrontendSource::script($path, $source));

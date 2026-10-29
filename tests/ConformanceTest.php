@@ -79,8 +79,17 @@ test('the CRUDDY package catches all existing route and public-surface cases', f
 test('media requires both the contract and disk measurement', function () {
     expect((new Conformance(fixtureConfiguration('Bad')))->violations('19'))->toEqualCanonicalizing([
         ['target' => 'FixtureBad\\Domain\\Billing\\Models\\Photo', 'check' => 'media model must implement HasMedia'],
+        ['target' => 'FixtureBad\\Domain\\Billing\\Models\\Gallery', 'check' => 'media model must implement HasMedia'],
         ['target' => 'src/Domain/Billing/Models/Photo.php', 'check' => 'getPath call: measure conversions through the disk'],
     ]);
+});
+
+test('media skips a trait that uses the media trait, and still checks the classes that use it', function () {
+    // Concerns\HasPhotos uses the media trait in both fixtures; Good's Gallery implements the contract, Bad's does not.
+    expect((new Conformance(fixtureConfiguration('Good')))->violations('19'))->toBe([])
+        ->and(array_column((new Conformance(fixtureConfiguration('Bad')))->violations('19'), 'target'))
+        ->not->toContain('FixtureBad\\Domain\\Billing\\Models\\Concerns\\HasPhotos')
+        ->toContain('FixtureBad\\Domain\\Billing\\Models\\Gallery', 'FixtureBad\\Domain\\Billing\\Models\\Photo');
 });
 
 test('an exact ratchet entry permits debt but cannot hide a second violation', function () {

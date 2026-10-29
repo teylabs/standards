@@ -85,9 +85,9 @@ final class Providers
             if ($node instanceof Node\Stmt\Return_) {
                 $found[] = [$node, $guarded];
             } elseif ($node instanceof Node\Stmt\If_) {
-                $found = [...$found, ...$this->returns($node->stmts, [...$guarded, ...$this->guards($node->cond)])];
+                $found = [...$found, ...$this->returns($node->stmts, [...$guarded, ...self::guards($node->cond)])];
                 foreach ($node->elseifs as $elseif) {
-                    $found = [...$found, ...$this->returns($elseif->stmts, [...$guarded, ...$this->guards($elseif->cond)])];
+                    $found = [...$found, ...$this->returns($elseif->stmts, [...$guarded, ...self::guards($elseif->cond)])];
                 }
                 $found = [...$found, ...$this->returns($node->else->stmts ?? [], $guarded)];
             } elseif ($node instanceof Node\Stmt\Namespace_ || $node instanceof Node\Stmt\Block) {
@@ -102,8 +102,35 @@ final class Providers
         return $found;
     }
 
+    /**
+     * Whether a reference to a class only runs when that same class exists: it is the `X::class` argument of class_exists() itself, or sits
+     * in the true branch of a ternary or `if` whose condition calls `class_exists(X::class)`, or in the list of an
+     * `array_filter([...], class_exists(...))`. `...(class_exists(X::class) ? [X::class] : [])` and `if (class_exists(X::class)) { ... }` are
+     * the common idioms for a provider that only a dev install has. Another class in the guarded branch is not covered.
+     */
+    public static function guarded(Node\Name $name): bool
+    {
+        $class = $name->toString();
+        $child = $name;
+        for ($parent = $name->getAttribute('parent'); $parent instanceof Node; $child = $parent, $parent = $parent->getAttribute('parent')) {
+            $guarded = match (true) {
+                $parent instanceof Node\Expr\FuncCall && $parent->name instanceof Node\Name && strtolower($parent->name->toString()) === 'class_exists' => in_array($class, self::guards($parent), true),
+                $parent instanceof Node\Expr\Ternary => $parent->if === $child && in_array($class, self::guards($parent->cond), true),
+                $parent instanceof Node\Stmt\If_ => in_array($child, $parent->stmts, true) && in_array($class, self::guards($parent->cond), true),
+                $parent instanceof Node\Stmt\ElseIf_ => in_array($child, $parent->stmts, true) && in_array($class, self::guards($parent->cond), true),
+                $parent instanceof Node\Expr\FuncCall => self::filtered($parent) !== null && ($parent->args[0] ?? null) === $child,
+                default => false,
+            };
+            if ($guarded) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** @return list<string> classes named by `class_exists(X::class)` calls in a condition */
-    private function guards(Node $condition): array
+    private static function guards(Node $condition): array
     {
         $classes = [];
         foreach ((new NodeFinder)->findInstanceOf([$condition], Node\Expr\FuncCall::class) as $call) {
@@ -119,11 +146,11 @@ final class Providers
 
     private function listable(?Node\Expr $expr): bool
     {
-        return $expr instanceof Node\Expr\Array_ || $this->filtered($expr) !== null;
+        return $expr instanceof Node\Expr\Array_ || self::filtered($expr) !== null;
     }
 
     /** The literal array of `array_filter([...], class_exists(...))`, in any callable spelling. */
-    private function filtered(?Node\Expr $expr): ?Node\Expr\Array_
+    private static function filtered(?Node\Expr $expr): ?Node\Expr\Array_
     {
         if (! $expr instanceof Node\Expr\FuncCall || ! $expr->name instanceof Node\Name || strtolower($expr->name->toString()) !== 'array_filter') {
             return null;
@@ -149,7 +176,7 @@ final class Providers
      */
     private function entries(Node\Expr $expr, array $guarded, bool $all): array
     {
-        if (($list = $this->filtered($expr)) !== null) {
+        if (($list = self::filtered($expr)) !== null) {
             return $this->entries($list, $guarded, true);
         }
         if (! $expr instanceof Node\Expr\Array_) {
@@ -179,7 +206,7 @@ final class Providers
     private function ternary(Node\Expr\Ternary $ternary, array $guarded, bool $all): array
     {
         $branches = [];
-        foreach ([[$ternary->if ?? $ternary->cond, [...$guarded, ...$this->guards($ternary->cond)]], [$ternary->else, $guarded]] as [$branch, $scope]) {
+        foreach ([[$ternary->if ?? $ternary->cond, [...$guarded, ...self::guards($ternary->cond)]], [$ternary->else, $guarded]] as [$branch, $scope]) {
             if ($branch instanceof Node\Expr\ConstFetch && strtolower($branch->name->toString()) === 'null') {
                 continue;
             }
