@@ -308,6 +308,32 @@ test('toast accepts a guest form whose back() returns to a page rendering kit Fo
     ];
 });
 
+test('the FormStatus exemption follows the page\'s .vue imports three levels deep, through kit-owned files, and stops at a cycle', function (array $components, bool $fails) {
+    file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\ContactController; Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]);');
+    file_put_contents($this->backendBase.'/bootstrap/app.php', guestBootstrap(''));
+    foreach ($components as $path => $source) {
+        @mkdir(dirname($this->backendBase.'/'.$path), 0777, true);
+        file_put_contents($this->backendBase.'/'.$path, $source);
+    }
+    $controller = 'namespace App; use Inertia\Inertia; class ContactController { public function show() { return Inertia::render("Public/Contact"); } public function store() { return back(); } }';
+    expect(($this->backend)('toast', $controller, ['pageRoots' => ['resources/js/pages']], 'src/Controllers/ContactController.php'))->toHaveCount($fails ? 1 : 0);
+})->with(function () {
+    $page = 'resources/js/pages/Public/Contact.vue';
+    $uses = fn (string ...$specifiers): string => "<script setup lang=\"ts\">\n".implode('', array_map(fn (string $specifier): string => 'import Part'.md5($specifier)." from '{$specifier}';\n", $specifiers))."</script>\n<template>\n    <div />\n</template>\n";
+    $status = "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit/Form';\n</script>\n<template>\n    <FormStatus />\n</template>\n";
+
+    return [
+        'FormStatus at depth 2' => [[$page => $uses('@/components/ContactForm.vue'), 'resources/js/components/ContactForm.vue' => $uses('./ContactFooter.vue'), 'resources/js/components/ContactFooter.vue' => $status], false],
+        'FormStatus at depth 3, relative import without extension' => [[$page => $uses('../../components/A'), 'resources/js/components/A.vue' => $uses('./B'), 'resources/js/components/B.vue' => $uses('./C'), 'resources/js/components/C.vue' => $status], false],
+        'a kit-owned file renders FormStatus' => [[$page => $uses('@/components/Kit/Auth/AuthCard.vue'), 'resources/js/components/Kit/Auth/AuthCard.vue' => $status], false],
+        'FormStatus at depth 4' => [[$page => $uses('@/components/A.vue'), 'resources/js/components/A.vue' => $uses('./B.vue'), 'resources/js/components/B.vue' => $uses('./C.vue'), 'resources/js/components/C.vue' => $uses('./D.vue'), 'resources/js/components/D.vue' => $status], true],
+        'an import cycle without FormStatus' => [[$page => $uses('@/components/A.vue'), 'resources/js/components/A.vue' => $uses('./B.vue', '@/pages/Public/Contact.vue'), 'resources/js/components/B.vue' => $uses('./A.vue')], true],
+        'a cycle on the way to FormStatus' => [[$page => $uses('@/components/A.vue'), 'resources/js/components/A.vue' => $uses('./A.vue', './B.vue'), 'resources/js/components/B.vue' => $status], false],
+        'imported through an alias this reader does not follow' => [[$page => $uses('~/components/ContactForm.vue'), 'resources/js/components/ContactForm.vue' => $status], true],
+        'the child renders FormStatus from elsewhere' => [[$page => $uses('@/components/ContactForm.vue'), 'resources/js/components/ContactForm.vue' => str_replace('@/components/Kit/Form', '@/components/Status', $status)], true],
+    ];
+});
+
 function guestBootstrap(string $middleware): string
 {
     return '<?php use Illuminate\Foundation\Application; use Illuminate\Foundation\Configuration\Middleware; return Application::configure(basePath: dirname(__DIR__))->withRouting(web: __DIR__."/../routes/web.php")->withMiddleware(function (Middleware $middleware): void { '.$middleware.' })->create();';

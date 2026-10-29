@@ -21,8 +21,9 @@ use Tey\Standards\Source;
  *     group anywhere in the route roots makes it unprovable. A controller that declares `middleware()` or calls `$this->middleware()` is never guest.
  *  2. For each such route, exactly one GET route with the same full literal URI exists, on the same controller.
  *  3. Every return of that GET action is `Inertia::render('<literal>')` or `inertia('<literal>')`, all the same page.
- *  4. That page is exactly one `<page>.vue` under the page roots, whose script imports FormStatus from `@/components/Kit` or `@/components/Kit/Form`
- *     and whose template renders `<FormStatus`.
+ *  4. That page is exactly one `<page>.vue` under the page roots, and it, or a `.vue` file it imports (app- or kit-owned, up to three import levels,
+ *     `@/` and relative specifiers only, cycles cut), has a script that imports FormStatus from `@/components/Kit` or `@/components/Kit/Form`
+ *     and a template that renders `<FormStatus`.
  */
 final class GuestFormStatus
 {
@@ -30,6 +31,9 @@ final class GuestFormStatus
     public const GUEST_MIDDLEWARE = ['web', 'guest', 'signed', 'throttle', 'precognitive'];
 
     private const MUTATING = ['post', 'put', 'patch', 'delete'];
+
+    /** Import levels below the page the FormStatus search follows. */
+    private const LEVELS = 3;
 
     /** Middleware classes known not to sign anyone in, allowed when bootstrap/app.php or a provider adds them to a group. */
     public const SAFE_MIDDLEWARE = [
@@ -319,11 +323,31 @@ final class GuestFormStatus
         if (count(array_unique($files)) !== 1) {
             return false;
         }
-        $source = (string) @file_get_contents($files[0]);
-        preg_match_all('~<script\b[^>]*>(.*?)</script\s*>~si', $source, $scripts);
-        $imports = preg_match('~\bimport\s*\{[^}]*(?<![\w$])FormStatus(?![\w$])(?!\s+as\b)[^}]*\}\s*from\s*([\'"])@/components/Kit(?:/Form)?\1~', implode("\n", preg_replace('~//[^\n]*|/\*.*?\*/~s', '', $scripts[1]) ?? [])) === 1;
+        $page = substr($files[0], strlen($this->config->base) + 1);
+
+        return VueImports::reaches(
+            $this->config->base,
+            $page,
+            self::LEVELS,
+            fn (string $path, string $source): bool => self::rendersKitFormStatus($source),
+            fn (array $import, string $from): ?string => self::component($this->config->base, $import, $from),
+        );
+    }
+
+    /** Whether a `.vue` file's script imports FormStatus (not renamed) from `@/components/Kit` or `@/components/Kit/Form` and its template renders `<FormStatus`. */
+    private static function rendersKitFormStatus(string $source): bool
+    {
+        $imports = preg_match('~\bimport\s*\{[^}]*(?<![\w$])FormStatus(?![\w$])(?!\s+as\b)[^}]*\}\s*from\s*([\'"])@/components/Kit(?:/Form)?\1~', VueImports::code(VueImports::scripts($source))) === 1;
 
         return $imports && preg_match('~<FormStatus[\s/>]~', FrontendSource::template($source)) === 1;
+    }
+
+    /** The `.vue` file an import names, app- or kit-owned, when it resolves under resources/js and exists; null for anything else. @param array{0: string, 1: string} $import */
+    private static function component(string $base, array $import, string $from): ?string
+    {
+        $path = VueImports::resolve($base, $import[0], $from);
+
+        return $path !== null && str_ends_with($path, '.vue') && is_file($base.'/'.$path) && ! is_link($base.'/'.$path) ? $path : null;
     }
 
     /** @return list<array{verbs: list<string>, uri: ?string, class: ?string, method: ?string, guest: bool}> */

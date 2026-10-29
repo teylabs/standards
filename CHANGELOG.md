@@ -5,6 +5,7 @@
 ### Changed
 
 - **Pattern `ui-page.kit-adoption` carries the migration recipe.** `standards:pattern "ui-page.kit-adoption"` now lists the steps in dependency order, shell, then layout, then actions and toast, then forms, then data: the hand-rolled signal each surface reads, the tey/kit feature and components that replace it, and how to verify (the `standards:adoption` row reads adopted with no signals, then `--ci` and `--compliance` pass). It also says what the tool can't see (Blade, Livewire and Filament UI among it) and what to do where kit has no component yet. The leaf stays `draft`: it has no generator.
+- **The FormStatus exemption follows the page's component tree.** A guest form's `back()` now also passes when a `.vue` file the page imports, up to three import levels below it, renders `<FormStatus>` imported from `@/components/Kit` (or `Kit/Form`); a kit-owned file counts as the importer, and an import cycle ends the walk. `ui.kit-shell`'s import walker moved to `Checks\VueImports`, which both rules use; ui.kit-shell behaves as before.
 
 ## 0.11.47 - 2026-10-29
 
