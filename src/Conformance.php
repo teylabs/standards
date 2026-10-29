@@ -504,6 +504,61 @@ final class Conformance
         }
 
         // A modular app's module code is not stock Laravel: its namespaces in presetIgnores are left out of the Laravel preset only.
-        return Native::preset($type, array_values($this->config->classRoots), $paths, $rule === 'preset laravel' ? $this->config->presetIgnores : []);
+        $failures = Native::preset($type, array_values($this->config->classRoots), $paths, $rule === 'preset laravel' ? $this->config->presetIgnores : []);
+
+        if ($rule !== 'preset security') {
+            return $failures;
+        }
+
+        // unserialize() with a literal allowed_classes list (or false) cannot instantiate an arbitrary class: drop that finding when every use in the file is that shape.
+        return array_values(array_filter($failures, fn (array $failure): bool => ! (str_contains($failure['check'], "'unserialize'")
+            && isset($classes[$failure['target']]) && $this->restrictedUnserialize($classes[$failure['target']]))));
+    }
+
+    /**
+     * Whether the file calls unserialize() at least once and only ever as unserialize($data, ['allowed_classes' => false | [Foo::class, ...]]).
+     * Fails closed: no options, `true`, a variable options array or allowed_classes, a spread, other keys only, a duplicate allowed_classes key,
+     * a first-class callable, or the name as a string (a callable such as array_map('unserialize', ...)) all keep the finding.
+     */
+    private function restrictedUnserialize(string $path): bool
+    {
+        $nodes = $this->source->nodes($path);
+        $finder = new NodeFinder;
+        $calls = $finder->find($nodes, fn (Node $node): bool => $node instanceof Node\Expr\FuncCall && $node->name instanceof Node\Name && strtolower($node->name->getLast()) === 'unserialize');
+
+        if ($calls === [] || $finder->findFirst($nodes, fn (Node $node): bool => $node instanceof Node\Scalar\String_ && strtolower(ltrim($node->value, '\\')) === 'unserialize') !== null) {
+            return false;
+        }
+
+        foreach ($calls as $call) {
+            if (! $call instanceof Node\Expr\FuncCall || $call->isFirstClassCallable() || count($call->getArgs()) !== 2) {
+                return false;
+            }
+
+            [$data, $options] = $call->getArgs();
+
+            if ($data->unpack || $options->unpack || $data->name !== null || ($options->name !== null && $options->name->toString() !== 'options') || ! $options->value instanceof Node\Expr\Array_) {
+                return false;
+            }
+
+            $allowed = array_values(array_filter($options->value->items, fn (?Node\ArrayItem $item): bool => $item !== null && $item->key instanceof Node\Scalar\String_ && $item->key->value === 'allowed_classes'));
+            $keyed = array_filter($options->value->items, fn (?Node\ArrayItem $item): bool => $item === null || $item->unpack || ! $item->key instanceof Node\Scalar\String_);
+
+            if (count($allowed) !== 1 || $keyed !== [] || $allowed[0]->byRef) {
+                return false;
+            }
+
+            $value = $allowed[0]->value;
+            $false = $value instanceof Node\Expr\ConstFetch && $value->name->toLowerString() === 'false';
+            $list = $value instanceof Node\Expr\Array_ && array_filter($value->items, fn (?Node\ArrayItem $item): bool => $item === null || $item->unpack || $item->byRef || $item->key !== null
+                || ! $item->value instanceof Node\Expr\ClassConstFetch || ! $item->value->class instanceof Node\Name || ! $item->value->name instanceof Node\Identifier
+                || $item->value->name->toLowerString() !== 'class') === [];
+
+            if (! $false && ! $list) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
