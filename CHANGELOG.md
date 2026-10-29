@@ -6,6 +6,10 @@
 
 - **Pattern `ui-page.kit-adoption` carries the migration recipe.** `standards:pattern "ui-page.kit-adoption"` now lists the steps in dependency order, shell, then layout, then actions and toast, then forms, then data: the hand-rolled signal each surface reads, the tey/kit feature and components that replace it, and how to verify (the `standards:adoption` row reads adopted with no signals, then `--ci` and `--compliance` pass). It also says what the tool can't see (Blade, Livewire and Filament UI among it) and what to do where kit has no component yet. The leaf stays `draft`: it has no generator.
 
+### Fixed
+
+- **`standards:adoption` and `bin/standards adoption`: a `{kind: rule}` signal that can't run is skipped instead of exiting 2.** When the standards process cannot load Pest, pest-plugin-arch or nikic/php-parser (the `Architecture checks require…` condition, now `Conformance::missingDependencies()` and a typed `Tey\Standards\RuleUnavailable`), the plain report records the signal in the row's new `skipped` list (`[{signal, kind: 'rule', rule, reason}]`, additive to format 1), lets the surface's other signals decide the row, shows a `skipped [n]` marker with a footnote, and exits 0. `--ci` and `--compliance` still exit 2, naming the surface, rule and reason. Any other rule failure still exits 2. Before, kit's fixture CI, which runs `vendor/bin/standards` without Pest, exited 2 on any surface with a `ui.kit-shell` signal.
+
 ## 0.11.47 - 2026-10-29
 
 ### Fixed

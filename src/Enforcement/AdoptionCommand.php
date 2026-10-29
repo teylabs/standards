@@ -94,6 +94,7 @@ final class AdoptionCommand extends Command
     public static function text(array $report): array
     {
         $lines = [];
+        $footnotes = [];
         $marks = ['adopted' => '<fg=green>adopted</>', 'hand-rolled' => '<fg=red>hand-rolled</>', 'missing' => '<fg=red>missing</>', 'n/a' => '<fg=gray>n/a</>', 'exempt' => '<fg=yellow>exempt</>'];
         $package = null;
         $group = null;
@@ -114,7 +115,17 @@ final class AdoptionCommand extends Command
                 'exempt' => 'allowlist '.$row['exemption']['file'].($row['exemption']['line'] === null ? '' : ':'.$row['exemption']['line']).', expires '.$row['exemption']['expires'].' — '.$row['exemption']['reason'],
                 default => implode(', ', $evidence).(count($row['evidence']) > 3 ? ' (+'.(count($row['evidence']) - 3).')' : ''),
             };
-            $lines[] = sprintf('    %-28s %-36s %s  %s%s', $row['id'], $row['label'], $marks[$row['status']], $detail, $row['new'] ? " (new in {$row['since']})" : '');
+            $marker = '';
+            foreach ($row['skipped'] ?? [] as $skip) {
+                $footnotes[] = '['.(count($footnotes) + 1)."] {$row['package']} {$row['id']}: rule {$skip['rule']} skipped (could not run): {$skip['reason']}";
+                $marker .= ' ['.count($footnotes).']';
+            }
+            $lines[] = sprintf('    %-28s %-36s %s  %s%s%s', $row['id'], $row['label'], $marks[$row['status']], $detail, $row['new'] ? " (new in {$row['since']})" : '', $marker === '' ? '' : ' <fg=yellow>skipped'.$marker.'</>');
+        }
+
+        if ($footnotes !== []) {
+            $lines[] = '';
+            array_push($lines, ...$footnotes);
         }
 
         $lines[] = '';
