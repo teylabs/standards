@@ -54,6 +54,152 @@ final class Code
         return array_map(fn (array $match): array => ['tag' => $match[0], 'offset' => $start + $match[1] - 1], $matches[1]);
     }
 
+    /**
+     * A Blade view with what is never markup blanked (offsets and newlines kept): `{{-- --}}` comments, `@verbatim` blocks, HTML
+     * comments, `<?php ... ?>` blocks (a Volt component's class) and `@php ... @endphp` blocks. With $echoes, `{{ }}` and `{!! !!}`
+     * echoes are blanked too, so a tag written inside one is not read as an element.
+     */
+    public static function bladeMarkup(string $source, bool $echoes = false): string
+    {
+        $patterns = ['~\{\{--.*?--\}\}~s', '~@verbatim\b.*?(?:@endverbatim\b|\z)~s', '~<!--.*?(?:-->|\z)~s', '~<\?(?:php\b|=).*?(?:\?>|\z)~s', '~@php\b(?!\s*\().*?(?:@endphp\b|\z)~s'];
+        if ($echoes) {
+            $patterns[] = '~\{\{.*?\}\}|\{!!.*?!!\}~s';
+        }
+
+        return (string) preg_replace_callback($patterns, fn (array $m): string => (string) preg_replace('~[^\n]~', ' ', $m[0]), $source);
+    }
+
+    /**
+     * Element tags in a Blade view (bladeMarkup with echoes blanked): HTML tags and component tags (`<x-name>`, `<x-dir.name>`,
+     * `<x-dir::name>`), with their offsets in the original source.
+     *
+     * @return list<array{tag: string, offset: int}>
+     */
+    public static function bladeTags(string $source): array
+    {
+        preg_match_all('~<([A-Za-z][\w.:-]*)~', self::bladeMarkup($source, true), $matches, PREG_OFFSET_CAPTURE);
+
+        return array_map(fn (array $match): array => ['tag' => $match[0], 'offset' => $match[1] - 1], $matches[1]);
+    }
+
+    /** Whether a Blade tag matches a signal's tag as written: a component (`x-...`) exactly, an HTML tag in any case. */
+    public static function bladeTagIs(string $tag, string $name): bool
+    {
+        return str_starts_with(strtolower($name), 'x-') ? $tag === $name : strtolower($tag) === strtolower($name);
+    }
+
+    /**
+     * The static attributes of the Blade element starting at $offset (its `<`) in bladeMarkup($source), lower-cased name => value.
+     * What Blade or Alpine decides at render time is left out, so it satisfies no `where` and triggers no `except`: a bound attribute
+     * (`:type`, `x-bind:type`), a value holding an echo (`type="{{ $t }}"`) or a directive, a directive (`@class(...)`, `@style(...)`,
+     * `@click`), and an echo standing alone (`{{ $attributes }}`, `{{ $attributes->merge([...]) }}`). The element ends at the first `>`
+     * outside quotes, echoes and directive parentheses. The first static occurrence of a name wins.
+     *
+     * @return array<string, string>
+     */
+    public static function bladeAttributes(string $source, int $offset): array
+    {
+        $code = self::bladeMarkup($source);
+        if (preg_match('~\G<[A-Za-z][\w.:-]*~', $code, $tag, 0, $offset) !== 1) {
+            return [];
+        }
+        $length = strlen($code);
+        $i = $offset + strlen($tag[0]);
+        $attributes = [];
+        $echoEnd = function (int $at) use ($code): ?int {
+            foreach (['{{' => '}}', '{!!' => '!!}'] as $open => $close) {
+                if (substr($code, $at, strlen($open)) === $open) {
+                    $end = strpos($code, $close, $at + strlen($open));
+
+                    return $end === false ? strlen($code) : $end + strlen($close);
+                }
+            }
+
+            return null;
+        };
+        while ($i < $length) {
+            if (ctype_space($code[$i]) || $code[$i] === '/') {
+                $i++;
+
+                continue;
+            }
+            if ($code[$i] === '>') {
+                break;
+            }
+            if (($end = $echoEnd($i)) !== null) {
+                $i = $end;
+
+                continue;
+            }
+            if (preg_match('~\G[^\s"\'<>/=(]+~', $code, $name, 0, $i) !== 1) {
+                $i++;
+
+                continue;
+            }
+            $i += strlen($name[0]);
+            $bound = preg_match('~\A(?::|@|#|v-|x-bind:|x-on:)~i', $name[0]) === 1;
+            // A directive's arguments: @class([...]), @style([...]), @if(...).
+            if ($name[0][0] === '@' && preg_match('~\G\s*\(~', $code, $paren, 0, $i) === 1) {
+                $i = self::closing($code, $i + strlen($paren[0]) - 1);
+
+                continue;
+            }
+            $value = '';
+            $dynamic = false;
+            if (preg_match('~\G\s*=\s*~', $code, $equals, 0, $i) === 1) {
+                $i += strlen($equals[0]);
+                $quote = $code[$i] ?? '';
+                if ($quote === '"' || $quote === "'") {
+                    $i++;
+                    while ($i < $length && $code[$i] !== $quote) {
+                        if (($end = $echoEnd($i)) !== null) {
+                            $dynamic = true;
+                            $value .= substr($code, $i, $end - $i);
+                            $i = $end;
+
+                            continue;
+                        }
+                        $value .= $code[$i++];
+                    }
+                    $i++;
+                } elseif (preg_match('~\G[^\s"\'=<>`]+~', $code, $bare, 0, $i) === 1) {
+                    $value = $bare[0];
+                    $i += strlen($bare[0]);
+                }
+                $dynamic = $dynamic || preg_match('~@\w+\s*\(~', $value) === 1;
+            }
+            $key = strtolower($name[0]);
+            if ($bound || $dynamic || array_key_exists($key, $attributes)) {
+                continue;
+            }
+            $attributes[$key] = $value;
+        }
+
+        return $attributes;
+    }
+
+    /** The offset just past the bracket that closes the one at $open, skipping quoted strings. */
+    private static function closing(string $code, int $open): int
+    {
+        $depth = 0;
+        for ($i = $open, $length = strlen($code); $i < $length; $i++) {
+            $char = $code[$i];
+            if ($char === '"' || $char === "'") {
+                $end = $i + 1;
+                while ($end < $length && $code[$end] !== $char) {
+                    $end += $code[$end] === '\\' ? 2 : 1;
+                }
+                $i = $end;
+            } elseif ($char === '(' || $char === '[') {
+                $depth++;
+            } elseif (($char === ')' || $char === ']') && --$depth === 0) {
+                return $i + 1;
+            }
+        }
+
+        return $length;
+    }
+
     /** The first element inside a Vue file's top-level `<template>`, or null. */
     public static function root(string $source): ?array
     {

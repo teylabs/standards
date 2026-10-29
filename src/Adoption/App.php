@@ -97,6 +97,19 @@ final class App
         return $this->views ??= array_values(array_filter($this->files(['resources/views'], ['php']), fn (string $path): bool => str_ends_with($path, '.blade.php')));
     }
 
+    /**
+     * The Blade views template-tag `in: ['blade']` reads: every view under `resources/views` except mail and PDF templates (a `mail`,
+     * `mails`, `email`, `emails`, `pdf` or `pdfs` folder at any depth), published package views (`resources/views/vendor/`) and error
+     * pages (`resources/views/errors/`). Livewire and Volt views (`resources/views/livewire/**`) are ordinary views here. Gitignored
+     * files, `public/build` and Storybook stay out as everywhere; kit-owned files are dropped where the scanner reads them (lineage).
+     *
+     * @return list<string>
+     */
+    public function bladeFiles(): array
+    {
+        return array_values(array_filter($this->views(), fn (string $path): bool => preg_match('~^resources/views/(?:vendor|errors)/|^resources/views/(?:.+/)?(?:mail|mails|email|emails|pdf|pdfs)/~', $path) !== 1));
+    }
+
     /** @return list<string> project-relative route files: PHP under `routes/` and every module route root (globs expanded), sorted */
     public function routes(): array
     {
