@@ -51,6 +51,12 @@ final class KitOwnership
         return new self($generated);
     }
 
+    /** Whether an installed lineage record lists the path among the files it generated, whatever its bytes are now. */
+    public function recorded(string $path): bool
+    {
+        return isset($this->generated[$path]);
+    }
+
     public function owns(string $path, string $source): bool
     {
         return str_starts_with($path, self::KIT_TREE) || (isset($this->generated[$path]) && $this->generated[$path] === $source);

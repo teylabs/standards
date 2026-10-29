@@ -1,0 +1,10 @@
+{
+    "format": 1,
+    "owner": "tey/mod:installed",
+    "artifact": {
+        "name": "tey/kit:shell",
+        "files": {
+            "resources/js/pages/Workspace/Layout.vue": "PHNjcmlwdCBzZXR1cCBsYW5nPSJ0cyI+CmltcG9ydCB7IFVzZXJNZW51LCBXb3Jrc3BhY2VTd2l0Y2hlciB9IGZyb20gJ0BraXQvc2hlbGwnOwo8L3NjcmlwdD4KPHRlbXBsYXRlPgogICAgPGRpdiBjbGFzcz0iZmxleCBtaW4taC1zdmggZmxleC1jb2wiPgogICAgICAgIDxoZWFkZXIgY2xhc3M9ImJvcmRlci1iIj4KICAgICAgICAgICAgPFdvcmtzcGFjZVN3aXRjaGVyIC8+CiAgICAgICAgICAgIDxVc2VyTWVudSAvPgogICAgICAgIDwvaGVhZGVyPgogICAgICAgIDxtYWluIGlkPSJtYWluIj48c2xvdCAvPjwvbWFpbj4KICAgIDwvZGl2Pgo8L3RlbXBsYXRlPgo="
+        }
+    }
+}

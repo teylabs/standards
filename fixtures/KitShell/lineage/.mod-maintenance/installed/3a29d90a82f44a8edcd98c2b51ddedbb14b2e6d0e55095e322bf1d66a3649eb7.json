@@ -1,0 +1,8 @@
+{
+    "format": 1,
+    "owner": "tey/mod:installed",
+    "artifact": {
+        "name": "tey/kit:session-ui",
+        "files": []
+    }
+}

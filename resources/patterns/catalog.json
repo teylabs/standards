@@ -466,7 +466,7 @@
         "ui-page.shared": {
             "id": "ui-page.shared",
             "question": "Which shared concern?",
-            "why": "Toasts and styling each have one app-wide convention and a check.",
+            "why": "Toasts, styling and the signed-in shell each have one app-wide convention and a check.",
             "options": [
                 {
                     "answer": "Feedback after a save or a background result (a toast)",
@@ -475,6 +475,10 @@
                 {
                     "answer": "Styling: CSS, inline styles, theme tokens or a dynamic value",
                     "next": "ui-page.styling"
+                },
+                {
+                    "answer": "The signed-in shell: the header, primary nav, account menu or workspace switcher",
+                    "next": "ui-page.shell"
                 },
                 {
                     "answer": "None of these",
@@ -959,6 +963,42 @@
                 "Dynamic values: bind a custom property and read it in an arbitrary-value class: :style=\"{ '--x': v }\" with class=\"[color:var(--x)]\" or w-(--x). Only quoted '--name' keys pass; :style=\"{ width: w }\" or :style=\"styles\" fails. In Blade, style=\"--x: {{ $v }}\" (custom properties only).",
                 "A real exception goes in the allowlist: rule styling.pure-tailwind, the finding's target and check, a reason and an expires Y-m-d date. An entry without a reason is rejected and one without an expiry fails.",
                 "A file the rule cannot read or parse is a finding, not a pass: fix the markup."
+            ]
+        },
+        "ui-page.shell": {
+            "id": "ui-page.shell",
+            "recipe": "Signed-in shell",
+            "summary": "Rule ui.kit-shell. Once an app adopts kit's shell feature, its signed-in pages render in kit's Workspace Layout (resources/js/pages/Workspace/Layout.vue): app.ts's layout callback returns it, or an app wrapper that renders it, and the app adds its parts through the Layout's slots and the server's navigation, never its own header, account menu or workspace switcher. Public, guest and focus pages keep PublicShell, GuestShell or their own layout; page sub-navs are fine.",
+            "kit": [
+                "shell Layout (pages/Workspace/Layout.vue)",
+                "shell UserMenu and WorkspaceSwitcher (@kit/shell)",
+                "shell PublicShell and GuestShell (pages/Workspace/Partials)"
+            ],
+            "make": null,
+            "checks": [
+                "ui.kit-shell"
+            ],
+            "paths": [
+                "resources/js/app.ts",
+                "resources/js/layouts/**"
+            ],
+            "keywords": [
+                "ui.kit-shell",
+                "kit shell",
+                "signed-in header",
+                "workspace layout",
+                "account menu",
+                "user menu",
+                "workspace switcher",
+                "primary nav",
+                "logout"
+            ],
+            "status": "draft",
+            "rules": [
+                "app.ts's layout callback returns kit's Layout (import Layout from '@/pages/Workspace/Layout.vue') for signed-in pages; an app wrapper that renders that Layout is fine. In an array layout the first element is the shell and the rest are page sublayouts.",
+                "App parts go in the Layout's slots: mark (the logo), nav and drawer-nav (an app's own module switcher), bar and actions (header controls), extra (account-menu items), user-menu and workspace-switcher (replacements with the same props), footer. Pages come from the server's navigation (Registry::navigation), not a hand-written nav.",
+                "Public pages use PublicShell, sign-in pages GuestShell, and a focus flow its own layout; their headers are not signed-in shells. A page's own tabs or section nav inside the content area are fine.",
+                "A real exception goes in the allowlist: rule ui.kit-shell, the finding's target and check, a reason and an expires Y-m-d date. An entry without a reason is rejected and one without an expiry fails."
             ]
         },
         "ui-page.add-button": {

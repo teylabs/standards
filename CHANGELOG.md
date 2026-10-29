@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Rule `ui.kit-shell`: an app that adopted tey/kit's `shell` feature renders its signed-in pages in kit's Workspace Layout, not its own header.** It is active only when `config/kit.php` lists `shell` (or `session-ui`) in `features`, or, with that key absent or null, an installed `tey/kit:shell` (or `tey/kit:session-ui`) lineage record exists; otherwise it reports nothing. It fails when `app.ts`'s `layout:` option or a persistent `.layout` default in `resolve` returns an app-owned `.vue` layout that does not render kit's `pages/Workspace/Layout.vue` (directly or through app wrappers, three levels deep), and when an app-owned `.vue` file has a `<header>` or `<nav>` holding a sign-out, an account or user menu, or a workspace switcher. Public, guest and focus surfaces (kit's PublicShell and GuestShell, and app files named for them), kit-owned files, page components, page-local sub-navs and files that wrap kit's Layout pass. It is static and conservative: a resolver it cannot read is not flagged, and the README lists what it cannot see. Findings carry `file:line`. Pattern `ui-page.shell` (draft) carries the fix recipes; `standards:pattern "rule ui.kit-shell"` resolves to it.
+
+### Upgrading
+
+- ui.kit-shell is a required rule for apps that adopted kit's shell; signed-in pages on an app-owned layout or header get findings. Move to kit's Workspace Layout or allowlist each with a reason and an expiry.
+
 ## 0.11.41 - 2026-10-29
 
 ### Added
