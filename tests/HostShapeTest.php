@@ -113,6 +113,7 @@ test('the reported host with workspaces and access adopted: the workbench goes i
             'app/Modules/Slides/Http/Requests/UpdateSlideWorkbenchOrderRequest.php', 'app/Modules/Slides/Actions/ReorderSlideWorkbench.php', 'app/Modules/Slides/Queries/SlideWorkbenchItems.php',
             'app/UI/Slides/ViewModels/SlideWorkbenchViewModel.php', 'app/Modules/Slides/resources/js/pages/Workbench/Page.vue',
             'app/Modules/Slides/resources/js/pages/Workbench/Inspectors/SlideItemInspector.vue', 'tests/Feature/Modules/Slides/SlideWorkbenchTest.php', 'bootstrap/providers.php',
+            'docs/mcp-capabilities.json',
         ]);
         foreach ($files as $file) {
             expect($file)->not->toContain('WorkbenchWorkbench');

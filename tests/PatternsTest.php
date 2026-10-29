@@ -324,8 +324,13 @@ test('every ready leaf\'s make command emits code that passes standards:check in
             ->and($report['violations'])->toBe([])
             ->and($report['exit_code'])->toBe(0);
 
-        // composer.json is only ever an added autoload mapping (Database\\Factories), and JSON holds no stamp.
-        foreach (array_diff($files, ['composer.json']) as $file) {
+        // composer.json is only ever an added autoload mapping (Database\\Factories), and JSON holds no stamp; the capability manifest only ever gains
+        // a uiOnly placeholder declaring the routes the unit wrote.
+        if (in_array('docs/mcp-capabilities.json', $files, true)) {
+            $placeholder = collect(json_decode(file_get_contents($base.'/docs/mcp-capabilities.json'))->capabilities)->firstWhere('uiOnly', Maker::UI_ONLY_REASON);
+            expect($placeholder->id)->toStartWith('generated.'.$make[1].'.')->and($placeholder->routes)->not->toBeEmpty();
+        }
+        foreach (array_diff($files, ['composer.json', 'docs/mcp-capabilities.json']) as $file) {
             expect(file_get_contents($base.'/'.$file))->toContain('standards-pattern: ');
         }
     } finally {
@@ -682,9 +687,11 @@ test('make workbench emits a Workbench page with its wiring, reorder guard, insp
             'app/Http/Controllers/DeckWorkbenchController.php', 'app/Http/Controllers/DeckWorkbenchOrderController.php', 'app/Http/Requests/UpdateDeckWorkbenchOrderRequest.php',
             'app/Actions/ReorderDeckWorkbench.php', 'app/Queries/DeckWorkbenchItems.php', 'app/ViewModels/Decks/DeckWorkbenchViewModel.php',
             'resources/js/pages/Decks/Workbench/Page.vue', 'resources/js/pages/Decks/Workbench/Inspectors/DeckItemInspector.vue', 'tests/Feature/Decks/DeckWorkbenchTest.php',
-            'bootstrap/providers.php',
+            'bootstrap/providers.php', 'docs/mcp-capabilities.json',
         ]);
-        foreach (array_slice($files, 0, -1) as $file) {
+        $manifest = json_decode(file_get_contents($base.'/docs/mcp-capabilities.json'));
+        expect(end($manifest->capabilities))->toEqual((object) ['id' => 'generated.workbench.deck', 'uiOnly' => 'generated: confirm or map to an MCP tool', 'routes' => ['PUT /decks/workbench/order']]);
+        foreach (array_slice($files, 0, -2) as $file) {
             expect(file_get_contents($base.'/'.$file))->toContain('standards-pattern: '.($file === 'app/Actions/ReorderDeckWorkbench.php' ? 'data-actions.action' : 'ui-page.workbench'));
         }
         expect(file_get_contents($base.'/app/ViewModels/Decks/DeckWorkbenchViewModel.php'))->toContain('final class DeckWorkbenchViewModel extends WorkbenchViewModel')
@@ -895,4 +902,33 @@ test('the PDF report leaf prefers the Bakery recipe and carries its rules, with 
         ->toContain('No PII in logs.')
         ->toContain('The app requires mpdf/mpdf.')
         ->toContain('Not covered yet: sending or attaching the PDF');
+});
+
+test('make declares the routes it writes in the capability manifest: an existing crud --mcp capability, else a uiOnly placeholder, merged idempotently', function () {
+    $base = fixtureApp();
+
+    try {
+        $path = $base.'/docs/mcp-capabilities.json';
+        $manifest = json_decode(file_get_contents($path));
+        $manifest->capabilities[] = (object) ['id' => 'invoices.write', 'routes' => ['records.archive']];
+        file_put_contents($path, json_encode($manifest));
+        (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Invoice', 'resource', null, ['mcp']);
+        $capabilities = collect(json_decode(file_get_contents($path))->capabilities)->keyBy('id');
+        expect($capabilities['invoices.write']->routes)->toBe(['records.archive', 'POST /invoices', 'PUT /invoices/{id}', 'DELETE /invoices/{id}'])
+            ->and($capabilities->has('generated.crud.invoice'))->toBeFalse();
+
+        // Both sections append to routes/web.php: the second run sees the first's route already declared and adds only its own.
+        (new Maker($base, TreeCatalog::shipped()))->make('settings-section', 'Alerts', 'form');
+        (new Maker($base, TreeCatalog::shipped()))->make('settings-section', 'Billing', 'form');
+        $capabilities = collect(json_decode(file_get_contents($path))->capabilities)->keyBy('id');
+        expect($capabilities['generated.settings-section.alerts'])->toEqual((object) ['id' => 'generated.settings-section.alerts', 'uiOnly' => Maker::UI_ONLY_REASON, 'routes' => ['settings.alerts.update']])
+            ->and($capabilities['generated.settings-section.billing']->routes)->toBe(['settings.billing.update'])
+            ->and($capabilities['invoices.write']->routes)->toHaveCount(4);
+
+        unlink($path);
+        expect((new Maker($base, TreeCatalog::shipped()))->make('settings-section', 'Usage', 'form'))->not->toContain('docs/mcp-capabilities.json')
+            ->and(file_exists($path))->toBeFalse();
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
 });

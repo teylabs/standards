@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Rule 55 no longer passes mutating routes the capability manifest never declares.** It checked only the actions listed in `docs/mcp-capabilities.json`, so a POST, PUT, PATCH or DELETE route with neither an MCP capability nor a UI-only declaration passed silently. It now parses the route files under `routeRoots` (module routes included) and reports every undeclared mutating route against its file and line, with its method, URI, name and controller action. A capability covers routes through a new optional `routes` list (route names or `"METHOD /uri"`), and a capability marked `"uiOnly": "<reason>"` covers routes that stay out of MCP; a `uiOnly` without a reason is reported. Unparseable route files, non-literal URIs and an empty `routeRoots` are reported rather than passed. Auth, framework and broadcasting routes are excluded by the new trailing `Configuration::mcpRouteExclusions` (default `McpParity::ROUTE_EXCLUSIONS`), as are webhook routes with signature middleware; vendor routes are never scanned. An app with no manifest still gets only the missing-manifest finding.
+
+### Changed
+
+- **`standards:make` now writes capability entries to `docs/mcp-capabilities.json`** for every mutating route it generates (crud, workbench, settings-section, webhook, including modular hosts): in the `routes` of an existing `<table>.write` capability for `crud --mcp`, otherwise a `uiOnly` placeholder `generated.<unit>.<name>` with the reason `generated: confirm or map to an MCP tool`. The merge is idempotent, and a host without a manifest is left untouched. A downstream scaffold whose drift test mirrors `standards:make` output will see the manifest change.
+- Rule 55 also reports a capability `routes` entry that no route file defines.
+
+### Upgrading
+
+- Apps with a capability manifest will see new rule 55 findings, one per undeclared mutating route. Declare each route in the `routes` of the capability whose MCP tool covers it, or in a capability marked `"uiOnly"` with the reason it stays out of MCP. Extend `mcpRouteExclusions` for app-specific framework routes, or allowlist a finding with a reason and expiry.
+- When `standards:make` adds capability entries, it rewrites `docs/mcp-capabilities.json` as pretty-printed JSON with 4-space indents, so an existing manifest in another style may be reformatted. Review the diff, and commit the reformat on its own if you want a clean history.
+
 ## 0.11.31 - 2026-10-29
 
 ### Changed

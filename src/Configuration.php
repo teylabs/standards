@@ -128,5 +128,7 @@ final readonly class Configuration
         public array $controllerNonOperationNamespaces = ['Data'],
         /** @var list<string> classes that fail to load; set by the gate's load probe and skipped by the checks */
         public array $unloadable = [],
+        /** @var list<string> Str::is patterns, matched against a mutating route's name and its "/uri", that rule 55 does not require a capability for */
+        public array $mcpRouteExclusions = Checks\McpParity::ROUTE_EXCLUSIONS,
     ) {}
 }

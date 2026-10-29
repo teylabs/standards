@@ -174,7 +174,7 @@ final class Conformance
         }
 
         if ($rule === '55') {
-            return (new Checks\McpParity($this->config->base, $this->config->mcpManifest))->violations();
+            return (new Checks\McpParity($this->config->base, $this->config->mcpManifest, $this->config->routeRoots, $this->config->mcpRouteExclusions))->violations();
         }
 
         $classes = $this->source->classes();
