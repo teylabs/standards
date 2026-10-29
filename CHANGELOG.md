@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`standards:allowlist --stamp-expiry` stamps one-line entries** (`['rule' => …, 'date' => '…']` on one line), straight after the date pair. An entry with no literal date to stamp after is now skipped and listed (`skipped` in `--json`) instead of aborting the whole run.
+- **`standards:allowlist` without `tests/Arch/configuration.php`** no longer emits a PHP warning while it looks for the allowlist path.
+
+- **An allowlist entry for an advisory goes stale.** Once an `operator` or `integrations` advisory stops firing, its entry is reported stale (`standards:check`) and fails the Pest ratchet, as a findings entry does. While it fires, an allowlisted advisory is acknowledged and no longer repeated.
+- **`operator` false positives:** a command the scheduler runs (`Schedule::command(...)`/`$schedule->command(...)`, by class or by name, in the source roots, `routes` or `bootstrap`) is not reported, and ConfirmableTrait's `confirmToProceed()` counts as a production guard.
+
+### Changed
+
+- **`js-imports` hints the parent's range for a transitive package.** An undeclared import of a package that a declared one depends on (`@inertiajs/core` under `@inertiajs/vue3`) gets a hint naming that range, the npm `overrides` alternative and `npm ls <package>`. Two copies of `@inertiajs/core` break vue-tsc.
+
+### Documentation
+
+- **Pre-push and a global `core.hooksPath`:** `standards:install` writes no pre-push hook when `core.hooksPath` is set outside the repository, globally included. It prints the line to add instead; the README says why and how to find the setting.
+
 ## 0.11.29 - 2026-10-29
 
 ### Fixed

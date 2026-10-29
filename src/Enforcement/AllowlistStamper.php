@@ -9,8 +9,10 @@ use InvalidArgumentException;
 
 /**
  * Dates an app's legacy allowlist in one go: every entry without an `expires`
- * gets the given date, written after its `date` line, and nothing else in the
- * file changes. An entry that already has an expiry is never touched. The
+ * gets the given date, written after its `date` line (or, in an entry written
+ * on one line, straight after its `'date' => '…'` pair), and nothing else in the
+ * file changes. An entry with no literal date to stamp after is skipped and
+ * reported; the rest of the run goes ahead. An entry that already has an expiry is never touched. The
  * result is read back and must hold the same entries, each now dated.
  */
 final class AllowlistStamper
@@ -26,7 +28,8 @@ final class AllowlistStamper
             return ltrim(str_replace('\\', '/', $file), '/');
         }
 
-        $configuration = (string) @file_get_contents($this->base.'/'.Extractor::TARGET);
+        $target = $this->base.'/'.Extractor::TARGET;
+        $configuration = is_file($target) ? (string) file_get_contents($target) : '';
 
         if (preg_match("/allowlist:\s*require\s+__DIR__\s*\.\s*'([^']+)'/", $configuration, $match) === 1) {
             $parts = [];
@@ -46,7 +49,7 @@ final class AllowlistStamper
     }
 
     /**
-     * @return array{file: string, expires: string, stamped: list<array{rule: string, target: string, check: string}>, kept: int, contents: string}
+     * @return array{file: string, expires: string, stamped: list<array{rule: string, target: string, check: string}>, skipped: list<array{rule: string, target: string, check: string, reason: string}>, kept: int, contents: string}
      */
     public function plan(string $expires, ?string $file = null, ?DateTimeImmutable $today = null): array
     {
@@ -75,6 +78,7 @@ final class AllowlistStamper
         $edits = [];
         $offset = 0;
         $stamped = [];
+        $skipped = [];
         $kept = 0;
         $index = 0;
 
@@ -97,12 +101,19 @@ final class AllowlistStamper
                     } else {
                         $block = substr($source, $start, $offset + 1 - $start);
 
-                        if (preg_match("/\n([ \t]*)'date'\s*=>\s*'[^']*',?[^\n]*\n/", $block, $line, PREG_OFFSET_CAPTURE) !== 1) {
-                            throw new InvalidArgumentException("{$relative}: the entry for [{$entry['rule']}] {$entry['target']} has no literal 'date' => '…' line to stamp after; date it by hand.");
-                        }
+                        $identity = ['rule' => (string) ($entry['rule'] ?? ''), 'target' => (string) ($entry['target'] ?? ''), 'check' => (string) ($entry['check'] ?? '')];
 
-                        $edits[] = [$start + $line[0][1] + strlen($line[0][0]), $line[1][0]."'expires' => '{$expires}',\n"];
-                        $stamped[] = ['rule' => (string) $entry['rule'], 'target' => (string) $entry['target'], 'check' => (string) $entry['check']];
+                        if (preg_match("/\n([ \t]*)'date'\s*=>\s*'[^']*',?[^\n]*\n/", $block, $line, PREG_OFFSET_CAPTURE) === 1) {
+                            // A multi-line entry: a line of its own, indented like the date line.
+                            $edits[] = [$start + $line[0][1] + strlen($line[0][0]), $line[1][0]."'expires' => '{$expires}',\n"];
+                            $stamped[] = $identity;
+                        } elseif (preg_match("/'date'\s*=>\s*'[^']*'/", $block, $pair, PREG_OFFSET_CAPTURE) === 1) {
+                            // A one-line entry: straight after the date pair, so any trailing comma stays where it was.
+                            $edits[] = [$start + $pair[0][1] + strlen($pair[0][0]), ", 'expires' => '{$expires}'"];
+                            $stamped[] = $identity;
+                        } else {
+                            $skipped[] = [...$identity, 'reason' => "no literal 'date' => '…' to stamp after; date it by hand"];
+                        }
                     }
                 }
 
@@ -124,7 +135,8 @@ final class AllowlistStamper
 
         // Read back: the same entries, each now dated, the stamped ones with this date and the rest untouched.
         $after = self::load($contents, $relative);
-        $expected = array_map(fn (array $entry): array => array_key_exists('expires', $entry) ? $entry : [...$entry, 'expires' => $expires], $before);
+        $skippedKeys = array_map(fn (array $entry): string => $entry['rule'].'|'.$entry['target'].'|'.$entry['check'], $skipped);
+        $expected = array_map(fn (array $entry): array => array_key_exists('expires', $entry) || in_array(($entry['rule'] ?? '').'|'.($entry['target'] ?? '').'|'.($entry['check'] ?? ''), $skippedKeys, true) ? $entry : [...$entry, 'expires' => $expires], $before);
 
         // Key order may differ (the expiry is written after `date`, wherever that sits), so compare each entry's keys sorted.
         $sorted = fn (array $entries): array => array_map(function (array $entry): array {
@@ -137,7 +149,7 @@ final class AllowlistStamper
             throw new InvalidArgumentException("{$relative} could not be stamped safely; date its entries by hand.");
         }
 
-        return ['file' => $relative, 'expires' => $expires, 'stamped' => $stamped, 'kept' => $kept, 'contents' => $contents];
+        return ['file' => $relative, 'expires' => $expires, 'stamped' => $stamped, 'skipped' => $skipped, 'kept' => $kept, 'contents' => $contents];
     }
 
     /** @param  array{file: string, contents: string}  $plan */

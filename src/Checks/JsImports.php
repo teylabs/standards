@@ -38,12 +38,37 @@ final class JsImports
 
                 $name = implode('/', array_slice(explode('/', $specifier), 0, str_starts_with($specifier, '@') ? 2 : 1));
                 if (! in_array($name, $declared, true)) {
-                    $violations[] = ['target' => $path, 'check' => 'undeclared package import: '.$specifier];
+                    $violation = ['target' => $path, 'check' => 'undeclared package import: '.$specifier];
+                    $hint = self::transitiveHint($config, $name, $package);
+
+                    $violations[] = $hint === null ? $violation : [...$violation, 'hint' => $hint];
                 }
             }
         }
 
         return $violations;
+    }
+
+    /**
+     * A package another declared one already depends on (`@inertiajs/core` under `@inertiajs/vue3`): declaring it at a looser range (`^3`)
+     * can install a second copy, and two copies of the same types break vue-tsc. So the hint names the range the parent asks for, read from
+     * node_modules when it is installed. Null for an ordinary undeclared package.
+     *
+     * @param  array<string, mixed>  $package
+     */
+    private static function transitiveHint(Configuration $config, string $name, array $package): ?string
+    {
+        foreach (array_keys(array_merge($package['dependencies'] ?? [], $package['devDependencies'] ?? [])) as $parent) {
+            $manifest = $config->base.'/node_modules/'.$parent.'/package.json';
+            $parentPackage = is_file($manifest) ? json_decode((string) file_get_contents($manifest), true) : null;
+            $range = is_array($parentPackage) ? ($parentPackage['dependencies'][$name] ?? $parentPackage['peerDependencies'][$name] ?? null) : null;
+
+            if (is_string($range)) {
+                return "{$name} comes with {$parent}, which depends on {$name}@{$range}. Declare it at that same range (\"{$name}\": \"{$range}\"), or pin it for every package with an npm `overrides` entry, so npm installs one copy: a looser range can install a second, and two copies of the same types break vue-tsc. Check with `npm ls {$name}` (one version, no duplicates).";
+            }
+        }
+
+        return null;
     }
 
     /**
