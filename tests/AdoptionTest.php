@@ -162,6 +162,22 @@ test('missing, n/a from applies, and a surface whose feature is not installed', 
         ->and($report['facts']['tey/kit']['has-search'])->toMatchArray(['value' => false, 'evidence' => null]);
 });
 
+test('a hand-rolled signal is evidence on its own: it reads hand-rolled when the package is not installed, and only a silent surface reads missing', function () {
+    $report = adoptionReport('uninstalled');
+    $rows = array_column($report['rows'], null, 'id');
+
+    expect($report['inventories'][0]['installed'])->toBeFalse()
+        // Positive: vue-toastification fires feedback.toast's signal although tey/kit is not installed.
+        ->and($rows['feedback.toast']['status'])->toBe('hand-rolled')
+        ->and($rows['feedback.toast']['installed'])->toBeFalse()
+        ->and($rows['feedback.toast']['note'])->toBe('tey/kit is not installed')
+        ->and(array_map(adoptionWhere(...), $rows['feedback.toast']['evidence']))->toBe(['resources/js/pages/Orders/Page.vue:2'])
+        // Negative: an applicable surface with no signal still reads missing, with no evidence; n/a still wins over both.
+        ->and($rows['shell.workspace']['status'])->toBe('missing')
+        ->and($rows['shell.workspace']['evidence'])->toBe([])
+        ->and($rows['navigation.search']['status'])->toBe('n/a');
+});
+
 test('kit-owned files never count as adoption; an edited lineage copy is the app\'s own', function () {
     $rows = array_column(adoptionReport('kit-owned')['rows'], null, 'id');
 

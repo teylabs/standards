@@ -16,9 +16,9 @@ use Throwable;
  * Builds the `standards:adoption` report (format 1) for one app against any number of package inventories (Inventory). Each surface reads:
  *
  * - `n/a` when its `applies` condition is false for the app's facts;
+ * - `hand-rolled` when any `handRolled` signal fires in an app-owned file, whether or not the package is installed (even if `uses` also match);
  * - `missing` when the package or the surface's `feature` is not installed;
- * - `hand-rolled` when any `handRolled` signal fires in an app-owned file (even if `uses` also match), or, when no `uses` match, when an
- *   app component, library or composer package maps to it through `replaces`;
+ * - `hand-rolled` when, with no `uses` match, an app component, library or composer package maps to it through `replaces`;
  * - `adopted` when any `uses` matches in an app-owned file (kit-owned unedited files never count; `files` count by presence);
  * - `missing` otherwise;
  * - `exempt` when it would be hand-rolled or missing and a valid allowlist entry (rule `adoption.<composer>.<surface-id>`) covers it.
@@ -263,8 +263,9 @@ final class Scanner
 
         $status = match (true) {
             ! $applies => 'n/a',
-            ! $installed => 'missing',
+            // A hand-rolled signal is evidence on its own: the app built the thing whether or not the package (or feature) is installed.
             $signals !== [] => 'hand-rolled',
+            ! $installed => 'missing',
             $uses !== [] => 'adopted',
             $replaced !== [] => 'hand-rolled',
             default => 'missing',

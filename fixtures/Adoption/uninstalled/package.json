@@ -1,0 +1,8 @@
+{
+    "name": "fixture-uninstalled",
+    "private": true,
+    "dependencies": {
+        "vue": "^3.5.0",
+        "vue-toastification": "^2.0.0"
+    }
+}
