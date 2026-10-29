@@ -18,7 +18,8 @@ use Tey\Standards\Source;
  *
  * A model is versioned when it uses a trait named Versioned, HasVersion or OptimisticLock (or one of Configuration::$versionedModels' traits or
  * classes). An Eloquent instance write (`$model->update([...])`, `Model::find($id)->update(...)`) runs the events and is not reported. Static and a
- * heuristic: a write reached through another class or a variable holding the builder is not seen. A deliberate exception goes in the allowlist.
+ * heuristic: a write reached through another class or a variable holding the builder is not seen. Migrations (any file under a `migrations`
+ * directory) are skipped: schema history that runs once, outside the stale-guard flow. A deliberate exception goes in the allowlist.
  */
 final class VersionedWrites
 {
@@ -59,6 +60,13 @@ final class VersionedWrites
         $violations = [];
 
         foreach ($this->source->files($this->config->sourceRoots) as $path => $text) {
+            // Migrations are schema history: they may predate the version column and run once, outside the stale-guard flow, so a data
+            // backfill in one is not checked. Any file under a `migrations` directory (database/migrations, a module's Database/Migrations,
+            // kit migration stubs) is skipped.
+            if (self::migration($path)) {
+                continue;
+            }
+
             foreach ($finder->find($this->source->nodes($path), fn (Node $node): bool => ($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall) && $node->name instanceof Node\Identifier && in_array($node->name->toString(), self::WRITES, true)) as $call) {
                 // A write straight on the model (Document::upsert(…)) forwards to a fresh builder, as Model::query()->upsert(…) does.
                 $model = $call instanceof Node\Expr\StaticCall
@@ -80,6 +88,11 @@ final class VersionedWrites
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    private static function migration(string $path): bool
+    {
+        return in_array('migrations', array_map('strtolower', explode('/', str_replace('\\', '/', dirname($path)))), true);
     }
 
     /** @param  array<string, Node\Stmt\Class_>  $classes */

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`versioned-writes` skips migrations:** any file under a `migrations` directory (`database/migrations`, a module's `Database/Migrations`, kit migration stubs). A data backfill in a migration, which may predate the version column and runs once outside the stale-guard flow, is no longer reported. The same write in app code still is.
+
 ## 0.11.26 - 2026-10-28
 
 ### Upgrading
