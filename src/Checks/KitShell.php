@@ -26,7 +26,7 @@ use Tey\Standards\Source;
  *   paths when no record lists them (ownership unknown), page components (`Page.vue`), files whose path names a public, guest or focus surface,
  *   and files that import kit's Layout themselves (the content they pass to its slots is sanctioned).
  *
- * Static and conservative: it prefers missing a case to flagging one it cannot prove. An unreadable file is skipped.
+ * Static and conservative: it prefers missing a case to flagging one it cannot prove. An entry file or `.vue` file it cannot read is a finding (fails closed).
  */
 final class KitShell
 {
@@ -50,6 +50,8 @@ final class KitShell
     ];
 
     private const HINT = 'Render signed-in pages in kit\'s Workspace Layout (resources/js/pages/Workspace/Layout.vue): return it (or an app wrapper that renders it) from app.ts\'s layout callback, and put app parts in its slots (`mark`, `nav`, `drawer-nav`, `bar`, `actions`, `extra`, `user-menu`, `workspace-switcher`, `footer`) and its pages in the server\'s navigation (Registry::navigation). Public, guest and focus pages keep PublicShell, GuestShell or their own layout.';
+
+    private const UNREADABLE = 'The rule fails closed: make the file readable so it can be checked.';
 
     /** @return list<array{target: string, check: string, line?: int, hint?: string}> */
     public function violations(Configuration $config): array
@@ -104,10 +106,15 @@ final class KitShell
             foreach (['app.ts', 'app.js'] as $name) {
                 $entry = trim($root, '/').'/'.$name;
                 $file = $base.'/'.$entry;
-                if (! is_file($file) || is_link($file) || ! is_readable($file)) {
+                if (! is_file($file) || is_link($file)) {
                     continue;
                 }
-                $source = (string) file_get_contents($file);
+                $source = is_readable($file) ? @file_get_contents($file) : false;
+                if ($source === false) {
+                    $findings[] = ['target' => $entry, 'check' => 'could not read the file', 'line' => 1, 'hint' => self::UNREADABLE];
+
+                    continue;
+                }
                 $code = self::code($source);
                 $imports = self::imports($code);
                 $seen = [];
@@ -143,8 +150,9 @@ final class KitShell
             foreach (glob($base.'/'.$root, GLOB_ONLYDIR) ?: [] as $directory) {
                 foreach ((new Finder)->files()->in($directory)->name('*.vue')->exclude(['vendor', 'node_modules'])->ignoreDotFiles(false) as $file) {
                     $path = str_replace('\\', '/', substr($file->getPathname(), strlen($base) + 1));
-                    if (! str_starts_with($path, Source::GENERATED) && is_readable($file->getPathname())) {
-                        $files[$path] = (string) file_get_contents($file->getPathname());
+                    if (! str_starts_with($path, Source::GENERATED)) {
+                        $contents = is_readable($file->getPathname()) ? @file_get_contents($file->getPathname()) : false;
+                        $files[$path] = $contents === false ? null : $contents;
                     }
                 }
             }
@@ -152,6 +160,11 @@ final class KitShell
         ksort($files);
         $findings = [];
         foreach ($files as $path => $source) {
+            if ($source === null) {
+                $findings[] = ['target' => $path, 'check' => 'could not read the file', 'line' => 1, 'hint' => self::UNREADABLE];
+
+                continue;
+            }
             if ($kit->owns($path, $source) || (self::shellPath($path) && ! $kit->recorded($path)) || basename($path) === 'Page.vue' || self::exempt($path)) {
                 continue;
             }

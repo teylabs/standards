@@ -788,8 +788,9 @@ Exempt: **public, guest and focus surfaces**: kit's PublicShell and GuestShell (
 - a header whose signals are outside the element (a sign-out wired from `<script>` only, a menu rendered through a slot or `<component :is>`), or that is built from components named other than above, is missed; a `Page.vue` that renders its own shell header is missed;
 - a file that imports kit's Layout is trusted entirely, even if it also renders a second header beside it;
 - an app file placed under `pages/Workspace/Partials/`, or an unrecorded `pages/Workspace/Layout.vue`, is taken as kit's;
-- an unreadable file is skipped, not reported;
 - Blade, React and Livewire shells are not read.
+
+**Fails closed.** An `app.ts`/`app.js` entry or a `.vue` file under the frontend roots that the rule cannot read is a finding (`could not read the file`), not a pass, while the shell is adopted. An app layout it follows through imports and cannot read is not followed.
 
 All options below are trailing named constructor arguments. Defaults preserve optional UI enforcement as off. Explicit frontend roots must exist (unmatched globs may be empty); overlapping roots are deduplicated.
 

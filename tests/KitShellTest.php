@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Filesystem\Filesystem;
 use PHPUnit\Framework\AssertionFailedError;
 use Tey\Standards\Checks\KitShell;
 use Tey\Standards\Configuration;
@@ -138,3 +139,25 @@ test('[ui.kit-shell] the package generators and the Good fixture emit no signed-
     expect($checked)->toBeGreaterThan(1)
         ->and((new KitShell)->violations(kitShellConfiguration(dirname(__DIR__).'/fixtures/Good')))->toBe([]);
 });
+
+test('[ui.kit-shell] fails closed: an app.ts it cannot read, or a .vue file it cannot read, is a finding, not a pass', function (string $path, string $contents) {
+    $base = sys_get_temp_dir().'/kit-shell-'.bin2hex(random_bytes(6));
+    mkdir($base.'/config', 0777, true);
+    mkdir(dirname($base.'/'.$path), 0777, true);
+    file_put_contents($base.'/config/kit.php', "<?php\n\nreturn ['features' => ['core', 'shell']];\n");
+    file_put_contents($base.'/'.$path, $contents);
+    chmod($base.'/'.$path, 0000);
+
+    try {
+        if (is_readable($base.'/'.$path)) {
+            $this->markTestSkipped('Running as a user that reads mode-0000 files (root); unreadable files cannot be simulated.');
+        }
+        expect(kitShellFindings($base))->toBe([['target' => $path, 'check' => 'could not read the file', 'line' => 1]]);
+    } finally {
+        chmod($base.'/'.$path, 0644);
+        (new Filesystem)->deleteDirectory($base);
+    }
+})->with([
+    'the layout entry' => ['resources/js/app.ts', "import { createInertiaApp } from '@inertiajs/vue3';\n"],
+    'a .vue file' => ['resources/js/components/AppHeader.vue', "<template><header><UserMenu /></header></template>\n"],
+]);
