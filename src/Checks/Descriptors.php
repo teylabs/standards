@@ -14,6 +14,54 @@ final class Descriptors
     /** Role names an auth check compares against; a comparison with anything else (an ARIA role, a domain role) is not an auth check. */
     public const ROLE_NAMES = ['owner', 'admin', 'administrator', 'superadmin', 'super-admin', 'super_admin', 'member', 'editor', 'viewer', 'manager', 'moderator', 'staff', 'guest'];
 
+    /** Receivers that make can()/cannot() an auth check: the user, auth props, permissions, a gate or a policy. */
+    public const AUTH_RECEIVERS = ['user', 'auth', 'permissions', 'gate', 'policy'];
+
+    /**
+     * can()/cannot() as an auth check: a bare call (`can('x')`, `$can(`), or a method on an auth-shaped receiver chain (`user.can(`,
+     * `$page.props.auth.can(`, `gate.cannot(`). A method on any other object is not one: Tiptap's `editor.can().undo()`, `chain.can()`.
+     *
+     * @param  list<string>  $tokens
+     */
+    private static function authCan(array $tokens): bool
+    {
+        foreach ($tokens as $index => $token) {
+            if (! in_array(ltrim($token, '$'), ['can', 'cannot'], true) || ($tokens[$index + 1] ?? '') !== '(') {
+                continue;
+            }
+
+            $previous = $tokens[$index - 1] ?? '';
+
+            if (! in_array($previous, ['.', '?.'], true)) {
+                // `function can(`, `can(` as an object method definition or a declaration name is not a call.
+                if (! in_array($previous, ['function', 'async'], true)) {
+                    return true;
+                }
+
+                continue;
+            }
+
+            // Walk back through the receiver chain (a.b?.c.can) and look for an auth-shaped name.
+            for ($i = $index - 2; $i >= 0; $i -= 2) {
+                $name = strtolower(ltrim($tokens[$i], '$'));
+
+                if (preg_match('/^[a-z_][a-z0-9_]*$/', $name) !== 1) {
+                    break;
+                }
+
+                if (in_array($name, self::AUTH_RECEIVERS, true)) {
+                    return true;
+                }
+
+                if (! in_array($tokens[$i - 1] ?? '', ['.', '?.'], true)) {
+                    break;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static function isString(string $token): bool
     {
         return str_starts_with($token, "'") || str_starts_with($token, '"') || str_starts_with($token, '`');
@@ -50,13 +98,16 @@ final class Descriptors
             $patterns = [
                 // Auth-shaped only: role and permission helpers, can()/cannot(), a user's roles or permissions, an admin flag. A template `role=` attribute,
                 // an ARIA role, a domain role (FeedRole, node[role]) or an identifier that merely contains "role" is not one.
-                'role or permission check' => '~\b(?:hasRole|hasAnyRole|hasAllRoles|hasPermission|hasPermissionTo|hasAnyPermission|is_?admin|is_?super_?admin)\b|\b(?:can|cannot)\s*\(|(?:\.|\?\.|\[)\s*roles\b|\bpermissions\s*(?:\?\.|\.|\[)~i',
+                'role or permission check' => '~\b(?:hasRole|hasAnyRole|hasAllRoles|hasPermission|hasPermissionTo|hasAnyPermission|is_?admin|is_?super_?admin)\b|(?:\.|\?\.|\[)\s*roles\b|\bpermissions\s*(?:\?\.|\.|\[)~i',
                 'boolean can-map' => '~\bcan\s*(?:\?\.|\.|\[|:\s*\{)|\bcan_[a-zA-Z]\w*\b~',
             ];
             foreach ($patterns as $check => $pattern) {
                 if (preg_match($pattern, $code)) {
                     $violations[] = ['target' => $path, 'check' => $check];
                 }
+            }
+            if (self::authCan($tokens)) {
+                $violations[] = ['target' => $path, 'check' => 'role or permission check'];
             }
             // A role or permission compared against a known role name (user.role === 'admin', 'owner' !== role).
             $names = implode('|', array_map(fn (string $name): string => preg_quote($name, '~'), self::ROLE_NAMES));

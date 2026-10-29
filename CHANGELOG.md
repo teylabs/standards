@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **The `descriptors` rule no longer flags Tiptap's `editor.can().undo()`.** `can(`/`cannot(` now counts only as a bare call (`can('x')`, `$can(`) or on an auth-shaped receiver (`user`, `auth`, `$page.props.auth…`, `page.props.auth…`, `permissions`, `gate`, `policy`). A method on any other object (`editor.can()`, `chain.can()`) isn't flagged.
+
 ## 0.11.24 - 2026-10-28
 
 ### Fixed
