@@ -52,12 +52,13 @@ final class Cli
                 return self::usage("Unknown option {$argument}.");
             }
         }
-        $resolved = $base === '' ? false : realpath(str_starts_with($base, '/') ? $base : $cwd.'/'.$base);
+        $absolute = fn (string $path): bool => preg_match('~\A(?:[/\\\\]|[A-Za-z]:[/\\\\])~', $path) === 1;
+        $resolved = $base === '' ? false : realpath($absolute($base) ? $base : $cwd.'/'.$base);
         if ($resolved === false || ! is_dir($resolved)) {
             return self::usage('--base must name an existing directory.');
         }
         // An explicit relative --inventory is relative to where the command runs, not to the app.
-        $inventories = array_map(fn (string $path): string => preg_match('~\A(?:[/\\\\]|[A-Za-z]:[/\\\\])~', $path) === 1 ? $path : $cwd.'/'.$path, $inventories);
+        $inventories = array_map(fn (string $path): string => $absolute($path) ? $path : $cwd.'/'.$path, $inventories);
 
         try {
             $configuration = null;
