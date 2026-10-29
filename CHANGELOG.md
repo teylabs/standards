@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Upgrading
+
+- **New rule `versioned-writes`,** on in apps with a versioned model (a trait named `Versioned`, `HasVersion` or `OptimisticLock`, or `Configuration::$versionedModels`). A query-builder write that skips the version bump now fails the gate. Bump it in the write, write through the model instance, or allowlist it with a reason and an expiry.
+
+### Added
+
+- **Rule `versioned-writes`** (README): a builder `update`/`upsert`/`increment`/`decrement` on a versioned model's query, or on `DB::table('<its table>')`, must set the version column (`DB::raw('version + 1')` or a value). Instance writes, which run the model events, aren't reported.
+  - Findings give the file, the line and a fix.
+  - New `Configuration::$versionedModels` and `$versionColumn` (default `version`).
+
 ## 0.11.25 - 2026-10-28
 
 ### Fixed

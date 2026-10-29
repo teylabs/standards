@@ -43,6 +43,8 @@ final readonly class Configuration
      * @param  list<string>  $uiToastRenderers  project-relative files allowed to import the toast library
      * @param  list<string>  $testBasePaths
      * @param  list<string>  $testRoots  where the test files live, for the php-tag rule (globs allowed)
+     * @param  list<string>  $versionedModels  for rule `versioned-writes`: traits or classes that make a model versioned (stale-write guarded), beyond the default detection of a trait named Versioned, HasVersion or OptimisticLock
+     * @param  string  $versionColumn  the column a versioned model bumps on every write
      * @param  list<string>  $tenantKeys  the column a single-database app scopes tenants by, for rule `tenant-aware`'s default detection (a model with it in $fillable or in its table's migration is tenant-scoped)
      * @param  list<string>  $tenantModels  what makes a model tenant-scoped for rule `tenant-aware`: traits it uses or classes it is (or extends). Default: spatie/laravel-multitenancy's UsesTenantConnection; add the app's own tenant-scope trait or base model
      * @param  list<string>  $presetIgnores  namespaces the stock Laravel preset does not apply to: a modular app's module roots (App\\Modules), whose own placement rule 20 and the tey/mod layout enforce
@@ -99,6 +101,8 @@ final readonly class Configuration
         public array $testRoots = ['tests'],
         public array $presetIgnores = [],
         public array $tenantKeys = ['workspace_id', 'tenant_id'],
+        public array $versionedModels = [],
+        public string $versionColumn = 'version',
         public array $tenantModels = ['Spatie\\Multitenancy\\Models\\Concerns\\UsesTenantConnection'],
         public array $boostSkills = [
             'laravel/framework' => ['laravel-best-practices'],

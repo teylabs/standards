@@ -455,6 +455,14 @@ The handler runs in the transaction that marks the call processed, so a handler 
 - `Fake<Provider>Client`, its provider, `services.<provider>` keys and `.env.example` lines;
 - tests that bind the Fake under `Http::preventStrayRequests()`, so no test reaches the service.
 
+**Rule `versioned-writes`.** A query-builder write on a versioned model must bump its version. A versioned (stale-write guarded) model bumps `version` through its model events, but a builder write skips them, so a stale guard silently passes.
+
+- **What's checked:** `update()`, `upsert()`, `increment()`, `decrement()`, `incrementEach()` and `updateOrInsert()`, on `Model::where(…)` or `Model::query()`, straight on the model (`Model::upsert(…)`), or on `DB::table('<its table>')`.
+- **What counts as a bump:** setting the version column (any value, `DB::raw('version + 1')` included), or incrementing the column itself. For `upsert`, the column goes in the update list, or, without one, in the values.
+- **Not reported:** an Eloquent instance write (`Model::findOrFail($id)->update(…)`, `->first()->update(…)`), because it runs the events.
+- **What counts as versioned:** a model that uses a trait named `Versioned`, `HasVersion` or `OptimisticLock`, or one of `Configuration::$versionedModels` (traits, or classes a model is or extends). `$versionColumn` defaults to `version`. An app with no versioned model gets nothing.
+- **Findings:** each gives the file, line and a fix. The rule is a static heuristic: a write reached through another class, or a builder held in a variable, isn't seen. A deliberate exception (a backfill, say) goes in the allowlist with a reason and an expiry.
+
 **Rule `tenant-aware`.** In an app on spatie/laravel-multitenancy, work that touches tenant-scoped models runs inside a tenant, and only one pattern counts: the package's own. A job that runs outside any tenant does not fail; it silently finds nothing.
 
 - **Commands:** an artisan command (extending `Illuminate\Console\Command`) that names a tenant-scoped model uses `Spatie\Multitenancy\Commands\Concerns\TenantAware`, with `{--tenant=*}` in its signature, so it runs once per tenant.
