@@ -231,3 +231,19 @@ test('no-dev accepts an app provider registered only behind class_exists of the 
         // Never registered at all: nothing gates it.
         ->and($run('return [];'))->toContain('app/Support/TypeScriptProvider.php');
 });
+
+test('no-dev ignores Laravel\'s generated bootstrap/cache manifests, but a real bootstrap/app.php reference still fails closed', function () {
+    copy(dirname(__DIR__).'/fixtures/Good/src/UI/Link.php', $this->backendBase.'/src/UI/Link.php');
+    mkdir($this->backendBase.'/app/Support', 0777, true);
+    mkdir($this->backendBase.'/bootstrap/cache', 0777, true);
+    file_put_contents($this->backendBase.'/app/Support/TypeScriptProvider.php', '<?php namespace App\Support; use Pest\TestSuite; final class TypeScriptProvider extends TestSuite {}');
+    // What Laravel writes on boot: the manifest names the provider, as a string and by class.
+    file_put_contents($this->backendBase.'/bootstrap/cache/services.php', "<?php return ['providers' => ['App\\\\Support\\\\TypeScriptProvider', \\Pest\\TestSuite::class], 'eager' => [App\\Support\\TypeScriptProvider::class]];");
+    $run = fn (): array => array_column(($this->backend)('no-dev', 'return [...(class_exists(\Pest\TestSuite::class) ? [\App\Support\TypeScriptProvider::class] : [])];',
+        ['discoveryRoots' => ['app', 'bootstrap'], 'developmentNamespaces' => ['Pest']], 'bootstrap/providers.php'), 'target');
+
+    expect($run())->toBe([]);
+
+    file_put_contents($this->backendBase.'/bootstrap/app.php', '<?php return Illuminate\Foundation\Application::configure()->withProviders([App\Support\TypeScriptProvider::class])->create();');
+    expect($run())->toContain('app/Support/TypeScriptProvider.php');
+});

@@ -18,6 +18,9 @@ final class Source
     /** @var array<string, array<Node>> */
     private array $parsed = [];
 
+    /** Laravel's generated cache, never scanned. */
+    public const GENERATED = 'bootstrap/cache/';
+
     public function __construct(private readonly Configuration $config) {}
 
     /**
@@ -51,6 +54,11 @@ final class Source
             foreach ($directories as $directory) {
                 foreach ((new Finder)->files()->in($directory)->name($pattern)->exclude(['vendor', 'node_modules']) as $file) {
                     $path = str_replace('\\', '/', substr($file->getPathname(), strlen($this->config->base) + 1));
+                    // Laravel regenerates bootstrap/cache/ (services.php, packages.php, config.php) on boot from what the app declares elsewhere:
+                    // not source, and a stale copy naming every provider would count as a reference.
+                    if (str_starts_with($path, self::GENERATED)) {
+                        continue;
+                    }
                     $files[$path] = $file->getContents();
                 }
             }
