@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The kit export snapshot is tey/kit v0.5.4's barrel**, which adds `DescriptionList` and `EmptyState`. The pattern catalog uses them:
+  - `ui-page.show` gains a "fields" slot: DescriptionList, the record's fields as a real `dl`, with copy for an id or key;
+  - `ui-page.external-sync` gains a "not linked" EmptyState, offering Link;
+  - `ui-page.live-console` gains a "no session" EmptyState (compact inside a panel), and both leaves' empty-state rules name it.
+
 ## 0.11.19 - 2026-10-28
 
 ### Fixed

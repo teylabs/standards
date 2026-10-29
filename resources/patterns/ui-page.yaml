@@ -104,11 +104,12 @@ nodes:
   - id: ui-page.show
     recipe: Inertia show page
     summary: A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand.
-    kit: ['@kit/ui Page', '@kit/ui SectionHeader', '@kit/ui Section', '@kit/ui ActionBar']
+    kit: ['@kit/ui Page', '@kit/ui SectionHeader', '@kit/ui Section', '@kit/ui DescriptionList', '@kit/ui ActionBar']
     components:
       - { name: "page shell", kit_component: Page, use: "Wraps the record page", props_hint: "title" }
       - { name: "header", kit_component: SectionHeader, use: "Record title and its actions", props_hint: "title, actions slot" }
       - { name: "details", kit_component: Section, use: "Groups the record fields", props_hint: "title" }
+      - { name: "fields", kit_component: DescriptionList, use: "The record's fields as term and description pairs (a real dl), with copy for an id or key", props_hint: "items, layout, copyable" }
       - { name: "actions", kit_component: ActionBar, use: "Record actions placed by the kit", props_hint: "actions descriptors" }
       - { name: "button set", kit_component: ButtonGroup, use: "Related buttons side by side", props_hint: "default slot" }
     make: standards:make crud --flavor=resource
@@ -409,10 +410,11 @@ nodes:
   - id: ui-page.external-sync
     recipe: External source sync
     summary: Connect an outside source, sync it on demand, show the last run and its result, and replace from the source behind a typed confirmation. Build your own from existing patterns; there is no generator yet.
-    kit: ['@kit/ui ActionBar', '@kit/ui DropdownConfirm', '@kit/ui Alert', '@kit/ui StageNotice', '@kit/ui Toaster']
+    kit: ['@kit/ui ActionBar', '@kit/ui DropdownConfirm', '@kit/ui Alert', '@kit/ui StageNotice', '@kit/ui Toaster', '@kit/ui EmptyState']
     components:
       - { name: "page actions", kit_component: ActionBar, use: "Server action descriptors: Link, Sync now, and Unlink and Replace from source in the ⌄ menu", props_hint: "actions" }
       - { name: "last run", kit_component: Alert, use: "The last run's status and result", props_hint: "variant, title" }
+      - { name: "not linked", kit_component: EmptyState, use: "The page while nothing is linked, offering Link", props_hint: "title, body, actions" }
     checks: ['tenant-aware']
     paths: []
     keywords: [sync, external source, sync with, connect a source, linked source, sync now, last sync, replace from source, import from, google, provider sync, import from google, sync from a service, connect an external account]
@@ -420,7 +422,7 @@ nodes:
     rules:
       - "The page's actions are server action descriptors: Link; Sync now; and Unlink and Replace from source in the ⌄ menu. Each is confirmed, and Replace needs a typed confirmation (the user types the source's name)."
       - "Sync runs as a queued TenantAware job (background.job), and answers a run token the page polls (or a broadcast it listens to)."
-      - "The last run's status and result show with kit Feedback (Alert or StageNotice), completion raises a toast, and the page has an empty state while nothing is linked."
+      - "The last run's status and result show with kit Feedback (Alert or StageNotice), completion raises a toast, and the page has an empty state (kit EmptyState) while nothing is linked."
       - "The outside source's credentials and tokens live server-side only: never in page props, the run token or the client."
       - "Tests: a sync that succeeds and one that fails, a typed confirmation refused, unlink, and the job failing loudly with no tenant."
     related: [background.job, ui-page.external-link]
@@ -428,10 +430,11 @@ nodes:
   - id: ui-page.live-console
     recipe: Live console
     summary: Run a live session from a stage plus side panels that act on it in real time. Workbench edits records; a console runs a session. Build your own on kit Workbench regions; there is no generator yet.
-    kit: ['@kit/ui Workbench', '@kit/ui Section', '@kit/ui Collapsible', '@kit/ui ActionBar']
+    kit: ['@kit/ui Workbench', '@kit/ui Section', '@kit/ui Collapsible', '@kit/ui ActionBar', '@kit/ui EmptyState']
     components:
       - { name: "console", kit_component: Workbench, use: "The stage and its panel regions", props_hint: "workbench-key, label" }
       - { name: "panel", kit_component: Collapsible, use: "One side panel in the stack", props_hint: "title" }
+      - { name: "no session", kit_component: EmptyState, use: "The ready or empty state while no session is open (compact inside a panel)", props_hint: "title, actions, compact" }
     checks: []
     paths: []
     keywords: [live session, console, presenter, run a session, control room, real time, stage and panels, live show, presenter console, control room]
@@ -440,7 +443,7 @@ nodes:
       - "Built on kit Workbench regions: the stage plus a panel stack of Sections or Collapsibles, with ActionBar descriptors. No hand-rolled layout."
       - "One realtime writer per session, held by a lock or lease."
       - "A documented keyboard transport map, with its keys announced in the help."
-      - "A ready or empty state while no session is open."
+      - "A ready or empty state (kit EmptyState) while no session is open."
       - "Live counts sit in polite aria-live regions."
       - "Frames relayed to other screens carry only public fields; a test proves private totals and names never reach a public screen."
       - "Presenter-only authorization, re-checked on every action."
