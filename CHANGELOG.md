@@ -2,22 +2,32 @@
 
 ## Unreleased
 
+<<<<<<< HEAD
 ### Documentation
 
 - **Helper or feature roots and `preset laravel`** (README, "A modular app's configuration"). An `app/Helpers/*` layout's models, requests and controllers are left out of the stock Laravel preset by adding `App\Helpers` to `presetIgnores` (since 0.11.11). The README gives the trade-off (the whole preset, with placement left to rule 20) and the stale-allowlist cleanup.
 
 ## Unreleased
+=======
+### Upgrading
+
+- **`standards:preflight --strict` on a Cloud managed queue now fails `queue.failed-store`** until the post-deploy check covers both failed-job stores and `PREFLIGHT_QUEUE_FAILED_STORE_CHECKED=true` is set.
+
+### Added
+
+- **Preflight `queue.failed-store`** (advisory). On a Laravel Cloud managed queue (driver or connection `cloud`, or a committed Cloud config naming a managed queue), failed jobs never reach `failed_jobs`. The check names both stores and their commands (`php artisan queue:failed` and `cloud managed-queue:failed-jobs <env> --json -n`). It exits 1 only under `--strict`, until `PREFLIGHT_QUEUE_FAILED_STORE_CHECKED=true` declares a post-deploy check that reads both. Other queues pass. "Verify after deploy" now says "0 failed jobs" means every store.
+
+### Changed
+
+- **A kit newer than the snapshot is an advisory, not a warning.** When the installed kit's exports are a superset of the snapshot, `standards:check` and `standards:pattern` print `Advisory: the pattern catalog's kit snapshot is older than the installed tey/kit (new: …)`. A kit missing snapshot components still warns.
+- **A weekly workflow opens the snapshot refresh.** `.github/workflows/kit-snapshot.yml` compares the latest tey/kit release's barrel with the snapshot and opens (or updates) one issue with the refresh commands.
+>>>>>>> origin/main
 
 ### Fixed
 
 - **`standards:install --dry-run` dry-runs the whole install.** Without `--extract` the flag was ignored and the install wrote skills, hooks and `tests/Arch/configuration.php`. Now every write goes through one place: a dry run lists each file it would write (`created` or `modified`) and writes nothing, and `--json` prints `{dry_run, installed, files}`.
 - **`preset security` leaves seeders and factories out.** `rand()`/`mt_rand()` there make fake data. New `Configuration::$securityExemptRoots` (default `database/seeders`, `database/factories`); app code stays checked.
 - **The kit export snapshot is tey/kit v0.5.13's barrel**, which adds `Badge`, `EmojiTray` and `RadioCardGroup`.
-
-### Changed
-
-- **A kit newer than the snapshot is an advisory, not a warning.** When the installed kit's exports are a superset of the snapshot, `standards:check` and `standards:pattern` print `Advisory: the pattern catalog's kit snapshot is older than the installed tey/kit (new: …)`. A kit missing snapshot components still warns.
-- **A weekly workflow opens the snapshot refresh.** `.github/workflows/kit-snapshot.yml` compares the latest tey/kit release's barrel with the snapshot and opens (or updates) one issue with the refresh commands.
 
 ## 0.11.27 - 2026-10-28
 

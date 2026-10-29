@@ -39,5 +39,7 @@ return [
         // A worker means whatever drains the queue, normally the managed queue, not an always-on process.
         'expect_worker' => $expectWorker === null ? null : filter_var($expectWorker, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE),
         'max_backlog_minutes' => (int) env('PREFLIGHT_QUEUE_MAX_BACKLOG_MINUTES', 15),
+        // True once the post-deploy "0 failed jobs" check reads both stores on a Laravel Cloud managed queue (queue.failed-store).
+        'failed_store_checked' => filter_var(env('PREFLIGHT_QUEUE_FAILED_STORE_CHECKED', false), FILTER_VALIDATE_BOOLEAN),
     ],
 ];
