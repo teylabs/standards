@@ -1,0 +1,9 @@
+{
+    "format": 1,
+    "owner": "tey/mod:installed",
+    "artifact": {
+        "files": {
+            "resources/js/pages/Workspace/Page.vue": "PHRlbXBsYXRlPgogICAgPHNlY3Rpb24gc3R5bGU9ImRpc3BsYXk6IGdyaWQiPktpdCBwYWdlPC9zZWN0aW9uPgo8L3RlbXBsYXRlPgo="
+        }
+    }
+}

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Rule `styling.pure-tailwind`: app UI styles with Tailwind classes and `@theme` tokens, not its own CSS.** It fails on a `<style>` block in a `.vue` file, a `style="..."` attribute in a `.vue` or Blade template, a `:style` binding that sets anything but CSS custom properties, and a `.css` file with selector rules beyond Tailwind's directives (`@import`, `@theme`, `@source`, `@plugin`, `@utility`, `@layer`), `@font-face` and `--token` declarations on `:root` and `.dark`. Kit-owned files (the Kit tree, and unedited files tey/mod records), Filament theme CSS and published views under `resources/views/vendor/` are not scanned. `:style="{ '--x': value }"` is the documented way to bind a server value. A file it cannot read or parse is a finding. Findings carry `file:line`. The rule is required, not opt-in.
+
+### Upgrading
+
+- **Apps may see new `styling.pure-tailwind` findings** on their own `.vue`, Blade and `.css` files. Fix them rather than allowlisting: replace `<style>` blocks and `style="..."` with Tailwind classes, move shared values to `@theme` tokens (or `:root`/`.dark` custom properties), use `@utility` for a reusable compound, and bind a dynamic value as a custom property (``:style="{ '--progress': `${p}%` }"`` with `class="w-(--progress)"`). Where styling has to stay for now, add an allowlist entry with `rule: 'styling.pure-tailwind'`, the finding's target and check, a `reason` and an `expires` date.
+
 ## 0.11.40 - 2026-10-29
 
 ### Fixed

@@ -1,0 +1,27 @@
+@import 'tailwindcss';
+@source '../js';
+@custom-variant dark (&:is(.dark *));
+
+@font-face {
+    font-family: 'Fixture Sans';
+    src: url('/fonts/fixture-sans.woff2') format('woff2');
+}
+
+@theme {
+    --color-brand: oklch(0.6 0.2 250);
+    --font-sans: 'Fixture Sans', ui-sans-serif, system-ui;
+}
+
+:root {
+    --background: oklch(1 0 0);
+}
+
+.dark {
+    --background: oklch(0.15 0 0);
+}
+
+@layer base {
+    body {
+        @apply bg-background;
+    }
+}
