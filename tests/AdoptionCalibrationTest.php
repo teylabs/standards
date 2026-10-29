@@ -113,7 +113,7 @@ test('Laravel Mix and webpack-era build tooling is never a library gap; a UI lib
     // Negative: every devDependency in the fixture is tooling. Positive: chart.js, and vue-loading-overlay, which only resembles
     // `*-loader`.
     expect(array_column($report['gaps'], 'subject'))->toBe(['npm:chart.js', 'npm:vue-loading-overlay'])
-        ->and($report['lists'])->toBe(2)
+        ->and($report['lists'])->toBe(3)
         ->and(Lists::tooling('resolve-url-loader'))->toBeTrue()
         ->and(Lists::tooling('loader'))->toBeFalse()
         ->and(Lists::tooling('@babel/runtime'))->toBeTrue()
@@ -154,4 +154,52 @@ test('facts that never fired: a kebab-case header button counts for has-page-act
         ->and($read('negative')['has-workspaces']['value'])->toBeFalse()
         ->and(Code::pascal('primary-button'))->toBe('PrimaryButton')
         ->and(Code::pascal('header'))->toBe('header');
+});
+
+test('route analyses apply a group\'s middleware and prefix to the route files it includes; a non-literal include is a blind spot', function () {
+    $facts = fn (string $case): Facts => new Facts(new App(calibrationBase('includes/'.$case)));
+
+    // Positive: an auth group that requires routes/app.php (Inertia::render pages), and `->group(base_path(...))`; a cycle terminates.
+    expect($facts('auth')->analysis('signed-in-pages'))->toBe(['value' => true, 'evidence' => 'routes/web.php:6 includes routes/app.php'])
+        ->and($facts('auth')->analysis('public-pages')['value'])->toBeFalse()
+        ->and($facts('auth')->blindSpots())->toBe([])
+        ->and($facts('cycle')->analysis('signed-in-pages')['value'])->toBeTrue()
+        // Negative: the same include under `web` only is not signed in (its pages are public), nor under an api group.
+        ->and($facts('guest')->analysis('signed-in-pages')['value'])->toBeFalse()
+        ->and($facts('guest')->analysis('public-pages'))->toBe(['value' => false, 'evidence' => null])
+        ->and($facts('api')->analysis('signed-in-pages')['value'])->toBeFalse();
+
+    // A non-literal include is not guessed at: routes/app.php is not read as signed in, and the include is recorded.
+    $dynamic = $facts('dynamic');
+    expect($dynamic->analysis('signed-in-pages')['value'])->toBeFalse()
+        ->and($dynamic->blindSpots())->toBe(["routes/web.php:6 includes a route file standards cannot resolve (__DIR__.'/'.config('app.area').'.php'); its routes are not read"])
+        ->and(calibrationReport('includes/dynamic', calibrationInventory(['layout.page' => [['kind' => 'file-name', 'globs' => ['Nothing.vue']]]]))['warnings'])
+        ->toContain("routes/web.php:6 includes a route file standards cannot resolve (__DIR__.'/'.config('app.area').'.php'); its routes are not read");
+});
+
+test('non-UI libraries are never gaps, as packages or as a component\'s imports; lodash, date libraries and UI libraries still are', function () {
+    $report = calibrationReport('non-ui', calibrationInventory(['layout.page' => [['kind' => 'file-name', 'globs' => ['Nothing.vue']]]]));
+
+    // Negative: every other dependency is on Lists::NON_UI, and ProjectLoader imports only axios and nanoid. Positive: dayjs (date
+    // display), vue-select, and ProjectPicker through vue-select alone.
+    expect(array_column($report['gaps'], 'subject'))->toBe(['resources/js/components/ProjectPicker.vue', 'npm:dayjs', 'npm:vue-select'])
+        ->and(array_column($report['gaps'], 'detail'))->toContain('app component: imports vue-select')
+        ->and($report['lists'])->toBe(3)
+        ->and(Lists::nonUi('@inertiajs/vue3'))->toBeTrue()
+        ->and(Lists::nonUi('@vueuse/components'))->toBeFalse()
+        ->and(Lists::nonUi('axios-mock-adapter'))->toBeFalse();
+});
+
+test('the component gap key is case-insensitive: BreadCrumbs.vue and Breadcrumbs.vue are one gap, citing every file', function () {
+    $report = calibrationReport('gap-case', calibrationInventory(['layout.page' => [['kind' => 'file-name', 'globs' => ['Nothing.vue']]]]));
+    $gaps = array_column($report['gaps'], null, 'subject');
+
+    // Positive: the two spellings merge under the first-seen path (layout/ sorts before nav/). Negative: BreadcrumbList is another
+    // name and stays its own gap.
+    expect(array_keys($gaps))->toBe(['resources/js/components/layout/BreadcrumbList.vue', 'resources/js/components/layout/Breadcrumbs.vue', 'npm:vue-select'])
+        ->and(array_column($gaps['resources/js/components/layout/Breadcrumbs.vue']['files'], 'file'))->toBe(['resources/js/components/layout/Breadcrumbs.vue', 'resources/js/components/nav/BreadCrumbs.vue'])
+        ->and(array_column($gaps['resources/js/components/layout/BreadcrumbList.vue']['files'], 'file'))->toBe(['resources/js/components/layout/BreadcrumbList.vue'])
+        ->and($report['summary']['gaps'])->toBe(3)
+        ->and(array_values(array_filter($report['blocking'], fn (array $item): bool => $item['subject'] === 'resources/js/components/layout/Breadcrumbs.vue'))[0]['evidence'])
+        ->toBe([['file' => 'resources/js/components/layout/Breadcrumbs.vue', 'line' => 2], ['file' => 'resources/js/components/nav/BreadCrumbs.vue', 'line' => 2]]);
 });

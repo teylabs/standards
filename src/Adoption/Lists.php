@@ -10,7 +10,7 @@ namespace Tey\Standards\Adoption;
  */
 final class Lists
 {
-    public const VERSION = 2;
+    public const VERSION = 3;
 
     /**
      * App component file names (without `.vue`) that are generic UI building blocks. A trailing `*` is a prefix match; anything else is
@@ -38,6 +38,17 @@ final class Lists
         '@playwright/test', 'playwright', 'husky', 'lint-staged', '@laravel/vite-plugin-wayfinder',
     ];
 
+    /**
+     * package.json dependencies that are not UI: HTTP clients, id generators, query strings, cookies, crypto, realtime transports,
+     * routing helpers, general utilities (lodash), the framework (Inertia, Vue, its router and stores) and validation. Never gap candidates. Same matching as TOOLING.
+     * Version 3 adds this list. Date libraries (dayjs, date-fns, moment, luxon) also stay gaps, because a kit surface may cover date display.
+     */
+    public const NON_UI = [
+        'axios', 'ky', 'ofetch', 'uuid', 'nanoid', 'qs', 'query-string', 'crypto-js', 'js-cookie', 'pusher-js', 'laravel-echo',
+        'socket.io-client', 'ziggy-js', '@inertiajs/*', 'vue', 'vue-router', 'pinia', 'vuex', '@vueuse/core', 'mitt', 'zod', 'yup', 'lodash',
+        'lodash-es',
+    ];
+
     public static function generic(string $name): bool
     {
         return self::matchesAny($name, self::GENERIC_NAMES);
@@ -51,6 +62,11 @@ final class Lists
     public static function tooling(string $package): bool
     {
         return self::matchesAny($package, self::TOOLING);
+    }
+
+    public static function nonUi(string $package): bool
+    {
+        return self::matchesAny($package, self::NON_UI);
     }
 
     /** @param list<string> $patterns */

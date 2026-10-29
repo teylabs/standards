@@ -40,6 +40,7 @@ export { default as FileInput } from './Form/FileInput.vue';
 export { default as FormActions } from './Form/FormActions.vue';
 export { default as FormCard } from './Form/FormCard.vue';
 export { default as FormFieldset } from './Form/FormFieldset.vue';
+export { default as FormStatus } from './Form/FormStatus.vue';
 // A form someone may read but not change (LockedForm.md): the wrapper, the renderless EditOnly for caller-owned edit actions, and the context every kit control reads.
 export { default as LockedForm } from './Form/LockedForm.vue';
 export { default as EditOnly } from './Form/EditOnly.vue';
@@ -57,6 +58,8 @@ export { default as InputSelect } from './Form/InputSelect.vue';
 export type { InputSelectGroup, InputSelectMessages, InputSelectOption, InputSelectOptions, InputSelectValue } from './Form/inputSelect';
 export { default as Textarea } from './Form/Textarea.vue';
 export { default as RadioCardGroup } from './Form/RadioCardGroup.vue';
+export { default as InputRichText } from './Form/InputRichText.vue';
+export { emptyDocument, isSafeColor, isSafeFontFamily, isSafeFontSize, isSafeLink, RICH_TEXT_ALLOW, RICH_TEXT_TOOLS, type RichTextAlign, type RichTextAllow, type RichTextStyleMark, type ContentError, type FileIntent, type RichBlock, type RichDocument, type RichInline, type RichListItem, type RichMark, type RichTextTool } from './Form/richText';
 export type { RadioCardOption } from './Form/RadioCardGroup.vue';
 export { default as EmojiTray } from './Form/EmojiTray.vue';
 export { DEFAULT_REACTIONS } from './Form/emojiTray';
@@ -81,7 +84,7 @@ export { useScrollList } from './List/useScrollList';
 export type { ListAction, ListItem, ScrollPayload } from './List/useScrollList';
 export { default as ActivityStream } from './Feed/ActivityStream.vue';
 export { useCursorFeed, type CursorFeedConfig } from './Feed/useCursorFeed';
-export { activitySections, createCursorFeed, trustedHtml, type ActivityDay, type ActivityEntry, type ActivityHeadline, type ActivityMeta, type ActivityTone, type CursorFeedPage } from './Feed/activity';
+export { ACTIVITY_TONES, activitySections, activityTone, createCursorFeed, trustedHtml, type ActivityDay, type ActivityEntry, type ActivityHeadline, type ActivityMeta, type ActivityTone, type CursorFeedPage } from './Feed/activity';
 export type * from './contract';
 // Computed values with their working (ComputedValue.md).
 export { default as ComputedValue } from './Explanation/ComputedValue.vue';
