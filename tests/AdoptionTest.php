@@ -480,10 +480,11 @@ test('the standards:adoption command prints the table, --json and the exit codes
             ->and($artisan->output())->toContain('describes tey/kit, which the app installs; --ci reads only the installed package\'s own inventory');
         expect($artisan->call('standards:adoption', $override + ['--compliance' => true]))->toBe(2);
         expect($artisan->call('standards:adoption', $override))->toBe(0)
-            ->and($artisan->output())->toContain('Warning: vendor inventory for tey/kit overridden by '.adoptionFixture('inventories/kit.json'));
+            // Paths in the report use forward slashes on every OS.
+            ->and($artisan->output())->toContain('Warning: vendor inventory for tey/kit overridden by '.str_replace('\\', '/', adoptionFixture('inventories/kit.json')));
         expect($artisan->call('standards:adoption', $override + ['--json' => true]))->toBe(0);
         $json = json_decode($artisan->output(), true);
-        expect($json['overridden'])->toBe([['package' => 'tey/kit', 'by' => adoptionFixture('inventories/kit.json'), 'vendor' => 'vendor/tey/kit/resources/adoption/surfaces.json']])
+        expect($json['overridden'])->toBe([['package' => 'tey/kit', 'by' => str_replace('\\', '/', adoptionFixture('inventories/kit.json')), 'vendor' => 'vendor/tey/kit/resources/adoption/surfaces.json']])
             ->and($json['inventories'][0]['origin'])->toBe('option');
         // A package the app doesn't install may be added in every mode (the calibration case).
         $add = ['--inventory' => [adoptionFixture('inventories/reports.json')], '--json' => true];
@@ -564,8 +565,9 @@ test('an --inventory replacing an installed package fails closed under --ci and 
         ->and(fn () => $run('compliance', [$kit]))->toThrow(AdoptionError::class, '--compliance reads only the installed package\'s own inventory');
 
     $report = $run('report', [$kit]);
-    expect($report['overridden'])->toBe([['package' => 'tey/kit', 'by' => $kit, 'vendor' => null]])
-        ->and($report['warnings'][0])->toBe('inventory for tey/kit (installed) overridden by '.$kit.'; --ci and --compliance refuse this.')
+    $shown = str_replace('\\', '/', $kit);
+    expect($report['overridden'])->toBe([['package' => 'tey/kit', 'by' => $shown, 'vendor' => null]])
+        ->and($report['warnings'][0])->toBe('inventory for tey/kit (installed) overridden by '.$shown.'; --ci and --compliance refuse this.')
         ->and($report['rows'])->not->toBe([]);
 
     // acme/reports is not installed here: adding it is the calibration case, allowed in every mode.
