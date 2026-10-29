@@ -24,7 +24,7 @@ final readonly class Inventory
         'template-tag' => ['tags' => 'list', 'min' => 'int', 'where' => 'attributes', 'except' => 'attributes', 'scope' => 'scope'],
         'mail-view' => ['without' => 'list', 'scope' => 'scope'],
         'php-class' => ['extends' => 'list', 'implements' => 'list', 'names' => 'list'],
-        'class-reference' => ['classes' => 'classes', 'min' => 'int', 'scope' => 'scope'],
+        'class-reference' => ['classes' => 'classes', 'paths' => 'items', 'min' => 'int', 'scope' => 'scope'],
         'composer' => ['packages' => 'list'],
         'migration' => ['tables' => 'list'],
     ];

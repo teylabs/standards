@@ -480,7 +480,9 @@ final class Scanner
                 break;
             case 'class-reference':
                 foreach ($this->owned($this->app->php()) as $path) {
-                    if (! $inScope($path)) {
+                    // `paths` narrows the app PHP read, with file-name's glob rules: a glob with `/` matches the path case-insensitively.
+                    $inPaths = ! isset($signal['paths']) || array_filter($signal['paths'], fn (string $glob): bool => str_contains($glob, '/') ? App::pathGlob($glob, $path) : App::glob($glob, basename($path))) !== [];
+                    if (! $inScope($path) || ! $inPaths) {
                         continue;
                     }
                     $source = $this->app->source($path);

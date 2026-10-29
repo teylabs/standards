@@ -70,6 +70,15 @@ test('scope reads the PHP path like the UI signals do', function () {
     expect(classReferenceRow(['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'scope' => 'public']))->toBe(['status' => 'missing', 'evidence' => []]);
 });
 
+test('paths keeps only app PHP matching a glob: app/Filament/** fires, the same kind of reference under app/Http does not', function () {
+    expect(classReferenceRow(['kind' => 'class-reference', 'classes' => ['Filament\Forms\Components\TextInput'], 'paths' => ['app/Filament/**']]))->toBe(['status' => 'hand-rolled', 'evidence' => ['app/Filament/Resources/PostResource.php:11 1 × reference to Filament\Forms\Components\TextInput']])
+        ->and(classReferenceRow(['kind' => 'class-reference', 'classes' => ['Filament\Forms\Components\TextInput'], 'paths' => ['app/filament/**']]))->toBe(['status' => 'hand-rolled', 'evidence' => ['app/Filament/Resources/PostResource.php:11 1 × reference to Filament\Forms\Components\TextInput']])
+        ->and(classReferenceRow(['kind' => 'class-reference', 'classes' => ['Filament\Forms\Components\TextInput']])['evidence'])->toBe(['app/Filament/Resources/PostResource.php:11 1 × reference to Filament\Forms\Components\TextInput', 'app/Http/Controllers/SearchController.php:9 1 × reference to Filament\Forms\Components\TextInput'])
+        ->and(classReferenceRow(['kind' => 'class-reference', 'classes' => ['Filament\Forms\Components\Select']]))->toBe(['status' => 'hand-rolled', 'evidence' => ['app/Http/Controllers/SearchController.php:9 1 × reference to Filament\Forms\Components\Select']])
+        ->and(classReferenceRow(['kind' => 'class-reference', 'classes' => ['Filament\Forms\Components\Select'], 'paths' => ['app/Filament/**']]))->toBe(['status' => 'missing', 'evidence' => []])
+        ->and(classReferenceRow(['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'paths' => ['app/Generated/**', 'vendor/**']]))->toBe(['status' => 'missing', 'evidence' => []]);
+});
+
 test('a class-reference signal computes a fact', function () {
     $data = classReferenceData(['kind' => 'file-name', 'globs' => ['NoSuchFile.vue']]);
     $data['facts'][] = ['id' => 'renders-pdf', 'description' => 'The app renders PDFs with mpdf.', 'computed' => ['signals' => [['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf']]]]];
@@ -146,6 +155,9 @@ test('class-reference and file-name except fail closed with exit 2', function (a
     'min zero' => [['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'min' => 0], 'min must be an integer of at least 1'],
     'min a string' => [['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'min' => '2'], 'min must be an integer of at least 1'],
     'bad scope' => [['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'scope' => 'guest'], 'is not one of signed-in, public, any'],
+    'paths a string' => [['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'paths' => 'app/**'], 'paths must be a list'],
+    'paths empty' => [['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'paths' => []], 'paths must be a non-empty list of strings'],
+    'paths non-string' => [['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'paths' => [1]], 'paths must be a list of non-empty strings'],
     'except a string' => [['kind' => 'file-name', 'globs' => ['*Card.vue'], 'except' => '**/AuthenticationCard.vue'], 'except must be a list'],
     'except empty' => [['kind' => 'file-name', 'globs' => ['*Card.vue'], 'except' => []], 'except must be a non-empty list of strings'],
     'except non-string' => [['kind' => 'file-name', 'globs' => ['*Card.vue'], 'except' => [true]], 'except must be a list of non-empty strings'],
