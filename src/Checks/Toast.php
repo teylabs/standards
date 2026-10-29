@@ -78,7 +78,7 @@ final class Toast
     /**
      * Whether a `with(...)` / `flash(...)` call's first argument may name an outcome key: a literal outcome key, an array with a literal
      * outcome key, or, on a chain provably rooted in a redirect or response, anything the rule can't read key by key (a spread, a non-literal
-     * array key, a lone non-array argument such as `->with($data)`), which fails closed. Implicit and integer keys are literal and never outcomes.
+     * array key, a lone non-array argument such as `->with($data)`, a non-literal key in `->with($key, $value)`), which fails closed. Implicit and integer keys are literal and never outcomes.
      */
     private static function flashesOutcome(Node\Expr\MethodCall|Node\Expr\StaticCall $call): bool
     {
@@ -112,7 +112,7 @@ final class Toast
             return false;
         }
 
-        return $redirect && count($arguments) === 1 && $first->name === null && ! $key instanceof Node\Scalar && ! $key instanceof Node\Expr\Closure && ! $key instanceof Node\Expr\ArrowFunction;
+        return $redirect && $first->name === null && ! $key instanceof Node\Scalar && ! $key instanceof Node\Expr\Closure && ! $key instanceof Node\Expr\ArrowFunction;
     }
 
     /**
