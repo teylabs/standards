@@ -199,6 +199,9 @@ final class Scanner
             }
         }
 
+        // A route include standards could not resolve is a blind spot: recorded, never guessed at.
+        array_push($warnings, ...$this->facts->blindSpots());
+
         $active = $mode === 'report' ? $blocking['compliance'] : $blocking[$mode];
 
         return [

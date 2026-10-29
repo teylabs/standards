@@ -155,3 +155,24 @@ test('facts that never fired: a kebab-case header button counts for has-page-act
         ->and(Code::pascal('primary-button'))->toBe('PrimaryButton')
         ->and(Code::pascal('header'))->toBe('header');
 });
+
+test('route analyses apply a group\'s middleware and prefix to the route files it includes; a non-literal include is a blind spot', function () {
+    $facts = fn (string $case): Facts => new Facts(new App(calibrationBase('includes/'.$case)));
+
+    // Positive: an auth group that requires routes/app.php (Inertia::render pages), and `->group(base_path(...))`; a cycle terminates.
+    expect($facts('auth')->analysis('signed-in-pages'))->toBe(['value' => true, 'evidence' => 'routes/web.php:6 includes routes/app.php'])
+        ->and($facts('auth')->analysis('public-pages')['value'])->toBeFalse()
+        ->and($facts('auth')->blindSpots())->toBe([])
+        ->and($facts('cycle')->analysis('signed-in-pages')['value'])->toBeTrue()
+        // Negative: the same include under `web` only is not signed in (its pages are public), nor under an api group.
+        ->and($facts('guest')->analysis('signed-in-pages')['value'])->toBeFalse()
+        ->and($facts('guest')->analysis('public-pages'))->toBe(['value' => false, 'evidence' => null])
+        ->and($facts('api')->analysis('signed-in-pages')['value'])->toBeFalse();
+
+    // A non-literal include is not guessed at: routes/app.php is not read as signed in, and the include is recorded.
+    $dynamic = $facts('dynamic');
+    expect($dynamic->analysis('signed-in-pages')['value'])->toBeFalse()
+        ->and($dynamic->blindSpots())->toBe(["routes/web.php:6 includes a route file standards cannot resolve (__DIR__.'/'.config('app.area').'.php'); its routes are not read"])
+        ->and(calibrationReport('includes/dynamic', calibrationInventory(['layout.page' => [['kind' => 'file-name', 'globs' => ['Nothing.vue']]]]))['warnings'])
+        ->toContain("routes/web.php:6 includes a route file standards cannot resolve (__DIR__.'/'.config('app.area').'.php'); its routes are not read");
+});

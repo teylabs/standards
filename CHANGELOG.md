@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`standards:adoption`: route analyses follow route files a group includes.** A group whose callback `require`s or `include`s another route file, or `->group(base_path('routes/x.php'))` / `->group(__DIR__.'/x.php')`, now applies its middleware and prefix to that file's routes, through chains of includes, with loops cut off. An auth group that requires `routes/app.php` with `Inertia::render` pages makes `signed-in-pages` true, and those routes are no longer `public-pages`; under an `api` group they never count. Only literal paths (`__DIR__.'/…'`, `base_path('…')`, a quoted string) are resolved; a non-literal include is not read and is reported as a warning (a blind spot).
+
 ## 0.11.47 - 2026-10-29
 
 ### Fixed

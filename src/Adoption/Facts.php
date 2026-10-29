@@ -29,8 +29,14 @@ final class Facts
     /** An API route group: the `api` middleware (alone or with others) or an `api` URI prefix. */
     private const API = '~[\'"]api[\'"]|\bprefix\s*\(\s*[\'"]/?api(?:/|[\'"])~';
 
+    /** Auth middleware in a route statement or group: `'auth'`, `'auth:<guard>'` or Authenticate::class. */
+    private const AUTH = '~[\'"]auth(?::[\w,-]+)?[\'"]|\bAuthenticate::class~';
+
     /** @var array<string, array{value: bool, evidence: ?string}> */
     private array $values = [];
+
+    /** @var ?array{into: array<string, list<array{from: string, line: int, context: string}>>, blind: list<string>} */
+    private ?array $includes = null;
 
     /** @param  ?\Closure(array<string, mixed>): list<array{file: string, line: ?int, detail: string}>  $signals  fires one signal (the Scanner's evaluator) */
     public function __construct(private readonly App $app, private readonly ?\Closure $signals = null) {}
@@ -216,19 +222,180 @@ final class Facts
             }
             $source = $this->app->source($path);
             $code = Code::withoutComments($source);
-            preg_match_all('~[\'"]auth(?::[\w,-]+)?[\'"]|\bAuthenticate::class~', $code, $matches, PREG_OFFSET_CAPTURE);
-            foreach ($matches[0] as [, $offset]) {
-                $statement = self::statement($code, $offset);
-                if (preg_match(self::API, $statement) === 1) {
+            foreach ($this->contexts($path) as $context) {
+                if (preg_match(self::API, $context['middleware']) === 1) {
                     continue;
                 }
-                if (preg_match(self::RENDERS, $statement) === 1 || $this->rendersThroughController($statement)) {
-                    return $path.':'.App::line($source, $offset);
+                // The whole file inherits an auth group it is included from: any page it renders is signed in.
+                if (preg_match(self::AUTH, $context['middleware']) === 1 && (preg_match(self::RENDERS, $code) === 1 || $this->rendersThroughController($code))) {
+                    return $context['via'].' includes '.$path;
+                }
+                preg_match_all(self::AUTH, $code, $matches, PREG_OFFSET_CAPTURE);
+                foreach ($matches[0] as [, $offset]) {
+                    $statement = self::statement($code, $offset);
+                    if (preg_match(self::API, $statement) === 1) {
+                        continue;
+                    }
+                    if (preg_match(self::RENDERS, $statement) === 1 || $this->rendersThroughController($statement)) {
+                        return $path.':'.App::line($source, $offset);
+                    }
                 }
             }
         }
 
         return null;
+    }
+
+    /**
+     * Route-file includes that could not be resolved to a literal app file (a variable, a call, a missing file or a path outside the
+     * app), as `file:line` notes. Their routes are not read, so a fact they would make true reads false: a blind spot, never a guess.
+     *
+     * @return list<string>
+     */
+    public function blindSpots(): array
+    {
+        return $this->includes()['blind'];
+    }
+
+    /**
+     * The group contexts a route file's routes run in: one per chain of literal includes that reaches it from a route file nothing
+     * includes, each with the middleware and prefix text of every enclosing group along the chain and the first include site
+     * (`via`). A route file nothing includes has one empty context. A chain that loops back on itself is dropped.
+     *
+     * @param  list<string>  $seen
+     * @return list<array{middleware: string, via: string}>
+     */
+    private function contexts(string $path, array $seen = []): array
+    {
+        $includes = $this->includes()['into'][$path] ?? [];
+        if ($includes === []) {
+            return [['middleware' => '', 'via' => '']];
+        }
+        $contexts = [];
+        foreach ($includes as $include) {
+            if (in_array($include['from'], [...$seen, $path], true)) {
+                continue;
+            }
+            foreach ($this->contexts($include['from'], [...$seen, $path]) as $outer) {
+                $contexts[] = ['middleware' => trim($outer['middleware'].' '.$include['context']), 'via' => $outer['via'] !== '' ? $outer['via'] : $include['from'].':'.$include['line']];
+            }
+        }
+
+        return $contexts;
+    }
+
+    /**
+     * Every `require`/`include` (and `_once`) and `->group(<file>)` in a route file, resolved when its path is literal:
+     * `__DIR__.'/x.php'`, `base_path('x.php')` or a quoted string (app-relative, else relative to the including file). Each
+     * records the header text of its enclosing groups (and of its own `->group()` statement), which carry their middleware and prefix.
+     *
+     * @return array{into: array<string, list<array{from: string, line: int, context: string}>>, blind: list<string>}
+     */
+    private function includes(): array
+    {
+        if ($this->includes !== null) {
+            return $this->includes;
+        }
+        $into = [];
+        $blind = [];
+        foreach ($this->app->routes() as $path) {
+            $source = $this->app->source($path);
+            $code = Code::withoutComments($source);
+            preg_match_all('~\b(?:require|include)(?:_once)?\b\s*(?=[^;]*;)|->\s*group\s*\(\s*(?!function\b|fn\b|static\b|\[|\$\w+\s*=>)~i', $code, $matches, PREG_OFFSET_CAPTURE);
+            foreach ($matches[0] as [$keyword, $offset]) {
+                $grouped = str_starts_with($keyword, '->');
+                $from = $offset + strlen($keyword);
+                $expression = $grouped ? self::argument($code, $from) : trim(substr($code, $from, (int) strpos($code, ';', $from) - $from));
+                $line = App::line($source, $offset);
+                $target = $this->resolveInclude($path, $expression);
+                if ($target === null) {
+                    $blind[] = $path.':'.$line.' includes a route file standards cannot resolve ('.preg_replace('~\s+~', ' ', $expression).'); its routes are not read';
+
+                    continue;
+                }
+                $context = self::enclosingHeaders($code, $offset).($grouped ? ' '.substr($code, self::bounds($code, $offset)[0], $offset - self::bounds($code, $offset)[0]) : '');
+                $into[$target][] = ['from' => $path, 'line' => $line, 'context' => trim($context)];
+            }
+        }
+
+        return $this->includes = ['into' => $into, 'blind' => $blind];
+    }
+
+    /** The app-relative route file a literal include expression names, or null when it is not literal or names no app route file. */
+    private function resolveInclude(string $from, string $expression): ?string
+    {
+        $expression = trim($expression);
+        while (preg_match('~^\((.*)\)$~s', $expression, $inner) === 1) {
+            $expression = trim($inner[1]);
+        }
+        $literal = '([\'"])([^\'"$\\\\]+)\1';
+        $candidates = match (true) {
+            preg_match('~^__DIR__\s*\.\s*'.$literal.'$~', $expression, $m) === 1 => [dirname($from).'/'.$m[2]],
+            preg_match('~^(?:\\\\?base_path)\s*\(\s*'.$literal.'\s*\)$~', $expression, $m) === 1 => [$m[2]],
+            preg_match('~^'.$literal.'$~', $expression, $m) === 1 => [$m[2], dirname($from).'/'.$m[2]],
+            default => [],
+        };
+        foreach ($candidates as $candidate) {
+            $parts = [];
+            foreach (explode('/', str_replace('\\', '/', $candidate)) as $part) {
+                if ($part === '' || $part === '.') {
+                    continue;
+                }
+                if ($part === '..') {
+                    if (array_pop($parts) === null) {
+                        continue 2;
+                    }
+
+                    continue;
+                }
+                $parts[] = $part;
+            }
+            $relative = implode('/', $parts);
+            if ($relative !== '' && in_array($relative, $this->app->routes(), true)) {
+                return $relative;
+            }
+        }
+
+        return null;
+    }
+
+    /** The argument of a call starting at $offset, up to its closing parenthesis. */
+    private static function argument(string $code, int $offset): string
+    {
+        $depth = 0;
+        for ($i = $offset, $length = strlen($code); $i < $length; $i++) {
+            $char = $code[$i];
+            if ($char === '(' || $char === '[' || $char === '{') {
+                $depth++;
+            } elseif ($char === ')' || $char === ']' || $char === '}') {
+                if ($depth === 0) {
+                    return substr($code, $offset, $i - $offset);
+                }
+                $depth--;
+            }
+        }
+
+        return substr($code, $offset);
+    }
+
+    /** The header (from its statement start to the `{`) of every group body enclosing $offset, outermost first. */
+    private static function enclosingHeaders(string $code, int $offset): string
+    {
+        $open = [];
+        for ($i = 0; $i < $offset; $i++) {
+            if ($code[$i] === '{') {
+                $open[] = $i;
+            } elseif ($code[$i] === '}') {
+                array_pop($open);
+            }
+        }
+        $headers = [];
+        foreach ($open as $brace) {
+            $start = self::bounds($code, $brace)[0];
+            $headers[] = substr($code, $start, $brace - $start);
+        }
+
+        return implode(' ', $headers);
     }
 
     /** Whether the statement names an app controller (`Name::class`) whose class file renders a page. */
@@ -253,6 +420,14 @@ final class Facts
      * nested brackets, so a group closure is read in full and a chained `->middleware('auth')` sees the route before it.
      */
     private static function statement(string $code, int $offset): string
+    {
+        [$start, $end] = self::bounds($code, $offset);
+
+        return substr($code, $start, $end - $start);
+    }
+
+    /** @return array{int, int} the start and end offsets of the statement around $offset (see statement()) */
+    private static function bounds(string $code, int $offset): array
     {
         $start = 0;
         $depth = 0;
@@ -293,13 +468,19 @@ final class Facts
             }
         }
 
-        return substr($code, $start, $end - $start);
+        return [$start, $end];
     }
 
     /** A top-level (ungrouped) GET/view/inertia route statement with no `auth` in it and not an auth screen's URI. */
     private function publicRoute(): ?string
     {
         foreach ($this->app->routes() as $path) {
+            // A file included from a group with middleware (auth, or any other) inherits it: its routes are not top-level public routes.
+            foreach ($this->contexts($path) as $context) {
+                if (str_contains($context['middleware'], 'auth') || str_contains($context['middleware'], 'middleware')) {
+                    continue 2;
+                }
+            }
             $source = $this->app->source($path);
             $code = Code::withoutComments($source);
             preg_match_all('~\bRoute::(?:get|view|inertia)\s*\(\s*([\'"])([^\'"]*)\1~', $code, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
