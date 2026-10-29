@@ -21,6 +21,12 @@
 - Apps can drop the rule 19 entries for traits that use `InteractsWithMedia`, and the `no-dev` entries for providers registered behind `class_exists` of the same class.
 - Declare landlord provisioning commands in the trailing `landlordCommands` argument of `Configuration`, each with the reason it runs outside any tenant, and drop the `tenant-aware` allowlist entries that covered them. Keep the allowlist (with an expiry) for cross-tenant admin commands that are debt rather than design.
 
+## 0.11.37 - 2026-10-29
+
+### Added
+
+- **`ui-page.public-legal` has a recipe**: the kit's PublicShell, PublicMeta and Public/Markdown page, as a `draft` leaf with its rules (no generator yet, so not `ready`). It answers "marketing, product or legal (privacy, terms)" and replaces the `gap` it was.
+
 ## 0.11.36 - 2026-10-29
 
 ### Fixed

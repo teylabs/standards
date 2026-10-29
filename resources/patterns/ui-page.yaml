@@ -280,12 +280,21 @@ nodes:
     evidence: { apps: 3, count: 3, prs: 3, past_apps: 17, past_count: 98 }
   - id: ui-page.public-legal
     recipe: Public page
-    summary: A sessionless public shell with config-driven product and legal links and markdown content.
-    kit: []
-    checks: []
-    paths: []
-    keywords: [public, marketing, landing, privacy, terms, legal]
-    status: gap
+    summary: "A sessionless public page (landing, help, privacy, terms, a guest's error) in the kit's PublicShell: route Public/ pages to it from the layout callback, set each page's head with PublicMeta, and serve legal and help text through the Public/Markdown page, sanitized on the server. There is no generator yet."
+    kit: ['shell PublicShell (pages/Workspace/Partials/PublicShell.vue)', 'shell PublicMeta (pages/Workspace/Partials/PublicMeta.vue)', 'shell Public/Markdown/Page with PublicMarkdown::page()', '@kit/ui Toaster']
+    checks: ['js-imports', 'ui new-tab']
+    paths: ['resources/js/pages/Public/**', 'resources/js/app.ts']
+    keywords: [public, marketing, landing, privacy, terms, legal, help, public page, guest error]
+    status: draft
+    rules:
+      - "The layout callback routes public pages to the kit's PublicShell, imported from @/pages/Workspace/Partials/PublicShell.vue (a guest's Workspace/Error/Page too); never a hand-rolled public header and footer."
+      - "Each public page sets its head with PublicMeta (title, description, canonical, Open Graph, Twitter card): no tracking tags."
+      - "Legal and help text is markdown rendered on the server by PublicMarkdown::page() (raw HTML stripped, unsafe links refused) into Public/Markdown/Page; the page shows only that sanitized HTML."
+      - "The footer's links come from one source: the shared shell footer (the brand config), or the shell's footer-links and footer-note props on a host without session-ui; never a second config for the same links."
+      - "A branded site uses the shell's opt-in props (width=site, align-bars, tone=bar, pin-footer, padded, theme) and its slots (mark, nav, cta, footer-mark), not a fork of the shell."
+      - "Tests: the skip link to #content, the CTA states, the footer links, and phone width (390px) and labelled landmarks. The kit's own coverage of these is by source; there is no browser or axe run, so accessibility is checked at source level, not rendered."
+    related: [ui-page.public.byo]
+    graduate: "Graduate to ready when a generator scaffolds a public page and its route."
     evidence: { apps: 8, count: 15, prs: 15, past_apps: 12, past_count: 37 }
   - id: ui-page.exhibit
     recipe: Demo exhibit
