@@ -69,6 +69,17 @@ test('[styling.pure-tailwind] a :style binding with a real CSS property, or one 
     ]);
 });
 
+test('[styling.pure-tailwind] a conditional :style passes when every branch is custom properties only, {}, undefined or null; one bad or unreadable branch fails', function () {
+    $check = ':style binds a CSS property other than a custom property';
+    expect(tailwindFindings('conditional-style'))->toBe([
+        ['target' => 'resources/js/pages/Avatar.vue', 'check' => $check, 'line' => 12],
+        ['target' => 'resources/js/pages/Avatar.vue', 'check' => $check, 'line' => 13],
+        ['target' => 'resources/js/pages/Avatar.vue', 'check' => $check, 'line' => 14],
+        ['target' => 'resources/js/pages/Avatar.vue', 'check' => $check, 'line' => 15],
+        ['target' => 'resources/js/pages/Avatar.vue', 'check' => $check, 'line' => 16],
+    ]);
+});
+
 test('[styling.pure-tailwind] kit-owned files are skipped: the Kit tree and an unedited file tey/mod records', function () {
     expect(tailwindFindings('kit-owned'))->toBe([]);
 });
