@@ -173,3 +173,19 @@ test('the bin/standards adoption script runs the Cli', function () {
 
     expect($exit)->toBe(0)->and([$row['facts'], $row['row']])->toBe([['has-forms' => true], 'hand-rolled']);
 });
+
+test('bin/standards adoption runs a {kind: rule} ui.kit-shell signal on a bare tree with the default configuration, firing and quiet', function () {
+    $root = dirname(__DIR__);
+    $inventory = $root.'/fixtures/Adoption/inventories/kit.json';
+    $layout = function (string $tree) use ($root, $inventory): array {
+        expect(is_file($root.'/fixtures/Adoption/'.$tree.'/'.Cli::CONFIGURATION))->toBeFalse('the tree must be bare');
+        $result = Cli::run(['--base', $root.'/fixtures/Adoption/'.$tree, '--inventory', $inventory, '--json'], $root);
+        expect($result['exit'])->toBe(0, $result['stdout'].$result['stderr']);
+        $row = collect(json_decode($result['stdout'], true, flags: JSON_THROW_ON_ERROR)['rows'])->firstWhere('id', 'layout.page');
+
+        return [$row['status'], array_map(fn (array $e): string => $e['file'].(isset($e['line']) ? ':'.$e['line'] : '').' '.$e['detail'], $row['evidence'])];
+    };
+
+    expect($layout('hand-rolled'))->toBe(['hand-rolled', ['resources/js/layouts/AppHeader.vue:6 [ui.kit-shell] signed-in <header> outside kit\'s shell']])
+        ->and($layout('adopted'))->toBe(['adopted', ['resources/js/pages/Dashboard/Page.vue:3 imports Page from @/components/Kit']]);
+});
