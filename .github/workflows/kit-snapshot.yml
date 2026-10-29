@@ -1,0 +1,52 @@
+name: Kit snapshot
+
+# Opens (or updates) one issue when the latest tey/kit release's @kit/ui barrel differs from
+# resources/patterns/kit-exports.json, so the snapshot refresh lands in the next standards release
+# instead of apps seeing the lag first. Weekly, and on demand.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Compare the snapshot with the latest tey/kit release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release view -R teylabs/kit --json tagName --jq .tagName)
+          git clone --quiet --depth 1 --branch "$tag" https://github.com/teylabs/kit.git "$RUNNER_TEMP/kit"
+          php -r 'require "src/Patterns/KitExports.php"; $s = Tey\Standards\Patterns\KitExports::snapshot(); $k = Tey\Standards\Patterns\KitExports::parse(file_get_contents($argv[1])); $new = array_values(array_diff($k, $s)); $gone = array_values(array_diff($s, $k)); file_put_contents(getenv("GITHUB_ENV"), "KIT_NEW=".implode(", ", $new)."\nKIT_GONE=".implode(", ", $gone)."\n", FILE_APPEND);' "$RUNNER_TEMP/kit/resources/features/core/components/Kit/index.ts.stub"
+          echo "KIT_TAG=$tag" >> "$GITHUB_ENV"
+      - name: Open or update the refresh issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KIT_NEW}${KIT_GONE}" ]; then
+            echo "The snapshot matches tey/kit ${KIT_TAG}."
+            exit 0
+          fi
+          title="Refresh the kit export snapshot to tey/kit ${KIT_TAG}"
+          body=$(printf 'The pattern catalog snapshot (resources/patterns/kit-exports.json) differs from tey/kit %s.\n\n- New in the kit: %s\n- Gone from the kit: %s\n\nRefresh it from a kit checkout at that tag:\n\n    php bin/standards kit-exports --refresh --from=<kit checkout>\n    php bin/standards patterns:compile\n\nthen update fixtures/KitExports to the same barrel and release a patch.' "$KIT_TAG" "${KIT_NEW:-none}" "${KIT_GONE:-none}")
+          existing=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "Refresh the kit export snapshot in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" -R "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

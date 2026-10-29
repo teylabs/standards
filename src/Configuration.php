@@ -43,6 +43,7 @@ final readonly class Configuration
      * @param  list<string>  $uiToastRenderers  project-relative files allowed to import the toast library
      * @param  list<string>  $testBasePaths
      * @param  list<string>  $testRoots  where the test files live, for the php-tag rule (globs allowed)
+     * @param  list<string>  $securityExemptRoots  project-relative folders `preset security` leaves out: seeders and factories use rand()/mt_rand() for fake data, which is normal there (app code stays checked)
      * @param  list<string>  $versionedModels  for rule `versioned-writes`: traits or classes that make a model versioned (stale-write guarded), beyond the default detection of a trait named Versioned, HasVersion or OptimisticLock
      * @param  string  $versionColumn  the column a versioned model bumps on every write
      * @param  list<string>  $tenantKeys  the column a single-database app scopes tenants by, for rule `tenant-aware`'s default detection (a model with it in $fillable or in its table's migration is tenant-scoped)
@@ -102,6 +103,7 @@ final readonly class Configuration
         public array $presetIgnores = [],
         public array $tenantKeys = ['workspace_id', 'tenant_id'],
         public array $versionedModels = [],
+        public array $securityExemptRoots = ['database/seeders', 'database/factories'],
         public string $versionColumn = 'version',
         public array $tenantModels = ['Spatie\\Multitenancy\\Models\\Concerns\\UsesTenantConnection'],
         public array $boostSkills = [

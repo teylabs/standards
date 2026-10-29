@@ -260,3 +260,53 @@ test('standards:install --extract --dry-run --json plans without writing; --extr
     expect($again->getStatusCode())->toBe(2)
         ->and(json_decode($again->getDisplay(), true, flags: JSON_THROW_ON_ERROR)['error'])->toContain('already exists');
 });
+
+/** Every file under $base with its bytes, so a dry run can be shown to write nothing (no files, no directories). */
+function treeSnapshot(string $base): array
+{
+    $tree = [];
+
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($base, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST) as $path => $file) {
+        $tree[str_replace('\\', '/', substr($path, strlen($base)))] = $file->isDir() ? 'dir' : (string) file_get_contents($path);
+    }
+
+    ksort($tree);
+
+    return $tree;
+}
+
+test('standards:install --dry-run (without --extract) plans the whole install and writes 0 files; the real run writes exactly that plan', function () {
+    $base = sys_get_temp_dir().'/standards-install-'.bin2hex(random_bytes(6));
+    mkdir($base, 0777, true);
+    file_put_contents($base.'/composer.json', json_encode(['require' => ['laravel/framework' => '^13'], 'require-dev' => ['laravel/boost' => '^2'], 'autoload' => ['psr-4' => ['App\\' => 'app/']]]));
+    file_put_contents($base.'/AGENTS.md', "# App\n");
+    mkdir($base.'/app');
+    ExtractTemp::$dirs[] = $base;
+    $before = treeSnapshot($base);
+
+    $dry = installCommand($base, ['--dry-run' => true, '--json' => true]);
+    $plan = json_decode($dry->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($dry->getStatusCode())->toBe(0)
+        ->and(treeSnapshot($base))->toBe($before)
+        ->and($plan['dry_run'])->toBeTrue()
+        ->and($plan['installed'])->toBeFalse()
+        ->and(array_column($plan['files'], 'action', 'path'))->toMatchArray([
+            'tests/Arch/configuration.php' => 'created',
+            'tests/Arch/ConformanceTest.php' => 'created',
+            'AGENTS.md' => 'modified',
+            '.claude/settings.json' => 'created',
+            'boost.json' => 'created',
+        ])
+        ->and(array_filter(array_column($plan['files'], 'path'), fn (string $path): bool => str_starts_with($path, '.ai/skills/')))->not->toBeEmpty();
+
+    $text = installCommand($base, ['--dry-run' => true]);
+
+    expect($text->getDisplay())->toContain('· AGENTS.md (modified)')->toContain('Dry run: nothing written.')->not->toContain('written;')->not->toContain('✓')
+        ->and(treeSnapshot($base))->toBe($before);
+
+    $run = installCommand($base, ['--json' => true]);
+
+    expect(json_decode($run->getDisplay(), true, flags: JSON_THROW_ON_ERROR)['files'])->toBe($plan['files'])
+        ->and(is_file($base.'/tests/Arch/configuration.php'))->toBeTrue();
+});

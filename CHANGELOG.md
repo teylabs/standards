@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`standards:install --dry-run` dry-runs the whole install.** Without `--extract` the flag was ignored and the install wrote skills, hooks and `tests/Arch/configuration.php`. Now every write goes through one place: a dry run lists each file it would write (`created` or `modified`) and writes nothing, and `--json` prints `{dry_run, installed, files}`.
+- **`preset security` leaves seeders and factories out.** `rand()`/`mt_rand()` there make fake data. New `Configuration::$securityExemptRoots` (default `database/seeders`, `database/factories`); app code stays checked.
+- **The kit export snapshot is tey/kit v0.5.13's barrel**, which adds `Badge`, `EmojiTray` and `RadioCardGroup`.
+
+### Changed
+
+- **A kit newer than the snapshot is an advisory, not a warning.** When the installed kit's exports are a superset of the snapshot, `standards:check` and `standards:pattern` print `Advisory: the pattern catalog's kit snapshot is older than the installed tey/kit (new: …)`. A kit missing snapshot components still warns.
+- **A weekly workflow opens the snapshot refresh.** `.github/workflows/kit-snapshot.yml` compares the latest tey/kit release's barrel with the snapshot and opens (or updates) one issue with the refresh commands.
+
 ## 0.11.27 - 2026-10-28
 
 ### Fixed

@@ -30,6 +30,8 @@ function fixtureConfiguration(string $kind, array $allowlist = [], bool $ciEnfor
         base: dirname(__DIR__).'/fixtures/'.$kind,
         classRoots: ['src' => $namespace],
         sourceRoots: ['src', 'routes'],
+        // The fixtures keep their seeders and factories under src/Database (rand() there is fake data, not a finding).
+        securityExemptRoots: ['src/Database/Seeders', 'src/Database/Factories'],
         uiRoots: ['src/UI'],
         uiNamespaces: [$namespace.'\\UI'],
         hostNamespaces: [$namespace],
