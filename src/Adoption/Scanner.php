@@ -172,7 +172,7 @@ final class Scanner
             }
         }
         foreach ($gaps as $gap) {
-            $item = ['kind' => $gap['exemption'] === null ? 'gap' : 'exempt', 'package' => null, 'subject' => $gap['subject'], 'evidence' => [$gap['exemption'] === null ? self::where($gap) : self::where($gap['exemption'])], 'expects' => null, 'cause' => null];
+            $item = ['kind' => $gap['exemption'] === null ? 'gap' : 'exempt', 'package' => null, 'subject' => $gap['subject'], 'evidence' => $gap['exemption'] === null ? array_map(self::where(...), $gap['files']) : [self::where($gap['exemption'])], 'expects' => null, 'cause' => null];
             $blocking['compliance'][] = $item;
             if ($gap['exemption'] === null) {
                 $blocking['ci'][] = $item;
@@ -544,7 +544,7 @@ final class Scanner
      * libraries, and composer packages a surface replaces: each maps to every surface whose `replaces` names it, or (except composer
      * packages) is a gap.
      *
-     * @return array{mapped: array<string, list<array{file: string, line: ?int, detail: string}>>, gaps: list<array{subject: string, kind: string, file: string, line: ?int, detail: string}>}
+     * @return array{mapped: array<string, list<array{file: string, line: ?int, detail: string}>>, gaps: list<array{subject: string, kind: string, file: string, line: ?int, detail: string, files: list<array{file: string, line: ?int, detail: string}>}>}
      */
     private function candidates(): array
     {
@@ -602,8 +602,13 @@ final class Scanner
             foreach ($targets as $key) {
                 $mapped[$key][] = $evidence;
             }
-            if ($targets === []) {
-                $gaps[] = ['subject' => $path, 'kind' => 'component', ...$evidence];
+            // One gap per component name, case-insensitively (BreadCrumbs.vue and Breadcrumbs.vue are one): the first-seen path is the
+            // subject, and `files` lists every file.
+            $key = 'component:'.strtolower($name);
+            if ($targets === [] && isset($gaps[$key])) {
+                $gaps[$key]['files'][] = $evidence;
+            } elseif ($targets === []) {
+                $gaps[$key] = ['subject' => $path, 'kind' => 'component', ...$evidence, 'files' => [$evidence]];
             }
         }
 
@@ -619,7 +624,7 @@ final class Scanner
                 $mapped[$key][] = $evidence;
             }
             if ($targets === []) {
-                $gaps[] = ['subject' => 'npm:'.$package, 'kind' => 'library', ...$evidence];
+                $gaps[] = ['subject' => 'npm:'.$package, 'kind' => 'library', ...$evidence, 'files' => [$evidence]];
             }
         }
 
@@ -629,7 +634,7 @@ final class Scanner
             }
         }
 
-        return ['mapped' => $mapped, 'gaps' => $gaps];
+        return ['mapped' => $mapped, 'gaps' => array_values($gaps)];
     }
 
     /** @return list<string> "<composer> <surface id>" for every surface whose `replaces` passes the test */

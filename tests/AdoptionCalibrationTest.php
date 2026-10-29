@@ -189,3 +189,17 @@ test('non-UI libraries are never gaps, as packages or as a component\'s imports;
         ->and(Lists::nonUi('@vueuse/components'))->toBeFalse()
         ->and(Lists::nonUi('axios-mock-adapter'))->toBeFalse();
 });
+
+test('the component gap key is case-insensitive: BreadCrumbs.vue and Breadcrumbs.vue are one gap, citing every file', function () {
+    $report = calibrationReport('gap-case', calibrationInventory(['layout.page' => [['kind' => 'file-name', 'globs' => ['Nothing.vue']]]]));
+    $gaps = array_column($report['gaps'], null, 'subject');
+
+    // Positive: the two spellings merge under the first-seen path (layout/ sorts before nav/). Negative: BreadcrumbList is another
+    // name and stays its own gap.
+    expect(array_keys($gaps))->toBe(['resources/js/components/layout/BreadcrumbList.vue', 'resources/js/components/layout/Breadcrumbs.vue', 'npm:vue-select'])
+        ->and(array_column($gaps['resources/js/components/layout/Breadcrumbs.vue']['files'], 'file'))->toBe(['resources/js/components/layout/Breadcrumbs.vue', 'resources/js/components/nav/BreadCrumbs.vue'])
+        ->and(array_column($gaps['resources/js/components/layout/BreadcrumbList.vue']['files'], 'file'))->toBe(['resources/js/components/layout/BreadcrumbList.vue'])
+        ->and($report['summary']['gaps'])->toBe(3)
+        ->and(array_values(array_filter($report['blocking'], fn (array $item): bool => $item['subject'] === 'resources/js/components/layout/Breadcrumbs.vue'))[0]['evidence'])
+        ->toBe([['file' => 'resources/js/components/layout/Breadcrumbs.vue', 'line' => 2], ['file' => 'resources/js/components/nav/BreadCrumbs.vue', 'line' => 2]]);
+});
