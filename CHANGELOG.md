@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Optional rule `ui header-actions` and the `ui-page.header-actions` leaf: a page header shows at most one primary and three visible actions (tey/kit 0.6.9 `priority`). It reads a page ViewModel's literal `actions()` or `pageActions()` and `#actions` slots with more than three controls. Enable it in `optionalRules`.
+
 ## 0.11.44 - 2026-10-29
 
 ### Fixed
