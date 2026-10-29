@@ -1,0 +1,53 @@
+name: adoption fixtures
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.draft }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  adoption-fixtures:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir --working-dir=tools/standards)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: standards-tools-${{ hashFiles('tools/standards/composer.lock') }}
+          restore-keys: standards-tools-
+
+      - run: composer install --working-dir=tools/standards --no-interaction --no-progress
+
+      - name: Diff every adoption fixture against its expected.json
+        run: |
+          status=0
+          for fixture in tests/fixtures/adoption/*/; do
+            tools/standards/vendor/bin/standards adoption --base "$fixture" --inventory resources/adoption/surfaces.json --json \
+              | jq -S '[.rows[] | {surface, facts, row}]' > /tmp/actual.json
+            if ! diff -u <(jq -S . "$fixture/expected.json") /tmp/actual.json; then
+              echo "::error::adoption fixture $fixture differs from its expected.json"
+              status=1
+            fi
+          done
+          exit $status

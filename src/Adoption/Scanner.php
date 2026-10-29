@@ -195,7 +195,7 @@ final class Scanner
             }
         }
         foreach ($gaps as $gap) {
-            $item = ['kind' => $gap['exemption'] === null ? 'gap' : 'exempt', 'package' => null, 'subject' => $gap['subject'], 'evidence' => [$gap['exemption'] === null ? self::where($gap) : self::where($gap['exemption'])], 'expects' => null, 'cause' => null];
+            $item = ['kind' => $gap['exemption'] === null ? 'gap' : 'exempt', 'package' => null, 'subject' => $gap['subject'], 'evidence' => $gap['exemption'] === null ? array_map(self::where(...), $gap['files']) : [self::where($gap['exemption'])], 'expects' => null, 'cause' => null];
             $blocking['compliance'][] = $item;
             if ($gap['exemption'] === null) {
                 $blocking['ci'][] = $item;
@@ -221,6 +221,9 @@ final class Scanner
                 $facts[$inventory->composer()][$id] = [...$this->facts->compute($fact['computed']), 'computed' => $fact['computed']];
             }
         }
+
+        // A route include standards could not resolve is a blind spot: recorded, never guessed at.
+        array_push($warnings, ...$this->facts->blindSpots());
 
         $active = $mode === 'report' ? $blocking['compliance'] : $blocking[$mode];
 
@@ -597,7 +600,7 @@ final class Scanner
      * libraries, and composer packages a surface replaces: each maps to every surface whose `replaces` names it, or (except composer
      * packages) is a gap.
      *
-     * @return array{mapped: array<string, list<array{file: string, line: ?int, detail: string}>>, gaps: list<array{subject: string, kind: string, file: string, line: ?int, detail: string}>}
+     * @return array{mapped: array<string, list<array{file: string, line: ?int, detail: string}>>, gaps: list<array{subject: string, kind: string, file: string, line: ?int, detail: string, files: list<array{file: string, line: ?int, detail: string}>}>}
      */
     private function candidates(): array
     {
@@ -612,7 +615,7 @@ final class Scanner
             $parts = explode('/', $module);
             $package = str_starts_with($module, '@') ? implode('/', array_slice($parts, 0, 2)) : $parts[0];
 
-            return in_array($package, $own, true) || Lists::runtime($package) ? null : $package;
+            return in_array($package, $own, true) || Lists::runtime($package) || Lists::nonUi($package) ? null : $package;
         };
 
         $mapped = [];
@@ -655,15 +658,20 @@ final class Scanner
             foreach ($targets as $key) {
                 $mapped[$key][] = $evidence;
             }
-            if ($targets === []) {
-                $gaps[] = ['subject' => $path, 'kind' => 'component', ...$evidence];
+            // One gap per component name, case-insensitively (BreadCrumbs.vue and Breadcrumbs.vue are one): the first-seen path is the
+            // subject, and `files` lists every file.
+            $key = 'component:'.strtolower($name);
+            if ($targets === [] && isset($gaps[$key])) {
+                $gaps[$key]['files'][] = $evidence;
+            } elseif ($targets === []) {
+                $gaps[$key] = ['subject' => $path, 'kind' => 'component', ...$evidence, 'files' => [$evidence]];
             }
         }
 
         $npm = array_keys($this->app->npmPackages());
         sort($npm);
         foreach ($npm as $package) {
-            if (in_array($package, $own, true) || Lists::runtime($package) || Lists::tooling($package) || $thirdParty($package) === null) {
+            if (in_array($package, $own, true) || Lists::runtime($package) || Lists::tooling($package) || Lists::nonUi($package) || $thirdParty($package) === null) {
                 continue;
             }
             $targets = $this->replacing(fn (array $replaces): bool => in_array($package, array_map(fn (string $entry): string => explode('#', $entry, 2)[0], $replaces['npm'] ?? []), true));
@@ -672,7 +680,7 @@ final class Scanner
                 $mapped[$key][] = $evidence;
             }
             if ($targets === []) {
-                $gaps[] = ['subject' => 'npm:'.$package, 'kind' => 'library', ...$evidence];
+                $gaps[] = ['subject' => 'npm:'.$package, 'kind' => 'library', ...$evidence, 'files' => [$evidence]];
             }
         }
 
@@ -682,7 +690,7 @@ final class Scanner
             }
         }
 
-        return ['mapped' => $mapped, 'gaps' => $gaps];
+        return ['mapped' => $mapped, 'gaps' => array_values($gaps)];
     }
 
     /** @return list<string> "<composer> <surface id>" for every surface whose `replaces` passes the test */

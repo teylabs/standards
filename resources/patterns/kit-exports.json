@@ -1,5 +1,5 @@
 {
-    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.5.22",
+    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.6.11",
     "module": "@kit/ui",
     "components": [
         "ActionBar",
@@ -51,10 +51,12 @@
         "FormActions",
         "FormCard",
         "FormFieldset",
+        "FormStatus",
         "IndexToolbar",
         "Input",
         "InputCheckbox",
         "InputNumber",
+        "InputRichText",
         "InputSelect",
         "LockedForm",
         "Modal",

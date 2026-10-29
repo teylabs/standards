@@ -219,3 +219,25 @@ test('no command and help print usage successfully', function (array $arguments)
         ->and($process->getErrorOutput())->toBe('')
         ->and($process->getOutput())->toContain('Usage: standards ci');
 })->with([[[]], [['--help']], [['ci', '--help']]]);
+
+test('[rule 51] the README\'s fixture-CI job on older PHP passes bin/standards ci and matches its fixture byte for byte', function () {
+    $fixture = file_get_contents(dirname(__DIR__).'/fixtures/CI/adoption-fixtures.yml');
+    unlink($this->cliBase.'/.github/workflows/tests.yml');
+    copy(dirname(__DIR__).'/fixtures/CI/adoption-fixtures.yml', $this->cliBase.'/.github/workflows/adoption-fixtures.yml');
+    $run = fn (string $distribution): array => json_decode(($this->cli)(['ci', '--json', '--strict', '--enforce', '--base='.$this->cliBase, '--distribution='.$distribution])->getOutput(), true);
+
+    // An app: no requirement and no advisory (timeout, triggers, concurrency, draft guard and the cache all pass).
+    $app = $run('app');
+    // A distributed package: only the repository-wide Windows requirement, which its main test workflow carries.
+    $package = $run('package');
+
+    expect(file_get_contents(dirname(__DIR__).'/README.md'))->toContain("```yaml\n".$fixture."```\n")
+        ->and($fixture)->toContain('timeout-minutes: 10', "php-version: '8.4'", 'runs-on: ubuntu-latest', "hashFiles('tools/standards/composer.lock')", 'composer install --working-dir=tools/standards', 'tools/standards/vendor/bin/standards adoption --base "$fixture" --inventory resources/adoption/surfaces.json --json')
+        ->and($app)->toMatchArray(['findings' => [], 'advisories' => [], 'enforce' => true, 'exit_code' => 0])
+        ->and(array_column($package['findings'] ?? [], 'reason'))->toHaveCount(1)
+        ->and($package['findings'][0]['reason'])->toStartWith('windows-gap:');
+
+    // Negative: the same job without its timeout fails rule 51.
+    file_put_contents($this->cliBase.'/.github/workflows/adoption-fixtures.yml', str_replace("    timeout-minutes: 10\n", '', $fixture));
+    expect(array_map(fn (array $finding): string => explode(':', $finding['reason'])[0], $run('app')['findings']))->toBe(['timeout']);
+});
