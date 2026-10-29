@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **New opt-in rule `destructive-db` checks that a service provider prohibits destructive database commands outside testing.** A `migrate:fresh --env=testing` with no `.env.testing` silently falls back to `.env` and wipes the local database. Listed in `Configuration::optionalRules`, the rule requires a service provider's `boot()` to call `DB::prohibitDestructiveCommands(...)` with a guard that is true outside testing, such as `! $this->app->runningUnitTests() && ! config('database.allow_destructive')`. A missing call, a bare call or `true` (which blocks `RefreshDatabase` too), a production-only guard and `env()` in the guard are reported. A deliberate local reset uses a one-off `ALLOW_DESTRUCTIVE_DB=1 php artisan migrate:fresh`, read through a config key; the README explains why the flag never goes in `.env`. Off by default, so existing apps see no change.
+
 ## 0.11.32 - 2026-10-29
 
 ### Fixed

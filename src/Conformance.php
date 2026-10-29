@@ -35,6 +35,7 @@ final class Conformance
         'integrations' => '[integrations] webhooks verify their sender and API calls go through a contract',
         'versioned-writes' => '[versioned-writes] query-builder writes on a versioned model bump its version',
         'tenant-aware' => '[tenant-aware] commands and queued jobs that touch tenant-scoped models run per tenant (spatie/laravel-multitenancy)',
+        'destructive-db' => '[destructive-db] a service provider prohibits destructive database commands outside testing',
 
         '14' => '[rule 14] UI does not build host routes',
         '22' => '[rule 22] UI has no host PHP dependencies',
@@ -88,7 +89,7 @@ final class Conformance
 
     public function assert(string $rule): void
     {
-        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'destructive-db'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             Assert::markTestSkipped('Optional rule ['.$rule.'] is disabled; enable it in Configuration::optionalRules.');
         }
 
@@ -121,7 +122,7 @@ final class Conformance
     /** @return list<array{target: string, check: string}> */
     public function violations(string $rule): array
     {
-        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'destructive-db'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             return [];
         }
 
@@ -171,6 +172,10 @@ final class Conformance
 
         if ($rule === 'tenant-aware') {
             return (new Checks\TenantAware($this->config, $this->source))->violations();
+        }
+
+        if ($rule === 'destructive-db') {
+            return (new Checks\DestructiveDb($this->config, $this->source))->violations();
         }
 
         if ($rule === '55') {
