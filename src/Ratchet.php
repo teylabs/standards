@@ -127,11 +127,16 @@ final class Ratchet
         return $stale;
     }
 
-    /** @param list<string> $rules */
+    /**
+     * `adoption.*` entries are standards:adoption exemptions (a surface or a gap), not rule findings: the adoption report validates and applies
+     * them, and the gate still requires their expiry.
+     *
+     * @param list<string> $rules
+     */
     public function assertRules(array $rules): void
     {
         foreach ($this->entries as $entry) {
-            if (! in_array($entry['rule'], $rules, true)) {
+            if (! in_array($entry['rule'], $rules, true) && ! str_starts_with($entry['rule'], 'adoption.')) {
                 throw new InvalidArgumentException("Exception names an unregistered rule [{$entry['rule']}].");
             }
         }
