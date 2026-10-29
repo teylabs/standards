@@ -129,6 +129,26 @@ final class Providers
         return false;
     }
 
+    /**
+     * The classes whose `class_exists(X::class)` guards a node: the conditions of every enclosing ternary or `if`/`elseif` whose true branch holds it.
+     *
+     * @return list<string>
+     */
+    public static function guardsAround(Node $node): array
+    {
+        $classes = [];
+        $child = $node;
+        for ($parent = $node->getAttribute('parent'); $parent instanceof Node; $child = $parent, $parent = $parent->getAttribute('parent')) {
+            $classes = [...$classes, ...match (true) {
+                $parent instanceof Node\Expr\Ternary && $parent->if === $child => self::guards($parent->cond),
+                ($parent instanceof Node\Stmt\If_ || $parent instanceof Node\Stmt\ElseIf_) && in_array($child, $parent->stmts, true) => self::guards($parent->cond),
+                default => [],
+            }];
+        }
+
+        return $classes;
+    }
+
     /** @return list<string> classes named by `class_exists(X::class)` calls in a condition */
     private static function guards(Node $condition): array
     {

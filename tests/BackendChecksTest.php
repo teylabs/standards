@@ -203,3 +203,31 @@ test('no-dev accepts a dev provider guarded by class_exists for that same class,
         ->and($run('return [...(class_exists(\Pest\TestSuite::class) ? [] : [\Pest\TestSuite::class])];'))->toBe([$dev])
         ->and($run('return array_filter([\Pest\TestSuite::class], fn ($provider) => $provider !== null);'))->toBe([$dev]);
 });
+
+test('no-dev accepts an app provider registered only behind class_exists of the dev class it extends, and fails closed on any other registration', function () {
+    // An app provider extending a dev package's provider (spatie/typescript-transformer's, say), registered only when that parent exists.
+    // The rule loads the class roots first, so they hold one autoloadable fixture class.
+    copy(dirname(__DIR__).'/fixtures/Good/src/UI/Link.php', $this->backendBase.'/src/UI/Link.php');
+    mkdir($this->backendBase.'/app/Support', 0777, true);
+    mkdir($this->backendBase.'/config', 0777, true);
+    file_put_contents($this->backendBase.'/app/Support/TypeScriptProvider.php', '<?php namespace App\Support; use Pest\TestSuite; use Pest\Plugin; final class TypeScriptProvider extends TestSuite { public function transformers(): array { return [Plugin::class]; } }');
+    $run = function (string $providers, string $config = 'return [];'): array {
+        file_put_contents($this->backendBase.'/config/app.php', '<?php '.$config);
+
+        return array_column(($this->backend)('no-dev', $providers, ['discoveryRoots' => ['app', 'bootstrap'], 'developmentNamespaces' => ['Pest']], 'bootstrap/providers.php'), 'target');
+    };
+    $parentGuard = 'use App\Support\TypeScriptProvider; return [...(class_exists(\Pest\TestSuite::class) ? [TypeScriptProvider::class] : [])];';
+
+    expect($run($parentGuard))->toBe([])
+        ->and($run('if (class_exists(\Pest\TestSuite::class)) { return [\App\Support\TypeScriptProvider::class]; } return [];'))->toBe([])
+        // The same provider also registered unguarded, guarded by an unrelated or a non-dev class, or in the else branch: its dev references are reported.
+        ->and($run('return [\App\Support\TypeScriptProvider::class, ...(class_exists(\Pest\TestSuite::class) ? [\App\Support\TypeScriptProvider::class] : [])];'))->toContain('app/Support/TypeScriptProvider.php')
+        ->and($run('return [...(class_exists(\Pest\Unrelated::class) ? [\App\Support\TypeScriptProvider::class] : [])];'))->toContain('app/Support/TypeScriptProvider.php')
+        ->and($run('return [...(class_exists(\Other\Thing::class) ? [\App\Support\TypeScriptProvider::class] : [])];'))->toContain('app/Support/TypeScriptProvider.php')
+        ->and($run('return [...(class_exists(\Pest\TestSuite::class) ? [] : [\App\Support\TypeScriptProvider::class])];'))->toContain('app/Support/TypeScriptProvider.php')
+        // Registered anywhere else as well (config/app.php providers, by name or as a string): reported.
+        ->and($run($parentGuard, "return ['providers' => [App\\Support\\TypeScriptProvider::class]];"))->toContain('app/Support/TypeScriptProvider.php')
+        ->and($run($parentGuard, "return ['providers' => ['App\\\\Support\\\\TypeScriptProvider']];"))->toContain('app/Support/TypeScriptProvider.php')
+        // Never registered at all: nothing gates it.
+        ->and($run('return [];'))->toContain('app/Support/TypeScriptProvider.php');
+});

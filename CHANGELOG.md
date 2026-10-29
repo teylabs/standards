@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`no-dev` accepts an app provider registered only behind `class_exists` of the dev class it extends.** An app's own provider that extends a development package's provider (spatie/typescript-transformer's, say) and uses its classes was reported once per dev reference, even though `bootstrap/providers.php` registers it only under `class_exists(<the parent>::class)`. Such a class's file is now skipped when every reference to the class is a registration in `bootstrap/providers.php`, in the true branch of `class_exists(D::class)`, and D is a development class the file itself extends or references. It fails closed: a registration anywhere else (`config/app.php`, a `register()` call, the class name as a string), a guard on an unrelated or non-development class, the else branch, or no registration at all, and the file is checked as before.
+
+### Upgrading
+
+- Apps can drop the `no-dev` ratchet or allowlist entries for a provider guarded by its dev parent.
+
 ## 0.11.38 - 2026-10-29
 
 ### Added
