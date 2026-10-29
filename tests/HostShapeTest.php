@@ -191,6 +191,9 @@ test('a laravel host with the full kit gets exactly what it got before, file for
                 (new Maker($base, TreeCatalog::shipped(), kit: true, host: $host))->make($unit, $name, $flavor, null, $options);
             }
             $outputs[$index] = array_map(fn (string $file): string => (string) preg_replace('/\d{4}_\d{2}_\d{2}_\d{6}/', 'TIMESTAMP', $file.' '.hash('sha256', (string) preg_replace('/\d{4}_\d{2}_\d{2}_\d{6}/', 'TIMESTAMP', (string) file_get_contents($base.'/'.$file)))), hostFiles($base));
+            // Sort after the timestamps are normalised: two migrations made in the same second sort by name, and across a second boundary by time,
+            // so the order of the raw names differs between runs on a slow machine.
+            sort($outputs[$index]);
         } finally {
             (new Filesystem)->deleteDirectory($base);
         }
