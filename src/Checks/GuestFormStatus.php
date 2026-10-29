@@ -13,6 +13,8 @@ use Tey\Standards\Source;
  * Whether a guest form's `back()` provably lands on a page that renders tey/kit's `<FormStatus>` (kit 0.5.65), which then replaces the toast.
  *
  * The narrowest resolution, all of which must hold or the toast is still required:
+ *  0. bootstrap/app.php exists, parses, and its withMiddleware configurator adds only SAFE_MIDDLEWARE (globally or to any group); app providers
+ *     neither wrap nor register routes nor push unknown middleware to a group (environmentKeepsGuest()).
  *  1. Every route that registers Controller@action is found in the route roots, is a literal `Route::post|put|patch|delete(<literal uri>, ...)`
  *     (array, invokable class or group-controller string action), and every middleware on it and its enclosing groups is a literal from
  *     GUEST_MIDDLEWARE. Any other middleware, a non-literal one, a non-literal prefix, a `Route::group([...])` array, or an include/require inside a
@@ -29,6 +31,21 @@ final class GuestFormStatus
 
     private const MUTATING = ['post', 'put', 'patch', 'delete'];
 
+    /** Middleware classes known not to sign anyone in, allowed when bootstrap/app.php or a provider adds them to a group. */
+    public const SAFE_MIDDLEWARE = [
+        '*\\HandleInertiaRequests',
+        'Tey\\Kit\\Features\\SessionUi\\Http\\Middleware\\PrepareKitRequest',
+        'Illuminate\\Http\\Middleware\\AddLinkHeadersForPreloadedAssets',
+    ];
+
+    /** Middleware configurator calls that add nothing to a group a web route runs through. */
+    private const HARMLESS = ['redirectgueststo', 'redirectto', 'redirectusersto', 'validatecsrftokens', 'preventrequestsduringmaintenance', 'encryptcookies', 'convertemptystringstonull', 'trimstrings', 'trustproxies', 'trusthosts', 'throttleapi', 'statefulapi', 'api', 'priority', 'appendtoprioritylist', 'prependtoprioritylist', 'remove', 'removefromgroup'];
+
+    /** Configurator calls whose every argument must be allowlisted middleware. */
+    private const ADDING = ['append', 'prepend', 'appendtogroup', 'prependtogroup', 'group', 'use', 'web'];
+
+    private ?bool $environment = null;
+
     /** @var ?list<array{verbs: list<string>, uri: ?string, class: ?string, method: ?string, guest: bool}> */
     private ?array $routes = null;
 
@@ -37,6 +54,9 @@ final class GuestFormStatus
     public function proves(Node\Stmt\Class_ $class, string $action): bool
     {
         if (! isset($class->namespacedName) || self::declaresMiddleware($class)) {
+            return false;
+        }
+        if (! $this->environmentKeepsGuest()) {
             return false;
         }
         $controller = $class->namespacedName->toString();
@@ -74,6 +94,173 @@ final class GuestFormStatus
 
         return $expression instanceof Node\Expr\MethodCall && $expression->name instanceof Node\Identifier && strtolower($expression->name->toString()) === 'back'
             && $expression->var instanceof Node\Expr\FuncCall && $expression->var->name instanceof Node\Name && $expression->var->name->toString() === 'redirect' && $expression->var->getArgs() === [];
+    }
+
+    /**
+     * Whether bootstrap/app.php and the app's service providers provably add nothing but SAFE_MIDDLEWARE to the groups a route runs through.
+     * A missing or unparsable bootstrap/app.php, a non-closure or escaping `withMiddleware` configurator, an unknown configurator call, `withRouting`
+     * with `then:` or `using:`, an alias over a GUEST_MIDDLEWARE name, or a provider that wraps or registers routes fails closed.
+     */
+    private function environmentKeepsGuest(): bool
+    {
+        return $this->environment ??= $this->bootstrapKeepsGuest() && $this->providersKeepGuest();
+    }
+
+    private function bootstrapKeepsGuest(): bool
+    {
+        if (! is_file($this->config->base.'/bootstrap/app.php')) {
+            return false;
+        }
+        try {
+            $nodes = $this->source->nodes('bootstrap/app.php');
+        } catch (\PhpParser\Error) {
+            return false;
+        }
+        if ($nodes === []) {
+            return false;
+        }
+        $finder = new NodeFinder;
+        foreach ($finder->find($nodes, fn (Node $node): bool => $node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier) as $call) {
+            /** @var Node\Expr\MethodCall $call */
+            $name = strtolower($call->name->toString());
+            if ($name === 'withrouting' && array_filter($call->getArgs(), fn (Node\Arg $argument): bool => in_array($argument->name?->toString(), ['then', 'using'], true)) !== []) {
+                return false;
+            }
+            if ($name !== 'withmiddleware') {
+                continue;
+            }
+            $configure = $call->getArgs()[0]->value ?? null;
+            if ($call->getArgs() === []) {
+                continue;
+            }
+            if (! ($configure instanceof Node\Expr\Closure || $configure instanceof Node\Expr\ArrowFunction) || ! ($configure->params[0]->var ?? null) instanceof Node\Expr\Variable) {
+                return false;
+            }
+            $parameter = $configure->params[0]->var->name;
+            foreach ($finder->find($configure->getStmts() ?? [$configure->expr], fn (Node $node): bool => $node instanceof Node\Expr\Variable && $node->name === $parameter) as $use) {
+                $call = $use->getAttribute('parent');
+                if (! $call instanceof Node\Expr\MethodCall || $call->var !== $use || ! $call->name instanceof Node\Identifier || ! $this->safeConfiguratorCall($call)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private function safeConfiguratorCall(Node\Expr\MethodCall $call): bool
+    {
+        $name = strtolower($call->name->toString());
+        if (in_array($name, self::HARMLESS, true)) {
+            return true;
+        }
+        if ($name === 'alias') {
+            $map = $call->getArgs()[0]->value ?? null;
+            if (! $map instanceof Node\Expr\Array_) {
+                return false;
+            }
+            foreach ($map->items as $item) {
+                if (! $item?->key instanceof Node\Scalar\String_ || in_array(explode(':', $item->key->value)[0], self::GUEST_MIDDLEWARE, true)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        if (! in_array($name, self::ADDING, true)) {
+            return false;
+        }
+        foreach ($call->getArgs() as $index => $argument) {
+            $label = $argument->name?->toString();
+            // appendToGroup('web', ...) and group('web', [...]) name the group first; web(remove: [...]) removes.
+            if (($index === 0 && $label === null && in_array($name, ['appendtogroup', 'prependtogroup', 'group'], true) && $argument->value instanceof Node\Scalar\String_) || $label === 'remove' || $label === 'group') {
+                continue;
+            }
+            if (! self::safeMiddleware($argument->value)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** A literal Class::class (or a list of them) on SAFE_MIDDLEWARE. */
+    public static function safeMiddleware(?Node\Expr $value): bool
+    {
+        if ($value instanceof Node\Expr\Array_) {
+            foreach ($value->items as $item) {
+                if ($item === null || $item->key !== null && ! $item->key instanceof Node\Scalar\String_ || ! self::safeMiddleware($item->value)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        $class = $value instanceof Node\Expr\ClassConstFetch && $value->class instanceof Node\Name && $value->name instanceof Node\Identifier && strtolower($value->name->toString()) === 'class'
+            ? $value->class->toString()
+            : ($value instanceof Node\Scalar\String_ ? ltrim($value->value, '\\') : null);
+        if ($class === null) {
+            return false;
+        }
+        foreach (self::SAFE_MIDDLEWARE as $safe) {
+            if ($class === $safe || (str_starts_with($safe, '*\\') && str_ends_with('\\'.$class, substr($safe, 1)))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Providers under app/Providers or listed in bootstrap/providers.php that touch route middleware or register route files. */
+    private function providersKeepGuest(): bool
+    {
+        $paths = array_keys($this->source->files(['app/Providers']));
+        if (is_file($this->config->base.'/bootstrap/providers.php')) {
+            try {
+                $listed = (new NodeFinder)->findInstanceOf($this->source->nodes('bootstrap/providers.php'), Node\Expr\ClassConstFetch::class);
+            } catch (\PhpParser\Error) {
+                return false;
+            }
+            $declared = $this->source->declared();
+            foreach ($listed as $constant) {
+                if ($constant->class instanceof Node\Name && isset($declared[$constant->class->toString()])) {
+                    $paths[] = $declared[$constant->class->toString()];
+                }
+            }
+        }
+        foreach (array_unique($paths) as $path) {
+            try {
+                $nodes = $this->source->nodes($path);
+            } catch (\PhpParser\Error) {
+                return false;
+            }
+            foreach ((new NodeFinder)->find($nodes, fn (Node $node): bool => $node instanceof Node\Expr\Include_ || $node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall) as $node) {
+                if ($node instanceof Node\Expr\Include_) {
+                    return false;
+                }
+                /** @var Node\Expr\MethodCall|Node\Expr\StaticCall $node */
+                $name = $node->name instanceof Node\Identifier ? strtolower($node->name->toString()) : null;
+                $route = $node instanceof Node\Expr\StaticCall && $node->class instanceof Node\Name && $node->class->toString() === 'Illuminate\Support\Facades\Route';
+                // Any group() (Route::group, Route::middleware(...)->group(...)) or routes() wraps or registers route files.
+                if (in_array($name, ['loadroutesfrom', 'group', 'routes'], true) || ($route && $name === null)) {
+                    return false;
+                }
+                if (($route && $name === 'middleware') && ! self::safeMiddleware($node->getArgs()[0]->value ?? null)) {
+                    return false;
+                }
+                if (in_array($name, ['pushmiddlewaretogroup', 'prependmiddlewaretogroup', 'appendmiddlewaretogroup', 'middlewaregroup'], true) && ! self::safeMiddleware($node->getArgs()[1]->value ?? null)) {
+                    return false;
+                }
+                if ($name === 'aliasmiddleware') {
+                    $alias = $node->getArgs()[0]->value ?? null;
+                    if (! $alias instanceof Node\Scalar\String_ || in_array(explode(':', $alias->value)[0], self::GUEST_MIDDLEWARE, true)) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
     }
 
     private static function declaresMiddleware(Node\Stmt\Class_ $class): bool

@@ -276,6 +276,7 @@ test('no-dev ignores Laravel\'s generated bootstrap/cache manifests, but a real 
 
 test('toast accepts a guest form whose back() returns to a page rendering kit FormStatus, and nothing less provable', function (string $routes, string $page, string $show, string $store, bool $fails) {
     file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\ContactController; '.$routes);
+    file_put_contents($this->backendBase.'/bootstrap/app.php', guestBootstrap('$middleware->web(append: [\App\Http\Middleware\HandleInertiaRequests::class]);'));
     mkdir($this->backendBase.'/resources/js/pages/Public', 0777, true);
     file_put_contents($this->backendBase.'/resources/js/pages/Public/Contact.vue', $page);
     $controller = 'namespace App; use Inertia\Inertia; class ContactController { public function show($name) { '.$show.' } public function store() { '.$store.' } }';
@@ -306,3 +307,40 @@ test('toast accepts a guest form whose back() returns to a page rendering kit Fo
         'redirect to a route instead of back' => [$guest, $status, $render, 'return to_route("home");', true],
     ];
 });
+
+function guestBootstrap(string $middleware): string
+{
+    return '<?php use Illuminate\Foundation\Application; use Illuminate\Foundation\Configuration\Middleware; return Application::configure(basePath: dirname(__DIR__))->withRouting(web: __DIR__."/../routes/web.php")->withMiddleware(function (Middleware $middleware): void { '.$middleware.' })->create();';
+}
+
+test('the FormStatus exemption fails closed unless bootstrap/app.php and the app providers provably keep the route guest', function (?string $bootstrap, ?string $provider, bool $fails) {
+    file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\ContactController; Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]);');
+    if ($bootstrap !== null) {
+        file_put_contents($this->backendBase.'/bootstrap/app.php', $bootstrap);
+    }
+    if ($provider !== null) {
+        mkdir($this->backendBase.'/app/Providers', 0777, true);
+        file_put_contents($this->backendBase.'/app/Providers/RouteServiceProvider.php', '<?php namespace App\Providers; use Illuminate\Support\Facades\Route; class RouteServiceProvider { public function boot() { '.$provider.' } }');
+    }
+    mkdir($this->backendBase.'/resources/js/pages/Public', 0777, true);
+    file_put_contents($this->backendBase.'/resources/js/pages/Public/Contact.vue', "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit';\n</script>\n<template>\n    <FormStatus />\n</template>\n");
+    $controller = 'namespace App; use Inertia\Inertia; class ContactController { public function show() { return Inertia::render("Public/Contact"); } public function store() { return back(); } }';
+    expect(($this->backend)('toast', $controller, ['pageRoots' => ['resources/js/pages']], 'src/Controllers/ContactController.php'))->toHaveCount($fails ? 1 : 0);
+})->with([
+    'web appends only HandleInertiaRequests and PrepareKitRequest' => [guestBootstrap('$middleware->web(append: [\App\Http\Middleware\HandleInertiaRequests::class, \Tey\Kit\Features\SessionUi\Http\Middleware\PrepareKitRequest::class]); $middleware->redirectGuestsTo("/login");'), null, false],
+    'preload headers appended globally, a harmless provider' => [guestBootstrap('$middleware->append(\Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class);'), 'Route::pattern("id", "[0-9]+");', false],
+    'auth appended to web' => [guestBootstrap('$middleware->web(append: [\App\Http\Middleware\HandleInertiaRequests::class, \Illuminate\Auth\Middleware\Authenticate::class]);'), null, true],
+    'auth appended to the web group by name' => [guestBootstrap('$middleware->appendToGroup("web", "auth");'), null, true],
+    'global prepend of an unknown class' => [guestBootstrap('$middleware->prepend(\App\Http\Middleware\RequireLogin::class);'), null, true],
+    'non-literal append' => [guestBootstrap('$middleware->web(append: $stack);'), null, true],
+    'guest aliased to another class' => [guestBootstrap('$middleware->alias(["guest" => \App\Http\Middleware\RequireLogin::class]);'), null, true],
+    'configurator handed elsewhere' => [guestBootstrap('\App\Http\Kernel::configure($middleware);'), null, true],
+    'unknown configurator call' => [guestBootstrap('$middleware->somethingNew([]);'), null, true],
+    'withRouting then:' => ['<?php return Application::configure()->withRouting(then: function () { Route::middleware("auth")->group(base_path("routes/web.php")); })->create();', null, true],
+    'missing bootstrap/app.php' => [null, null, true],
+    'unparsable bootstrap/app.php' => ['<?php return Application::configure(', null, true],
+    'provider wraps the route files in auth' => [guestBootstrap(''), 'Route::middleware("auth")->group(base_path("routes/web.php"));', true],
+    'provider pushes auth to web' => [guestBootstrap(''), 'app("router")->pushMiddlewareToGroup("web", \Illuminate\Auth\Middleware\Authenticate::class);', true],
+    'provider pushes PrepareKitRequest to web' => [guestBootstrap(''), 'app("router")->pushMiddlewareToGroup("web", \Tey\Kit\Features\SessionUi\Http\Middleware\PrepareKitRequest::class);', false],
+    'provider loads a route file' => [guestBootstrap(''), '$this->loadRoutesFrom(__DIR__."/../../routes/extra.php");', true],
+]);
