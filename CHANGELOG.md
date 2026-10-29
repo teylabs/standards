@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **No rule scans Laravel's generated `bootstrap/cache/` any more.** Laravel rewrites `bootstrap/cache/services.php` on every boot, and it names every provider, so 0.11.39's `no-dev` parent-guard skip never applied in a booted app: the manifest counted as an unguarded reference. `Source` now leaves out `bootstrap/cache/` for every scan (`no-dev`, its parent-guard check, and the operator rule's `bootstrap` scan). A real reference in `bootstrap/app.php` or `bootstrap/providers.php` still counts.
+
 ## 0.11.39 - 2026-10-29
 
 ### Fixed
