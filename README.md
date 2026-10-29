@@ -460,6 +460,7 @@ The handler runs in the transaction that marks the call processed, so a handler 
 - **What's checked:** `update()`, `upsert()`, `increment()`, `decrement()`, `incrementEach()` and `updateOrInsert()`, on `Model::where(…)` or `Model::query()`, straight on the model (`Model::upsert(…)`), or on `DB::table('<its table>')`.
 - **What counts as a bump:** setting the version column (any value, `DB::raw('version + 1')` included), or incrementing the column itself. For `upsert`, the column goes in the update list, or, without one, in the values.
 - **Not reported:** an Eloquent instance write (`Model::findOrFail($id)->update(…)`, `->first()->update(…)`), because it runs the events.
+- **Migrations are skipped:** any file under a `migrations` directory (`database/migrations`, a module's `Database/Migrations`, kit migration stubs). Migrations are schema history: they may predate the version column, and they run once, outside the stale-guard flow, so a data backfill in one isn't checked.
 - **What counts as versioned:** a model that uses a trait named `Versioned`, `HasVersion` or `OptimisticLock`, or one of `Configuration::$versionedModels` (traits, or classes a model is or extends). `$versionColumn` defaults to `version`. An app with no versioned model gets nothing.
 - **Findings:** each gives the file, line and a fix. The rule is a static heuristic: a write reached through another class, or a builder held in a variable, isn't seen. A deliberate exception (a backfill, say) goes in the allowlist with a reason and an expiry.
 

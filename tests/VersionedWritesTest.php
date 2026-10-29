@@ -96,3 +96,17 @@ test('a deliberate exception is allowlisted with a reason and an expiry', functi
 
     expect((new Ratchet([$entry]))->failures('versioned-writes', array_map(fn (array $v): array => ['target' => $v['target'], 'check' => $v['check']], $violations)))->toBe([]);
 });
+
+test('migrations are skipped (schema history that runs once), while the same write in app code is reported', function () {
+    $write = "Post::where('id', \$id)->update(['title' => 'x']);";
+    $base = versionedApp($write);
+    $migration = "<?php\n\nuse App\\Models\\Post;\nuse Illuminate\\Database\\Migrations\\Migration;\nuse Illuminate\\Support\\Facades\\DB;\n\nreturn new class extends Migration\n{\n    public function up(): void\n    {\n        Post::query()->update(['slug' => null]);\n        DB::table('posts')->update(['title' => 'backfilled']);\n    }\n};\n";
+    foreach (['database/migrations/2026_01_01_000000_backfill_posts.php', 'src/Modules/Billing/Database/Migrations/2026_01_02_000000_backfill_posts.php'] as $path) {
+        mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $migration);
+    }
+
+    $targets = array_column((new Conformance(versionedConfiguration($base, ['sourceRoots' => ['src', 'database']])))->violations('versioned-writes'), 'target');
+
+    expect($targets)->toBe(['src/Writer.php']);
+});
