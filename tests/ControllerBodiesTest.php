@@ -192,3 +192,39 @@ test('rule 21 allows a public method overriding a same-named method of a vendor 
         (new Filesystem)->deleteDirectory($base);
     }
 });
+
+test('rule 21 skips response negotiation on a vendor-parent override under the name allowance\'s conditions; other body checks still apply', function () {
+    $base = sys_get_temp_dir().'/standards-vendor-negotiation-'.bin2hex(random_bytes(6));
+    $write = function (string $path, string $source) use ($base): void {
+        is_dir(dirname($base.'/'.$path)) || mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $source);
+    };
+    $write('vendor/composer/autoload_classmap.php', "<?php\n\$vendorDir = dirname(__DIR__);\n\$baseDir = dirname(\$vendorDir);\n\nreturn [\n"
+        ."    'Laravel\\\\Passport\\\\Http\\\\Controllers\\\\AuthorizationController' => \$vendorDir.'/laravel/passport/src/Http/Controllers/AuthorizationController.php',\n"
+        ."    'Acme\\\\Plain\\\\PlainController' => \$vendorDir.'/acme/plain/src/PlainController.php',\n"
+        ."    'App\\\\Http\\\\Controllers\\\\BaseController' => \$baseDir.'/app/Http/Controllers/BaseController.php',\n];\n");
+    $write('vendor/laravel/passport/src/Http/Controllers/AuthorizationController.php', "<?php\nnamespace Laravel\\Passport\\Http\\Controllers;\nclass AuthorizationController { public function authorize() {} }\n");
+    $write('vendor/acme/plain/src/PlainController.php', "<?php\nnamespace Acme\\Plain;\nclass PlainController { public function other() {} }\n");
+    $write('app/Http/Controllers/BaseController.php', "<?php\nnamespace App\\Http\\Controllers;\nclass BaseController { public function authorize() {} }\n");
+    $negotiates = "public function authorize(\\Illuminate\\Http\\Request \$request) { return \$request->expectsJson() ? redirect('/') : \\Inertia\\Inertia::render('Authorize'); }";
+    $controller = fn (string $name, string $parent, string $methods): string => "<?php\nnamespace App\\Http\\Controllers;\nuse {$parent};\nclass {$name} extends ".substr(strrchr('\\'.$parent, '\\'), 1)." { {$methods} }\n";
+    $write('app/Http/Controllers/PassportController.php', $controller('PassportController', 'Laravel\\Passport\\Http\\Controllers\\AuthorizationController', $negotiates));
+    $write('app/Http/Controllers/PersistingController.php', $controller('PersistingController', 'Laravel\\Passport\\Http\\Controllers\\AuthorizationController',
+        "public function authorize(\\Illuminate\\Http\\Request \$request) { \\Illuminate\\Support\\Facades\\DB::table('grants')->insert([]); return \$request->wantsJson() ? redirect('/') : \\Inertia\\Inertia::render('Authorize'); }"));
+    $write('app/Http/Controllers/OwnedController.php', $controller('OwnedController', 'App\\Http\\Controllers\\BaseController', $negotiates));
+    $write('app/Http/Controllers/UnknownController.php', $controller('UnknownController', 'Acme\\Missing\\Gone', $negotiates));
+    $write('app/Http/Controllers/PlainChildController.php', $controller('PlainChildController', 'Acme\\Plain\\PlainController', $negotiates));
+
+    try {
+        $checks = array_column(bodyViolations('Good', ['base' => $base, 'classRoots' => ['app' => 'App'], 'controllerRoots' => ['app/Http/Controllers']]), 'check');
+
+        expect($checks)->toEqualCanonicalizing([
+            'direct persistence | PersistingController::authorize',
+            'response negotiation | OwnedController::authorize',
+            'response negotiation | UnknownController::authorize',
+            'response negotiation | PlainChildController::authorize',
+        ]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});

@@ -54,7 +54,15 @@ final class ControllerBodies
 
                 foreach ($class->getMethods() as $method) {
                     $subject = $class->name->toString().'::'.$method->name->toString();
-                    foreach ($this->methodChecks($method, $properties) as $check) {
+                    $checks = $this->methodChecks($method, $properties);
+                    // A public method overriding a same-named method of a vendor parent (Passport's AuthorizationController::authorize(), say)
+                    // keeps the parent's response contract, so `response negotiation` is skipped under exactly rule 21's name allowance:
+                    // CruddyGuard::overridesVendor(), the same resolver. Every other body check still applies.
+                    if (in_array('response negotiation', $checks, true) && $method->isPublic() && ! $method->isStatic()
+                        && $this->vendorGuard()->overridesVendor($this->config->base.'/'.$path, $class->name->toString(), $method->name->toString())) {
+                        $checks = array_values(array_diff($checks, ['response negotiation']));
+                    }
+                    foreach ($checks as $check) {
                         $violations[] = ['target' => $path, 'check' => $check.' | '.$subject];
                     }
                 }
@@ -62,6 +70,14 @@ final class ControllerBodies
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    private ?CruddyGuard $vendorGuard = null;
+
+    /** Rule 21's resolver, used only for its vendor-parent override check (composer's static maps, cached per run). */
+    private function vendorGuard(): CruddyGuard
+    {
+        return $this->vendorGuard ??= new CruddyGuard($this->config->base, [], []);
     }
 
     /** @param array<string, string|null> $properties

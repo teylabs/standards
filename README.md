@@ -94,7 +94,7 @@ Rule 21 retains every CRUDDY public-surface and route check. It also parses cont
 | `non-response helper` | Private/protected methods other than the constructor or a response formatter. |
 | `direct persistence` | Calls to `DB::` and recognised model/builder writes, including `create`, `update`, `save`, `delete`, `forceDelete`, bulk writes and quiet variants. |
 | `multiple operations` | A resource action or `__invoke` constructs or invokes more than one distinct recognised Action/Query class. Repeated calls to the same class count once. |
-| `response negotiation` | Request `wantsJson()`, `expectsJson()`, `ajax()` or `acceptsJson()`. Choose the response contract at the route boundary. |
+| `response negotiation` | Request `wantsJson()`, `expectsJson()`, `ajax()` or `acceptsJson()`. Choose the response contract at the route boundary. Skipped only for a public method that overrides a same-named method of a vendor parent, resolved exactly as rule 21's vendor-override allowance (composer's maps, a parent under `vendor/`); every other body check still applies to it. |
 
 **A vendor override is not app surface.** CRUDDY's `method` check skips a public method that overrides a method of the same exact name declared by a vendor parent, such as a controller extending `Laravel\Passport\Http\Controllers\AuthorizationController` and overriding `authorize()`. The parent is resolved statically through the app's `vendor/composer/autoload_classmap.php`, then `autoload_psr4.php` (no class is loaded), its file must lie under `vendor/`, and the walk follows vendor ancestors only. Blind spots, all of which still fail: a parent the maps don't resolve or whose file doesn't parse, an app-owned parent (even one that extends a vendor class), a name that differs in case, and a method the vendor parent gets only from a trait or an interface. The body checks below still apply to the override.
 
@@ -507,7 +507,7 @@ The handler runs in the transaction that marks the call processed, so a handler 
   The list lives in configuration rather than in an attribute on the command, so it works the same whether the app requires tey/standards in production or only in development, and a reviewer sees every landlord command in one place. Unlike an allowlist entry it has no expiry: a landlord command is landlord by design, not debt.
 - **What counts as tenant-scoped:** `Configuration::$tenantModels`, when the app sets it, is the whole answer (traits a model uses, or classes it is or extends). Otherwise the rule detects:
   - Spatie's `UsesTenantConnection`;
-  - a tenant-style trait (`BelongsToTenant`, `BelongsToWorkspace`, `TenantScoped` and the like);
+  - a tenant-style trait (`BelongsToTenant`, `BelongsToWorkspace` (tey/kit's `Tey\Kit\Features\Workspaces\Concerns\BelongsToWorkspace`), `TenantScoped`, `WorkspaceScoped`, `ScopedToWorkspace` and the like). Kit's `HasWorkspaces` and `HasWorkspace` (the user model's memberships and roles), `IsKitWorkspace` and `GuardsStaleWrites` are excluded by name and never make a model tenant-scoped; a model using `HasWorkspaces` with a scoping trait is still scoped;
   - a global scope that names a tenant (`addGlobalScope` with a tenant scope class or a closure on a tenant key, or `#[ScopedBy]` a tenant scope);
   - a tenant key (`Configuration::$tenantKeys`, default `workspace_id` and `tenant_id`) in `$fillable`, or as a column of the model's table in `database/migrations`.
 - **When it runs:** when the app requires spatie/laravel-multitenancy, tey/kit or tey/concierge, or sets `tenantModels`.

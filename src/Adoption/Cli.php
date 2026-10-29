@@ -10,7 +10,7 @@ use Tey\Standards\Enforcement\CheckReport;
 /**
  * `bin/standards adoption`: the standards:adoption scan without booting Laravel, for bare trees (a package's adoption fixtures in its CI).
  * Reads the app's tests/Arch/configuration.php when it has one, else the default (null) configuration: frontend under resources/js, pages
- * under any `pages/` directory there. `kit_adoptions` is not read (no database), so a migration signal treats every created table as
+ * under any `pages/` directory there; a `{kind: rule}` signal runs its rule on that default, based at --base. `kit_adoptions` is not read (no database), so a migration signal treats every created table as
  * hand-rolled. Each JSON row also carries `surface`, `facts` (the facts its `applies` names, with their values) and `row`, the fields of a
  * package's adoption fixture `expected.json`, so the package can diff against it.
  */
@@ -70,7 +70,9 @@ final class Cli
                 }
             }
             $loaded = Scanner::inventories($resolved, $inventories);
-            $report = (new Scanner(new App($resolved, $configuration), $loaded, $configuration, new DateTimeImmutable('today'), [], $configuration === null ? null : self::CONFIGURATION))->report($mode);
+            // A `{kind: rule}` signal runs its rule through Conformance, which needs a Configuration: on a bare tree it gets the same default
+            // the scan falls back to (App::bare(), based at --base; frontend under resources/js), not an exit 2.
+            $report = (new Scanner(new App($resolved, $configuration), $loaded, $configuration ?? App::bare($resolved), new DateTimeImmutable('today'), [], $configuration === null ? null : self::CONFIGURATION))->report($mode);
         } catch (AdoptionError $error) {
             return $json
                 ? ['exit' => 2, 'stdout' => json_encode(['format' => Scanner::FORMAT, 'mode' => $mode, 'error' => $error->getMessage(), 'exit_code' => 2], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).PHP_EOL, 'stderr' => '']

@@ -25,7 +25,8 @@ use Tey\Standards\Source;
  *   execute() has restored the previous tenant. Use a block closure, or dispatch a resolved job through Bus::dispatch.
  *
  * Which models are tenant-scoped: Configuration::$tenantModels, when the app sets it, is the whole answer (traits a model uses, or classes it is
- * or extends). Otherwise they are detected: Spatie's UsesTenantConnection; a tenant-style trait (BelongsToTenant, BelongsToWorkspace and the like);
+ * or extends). Otherwise they are detected: Spatie's UsesTenantConnection; a tenant-style trait (BelongsToTenant, BelongsToWorkspace, WorkspaceScoped and the like; never kit's
+ * HasWorkspaces, the user's memberships);
  * a global scope that names a tenant (a scope class or a closure on a tenant key); or, for a single-database app scoped by a column, a tenant key
  * (Configuration::$tenantKeys, default workspace_id and tenant_id) in $fillable or in the model's table in database/migrations. Active when the
  * app requires spatie/laravel-multitenancy, tey/kit or tey/concierge, or sets $tenantModels. An active rule that finds no tenant-scoped model at
@@ -38,6 +39,13 @@ use Tey\Standards\Source;
 final class TenantAware
 {
     private const COMMAND = 'Illuminate\Console\Command';
+
+    /**
+     * tey/kit traits that never scope a model's queries, excluded by short name before the tenant-trait pattern:
+     * HasWorkspaces (Tey\Kit\Features\Workspaces\Concerns\HasWorkspaces, the user model's memberships and team roles) and its
+     * singular HasWorkspace, IsKitWorkspace (the workspace model itself) and GuardsStaleWrites (optimistic locking).
+     */
+    private const MEMBERSHIP_TRAITS = ['HasWorkspaces', 'HasWorkspace', 'IsKitWorkspace', 'GuardsStaleWrites'];
 
     private const SHOULD_QUEUE = 'Illuminate\Contracts\Queue\ShouldQueue';
 
@@ -418,7 +426,10 @@ final class TenantAware
     }
 
     /**
-     * A trait named for a tenant: BelongsToTenant, BelongsToWorkspace, TenantScoped, HasTenant and the like.
+     * A trait named for a tenant or a workspace: BelongsToTenant, BelongsToWorkspace (tey/kit's scoping trait,
+     * Tey\Kit\Features\Workspaces\Concerns\BelongsToWorkspace), TenantScoped, WorkspaceScoped, ScopedToWorkspace, ForWorkspace and the like.
+     * Kit's non-scoping traits are excluded by name (MEMBERSHIP_TRAITS: HasWorkspaces, HasWorkspace, IsKitWorkspace, GuardsStaleWrites);
+     * a model that also uses a scoping trait, such as HasWorkspaces with BelongsToWorkspace, is still scoped.
      *
      * @param  array<string, array{0: string, 1: Node\Stmt\Class_}>  $classes
      */
@@ -427,7 +438,11 @@ final class TenantAware
         foreach ([$class, ...array_map(fn (string $parent): ?Node\Stmt\Class_ => $classes[$parent][1] ?? null, $this->ancestors($class, $classes))] as $node) {
             foreach ($node?->getTraitUses() ?? [] as $use) {
                 foreach ($use->traits as $trait) {
-                    if (preg_match('/^(BelongsTo|Has|ScopedTo|ScopedBy|For)(Tenant|Workspace)s?$|^(Tenant|Workspace)(Scoped|Owned|Aware)$/', $trait->getLast()) === 1) {
+                    $short = $trait->getLast();
+                    if (in_array($short, self::MEMBERSHIP_TRAITS, true)) {
+                        continue;
+                    }
+                    if (preg_match('/^(BelongsTo|Has|ScopedTo|ScopedBy|For)(Tenant|Workspace)s?$|^(Tenant|Workspace)(Scoped|Owned|Aware)$/', $short) === 1) {
                         return true;
                     }
                 }

@@ -506,8 +506,9 @@ final class CruddyGuard
      * autoload_classmap.php, then autoload_psr4.php), never loaded. Only a parent whose file lies under vendor/ counts, and the
      * walk follows vendor ancestors only. Anything unresolvable or unreadable (no vendor dir, no map entry, an app-owned parent,
      * a parse error) keeps the method a violation. Methods a vendor parent gets only from a trait or an interface do not count.
+     * Public so rule 21's body checks (ControllerBodies) skip `response negotiation` under exactly these conditions; $path is absolute.
      */
-    private function overridesVendor(string $path, string $class, string $method): bool
+    public function overridesVendor(string $path, string $class, string $method): bool
     {
         $declaration = $this->declaration($path, $class);
         $vendor = realpath($this->base.'/vendor');
