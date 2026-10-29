@@ -17,7 +17,8 @@ use Tey\Standards\Source;
  *   keys are all CSS custom properties (`:style="{ '--progress': value }"`), the documented way to hand a server value to a Tailwind class
  *   (`w-(--progress)`). Blade has no binding, so there a `style` attribute passes only when every declaration is a custom property.
  * - A `.css` file holds only Tailwind's directives (`@import`, `@theme`, `@source`, `@plugin`, `@utility`, `@layer`, plus `@config`,
- *   `@reference`, `@custom-variant`, `@tailwind`, `@charset`), `@font-face`, and custom-property declarations on `:root` and `.dark`. Inside
+ *   `@reference`, `@custom-variant`, `@tailwind`, `@charset`) in any argument form (quoted or not, with or without the semicolon,
+ *   globs such as `{js,vue}`), `@font-face`, and custom-property declarations on `:root` and `.dark`. Inside
  *   `@layer` an element (base) rule passes and a class rule fails. `@media`, `@supports` and `@container` are read through.
  *
  * Not scanned: files tey/kit owns (KitOwnership), Filament theme CSS (under a `css/filament/` folder, or importing Filament's vendor theme),
@@ -28,6 +29,9 @@ final class PureTailwind
     public const RULE = 'styling.pure-tailwind';
 
     private const STATEMENTS = ['import', 'source', 'plugin', 'config', 'reference', 'custom-variant', 'layer', 'tailwind', 'charset'];
+
+    /** Directives that are only ever statements: their arguments (globs with `{a,b}`, `/*`, quoted or not) never open a block. */
+    private const STATEMENT_ONLY = ['import', 'source', 'config', 'reference', 'tailwind', 'charset', 'plugin'];
 
     private const OPAQUE = ['theme', 'utility', 'font-face', 'custom-variant'];
 
@@ -252,7 +256,7 @@ final class PureTailwind
     public static function css(string $source): array
     {
         try {
-            $blank = self::blank($source, '~/\*.*?(?:\*/|\z)~s', '/*', '*/');
+            $blank = self::blank($source, '~("(?:[^"\\\\\n]|\\\\.)*"|\'(?:[^\'\\\\\n]|\\\\.)*\')|/\*.*?(?:\*/|\z)~s', '/*', '*/');
 
             return self::block($source, $blank, 0, strlen($blank), 'top');
         } catch (RuntimeException $error) {
@@ -270,6 +274,11 @@ final class PureTailwind
         $i = $from;
 
         while ($i < $to) {
+            if ($context !== 'tokens' && preg_match('~\G\s*@('.implode('|', self::STATEMENT_ONLY).')(?![\w-])~i', $css, $directive, 0, $i)) {
+                $i = self::statement($source, $css, $i + strlen($directive[0]), $to, strtolower($directive[1]) === 'plugin');
+
+                continue;
+            }
             [$prelude, $end, $terminator] = self::prelude($source, $css, $i, $to);
             $text = trim($prelude);
             $at = $i + (strlen($prelude) - strlen(ltrim($prelude)));
@@ -366,6 +375,43 @@ final class PureTailwind
         return [substr($css, $from, $to - $from), $to, null];
     }
 
+    /**
+     * Skips a statement-only directive from just after its name: it ends at `;`, at the block's end, or at a line break (parentheses closed)
+     * whose next line does not continue it with a `modifier(...)`. A `@plugin` may carry an options block, read as opaque.
+     */
+    private static function statement(string $source, string $css, int $from, int $to, bool $options): int
+    {
+        $quote = null;
+        $parens = 0;
+        for ($i = $from; $i < $to; $i++) {
+            $char = $css[$i];
+            if ($quote !== null) {
+                if ($char === '\\') {
+                    $i++;
+                } elseif ($char === $quote) {
+                    $quote = null;
+                }
+            } elseif ($char === '"' || $char === "'") {
+                $quote = $char;
+            } elseif ($char === '(') {
+                $parens++;
+            } elseif ($char === ')') {
+                $parens--;
+            } elseif ($parens <= 0 && $char === ';') {
+                return $i + 1;
+            } elseif ($parens <= 0 && $options && $char === '{') {
+                return self::matching($source, $css, $i, $to) + 1;
+            } elseif ($parens <= 0 && $char === "\n" && preg_match('~\G\s*[a-z][\w-]*\(~i', $css, $continued, 0, $i + 1) !== 1) {
+                return $i + 1;
+            }
+        }
+        if ($quote !== null || $parens > 0) {
+            throw new RuntimeException('unterminated string or parenthesis at line '.self::line($source, $from));
+        }
+
+        return $to;
+    }
+
     private static function matching(string $source, string $css, int $open, int $to): int
     {
         $depth = 0;
@@ -415,6 +461,10 @@ final class PureTailwind
     {
         return (string) preg_replace_callback($pattern, function (array $match) use ($opener, $closer, $insensitive): string {
             $text = $match[0];
+            // A pattern may match strings first so an opener inside one (`'app/**/*.vue'`) is left alone.
+            if (! str_starts_with($text, $opener)) {
+                return $text;
+            }
             $tail = $insensitive ? stripos($text, $closer, strlen($opener)) : strpos($text, $closer, strlen($opener));
             if ($tail === false) {
                 throw new RuntimeException('unterminated '.$opener);

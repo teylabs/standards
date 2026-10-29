@@ -1,0 +1,9 @@
+@import 'tailwindcss' source(none);
+
+@source '../../app/UI/resources/js';
+@source "../vendor/x";
+@source '../../app/UI/resources/js/**/*.{js,vue}'
+
+@theme {
+    --color-brand: oklch(0.6 0.2 250);
+}

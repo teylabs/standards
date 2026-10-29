@@ -87,6 +87,50 @@ test('[styling.pure-tailwind] Tailwind directives, @theme, @utility, @layer base
     expect(tailwindFindings('theme'))->toBe([]);
 });
 
+test('[styling.pure-tailwind] a top-level @source for a module folder passes, quoted either way, with an @import source(none)', function () {
+    expect(tailwindFindings('module-source'))->toBe([]);
+});
+
+test('[styling.pure-tailwind] a class rule next to a top-level @source still fails', function () {
+    expect(tailwindFindings('module-source-class-rule'))->toBe([
+        ['target' => 'resources/css/app.css', 'check' => 'custom CSS rule .card', 'line' => 5],
+    ]);
+});
+
+test('[styling.pure-tailwind] every Tailwind directive passes at the top level, in any argument form', function (string $css) {
+    expect(PureTailwind::css($css))->toBe([])
+        ->and(PureTailwind::css($css."\n.card { padding: 1rem; }\n"))->toBe([
+            ['check' => 'custom CSS rule .card', 'line' => substr_count($css, "\n") + 2, 'hint' => PureTailwind::css(".card { padding: 1rem; }")[0]['hint']],
+        ]);
+})->with([
+    '@source single-quoted' => ["@source '../../app/UI/resources/js';"],
+    '@source double-quoted' => ['@source "../vendor/x";'],
+    '@source unquoted' => ['@source ../vendor/x;'],
+    '@source without semicolon' => ["@source '../../app/UI/resources/js'"],
+    '@source glob with braces and /*' => ["@source '../../app/**/*.{js,vue}';"],
+    '@source unquoted glob with braces' => ['@source ../app/**/*.{js,vue}'],
+    '@source not' => ["@source not '../legacy';"],
+    '@source inline' => ['@source inline("underline");'],
+    '@import' => ["@import 'tailwindcss';"],
+    '@import double-quoted, no semicolon' => ['@import "tailwindcss"'],
+    '@import source(none)' => ["@import 'tailwindcss' source(none);"],
+    '@import source(path) theme(static)' => ["@import 'tailwindcss' source('../src') theme(static);"],
+    '@import url()' => ["@import url('tw-animate-css');"],
+    '@plugin' => ["@plugin '@tailwindcss/typography';"],
+    '@plugin with options' => ["@plugin 'daisyui' {\n    themes: light --default;\n}"],
+    '@custom-variant' => ['@custom-variant dark (&:where(.dark, .dark *));'],
+    '@custom-variant block' => ["@custom-variant hocus {\n    &:hover, &:focus { @slot; }\n}"],
+    '@config' => ["@config '../../tailwind.config.js';"],
+    '@reference' => ['@reference "../app.css";'],
+    '@utility' => ["@utility content-auto {\n    content-visibility: auto;\n}"],
+    '@layer statement' => ['@layer theme, base, components, utilities;'],
+    '@layer base' => ["@layer base {\n    body { margin: 0; }\n}"],
+    '@tailwind' => ['@tailwind utilities;'],
+    '@charset' => ['@charset "UTF-8";'],
+    '@theme' => ["@theme {\n    --color-brand: red;\n}"],
+    '@theme inline' => ["@theme inline {\n    --color-brand: var(--brand);\n}"],
+]);
+
 test('[styling.pure-tailwind] a CSS class rule fails, as do non-token declarations on :root, class rules in @layer and loose at-rules', function () {
     expect(tailwindFindings('class-rule'))->toBe([
         ['target' => 'resources/css/app.css', 'check' => 'declaration other than a custom property on :root or .dark', 'line' => 5],

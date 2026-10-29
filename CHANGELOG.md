@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- styling.pure-tailwind no longer reports top-level Tailwind directives such as `@source` (module folders) as at-rules outside @theme.
+
 ## 0.11.43 - 2026-10-29
 
 ### Fixed
