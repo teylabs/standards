@@ -79,6 +79,9 @@ export type { RepeaterRow } from './Form/repeaterState';
 export { default as ScrollList } from './List/ScrollList.vue';
 export { useScrollList } from './List/useScrollList';
 export type { ListAction, ListItem, ScrollPayload } from './List/useScrollList';
+export { default as ActivityStream } from './Feed/ActivityStream.vue';
+export { useCursorFeed, type CursorFeedConfig } from './Feed/useCursorFeed';
+export { activitySections, createCursorFeed, trustedHtml, type ActivityDay, type ActivityEntry, type ActivityHeadline, type ActivityMeta, type ActivityTone, type CursorFeedPage } from './Feed/activity';
 export type * from './contract';
 // Computed values with their working (ComputedValue.md).
 export { default as ComputedValue } from './Explanation/ComputedValue.vue';

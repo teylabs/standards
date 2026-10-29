@@ -751,14 +751,14 @@ test('make model emits a domain model with its migration, factory, enums and tes
     }
 });
 
-test('the kit export snapshot is tey/kit v0.5.13\'s @kit/ui barrel: an app on that kit gets no mismatch warning', function () {
-    // The barrel as tey/kit v0.5.13 ships it (fixtures/KitExports), installed in a synthetic app.
+test('the kit export snapshot is tey/kit v0.5.21\'s @kit/ui barrel: an app on that kit gets no mismatch warning', function () {
+    // The barrel as tey/kit v0.5.21 ships it (fixtures/KitExports), installed in a synthetic app.
     $app = sys_get_temp_dir().'/standards-kit-exports-'.bin2hex(random_bytes(6));
     mkdir(dirname($app.'/vendor/tey/kit/'.KitExports::BARREL), 0777, true);
-    copy(dirname(__DIR__).'/fixtures/KitExports/index-v0.5.13.ts.stub', $app.'/vendor/tey/kit/'.KitExports::BARREL);
+    copy(dirname(__DIR__).'/fixtures/KitExports/index-v0.5.21.ts.stub', $app.'/vendor/tey/kit/'.KitExports::BARREL);
 
     try {
-        expect(KitExports::snapshot())->toContain('PasskeyOffer')->toContain('PasswordRules')->toContain('StageNotice')->toContain('Surface')->toContain('Collapsible')->toContain('DescriptionList')->toContain('EmptyState')->toContain('Badge')->toContain('EmojiTray')->toContain('RadioCardGroup')
+        expect(KitExports::snapshot())->toContain('PasskeyOffer')->toContain('PasswordRules')->toContain('StageNotice')->toContain('Surface')->toContain('Collapsible')->toContain('DescriptionList')->toContain('EmptyState')->toContain('Badge')->toContain('EmojiTray')->toContain('RadioCardGroup')->toContain('ActivityStream')
             ->and(KitExports::mismatch($app))->toBeNull();
     } finally {
         (new Illuminate\Filesystem\Filesystem)->deleteDirectory($app);
