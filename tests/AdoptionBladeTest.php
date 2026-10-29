@@ -6,6 +6,7 @@ use Tey\Standards\Adoption\AdoptionError;
 use Tey\Standards\Adoption\App;
 use Tey\Standards\Adoption\Cli;
 use Tey\Standards\Adoption\Code;
+use Tey\Standards\Adoption\Facts;
 use Tey\Standards\Adoption\Inventory;
 use Tey\Standards\Adoption\Scanner;
 
@@ -142,3 +143,87 @@ test('template-tag in fails closed with exit 2', function (array $signal, string
     'duplicate' => [['kind' => 'template-tag', 'tags' => ['table'], 'in' => ['blade', 'blade']], 'in lists a format twice'],
     'on another kind' => [['kind' => 'file-name', 'globs' => ['*.blade.php'], 'in' => ['blade']], 'unknown field [in]'],
 ]);
+
+test('a routed Blade view reads its route scope: controller action, Route::view, a Livewire full-page render() and a public closure', function () {
+    expect((new Facts(new App(bladeBase())))->viewScopes())->toBe([
+        'resources/views/welcome.blade.php' => ['public'],
+        'resources/views/orders/index.blade.php' => ['signed-in'],
+        'resources/views/livewire/order-board.blade.php' => ['signed-in'],
+        'resources/views/help/index.blade.php' => ['signed-in'],
+    ]);
+});
+
+test('Blade scope: signed-in and public match only routed views; partials, an unrouted action and a Volt view read unknown (scope any only)', function () {
+    expect(bladeRow(['kind' => 'template-tag', 'tags' => ['table'], 'in' => ['blade'], 'scope' => 'signed-in'])['evidence'])->toBe([
+        'resources/views/livewire/order-board.blade.php:2 1 × <table> in a Blade view',
+        'resources/views/orders/index.blade.php:13 1 × <table> in a Blade view',
+    ])
+        ->and(bladeRow(['kind' => 'template-tag', 'tags' => ['table'], 'in' => ['blade'], 'scope' => 'public'])['evidence'])->toBe(['resources/views/welcome.blade.php:8 1 × <table> in a Blade view'])
+        ->and(bladeRow(['kind' => 'template-tag', 'tags' => ['table'], 'in' => ['blade'], 'scope' => 'any'])['evidence'])->toHaveCount(6)
+        ->and(bladeRow(['kind' => 'template-tag', 'tags' => ['x-button'], 'in' => ['blade'], 'scope' => 'signed-in'])['evidence'])->toBe(['resources/views/orders/index.blade.php:11 1 × <x-button> in a Blade view']);
+});
+
+test('a Volt single-file component is a Blade view: its markup is read, its PHP block is not, and unrouted it reads unknown', function () {
+    $volt = fn (array $signal): array => array_values(array_filter(bladeRow($signal)['evidence'], fn (string $e): bool => str_starts_with($e, 'resources/views/livewire/pages/settings.blade.php')));
+
+    expect($volt(['kind' => 'template-tag', 'tags' => ['table', 'x-button'], 'in' => ['blade']]))->toBe(['resources/views/livewire/pages/settings.blade.php:10 2 × <table|x-button> in a Blade view'])
+        ->and($volt(['kind' => 'template-tag', 'tags' => ['dialog'], 'in' => ['blade']]))->toBe([])
+        ->and($volt(['kind' => 'template-tag', 'tags' => ['table'], 'in' => ['blade'], 'scope' => 'signed-in']))->toBe([]);
+});
+
+test('a signal-computed fact reads Blade scope the same way', function () {
+    $data = bladeData(['kind' => 'file-name', 'globs' => ['NoSuchFile.vue']]);
+    $data['facts'][] = ['id' => 'has-blade-tables', 'description' => 'A signed-in Blade page renders a table.', 'computed' => ['signals' => [['kind' => 'template-tag', 'tags' => ['table'], 'in' => ['blade'], 'scope' => 'signed-in']]]];
+    $data['facts'][] = ['id' => 'has-public-dialogs', 'description' => 'A public Blade page renders a dialog.', 'computed' => ['signals' => [['kind' => 'template-tag', 'tags' => ['dialog'], 'in' => ['blade'], 'scope' => 'public']]]];
+    $report = (new Scanner(new App(bladeBase()), [Inventory::fromArray($data, 'kit-cases.json')], null, new DateTimeImmutable('2026-10-29')))->report();
+
+    expect($report['facts']['tey/kit']['has-blade-tables'])->toMatchArray(['value' => true, 'evidence' => 'resources/views/livewire/order-board.blade.php:2 1 × <table> in a Blade view'])
+        ->and($report['facts']['tey/kit']['has-public-dialogs']['value'])->toBeFalse();
+});
+
+test('Livewire and Filament PHP are app PHP that class-reference paths reads', function () {
+    expect((new App(bladeBase()))->php())->toContain('app/Livewire/OrderBoard.php', 'app/Filament/Resources/OrderResource.php', 'app/Filament/Kiosk/Resources/ScreenResource.php')
+        ->and(bladeRow(['kind' => 'class-reference', 'classes' => ['Livewire\Component'], 'paths' => ['app/Livewire/**']])['evidence'])->toBe(['app/Livewire/OrderBoard.php:7 1 × reference to Livewire\Component']);
+});
+
+test('a Filament hit reads signed-in only under a panel with ->login() or authMiddleware; an open or unclaimed panel reads unknown', function () {
+    $signal = ['kind' => 'class-reference', 'classes' => ['Filament\Tables\Table'], 'paths' => ['app/Filament/**']];
+
+    expect(bladeRow([...$signal, 'scope' => 'signed-in'])['evidence'])->toBe(['app/Filament/Resources/OrderResource.php:10 2 × reference to Filament\Tables\Table'])
+        ->and(bladeRow([...$signal, 'scope' => 'public']))->toBe(['status' => 'missing', 'evidence' => []])
+        ->and(bladeRow($signal)['evidence'])->toBe(['app/Filament/Kiosk/Resources/ScreenResource.php:10 2 × reference to Filament\Tables\Table', 'app/Filament/Resources/OrderResource.php:10 2 × reference to Filament\Tables\Table'])
+        ->and((new Facts(new App(bladeBase())))->filamentScopes('app/Filament/Pages/Unclaimed.php'))->toBe([]);
+});
+
+test('a lone panel provider that discovers nothing claims app/Filament; authMiddleware must be a non-empty literal', function (string $provider, array $scopes) {
+    $base = sys_get_temp_dir().'/adoption-filament-'.bin2hex(random_bytes(4));
+    mkdir($base.'/app/Providers/Filament', 0777, true);
+    file_put_contents($base.'/app/Providers/Filament/AppPanelProvider.php', "<?php\n\nclass AppPanelProvider\n{\n    public function panel(\$panel)\n    {\n        return \$panel{$provider};\n    }\n}\n");
+    try {
+        expect((new Facts(new App($base)))->filamentScopes('app/Filament/Resources/X.php'))->toBe($scopes);
+    } finally {
+        unlink($base.'/app/Providers/Filament/AppPanelProvider.php');
+        rmdir($base.'/app/Providers/Filament');
+        rmdir($base.'/app/Providers');
+        rmdir($base.'/app');
+        rmdir($base);
+    }
+})->with([
+    'login' => ['->login()', ['signed-in']],
+    'auth middleware' => ['->authMiddleware([Authenticate::class])', ['signed-in']],
+    'empty auth middleware' => ['->authMiddleware([])', []],
+    'neither' => ['->path(\'app\')', []],
+]);
+
+test('Filament and Blade files never make a surface adopted: uses.classes skips app/Filament', function () {
+    $data = bladeData(['kind' => 'file-name', 'globs' => ['NoSuchFile.vue']]);
+    foreach ($data['surfaces'] as $index => $surface) {
+        if ($surface['id'] === 'data.table') {
+            $data['surfaces'][$index]['uses'] = ['classes' => ['Filament\Tables\Table', 'Livewire\Component'], 'components' => ['x-button', 'XButton', 'table']];
+        }
+    }
+    $report = (new Scanner(new App(bladeBase()), [Inventory::fromArray($data, 'kit-cases.json')], null, new DateTimeImmutable('2026-10-29')))->report();
+
+    // Livewire PHP is still app PHP for uses.classes; uses.components reads .vue only, so no Blade tag is a use.
+    expect(array_column(collect($report['rows'])->firstWhere('id', 'data.table')['matches'], 'file'))->toBe(['app/Livewire/OrderBoard.php']);
+});

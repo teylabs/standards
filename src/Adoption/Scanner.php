@@ -512,7 +512,9 @@ final class Scanner
                 foreach ($this->owned($this->app->php()) as $path) {
                     // `paths` narrows the app PHP read, with file-name's glob rules: a glob with `/` matches the path case-insensitively.
                     $inPaths = ! isset($signal['paths']) || array_filter($signal['paths'], fn (string $glob): bool => str_contains($glob, '/') ? App::pathGlob($glob, $path) : App::glob($glob, basename($path))) !== [];
-                    if (! $inScope($path) || ! $inPaths) {
+                    // An app/Filament file reads its panel's scope (Facts::filamentScopes), never its path's: unknown unless the panel signs in.
+                    $scoped = $scope === 'any' || (str_starts_with($path, 'app/Filament/') ? in_array($scope, $this->facts->filamentScopes($path), true) : $inScope($path));
+                    if (! $scoped || ! $inPaths) {
                         continue;
                     }
                     $source = $this->app->source($path);
@@ -596,7 +598,8 @@ final class Scanner
             }
         }
         foreach ($uses['classes'] ?? [] as $class) {
-            foreach ($this->owned($this->app->php()) as $path) {
+            // Filament is server-rendered UI that kit (Vue) does not replace: a reference there is never adoption.
+            foreach ($this->owned(array_values(array_filter($this->app->php(), fn (string $path): bool => ! str_starts_with($path, 'app/Filament/')))) as $path) {
                 $source = $this->app->source($path);
                 $found = Code::classReferences($source, $class);
                 // A `use` import alone counts, as the class-reference signal's does; the first reference or import is the evidence line.
@@ -806,14 +809,15 @@ final class Scanner
     }
 
     /**
-     * The scopes a template-tag hit in a Blade view satisfies. Empty is `unknown`: only `scope: any` matches it, never `public` or
-     * `signed-in`. Blade views carry no path scope, since a view's folder says nothing about who can reach it.
+     * The scopes a template-tag hit in a Blade view satisfies: those of the routes that render it (Facts::viewScopes). Empty is
+     * `unknown`: only `scope: any` matches it, never `public` or `signed-in`. Blade views carry no path scope, since a view's folder
+     * says nothing about who can reach it.
      *
      * @return list<string>
      */
     private function bladeScopes(string $path): array
     {
-        return [];
+        return $this->facts->viewScopes()[$path] ?? [];
     }
 
     /**
