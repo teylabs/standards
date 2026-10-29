@@ -116,13 +116,13 @@ final class KitShell
 
                     continue;
                 }
-                $code = self::code($source);
-                $imports = self::imports($code);
+                $code = VueImports::code($source);
+                $imports = VueImports::imports($code);
                 $seen = [];
                 foreach (self::layoutValues($code) as [$value, $offset]) {
                     foreach (self::layoutIdentifiers($value, $offset, $code, $imports) as [$identifier, $at]) {
                         [$kind, $path] = $this->kind($base, $imports[$identifier], $entry, $kit);
-                        if ($kind !== 'app' || isset($seen[$path]) || self::exempt($path) || $this->reachesKit($base, $path, $kit, 0, [])) {
+                        if ($kind !== 'app' || isset($seen[$path]) || self::exempt($path) || $this->reachesKit($base, $path, $kit)) {
                             continue;
                         }
                         $seen[$path] = true;
@@ -170,7 +170,7 @@ final class KitShell
             if ($kit->owns($path, $source) || (self::shellPath($path) && ! $kit->recorded($path)) || basename($path) === 'Page.vue' || self::exempt($path)) {
                 continue;
             }
-            $imports = self::imports(self::code(self::scripts($source)));
+            $imports = VueImports::imports(VueImports::code(VueImports::scripts($source)));
             foreach ($imports as $import) {
                 if ($this->kind($base, $import, $path, $kit)[0] === 'kit-layout') {
                     continue 2;
@@ -249,7 +249,7 @@ final class KitShell
         if ($specifier === '@kit/shell') {
             return [$imported === 'Layout' ? 'kit-layout' : 'kit', ''];
         }
-        $path = self::resolve($base, $specifier, $from);
+        $path = VueImports::resolve($base, $specifier, $from);
         if ($path === null) {
             return ['other', ''];
         }
@@ -267,51 +267,20 @@ final class KitShell
         return $kit->owns($path, (string) file_get_contents($file)) ? ['kit', $path] : ['app', $path];
     }
 
-    /** Whether an app `.vue` file, or an app `.vue` file it imports (three levels at most), imports kit's Workspace Layout. @param array<string, true> $visited */
-    private function reachesKit(string $base, string $path, KitOwnership $kit, int $depth, array $visited): bool
+    /** Whether an app `.vue` file, or an app `.vue` file it imports (three levels at most), imports kit's Workspace Layout. */
+    private function reachesKit(string $base, string $path, KitOwnership $kit): bool
     {
-        if ($depth > 3 || isset($visited[$path])) {
-            return false;
-        }
-        $visited[$path] = true;
-        $imports = self::imports(self::code(self::scripts((string) @file_get_contents($base.'/'.$path))));
-        foreach ($imports as $import) {
-            [$kind, $next] = $this->kind($base, $import, $path, $kit);
-            if ($kind === 'kit-layout' || ($kind === 'app' && $this->reachesKit($base, $next, $kit, $depth + 1, $visited))) {
-                return true;
-            }
-        }
+        return VueImports::reaches(
+            $base,
+            $path,
+            3,
+            fn (string $file, string $source, array $imports): bool => array_any($imports, fn (array $import): bool => $this->kind($base, $import, $file, $kit)[0] === 'kit-layout'),
+            function (array $import, string $from) use ($base, $kit): ?string {
+                [$kind, $next] = $this->kind($base, $import, $from, $kit);
 
-        return false;
-    }
-
-    /** `@/x` (Vite's resources/js alias) and relative specifiers, as a project path; a bare one gets `.vue` when that file exists. Null for anything else. */
-    private static function resolve(string $base, string $specifier, string $from): ?string
-    {
-        if (str_starts_with($specifier, '@/')) {
-            $path = 'resources/js/'.substr($specifier, 2);
-        } elseif (str_starts_with($specifier, './') || str_starts_with($specifier, '../')) {
-            $path = dirname($from).'/'.$specifier;
-        } else {
-            return null;
-        }
-        $parts = [];
-        foreach (explode('/', $path) as $part) {
-            if ($part === '..') {
-                if ($parts === []) {
-                    return null;
-                }
-                array_pop($parts);
-            } elseif ($part !== '.' && $part !== '') {
-                $parts[] = $part;
-            }
-        }
-        $path = implode('/', $parts);
-        if (! preg_match('~\.[a-z]+$~', $path) && is_file($base.'/'.$path.'.vue')) {
-            $path .= '.vue';
-        }
-
-        return $path;
+                return $kind === 'app' ? $next : null;
+            },
+        );
     }
 
     private static function shellPath(string $path): bool
@@ -383,7 +352,7 @@ final class KitShell
 
             return [];
         }
-        $text = self::firstElements(self::code($value, strings: true));
+        $text = self::firstElements(VueImports::code($value, strings: true));
         preg_match_all('~(?<![\w$.])[A-Za-z_$][\w$]*(?![\w$])~', $text, $names, PREG_OFFSET_CAPTURE);
         $found = [];
         foreach ($names[0] as [$name, $at]) {
@@ -513,73 +482,6 @@ final class KitShell
         }
 
         return $length;
-    }
-
-    /**
-     * Default and named imports, local name => [specifier, imported name]. Type-only imports are left out.
-     *
-     * @return array<string, array{0: string, 1: string}>
-     */
-    private static function imports(string $code): array
-    {
-        $imports = [];
-        preg_match_all('~\bimport\s+(?!type\b)(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\{([^}]*)\}\s*)?from\s*([\'"])([^\'"]+)\3~', $code, $matches, PREG_SET_ORDER);
-        foreach ($matches as $match) {
-            if (($match[1] ?? '') !== '') {
-                $imports[$match[1]] = [$match[4], 'default'];
-            }
-            foreach (explode(',', $match[2] ?? '') as $named) {
-                if (preg_match('~^\s*(?:type\s+)?([\w$]+)(?:\s+as\s+([\w$]+))?\s*$~', $named, $parts) && ! preg_match('~^\s*type\s~', $named)) {
-                    $imports[$parts[2] ?? $parts[1]] = [$match[4], $parts[1]];
-                }
-            }
-        }
-
-        return $imports;
-    }
-
-    /** The contents of every `<script>` block in a `.vue` file, at their own offsets. */
-    private static function scripts(string $source): string
-    {
-        preg_match_all('~<script\b[^>]*>(.*?)</script\s*>~si', $source, $blocks);
-
-        return implode("\n", $blocks[1]);
-    }
-
-    /** JavaScript with its comments blanked (and its string contents too, when asked); lengths and lines are kept. */
-    private static function code(string $source, bool $strings = false): string
-    {
-        $out = $source;
-        $length = strlen($source);
-        for ($i = 0; $i < $length; $i++) {
-            $char = $source[$i];
-            if (in_array($char, ['"', "'", '`'], true)) {
-                for ($j = $i + 1; $j < $length && $source[$j] !== $char; $j++) {
-                    if ($source[$j] === '\\') {
-                        $j++;
-                    }
-                }
-                if ($strings) {
-                    for ($k = $i + 1; $k < min($j, $length); $k++) {
-                        $out[$k] = $source[$k] === "\n" ? "\n" : ' ';
-                    }
-                }
-                $i = $j;
-            } elseif ($char === '/' && ($source[$i + 1] ?? '') === '/') {
-                for (; $i < $length && $source[$i] !== "\n"; $i++) {
-                    $out[$i] = ' ';
-                }
-            } elseif ($char === '/' && ($source[$i + 1] ?? '') === '*') {
-                $end = strpos($source, '*/', $i + 2);
-                $end = $end === false ? $length : $end + 2;
-                for (; $i < $end; $i++) {
-                    $out[$i] = $source[$i] === "\n" ? "\n" : ' ';
-                }
-                $i--;
-            }
-        }
-
-        return $out;
     }
 
     private static function phpWithoutComments(string $source): string
