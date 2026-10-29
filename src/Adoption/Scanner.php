@@ -559,7 +559,7 @@ final class Scanner
             $parts = explode('/', $module);
             $package = str_starts_with($module, '@') ? implode('/', array_slice($parts, 0, 2)) : $parts[0];
 
-            return in_array($package, $own, true) || Lists::runtime($package) ? null : $package;
+            return in_array($package, $own, true) || Lists::runtime($package) || Lists::nonUi($package) ? null : $package;
         };
 
         $mapped = [];
@@ -610,7 +610,7 @@ final class Scanner
         $npm = array_keys($this->app->npmPackages());
         sort($npm);
         foreach ($npm as $package) {
-            if (in_array($package, $own, true) || Lists::runtime($package) || Lists::tooling($package) || $thirdParty($package) === null) {
+            if (in_array($package, $own, true) || Lists::runtime($package) || Lists::tooling($package) || Lists::nonUi($package) || $thirdParty($package) === null) {
                 continue;
             }
             $targets = $this->replacing(fn (array $replaces): bool => in_array($package, array_map(fn (string $entry): string => explode('#', $entry, 2)[0], $replaces['npm'] ?? []), true));

@@ -5,6 +5,7 @@
 ### Fixed
 
 - **`standards:adoption`: route analyses follow route files a group includes.** A group whose callback `require`s or `include`s another route file, or `->group(base_path('routes/x.php'))` / `->group(__DIR__.'/x.php')`, now applies its middleware and prefix to that file's routes, through chains of includes, with loops cut off. An auth group that requires `routes/app.php` with `Inertia::render` pages makes `signed-in-pages` true, and those routes are no longer `public-pages`; under an `api` group they never count. Only literal paths (`__DIR__.'/…'`, `base_path('…')`, a quoted string) are resolved; a non-literal include is not read and is reported as a warning (a blind spot).
+- **`standards:adoption`: non-UI libraries are never UI gaps.** A new `Lists::NON_UI` (`Lists::VERSION` 3) holds axios, ky, ofetch, uuid, nanoid, qs, query-string, crypto-js, js-cookie, pusher-js, laravel-echo, socket.io-client, ziggy-js, @inertiajs/\*, vue, vue-router, pinia, vuex, @vueuse/core, mitt, zod and yup. Neither the dependency nor a component's import of one makes a gap. lodash and lodash-es are left off for review, and date libraries stay gaps, since a kit surface may cover date display.
 
 ## 0.11.47 - 2026-10-29
 

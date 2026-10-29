@@ -113,7 +113,7 @@ test('Laravel Mix and webpack-era build tooling is never a library gap; a UI lib
     // Negative: every devDependency in the fixture is tooling. Positive: chart.js, and vue-loading-overlay, which only resembles
     // `*-loader`.
     expect(array_column($report['gaps'], 'subject'))->toBe(['npm:chart.js', 'npm:vue-loading-overlay'])
-        ->and($report['lists'])->toBe(2)
+        ->and($report['lists'])->toBe(3)
         ->and(Lists::tooling('resolve-url-loader'))->toBeTrue()
         ->and(Lists::tooling('loader'))->toBeFalse()
         ->and(Lists::tooling('@babel/runtime'))->toBeTrue()
@@ -175,4 +175,17 @@ test('route analyses apply a group\'s middleware and prefix to the route files i
         ->and($dynamic->blindSpots())->toBe(["routes/web.php:6 includes a route file standards cannot resolve (__DIR__.'/'.config('app.area').'.php'); its routes are not read"])
         ->and(calibrationReport('includes/dynamic', calibrationInventory(['layout.page' => [['kind' => 'file-name', 'globs' => ['Nothing.vue']]]]))['warnings'])
         ->toContain("routes/web.php:6 includes a route file standards cannot resolve (__DIR__.'/'.config('app.area').'.php'); its routes are not read");
+});
+
+test('non-UI libraries are never gaps, as packages or as a component\'s imports; lodash, date libraries and UI libraries still are', function () {
+    $report = calibrationReport('non-ui', calibrationInventory(['layout.page' => [['kind' => 'file-name', 'globs' => ['Nothing.vue']]]]));
+
+    // Negative: every other dependency is on Lists::NON_UI, and ProjectLoader imports only axios and nanoid. Positive: dayjs (date
+    // display), lodash and lodash-es (left for review), vue-select, and ProjectPicker through vue-select alone.
+    expect(array_column($report['gaps'], 'subject'))->toBe(['resources/js/components/ProjectPicker.vue', 'npm:dayjs', 'npm:lodash', 'npm:lodash-es', 'npm:vue-select'])
+        ->and(array_column($report['gaps'], 'detail'))->toContain('app component: imports vue-select')
+        ->and($report['lists'])->toBe(3)
+        ->and(Lists::nonUi('@inertiajs/vue3'))->toBeTrue()
+        ->and(Lists::nonUi('@vueuse/components'))->toBeFalse()
+        ->and(Lists::nonUi('axios-mock-adapter'))->toBeFalse();
 });
