@@ -514,3 +514,74 @@ test('[rule 51] cache suggestions distinguish dependency caches from unrelated c
     ['npm ci', [['uses' => 'actions/cache@v4', 'with' => ['path' => 'public/build', 'key' => 'assets']]], true],
     ['composer install', [['uses' => 'actions/setup-node@v6', 'with' => ['cache' => 'npm']]], true],
 ]);
+
+test('[rule 51] a standards reusable-workflow call reads runs-on and timeout-minutes from with', function (Closure $change, array $reasons) {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/standards-call.yml');
+    $change($workflow['jobs']['standards']);
+    file_put_contents($this->ciBase.'/.github/workflows/standards.yml', Yaml::dump($workflow, 10));
+
+    expect(array_column((new CiTriggers($this->ciBase, distribution: 'app'))->findings(), 'reason'))->toBe($reasons);
+})->with([
+    'both inputs' => [fn (array &$job) => null, []],
+    'any ref' => [function (array &$job) {
+        $job['uses'] = 'teylabs/standards/.github/workflows/standards.yml@0123456789abcdef0123456789abcdef01234567';
+    }, []],
+    'string minutes' => [function (array &$job) {
+        $job['with']['timeout-minutes'] = '30';
+    }, []],
+    'missing timeout relies on the bounded default of 15' => [function (array &$job) {
+        unset($job['with']['timeout-minutes']);
+    }, []],
+    'no with at all' => [function (array &$job) {
+        unset($job['with']);
+    }, []],
+    'zero timeout' => [function (array &$job) {
+        $job['with']['timeout-minutes'] = 0;
+    }, ['timeout: with.timeout-minutes must be a positive whole number of minutes for the standards reusable workflow.']],
+    'negative timeout' => [function (array &$job) {
+        $job['with']['timeout-minutes'] = -5;
+    }, ['timeout: with.timeout-minutes must be a positive whole number of minutes for the standards reusable workflow.']],
+    'non-numeric timeout' => [function (array &$job) {
+        $job['with']['timeout-minutes'] = 'soon';
+    }, ['timeout: with.timeout-minutes must be a positive whole number of minutes for the standards reusable workflow.']],
+    'fractional timeout' => [function (array &$job) {
+        $job['with']['timeout-minutes'] = 1.5;
+    }, ['timeout: with.timeout-minutes must be a positive whole number of minutes for the standards reusable workflow.']],
+    'non-Linux runner from with' => [function (array &$job) {
+        $job['with']['runs-on'] = 'windows-latest';
+    }, ['os-matrix: remove non-Linux legs on every event; our apps deploy on Linux only.']],
+]);
+
+test('[rule 51] other reusable-workflow calls keep their existing findings', function (string $uses) {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/standards-call.yml');
+    $workflow['jobs']['standards']['uses'] = $uses;
+    file_put_contents($this->ciBase.'/.github/workflows/standards.yml', Yaml::dump($workflow, 10));
+
+    // Unchanged from before: with: is not read, so the empty job runs-on and missing job timeout are both reported.
+    expect(array_column((new CiTriggers($this->ciBase, distribution: 'app'))->findings(), 'reason'))
+        ->toBe(['os-matrix: remove non-Linux legs on every event; our apps deploy on Linux only.', 'timeout: set timeout-minutes on every job.']);
+})->with([
+    'third party' => ['acme/workflows/.github/workflows/standards.yml@v1'],
+    'other teylabs repo' => ['teylabs/cookbook/.github/workflows/standards.yml@main'],
+    'other standards workflow' => ['teylabs/standards/.github/workflows/tests.yml@main'],
+    'local copy' => ['./.github/workflows/standards.yml'],
+]);
+
+test('[rule 51] a normal job ignores with-style inputs and still needs its own timeout', function () {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/timeout.yml');
+    $workflow['jobs']['test']['with'] = ['timeout-minutes' => 20];
+    file_put_contents($this->ciBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
+
+    expect(array_column((new CiTriggers($this->ciBase, distribution: 'app'))->findings(), 'reason'))
+        ->toBe(['timeout: set timeout-minutes on every job.']);
+});
+
+test('the reusable standards workflow declares runs-on and timeout-minutes inputs with today\'s defaults', function () {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/.github/workflows/standards.yml');
+    $inputs = ($workflow['on'] ?? $workflow[true])['workflow_call']['inputs'];
+
+    expect($inputs['runs-on'])->toMatchArray(['type' => 'string', 'default' => 'ubuntu-latest'])
+        ->and($inputs['timeout-minutes'])->toMatchArray(['type' => 'number', 'default' => 15])
+        ->and($workflow['jobs']['standards']['runs-on'])->toBe('${{ inputs.runs-on }}')
+        ->and($workflow['jobs']['standards']['timeout-minutes'])->toBe('${{ inputs.timeout-minutes }}');
+});

@@ -4,6 +4,16 @@
 
 ### Added
 
+- **The reusable `standards.yml` workflow takes optional `runs-on` (default `ubuntu-latest`) and `timeout-minutes` (default `15`) inputs.** Both defaults match the previous hard-coded job, so existing callers are unchanged.
+
+### Fixed
+
+- **Rule 51 accepts a job calling the standards reusable workflow.** GitHub rejects `timeout-minutes` on a `uses:` job, so for `teylabs/standards/.github/workflows/standards.yml@<any ref>` the rule now reads `with.timeout-minutes` and `with.runs-on` instead. A missing `with.timeout-minutes` passes on the bounded 15-minute default; zero, negative, fractional or non-numeric values fail. Other `uses:` jobs and normal jobs are judged as before.
+
+## Unreleased
+
+### Added
+
 - Optional rule `ui header-actions` and the `ui-page.header-actions` leaf: a page header shows at most one primary and three visible actions (tey/kit 0.6.9 `priority`). It reads a page ViewModel's literal `actions()` or `pageActions()` and `#actions` slots with more than three controls. Enable it in `optionalRules`.
 
 ## 0.11.44 - 2026-10-29

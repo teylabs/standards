@@ -204,8 +204,11 @@ final readonly class CiTriggers
             }
 
             $matrix = $job['strategy']['matrix'] ?? [];
+            $standardsCall = $this->standardsCall($job);
+            $with = is_array($job['with'] ?? null) ? $job['with'] : [];
+            $runner = $standardsCall ? ($with['runs-on'] ?? 'ubuntu-latest') : ($job['runs-on'] ?? '');
 
-            if ($ciWorkflow && $this->distribution() === 'app' && $this->nonLinux($job['runs-on'] ?? '', $matrix)) {
+            if ($ciWorkflow && $this->distribution() === 'app' && $this->nonLinux($runner, $matrix)) {
                 $findings[] = ['job' => $name, 'reason' => 'os-matrix: remove non-Linux legs on every event; our apps deploy on Linux only.'];
             }
 
@@ -219,7 +222,11 @@ final readonly class CiTriggers
                 }
             }
 
-            if (! isset($job['timeout-minutes'])) {
+            if ($standardsCall) {
+                if (array_key_exists('timeout-minutes', $with) && ! $this->positiveMinutes($with['timeout-minutes'])) {
+                    $findings[] = ['job' => $name, 'reason' => 'timeout: with.timeout-minutes must be a positive whole number of minutes for the standards reusable workflow.'];
+                }
+            } elseif (! isset($job['timeout-minutes'])) {
                 $findings[] = ['job' => $name, 'reason' => 'timeout: set timeout-minutes on every job.'];
             }
         }
@@ -248,6 +255,28 @@ final readonly class CiTriggers
         }
 
         return $findings;
+    }
+
+    /**
+     * A job calling teylabs/standards' reusable workflow (any ref). GitHub rejects
+     * timeout-minutes on a uses-job, so its runner and timeout come from with:.
+     *
+     * @param  array<mixed>  $job
+     */
+    private function standardsCall(array $job): bool
+    {
+        $uses = $job['uses'] ?? null;
+
+        return is_string($uses) && preg_match('#^teylabs/standards/\.github/workflows/standards\.ya?ml@\S+$#i', trim($uses)) === 1;
+    }
+
+    private function positiveMinutes(mixed $value): bool
+    {
+        if (is_int($value)) {
+            return $value > 0;
+        }
+
+        return is_string($value) && preg_match('/^\s*0*[1-9]\d*\s*$/', $value) === 1;
     }
 
     private function draftGuard(mixed $condition): bool
