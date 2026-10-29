@@ -10,7 +10,7 @@ use Tey\Standards\Adoption\Inventory;
 use Tey\Standards\Adoption\Scanner;
 
 /*
- * The `class-reference` signal, scanned over fixtures/Adoption/class-reference with the kit-cases inventory,
+ * The `class-reference` signal and file-name `except`, scanned over fixtures/Adoption/class-reference with the kit-cases inventory,
  * where one signal replaces form.files' hand-rolled signals (and applies is forced true).
  */
 
@@ -117,7 +117,15 @@ test('uses.classes, through the shared matcher, still reads a use import and cit
         ->and(array_map(fn (array $e): string => $e['file'].':'.$e['line'], $row['matches']))->toBe(['app/Pdf/ImportOnly.php:5', 'app/Pdf/InvoiceRenderer.php:9', 'app/Pdf/ReportRenderer.php:5']);
 });
 
-test('class-reference fails closed with exit 2', function (array $signal, string $message) {
+test('file-name except removes a file an include glob matched; the other Card still fires', function () {
+    expect(classReferenceRow(['kind' => 'file-name', 'globs' => ['*Card.vue'], 'except' => ['**/Components/AuthenticationCard.vue']]))->toBe(['status' => 'hand-rolled', 'evidence' => ['resources/js/Components/StatCard.vue file name matches *Card.vue']])
+        ->and(classReferenceRow(['kind' => 'file-name', 'globs' => ['*Card.vue'], 'except' => ['**/components/authenticationcard.vue']]))->toBe(['status' => 'hand-rolled', 'evidence' => ['resources/js/Components/StatCard.vue file name matches *Card.vue']])
+        ->and(classReferenceRow(['kind' => 'file-name', 'globs' => ['*Card.vue'], 'except' => ['authenticationcard.vue']])['evidence'])->toHaveCount(2)
+        ->and(classReferenceRow(['kind' => 'file-name', 'globs' => ['*Card.vue'], 'except' => ['*Card.vue']]))->toBe(['status' => 'missing', 'evidence' => []])
+        ->and(classReferenceRow(['kind' => 'file-name', 'globs' => ['*Card.vue']])['evidence'])->toHaveCount(2);
+});
+
+test('class-reference and file-name except fail closed with exit 2', function (array $signal, string $message) {
     expect(fn () => Inventory::fromArray(classReferenceData($signal), 'kit-cases.json'))->toThrow(AdoptionError::class, $message);
 
     $file = tempnam(sys_get_temp_dir(), 'inventory');
@@ -138,4 +146,7 @@ test('class-reference fails closed with exit 2', function (array $signal, string
     'min zero' => [['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'min' => 0], 'min must be an integer of at least 1'],
     'min a string' => [['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'min' => '2'], 'min must be an integer of at least 1'],
     'bad scope' => [['kind' => 'class-reference', 'classes' => ['Mpdf\Mpdf'], 'scope' => 'guest'], 'is not one of signed-in, public, any'],
+    'except a string' => [['kind' => 'file-name', 'globs' => ['*Card.vue'], 'except' => '**/AuthenticationCard.vue'], 'except must be a list'],
+    'except empty' => [['kind' => 'file-name', 'globs' => ['*Card.vue'], 'except' => []], 'except must be a non-empty list of strings'],
+    'except non-string' => [['kind' => 'file-name', 'globs' => ['*Card.vue'], 'except' => [true]], 'except must be a list of non-empty strings'],
 ]);

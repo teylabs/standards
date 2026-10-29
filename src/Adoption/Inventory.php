@@ -19,7 +19,7 @@ final readonly class Inventory
     public const SIGNALS = [
         'rule' => ['rule' => 'string', 'scope' => 'scope'],
         'vue-root' => ['tags' => 'list', 'requires' => 'requires', 'scope' => 'scope'],
-        'file-name' => ['globs' => 'list', 'scope' => 'scope'],
+        'file-name' => ['globs' => 'list', 'except' => 'items', 'scope' => 'scope'],
         'import' => ['specifiers' => 'list', 'scope' => 'scope'],
         'template-tag' => ['tags' => 'list', 'min' => 'int', 'where' => 'attributes', 'except' => 'attributes', 'scope' => 'scope'],
         'mail-view' => ['without' => 'list', 'scope' => 'scope'],

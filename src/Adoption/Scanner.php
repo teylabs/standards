@@ -398,9 +398,14 @@ final class Scanner
                 }
                 break;
             case 'file-name':
+                $globMatches = fn (string $glob, string $path): bool => str_contains($glob, '/') ? App::pathGlob($glob, $path) : App::glob($glob, basename($path));
                 foreach ($this->owned([...$this->app->frontend(), ...$this->app->views()]) as $path) {
+                    // `except` removes a file that an include glob matched, with the same glob semantics.
+                    if (! $inScope($path) || array_filter($signal['except'] ?? [], fn (string $glob): bool => $globMatches($glob, $path)) !== []) {
+                        continue;
+                    }
                     foreach ($signal['globs'] as $glob) {
-                        if ($inScope($path) && (str_contains($glob, '/') ? App::pathGlob($glob, $path) : App::glob($glob, basename($path)))) {
+                        if ($globMatches($glob, $path)) {
                             $fired[] = self::evidence($path, null, 'file name matches '.$glob);
                             break;
                         }
