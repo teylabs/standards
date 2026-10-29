@@ -193,3 +193,15 @@ test('MCP route coverage fails closed when routes cannot be enumerated and keeps
     unlink($this->manifest);
     expect(array_column((new McpParity($this->base))->violations(), 'check'))->toBe(['capability inventory is missing or is a symlink']);
 });
+
+test('MCP route coverage reports a listed route that no route file defines', function () {
+    file_put_contents($this->base.'/routes/web.php', "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n\nRoute::post('/records', [Records::class, 'store'])->name('records.store');\n");
+    $data = json_decode(file_get_contents($this->manifest));
+    $data->capabilities[0]->routes = ['records.store', 'records.gone', 'DELETE /records/{record}'];
+    $data->capabilities[] = (object) ['id' => 'old.ui', 'uiOnly' => 'Retired screen', 'routes' => ['post records']];
+    file_put_contents($this->manifest, json_encode($data));
+    expect((new McpParity($this->base))->violations())->toBe([
+        ['target' => 'docs/mcp-capabilities.json', 'check' => 'capability 1 lists route records.gone that no route file defines'],
+        ['target' => 'docs/mcp-capabilities.json', 'check' => 'capability 1 lists route DELETE /records/{record} that no route file defines'],
+    ]);
+});

@@ -77,15 +77,21 @@ final class McpParity
      * Every mutating route in the app's route files needs a capability that lists it in `routes`, by name or as "METHOD /uri":
      * one with an MCP path, or one marked `uiOnly` with the reason it stays out of MCP.
      *
-     * @param  array<string, list<string>>  $covered  capability id => declared route keys
+     * @param  array<string, list<string>>  $covered  capability label => declared route keys
      */
     private function routeCoverage(array $covered): void
     {
         $routes = new McpRoutes($this->base, $this->routeRoots);
         $this->routeFindings = $routes->errors;
         $keys = array_merge(...array_values($covered ?: [[]]));
+        $known = array_merge(...array_map(McpRoutes::keys(...), $routes->routes ?: [['methods' => '', 'uri' => '', 'name' => null]]));
+        foreach ($covered as $label => $declared) {
+            foreach (array_diff($declared, $known) as $stale) {
+                $this->routeFindings[] = ['target' => $this->manifest, 'check' => $label.' lists route '.$stale.' that no route file defines'];
+            }
+        }
         foreach ($routes->routes as $route) {
-            $candidates = [...($route['name'] === null ? [] : [$route['name']]), ...array_map(fn (string $method): string => $method.' '.$route['uri'], explode('|', $route['methods']))];
+            $candidates = McpRoutes::keys($route);
             if (array_intersect($candidates, $keys) !== [] || $this->excluded($route)) {
                 continue;
             }
@@ -130,7 +136,7 @@ final class McpParity
             if (property_exists($capability, 'routes') && ! $this->strings($capability->routes)) {
                 $this->findings[] = $label.' needs routes as a non-empty list of route names or "METHOD /uri"';
             } elseif (property_exists($capability, 'routes')) {
-                $routeKeys[$name] = array_map(fn (string $key): string => preg_match('/^([A-Za-z]+)\s+(\S+)$/D', $key, $m) === 1 ? strtoupper($m[1]).' /'.trim($m[2], '/') : $key, $capability->routes);
+                $routeKeys[$label] = array_map(self::routeKey(...), $capability->routes);
             }
             if (property_exists($capability, 'uiOnly')) {
                 if (! $this->text($capability->uiOnly)) {
@@ -255,6 +261,12 @@ final class McpParity
             }
         }
         $this->routeCoverage($routeKeys);
+    }
+
+    /** A capability's `routes` entry normalised as rule 55 matches it: a route name as written, "METHOD /uri" with the method upper-cased and one leading slash. */
+    public static function routeKey(string $key): string
+    {
+        return preg_match('/^([A-Za-z]+)\s+(\S+)$/D', $key, $m) === 1 ? strtoupper($m[1]).' /'.trim($m[2], '/') : $key;
     }
 
     /** @param list<string> $required */

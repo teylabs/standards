@@ -7,6 +7,10 @@ namespace Tey\Standards\Enforcement;
 use Closure;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use JsonException;
+use stdClass;
+use Tey\Standards\Checks\McpParity;
+use Tey\Standards\Checks\McpRoutes;
 use Tey\Standards\Configuration;
 use Tey\Standards\Patterns\Compiler;
 use Tey\Standards\Patterns\Leaf;
@@ -122,6 +126,88 @@ final class Maker
      * @return list<string> the project-relative files written or changed
      */
     public function make(string $unit, string $name, string $flavor, ?string $leafId = null, array $options = []): array
+    {
+        $written = $this->unit($unit, $name, $flavor, $leafId, $options);
+
+        return [...$written, ...$this->declareRoutes($unit, self::base($unit, $name), $options)];
+    }
+
+    /** The default reason on the uiOnly entry standards:make writes for a route it generates, so the route shows up in review. */
+    public const UI_ONLY_REASON = 'generated: confirm or map to an MCP tool';
+
+    /**
+     * Declares every mutating route this run wrote in the host's capability manifest (rule 55), merged idempotently: a route already listed anywhere is left
+     * alone. A crud --mcp route goes in the `routes` of the manifest's `<table>.write` capability when that capability exists; every other route goes in a
+     * `uiOnly` entry `generated.<unit>.<name>` with UI_ONLY_REASON. A host without a manifest, or with one that is not a JSON object with a capabilities
+     * list, is left untouched: rule 55 already reports it.
+     *
+     * @param  list<string>  $options
+     * @return list<string>
+     */
+    private function declareRoutes(string $unit, string $name, array $options): array
+    {
+        $manifest = 'docs/mcp-capabilities.json';
+        $sources = [];
+        foreach ($this->overlay as $path => $contents) {
+            if (self::kind($path) === 'routes') {
+                $sources[$path] = $contents;
+            }
+        }
+        if ($sources === [] || ! $this->exists($manifest)) {
+            return [];
+        }
+        try {
+            $data = json_decode($this->read($manifest), flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return [];
+        }
+        if (! $data instanceof stdClass || ! is_array($data->capabilities ?? null) || ! array_is_list($data->capabilities)) {
+            return [];
+        }
+        $declared = [];
+        foreach ($data->capabilities as $capability) {
+            foreach (is_array($capability->routes ?? null) ? $capability->routes : [] as $key) {
+                is_string($key) && $declared[] = McpParity::routeKey($key);
+            }
+        }
+        $keys = [];
+        foreach ((new McpRoutes($this->base, [], $sources))->routes as $route) {
+            if (array_intersect(McpRoutes::keys($route), $declared) === []) {
+                $keys[] = $route['name'] ?? explode('|', $route['methods'])[0].' '.$route['uri'];
+            }
+        }
+        $keys = array_values(array_unique($keys));
+        if ($keys === []) {
+            return [];
+        }
+        $mcp = $unit === 'crud' && in_array('mcp', $options, true) ? Str::snake(Str::plural($name)).'.write' : null;
+        $placeholder = 'generated.'.$unit.'.'.Str::kebab($name);
+        $target = null;
+        foreach ($data->capabilities as $capability) {
+            if ($capability instanceof stdClass && $mcp !== null && ($capability->id ?? null) === $mcp && ! property_exists($capability, 'uiOnly')) {
+                $target = $capability;
+                break;
+            }
+        }
+        foreach ($target === null ? $data->capabilities : [] as $capability) {
+            if ($capability instanceof stdClass && ($capability->id ?? null) === $placeholder) {
+                $target = $capability;
+            }
+        }
+        if ($target === null) {
+            $target = (object) ['id' => $placeholder, 'uiOnly' => self::UI_ONLY_REASON, 'routes' => []];
+            $data->capabilities[] = $target;
+        }
+        $target->routes = array_values(array_unique([...(is_array($target->routes ?? null) ? $target->routes : []), ...$keys]));
+
+        return [$this->write($manifest, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION)."\n")];
+    }
+
+    /**
+     * @param  list<string>  $options
+     * @return list<string>
+     */
+    private function unit(string $unit, string $name, string $flavor, ?string $leafId, array $options): array
     {
         if (! in_array($flavor, Compiler::UNITS[$unit] ?? [], true)) {
             throw new InvalidArgumentException("Unknown unit or flavor {$unit} --flavor={$flavor}. Units: ".implode('; ', array_map(fn (string $u, array $f): string => $u.' ('.implode('|', $f).')', array_keys(Compiler::UNITS), Compiler::UNITS)).'.');

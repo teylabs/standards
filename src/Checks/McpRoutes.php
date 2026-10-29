@@ -34,9 +34,20 @@ final class McpRoutes
     /** @var list<array{target: string, check: string, line?: int}> */
     public array $errors = [];
 
-    /** @param list<string> $roots */
-    public function __construct(private readonly string $base, private readonly array $roots)
+    /**
+     * @param  list<string>  $roots
+     * @param  array<string, string>|null  $sources  path => contents to parse instead of the files under $roots (standards:make's planned writes)
+     */
+    public function __construct(string $base, array $roots, ?array $sources = null)
     {
+        if ($sources !== null) {
+            ksort($sources);
+            foreach ($sources as $path => $contents) {
+                $this->parse($path, $contents);
+            }
+
+            return;
+        }
         $files = [];
         foreach ($roots as $root) {
             foreach (glob(rtrim($base, '/').'/'.$root, GLOB_ONLYDIR) ?: [] as $directory) {
@@ -53,17 +64,33 @@ final class McpRoutes
             return;
         }
         foreach ($files as $path) {
-            try {
-                $nodes = (new ParserFactory)->createForNewestSupportedVersion()->parse((string) file_get_contents($base.'/'.$path)) ?? [];
-            } catch (Error $error) {
-                $this->errors[] = ['target' => $path, 'check' => 'mutating routes could not be enumerated: the route file does not parse'];
+            $this->parse($path, (string) file_get_contents($base.'/'.$path));
+        }
+    }
 
-                continue;
-            }
-            $nodes = (new NodeTraverser(new NameResolver, new ParentConnectingVisitor))->traverse($nodes);
-            foreach ((new NodeFinder)->findInstanceOf($nodes, Node\Expr\StaticCall::class) as $call) {
-                $this->route($path, $call);
-            }
+    /**
+     * The keys a capability's `routes` may use for a route: its name, and "METHOD /uri" for each of its methods.
+     *
+     * @param  array{methods: string, uri: string, name: ?string}  $route
+     * @return list<string>
+     */
+    public static function keys(array $route): array
+    {
+        return [...($route['name'] === null ? [] : [$route['name']]), ...array_map(fn (string $method): string => $method.' '.$route['uri'], explode('|', $route['methods']))];
+    }
+
+    private function parse(string $path, string $contents): void
+    {
+        try {
+            $nodes = (new ParserFactory)->createForNewestSupportedVersion()->parse($contents) ?? [];
+        } catch (Error) {
+            $this->errors[] = ['target' => $path, 'check' => 'mutating routes could not be enumerated: the route file does not parse'];
+
+            return;
+        }
+        $nodes = (new NodeTraverser(new NameResolver, new ParentConnectingVisitor))->traverse($nodes);
+        foreach ((new NodeFinder)->findInstanceOf($nodes, Node\Expr\StaticCall::class) as $call) {
+            $this->route($path, $call);
         }
     }
 
