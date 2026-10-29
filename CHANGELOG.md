@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`integrations` follows one webhook delegation.** A webhook route whose invokable controller calls an injected handler (`$handler->handleWebhook(...)` on a typed parameter or property) no longer reports "does not go through a signature validator" when that handler's called method verifies (it wraps `(new VerifyWebhookSignature)->handle(`, say) or the handler extends a verifying controller. A subclass of Cashier's `WebhookController` counts as verified, since it inherits the middleware. A delegated handler that doesn't verify is still reported.
+
 ## 0.11.28 - 2026-10-29
 
 ### Upgrading
