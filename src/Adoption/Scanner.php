@@ -396,20 +396,21 @@ final class Scanner
                     }
                     $source = $this->app->source($path);
                     $matching = array_values(array_filter(Code::tags($source), function (array $tag) use ($signal, $source): bool {
-                        // CSRF and method-spoofing fields are not hand-rolled inputs: <input type="hidden"> never counts (v1 has no attribute filter).
+                        // CSRF and method-spoofing fields are not hand-rolled inputs: <input type="hidden"> never counts (whatever the signal's where/except say).
                         if (strtolower($tag['tag']) === 'input' && Code::hiddenInput($source, $tag['offset'])) {
                             return false;
                         }
                         foreach ($signal['tags'] as $name) {
                             if (Code::tagIs($tag['tag'], $name)) {
-                                return true;
+                                // `except: {type: [hidden]}` repeats the built-in drop above harmlessly: a filter, so nothing counts twice.
+                                return Code::attributesPass(Code::staticAttributes($source, $tag['offset']), $signal['where'] ?? [], $signal['except'] ?? []);
                             }
                         }
 
                         return false;
                     }));
                     if (count($matching) >= ($signal['min'] ?? 1)) {
-                        $fired[] = self::evidence($path, App::line($source, $matching[0]['offset']), count($matching).' × <'.implode('|', $signal['tags']).'> in a page');
+                        $fired[] = self::evidence($path, App::line($source, $matching[0]['offset']), count($matching).' × <'.implode('|', $signal['tags']).'>'.self::filters($signal).' in a page');
                     }
                 }
                 break;
@@ -818,6 +819,19 @@ final class Scanner
         }
 
         return true;
+    }
+
+    /** A template-tag signal's where/except, as evidence text: ` where type=file except type=hidden|search`. */
+    private static function filters(array $signal): string
+    {
+        $text = '';
+        foreach (['where', 'except'] as $field) {
+            foreach ($signal[$field] ?? [] as $name => $values) {
+                $text .= " {$field} {$name}=".implode('|', $values);
+            }
+        }
+
+        return $text;
     }
 
     /** @return array{file: string, line: ?int, detail: string} */

@@ -1,0 +1,2112 @@
+{
+  "format": 1,
+  "package": {
+    "composer": "tey/kit",
+    "alias": "@/components/Kit"
+  },
+  "facts": [
+    {
+      "id": "has-signed-in-pages",
+      "description": "The app serves at least one page behind auth middleware.",
+      "computed": {
+        "analysis": "signed-in-pages"
+      }
+    },
+    {
+      "id": "has-public-pages",
+      "description": "The app serves at least one page without auth middleware (beyond auth screens).",
+      "computed": {
+        "analysis": "public-pages"
+      }
+    },
+    {
+      "id": "has-auth-screens",
+      "description": "The app has login, password reset or email verification routes.",
+      "computed": {
+        "analysis": "auth-routes"
+      }
+    },
+    {
+      "id": "has-workspaces",
+      "description": "The app has a team, organisation or workspace model that users belong to.",
+      "computed": {
+        "analysis": "workspace-model"
+      }
+    },
+    {
+      "id": "sends-mail",
+      "description": "The app defines a Mailable or Notification with a mail channel.",
+      "computed": {
+        "analysis": "mail-notifications"
+      }
+    },
+    {
+      "id": "has-mcp-server",
+      "description": "The app requires laravel/mcp or registers an MCP server.",
+      "computed": {
+        "analysis": "mcp-server"
+      }
+    },
+    {
+      "id": "has-settings-pages",
+      "description": "The app has account or workspace settings pages.",
+      "computed": {
+        "analysis": "settings-routes"
+      }
+    },
+    {
+      "id": "has-search",
+      "description": "The app has a search route or a global search box.",
+      "computed": {
+        "analysis": "search-route"
+      }
+    },
+    {
+      "id": "has-destructive-actions",
+      "description": "An app-owned route deletes records or performs an irreversible action.",
+      "computed": {
+        "analysis": "destructive-routes"
+      }
+    },
+    {
+      "id": "has-forms",
+      "description": "An app-owned page posts, puts or patches a form.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "template-tag",
+            "tags": [
+              "form",
+              "input",
+              "select",
+              "textarea"
+            ],
+            "min": 1
+          },
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#FormCard",
+              "@/components/Kit#Input",
+              "@/components/Kit#Select",
+              "@/components/Kit#Field"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-computed-fields",
+      "description": "An app-owned form shows a value derived from other inputs (totals, previews).",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#ComputedValue",
+              "@/components/Kit#ComputedValueRoot"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/*Total*.vue",
+              "resources/js/**/*Computed*.vue"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-index-pages",
+      "description": "An app-owned page lists records with paging, sorting or filtering.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "template-tag",
+            "tags": [
+              "table"
+            ],
+            "min": 1
+          },
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#DataTable",
+              "@/components/Kit#ScrollList",
+              "@tanstack/vue-table",
+              "vue3-easy-data-table",
+              "ag-grid-vue3"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/*DataTable*.vue",
+              "resources/js/**/*Pagination*.vue"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-feeds",
+      "description": "An app-owned page renders an activity, history or audit timeline.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#ActivityStream"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/*Timeline*.vue",
+              "resources/js/**/*Activity*.vue",
+              "resources/js/**/*AuditLog*.vue"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-file-uploads",
+      "description": "An app-owned form takes files.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "template-tag",
+            "tags": [
+              "input"
+            ],
+            "min": 1,
+            "where": {
+              "type": [
+                "file"
+              ]
+            }
+          },
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#FileInput",
+              "@/components/Kit#BulkDrop",
+              "vue-filepond",
+              "filepond",
+              "dropzone",
+              "vue3-dropzone",
+              "@uppy/core"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/*Upload*.vue",
+              "resources/js/**/*Dropzone*.vue"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-rich-text",
+      "description": "An app stores or edits rich-text or HTML content.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#InputRichText",
+              "@tiptap/vue-3",
+              "quill",
+              "@vueup/vue-quill",
+              "tinymce",
+              "@tinymce/tinymce-vue",
+              "ckeditor5",
+              "trix"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-split-views",
+      "description": "An app-owned page shows a list beside a detail or preview pane.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#SplitPane",
+              "splitpanes",
+              "vue-split-panel"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/*SplitView*.vue",
+              "resources/js/**/*MasterDetail*.vue"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-sequence-editors",
+      "description": "An app-owned page edits an ordered sequence of items with a live preview.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#Workbench",
+              "vuedraggable",
+              "sortablejs",
+              "vue-draggable-plus"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-menus",
+      "description": "An app-owned page or component opens a dropdown or action menu.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#Dropdown",
+              "@/components/Kit#DropdownMenu",
+              "@/components/Kit#ButtonDropdown",
+              "@/components/Kit#RowActions",
+              "@headlessui/vue#Menu",
+              "floating-vue",
+              "reka-ui#DropdownMenuRoot"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/Dropdown*.vue",
+              "resources/js/**/*Menu.vue"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-dialogs",
+      "description": "An app-owned page or component opens a modal, dialog, sheet or popover.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "template-tag",
+            "tags": [
+              "dialog"
+            ],
+            "min": 1
+          },
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#Modal",
+              "@/components/Kit#Dialog",
+              "@/components/Kit#Sheet",
+              "@/components/Kit#Popover",
+              "@headlessui/vue#Dialog",
+              "vue-final-modal",
+              "sweetalert2",
+              "reka-ui#DialogRoot"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/*Modal*.vue",
+              "resources/js/**/*Dialog*.vue",
+              "resources/js/**/*Drawer*.vue"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-avatars",
+      "description": "An app-owned page or component shows a person's or workspace's picture or initials.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#Avatar",
+              "vue-avatar",
+              "reka-ui#AvatarRoot"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/*Avatar*.vue"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-badges",
+      "description": "An app-owned page or component shows a status badge, pill or chip.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#Badge"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/*Badge*.vue",
+              "resources/js/**/*Pill*.vue",
+              "resources/js/**/*Chip*.vue"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-alerts",
+      "description": "An app-owned page shows an inline alert, banner, notice or empty state.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#Alert",
+              "@/components/Kit#StageNotice",
+              "@/components/Kit#EmptyState"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/Alert*.vue",
+              "resources/js/**/*Banner*.vue",
+              "resources/js/**/*EmptyState*.vue",
+              "resources/js/**/*Callout*.vue"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-page-actions",
+      "description": "An app-owned page puts buttons or links in its header beside the title.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#ActionBar",
+              "@/components/Kit#FloatingToolbar",
+              "@/components/Kit#ButtonGroup"
+            ]
+          },
+          {
+            "kind": "vue-root",
+            "tags": [
+              "header"
+            ],
+            "requires": {
+              "components": [
+                "Button",
+                "*Button",
+                "Link"
+              ],
+              "min": 1
+            },
+            "scope": "signed-in"
+          }
+        ]
+      }
+    },
+    {
+      "id": "has-content-panels",
+      "description": "An app-owned page groups content in cards, panels, sections or collapsibles.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "import",
+            "specifiers": [
+              "@/components/Kit#BlockStack",
+              "@/components/Kit#Section",
+              "@/components/Kit#Collapsible",
+              "@/components/Kit#Surface",
+              "@headlessui/vue#Disclosure",
+              "reka-ui#CollapsibleRoot"
+            ]
+          },
+          {
+            "kind": "file-name",
+            "globs": [
+              "resources/js/**/*Card.vue",
+              "resources/js/**/*Panel.vue",
+              "resources/js/**/*Accordion*.vue"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "shell.workspace",
+      "layer": "ui",
+      "group": "layout",
+      "label": "Signed-in app shell (primary nav, sub nav, drawer, breadcrumbs)",
+      "feature": "shell",
+      "applies": "has-signed-in-pages",
+      "uses": {
+        "files": [
+          "resources/js/pages/Workspace/Layout.vue"
+        ],
+        "components": [
+          "PrimaryNav",
+          "SubNav",
+          "ShellDrawer"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "vue-root",
+          "tags": [
+            "header",
+            "nav",
+            "aside"
+          ],
+          "requires": {
+            "routes": [
+              "logout"
+            ],
+            "components": [
+              "*UserMenu",
+              "*AccountMenu",
+              "*Sidebar*"
+            ],
+            "min": 1
+          },
+          "scope": "signed-in"
+        }
+      ],
+      "docs": "docs/public-shell.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "*AppLayout*",
+          "*Sidebar*",
+          "*Navbar*",
+          "*TopNav*"
+        ]
+      }
+    },
+    {
+      "id": "shell.public",
+      "layer": "ui",
+      "group": "layout",
+      "label": "Public shell and meta",
+      "feature": "shell",
+      "applies": "has-public-pages",
+      "uses": {
+        "files": [
+          "resources/js/pages/Workspace/Partials/PublicShell.vue"
+        ],
+        "components": [
+          "PublicShell",
+          "PublicMeta"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "vue-root",
+          "tags": [
+            "header",
+            "nav",
+            "footer"
+          ],
+          "requires": {
+            "routes": [
+              "login",
+              "register"
+            ],
+            "min": 1
+          },
+          "scope": "public"
+        }
+      ],
+      "docs": "docs/public-shell.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "*GuestLayout*",
+          "*PublicLayout*",
+          "*SiteHeader*",
+          "*SiteFooter*"
+        ]
+      }
+    },
+    {
+      "id": "layout.page",
+      "layer": "ui",
+      "group": "layout",
+      "label": "Page frame with header actions and status",
+      "feature": "core",
+      "applies": "has-signed-in-pages",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Page",
+          "@/components/Kit:PageEnd",
+          "@/components/Kit:SectionHeader"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "rule",
+          "rule": "ui.kit-shell"
+        }
+      ],
+      "docs": "README.md#page-header-actions",
+      "status": "stable"
+    },
+    {
+      "id": "layout.blocks",
+      "layer": "ui",
+      "group": "layout",
+      "label": "Stacks, sections, toolbars and sticky bars",
+      "feature": "core",
+      "applies": "has-content-panels",
+      "uses": {
+        "imports": [
+          "@/components/Kit:BlockStack",
+          "@/components/Kit:Section",
+          "@/components/Kit:SectionIcon",
+          "@/components/Kit:Toolbar",
+          "@/components/Kit:StickyBar",
+          "@/components/Kit:Surface",
+          "@/components/Kit:Collapsible",
+          "@/components/Kit:Placeholder"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/*Card.vue",
+            "resources/js/**/*Panel.vue"
+          ]
+        }
+      ],
+      "docs": "docs/surface.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "@headlessui/vue#Disclosure",
+          "reka-ui#Collapsible"
+        ],
+        "components": [
+          "Card",
+          "Panel",
+          "Collapse*",
+          "Accordion*"
+        ]
+      }
+    },
+    {
+      "id": "layout.split",
+      "layer": "ui",
+      "group": "layout",
+      "label": "Split panes with tabs and toggles",
+      "feature": "core",
+      "applies": "has-split-views",
+      "uses": {
+        "imports": [
+          "@/components/Kit:SplitPane",
+          "@/components/Kit:PaneScroll",
+          "@/components/Kit:PaneTabs",
+          "@/components/Kit:PaneToggle"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "import",
+          "specifiers": [
+            "splitpanes",
+            "vue-split-panel"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "splitpanes",
+          "vue-split-panel"
+        ],
+        "components": [
+          "*SplitView*",
+          "Tabs"
+        ]
+      }
+    },
+    {
+      "id": "navigation.search",
+      "layer": "ui",
+      "group": "navigation",
+      "label": "Global search box",
+      "feature": "core",
+      "applies": "has-search",
+      "uses": {
+        "imports": [
+          "@/components/Kit:SearchBox"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/*Search*.vue",
+            "resources/js/**/*CommandPalette*.vue"
+          ]
+        }
+      ],
+      "docs": "docs/search.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "vue-command-palette",
+          "cmdk-vue"
+        ],
+        "components": [
+          "*CommandPalette*",
+          "*SearchBar*"
+        ]
+      }
+    },
+    {
+      "id": "action.bar",
+      "layer": "ui",
+      "group": "action",
+      "label": "Server action descriptors as buttons, groups and menus",
+      "feature": "core",
+      "applies": "has-page-actions",
+      "uses": {
+        "imports": [
+          "@/components/Kit:ActionBar",
+          "@/components/Kit:ActionLabel",
+          "@/components/Kit:ButtonGroup",
+          "@/components/Kit:ButtonDropdown",
+          "@/components/Kit:FloatingToolbar",
+          "@/components/Kit:FloatingToolbarDot"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "template-tag",
+          "tags": [
+            "button"
+          ],
+          "min": 4
+        }
+      ],
+      "docs": "README.md#page-header-actions",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "*ActionBar*",
+          "*ButtonGroup*"
+        ]
+      }
+    },
+    {
+      "id": "action.button",
+      "layer": "ui",
+      "group": "action",
+      "label": "Button",
+      "feature": "core",
+      "applies": "has-signed-in-pages",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Button"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/Button.vue",
+            "resources/js/**/PrimaryButton.vue",
+            "resources/js/**/SecondaryButton.vue",
+            "resources/js/**/DangerButton.vue"
+          ]
+        }
+      ],
+      "docs": "docs/button.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "Button",
+          "PrimaryButton",
+          "SecondaryButton",
+          "DangerButton"
+        ]
+      }
+    },
+    {
+      "id": "action.menu",
+      "layer": "ui",
+      "group": "action",
+      "label": "Dropdown menus",
+      "feature": "core",
+      "applies": "has-menus",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Dropdown",
+          "@/components/Kit:DropdownItem",
+          "@/components/Kit:DropdownLink",
+          "@/components/Kit:DropdownConfirm",
+          "@/components/Kit:DropdownAction",
+          "@/components/Kit:DropdownDelete",
+          "@/components/Kit:DropdownModalLink",
+          "@/components/Kit:DropdownMenu",
+          "@/components/Kit:DropdownMenuContent",
+          "@/components/Kit:DropdownMenuItem",
+          "@/components/Kit:DropdownMenuTrigger"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "import",
+          "specifiers": [
+            "@headlessui/vue#Menu",
+            "floating-vue"
+          ]
+        },
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/Dropdown*.vue"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "@headlessui/vue#Menu",
+          "floating-vue",
+          "v-dropdown"
+        ],
+        "components": [
+          "Dropdown*",
+          "Menu*"
+        ]
+      }
+    },
+    {
+      "id": "action.confirm",
+      "layer": "ui",
+      "group": "overlay",
+      "label": "Typed and plain confirmations",
+      "feature": "core",
+      "applies": "has-destructive-actions",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Dialog",
+          "@/components/Kit:DropdownConfirm",
+          "@/components/Kit:DropdownDelete"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "import",
+          "specifiers": [
+            "sweetalert2",
+            "vue-sweetalert2"
+          ]
+        }
+      ],
+      "docs": "docs/typed-confirmation.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "sweetalert2",
+          "vue-sweetalert2"
+        ],
+        "components": [
+          "*Confirm*Modal*",
+          "*ConfirmDialog*"
+        ]
+      }
+    },
+    {
+      "id": "overlay.modal",
+      "layer": "ui",
+      "group": "overlay",
+      "label": "Modals, sheets and popovers",
+      "feature": "core",
+      "applies": "has-dialogs",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Modal",
+          "@/components/Kit:Dialog",
+          "@/components/Kit:Popover",
+          "@/components/Kit:Sheet",
+          "@/components/Kit:SheetContent"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "template-tag",
+          "tags": [
+            "dialog"
+          ],
+          "min": 1
+        },
+        {
+          "kind": "import",
+          "specifiers": [
+            "@headlessui/vue#Dialog",
+            "vue-final-modal",
+            "@kouts/vue-modal"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "@headlessui/vue#Dialog",
+          "vue-final-modal",
+          "@kouts/vue-modal",
+          "tippy.js",
+          "vue-tippy"
+        ],
+        "components": [
+          "Modal",
+          "Dialog",
+          "*Drawer*",
+          "Tooltip",
+          "Popover"
+        ]
+      }
+    },
+    {
+      "id": "form.inputs",
+      "layer": "ui",
+      "group": "form",
+      "label": "Inputs, selects, checkboxes, numbers and textareas",
+      "feature": "core",
+      "applies": "has-forms",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Input",
+          "@/components/Kit:InputCheckbox",
+          "@/components/Kit:Checkbox",
+          "@/components/Kit:Select",
+          "@/components/Kit:InputSelect",
+          "@/components/Kit:Textarea",
+          "@/components/Kit:InputNumber",
+          "@/components/Kit:NumberInput",
+          "@/components/Kit:PasswordInput",
+          "@/components/Kit:PasswordRules",
+          "@/components/Kit:TimezoneSelect",
+          "@/components/Kit:RadioCardGroup",
+          "@/components/Kit:Field"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "template-tag",
+          "tags": [
+            "input",
+            "select",
+            "textarea"
+          ],
+          "min": 1,
+          "except": {
+            "type": [
+              "hidden",
+              "search",
+              "file"
+            ]
+          }
+        },
+        {
+          "kind": "import",
+          "specifiers": [
+            "vue-multiselect",
+            "@vueform/multiselect",
+            "vue-select",
+            "@headlessui/vue#Combobox",
+            "@headlessui/vue#Listbox",
+            "v-money3",
+            "vue-number-format"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "vue-multiselect",
+          "@vueform/multiselect",
+          "vue-select",
+          "@headlessui/vue#Combobox",
+          "@headlessui/vue#Listbox",
+          "@headlessui/vue#Switch",
+          "v-money3",
+          "vue-number-format",
+          "maska",
+          "vue-the-mask"
+        ],
+        "components": [
+          "Input*",
+          "Select*",
+          "Checkbox",
+          "Combobox",
+          "TextInput",
+          "InputLabel",
+          "InputError",
+          "Toggle",
+          "Switch"
+        ]
+      }
+    },
+    {
+      "id": "form.frame",
+      "layer": "ui",
+      "group": "form",
+      "label": "Form cards, fieldsets, actions, locking and repeaters",
+      "feature": "core",
+      "applies": "has-forms",
+      "uses": {
+        "imports": [
+          "@/components/Kit:FormCard",
+          "@/components/Kit:FormFieldset",
+          "@/components/Kit:FormActions",
+          "@/components/Kit:LockedForm",
+          "@/components/Kit:EditOnly",
+          "@/components/Kit:Repeater",
+          "@/components/Kit:SettingsFrame"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "template-tag",
+          "tags": [
+            "form"
+          ],
+          "min": 1
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "*FormSection*",
+          "*FormCard*",
+          "ActionSection",
+          "*Repeater*"
+        ]
+      }
+    },
+    {
+      "id": "form.files",
+      "layer": "ui",
+      "group": "form",
+      "label": "File input and bulk drop",
+      "feature": "core",
+      "applies": "has-file-uploads",
+      "uses": {
+        "imports": [
+          "@/components/Kit:FileInput",
+          "@/components/Kit:BulkDrop"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "import",
+          "specifiers": [
+            "vue-filepond",
+            "filepond",
+            "dropzone",
+            "vue3-dropzone",
+            "@uppy/core"
+          ]
+        },
+        {
+          "kind": "template-tag",
+          "tags": [
+            "input"
+          ],
+          "min": 1,
+          "where": {
+            "type": [
+              "file"
+            ]
+          }
+        }
+      ],
+      "docs": "docs/media.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "vue-filepond",
+          "filepond",
+          "dropzone",
+          "vue3-dropzone",
+          "@uppy/core",
+          "@uppy/dashboard"
+        ],
+        "components": [
+          "*Upload*",
+          "*Dropzone*",
+          "FileInput"
+        ]
+      }
+    },
+    {
+      "id": "form.rich-text",
+      "layer": "ui",
+      "group": "form",
+      "label": "Rich-text input",
+      "feature": "core",
+      "applies": "has-rich-text",
+      "uses": {
+        "imports": [
+          "@/components/Kit:InputRichText",
+          "@/components/Kit:EmojiTray"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "import",
+          "specifiers": [
+            "@tiptap/vue-3",
+            "quill",
+            "@vueup/vue-quill",
+            "tinymce",
+            "@tinymce/tinymce-vue",
+            "ckeditor5",
+            "@ckeditor/ckeditor5-vue",
+            "trix"
+          ]
+        }
+      ],
+      "docs": "docs/input-rich-text.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "@tiptap/vue-3",
+          "@tiptap/starter-kit",
+          "quill",
+          "@vueup/vue-quill",
+          "tinymce",
+          "@tinymce/tinymce-vue",
+          "ckeditor5",
+          "@ckeditor/ckeditor5-vue",
+          "trix",
+          "emoji-picker-element",
+          "vue3-emoji-picker"
+        ],
+        "components": [
+          "*Editor*",
+          "*Wysiwyg*",
+          "*EmojiPicker*"
+        ]
+      }
+    },
+    {
+      "id": "data.table",
+      "layer": "ui",
+      "group": "data",
+      "label": "Data table with row and bulk actions",
+      "feature": "core",
+      "applies": "has-index-pages",
+      "uses": {
+        "imports": [
+          "@/components/Kit:DataTable",
+          "@/components/Kit:RowActions",
+          "@/components/Kit:IndexToolbar",
+          "@/components/Kit:BulkBar"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "template-tag",
+          "tags": [
+            "table"
+          ],
+          "min": 1
+        },
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/*DataTable*.vue"
+          ]
+        },
+        {
+          "kind": "import",
+          "specifiers": [
+            "@tanstack/vue-table",
+            "vue3-easy-data-table",
+            "ag-grid-vue3",
+            "vue-good-table-next"
+          ]
+        }
+      ],
+      "docs": "docs/data-table.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "@tanstack/vue-table",
+          "vue3-easy-data-table",
+          "ag-grid-vue3",
+          "ag-grid-community",
+          "vue-good-table-next",
+          "datatables.net",
+          "datatables.net-vue3"
+        ],
+        "components": [
+          "Table",
+          "DataTable",
+          "*Pagination*",
+          "*TableRow*"
+        ]
+      }
+    },
+    {
+      "id": "data.list",
+      "layer": "ui",
+      "group": "data",
+      "label": "Scroll list and description list",
+      "feature": "core",
+      "applies": "has-index-pages",
+      "uses": {
+        "imports": [
+          "@/components/Kit:ScrollList",
+          "@/components/Kit:DescriptionList"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "import",
+          "specifiers": [
+            "vue-virtual-scroller",
+            "vue3-infinite-loading",
+            "v3-infinite-loading"
+          ]
+        }
+      ],
+      "docs": "docs/description-list.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "vue-virtual-scroller",
+          "vue3-infinite-loading",
+          "v3-infinite-loading",
+          "@vueuse/components#UseVirtualList"
+        ],
+        "components": [
+          "*InfiniteScroll*",
+          "*VirtualList*",
+          "*DetailList*"
+        ]
+      }
+    },
+    {
+      "id": "data.computed",
+      "layer": "ui",
+      "group": "data",
+      "label": "Computed values with scope and toggle",
+      "feature": "core",
+      "applies": "has-computed-fields",
+      "uses": {
+        "imports": [
+          "@/components/Kit:ComputedValue",
+          "@/components/Kit:ComputedValueRoot",
+          "@/components/Kit:ComputedValueScope",
+          "@/components/Kit:ComputedValueToggle"
+        ]
+      },
+      "handRolled": [],
+      "docs": "README.md",
+      "status": "stable"
+    },
+    {
+      "id": "data.badge",
+      "layer": "ui",
+      "group": "content",
+      "label": "Badges",
+      "feature": "core",
+      "applies": "has-badges",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Badge"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/Badge.vue",
+            "resources/js/**/*Pill.vue",
+            "resources/js/**/*Chip.vue"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "Badge",
+          "*Pill*",
+          "*Chip*"
+        ]
+      }
+    },
+    {
+      "id": "data.avatar",
+      "layer": "ui",
+      "group": "content",
+      "label": "Avatars",
+      "feature": "core",
+      "applies": "has-avatars",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Avatar"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/Avatar.vue"
+          ]
+        },
+        {
+          "kind": "import",
+          "specifiers": [
+            "vue-avatar"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "vue-avatar",
+          "@vueuse/gravatar"
+        ],
+        "components": [
+          "Avatar"
+        ]
+      }
+    },
+    {
+      "id": "feedback.alert",
+      "layer": "ui",
+      "group": "feedback",
+      "label": "Alerts, stage notices and empty states",
+      "feature": "core",
+      "applies": "has-alerts",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Alert",
+          "@/components/Kit:StageNotice",
+          "@/components/Kit:EmptyState"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/Alert*.vue",
+            "resources/js/**/*Banner*.vue",
+            "resources/js/**/*EmptyState*.vue"
+          ]
+        }
+      ],
+      "docs": "docs/stage-notice.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "Alert*",
+          "*Banner*",
+          "*EmptyState*",
+          "*Callout*"
+        ]
+      }
+    },
+    {
+      "id": "feedback.toast",
+      "layer": "ui",
+      "group": "feedback",
+      "label": "Toasts from server flashes",
+      "feature": "core",
+      "applies": "has-signed-in-pages",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Toaster"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "import",
+          "specifiers": [
+            "vue-toastification",
+            "vue-sonner",
+            "notiwind",
+            "@kyvg/vue3-notification",
+            "vue3-toastify"
+          ]
+        }
+      ],
+      "docs": "docs/toasts.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "vue-toastification",
+          "vue-sonner",
+          "notiwind",
+          "@kyvg/vue3-notification",
+          "vue3-toastify",
+          "toastr"
+        ],
+        "components": [
+          "Toast*",
+          "*Notification*",
+          "*Flash*"
+        ]
+      }
+    },
+    {
+      "id": "feed.activity",
+      "layer": "ui",
+      "group": "activity",
+      "label": "Activity stream with cursor paging",
+      "feature": "core",
+      "applies": "has-feeds",
+      "uses": {
+        "imports": [
+          "@/components/Kit:ActivityStream"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/*Timeline*.vue",
+            "resources/js/**/*Activity*.vue",
+            "resources/js/**/*History*.vue"
+          ]
+        }
+      ],
+      "docs": "docs/activity.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "*Timeline*",
+          "*ActivityLog*",
+          "*AuditLog*"
+        ]
+      }
+    },
+    {
+      "id": "workbench",
+      "layer": "ui",
+      "group": "content",
+      "label": "Workbench sequence editor",
+      "feature": "core",
+      "applies": "has-sequence-editors",
+      "uses": {
+        "imports": [
+          "@/components/Kit:Workbench",
+          "@/components/Kit:WorkbenchNavigator",
+          "@/components/Kit:WorkbenchInspector",
+          "@/components/Kit:WorkbenchZoom"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "import",
+          "specifiers": [
+            "vuedraggable",
+            "sortablejs",
+            "vue-draggable-plus"
+          ]
+        }
+      ],
+      "docs": "docs/workbench.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "vuedraggable",
+          "sortablejs",
+          "vue-draggable-plus",
+          "@vueuse/integrations#useSortable"
+        ],
+        "components": [
+          "*Sortable*",
+          "*Draggable*",
+          "*Builder*"
+        ]
+      }
+    },
+    {
+      "id": "appearance.theme",
+      "layer": "ui",
+      "group": "platform",
+      "label": "Light, dark and system appearance",
+      "feature": "core",
+      "applies": "has-signed-in-pages",
+      "uses": {
+        "imports": [
+          "@/components/Kit:AppearanceToggle",
+          "@/components/Kit:AppearanceChoice",
+          "@/components/Kit:useAppearance",
+          "@/components/Kit:initializeTheme"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/*DarkMode*.vue",
+            "resources/js/**/*ThemeToggle*.vue"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "@vueuse/core#useDark"
+        ],
+        "components": [
+          "*DarkMode*",
+          "*ThemeToggle*"
+        ]
+      }
+    },
+    {
+      "id": "platform.timezone",
+      "layer": "ui",
+      "group": "platform",
+      "label": "Browser timezone sync",
+      "feature": "core",
+      "applies": "has-signed-in-pages",
+      "uses": {
+        "imports": [
+          "@/components/Kit:syncTimezoneCookie",
+          "@/components/Kit:browserTimezone",
+          "@/components/Kit:TimezoneSelect"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "import",
+          "specifiers": [
+            "moment-timezone",
+            "@vvo/tzdb"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "moment-timezone",
+          "@vvo/tzdb",
+          "countries-and-timezones"
+        ]
+      }
+    },
+    {
+      "id": "auth.screens",
+      "layer": "ui",
+      "group": "auth",
+      "label": "Sign-in, reset, two-factor and verification screens",
+      "feature": "session-ui",
+      "applies": "has-auth-screens",
+      "uses": {
+        "files": [
+          "resources/js/pages/Auth/Login/Page.vue",
+          "resources/js/pages/Auth/ForgotPassword/Page.vue",
+          "resources/js/pages/Auth/TwoFactor/Page.vue"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/pages/**/Login.vue",
+            "resources/js/pages/**/ForgotPassword.vue",
+            "resources/js/pages/Auth/**/*.vue"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "*AuthLayout*",
+          "*AuthCard*",
+          "*Login*"
+        ]
+      }
+    },
+    {
+      "id": "auth.passkeys",
+      "layer": "ui",
+      "group": "auth",
+      "label": "Passkey offer",
+      "feature": "session-ui",
+      "applies": "has-auth-screens",
+      "uses": {
+        "imports": [
+          "@/components/Kit:PasskeyOffer"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "import",
+          "specifiers": [
+            "@simplewebauthn/browser"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "npm": [
+          "@simplewebauthn/browser"
+        ]
+      }
+    },
+    {
+      "id": "account.pages",
+      "layer": "ui",
+      "group": "account",
+      "label": "Profile, password and security pages",
+      "feature": "workspace-ui",
+      "applies": "has-settings-pages",
+      "uses": {
+        "files": [
+          "resources/js/pages/Workspace/Account/Profile/Page.vue",
+          "resources/js/pages/Workspace/Account/Security/Page.vue"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/pages/Profile/**/*.vue",
+            "resources/js/pages/Settings/Profile*.vue",
+            "resources/js/pages/settings/*.vue"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "*UpdateProfile*",
+          "*UpdatePassword*",
+          "*DeleteUser*",
+          "*TwoFactor*"
+        ]
+      }
+    },
+    {
+      "id": "workspace.pages",
+      "layer": "ui",
+      "group": "workspace",
+      "label": "Workspace dashboard, sections and switching",
+      "feature": "workspace-ui",
+      "applies": {
+        "all": [
+          "has-workspaces",
+          "has-signed-in-pages"
+        ]
+      },
+      "uses": {
+        "files": [
+          "resources/js/pages/Workspace/Dashboard/Page.vue",
+          "resources/js/pages/Workspace/Index/Page.vue"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/*TeamSwitcher*.vue",
+            "resources/js/**/*OrganizationSwitcher*.vue",
+            "resources/js/pages/Teams/**/*.vue"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "*TeamSwitcher*",
+          "*OrgSwitcher*",
+          "*OrganizationSwitcher*",
+          "*WorkspaceSwitcher*"
+        ]
+      }
+    },
+    {
+      "id": "workspace.settings",
+      "layer": "ui",
+      "group": "workspace",
+      "label": "Workspace general settings",
+      "feature": "settings",
+      "applies": {
+        "all": [
+          "has-workspaces",
+          "has-settings-pages"
+        ]
+      },
+      "uses": {
+        "files": [
+          "resources/js/pages/Workspace/Settings/General/Page.vue"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/pages/Teams/Show.vue",
+            "resources/js/pages/**/TeamSettings*.vue"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "*TeamSettings*",
+          "*UpdateTeamName*"
+        ]
+      }
+    },
+    {
+      "id": "access.members",
+      "layer": "ui",
+      "group": "access",
+      "label": "Members, roles and invitations",
+      "feature": "access",
+      "applies": "has-workspaces",
+      "uses": {
+        "classes": [
+          "Tey\\Kit\\Features\\Access\\Access",
+          "Tey\\Kit\\Features\\Access\\Policies\\WorkspacePolicy"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/js/**/*TeamMember*.vue",
+            "resources/js/**/*Invitation*.vue"
+          ]
+        },
+        {
+          "kind": "migration",
+          "tables": [
+            "team_invitations",
+            "team_user"
+          ]
+        }
+      ],
+      "docs": "README.md",
+      "status": "stable",
+      "replaces": {
+        "components": [
+          "*TeamMember*",
+          "*Invite*",
+          "*RoleSelect*"
+        ],
+        "composer": [
+          "laravel/jetstream"
+        ]
+      }
+    },
+    {
+      "id": "workspaces.tenancy",
+      "layer": "backend",
+      "group": "workspace",
+      "label": "Workspace model, membership and tenant context",
+      "feature": "workspaces",
+      "applies": "has-workspaces",
+      "uses": {
+        "classes": [
+          "Tey\\Kit\\Features\\Workspaces\\Concerns\\IsKitWorkspace",
+          "Tey\\Kit\\Features\\Workspaces\\Concerns\\HasWorkspaces",
+          "Tey\\Kit\\Features\\Workspaces\\Concerns\\BelongsToWorkspace"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "migration",
+          "tables": [
+            "teams",
+            "organisations",
+            "organizations",
+            "workspaces"
+          ]
+        },
+        {
+          "kind": "composer",
+          "packages": [
+            "stancl/tenancy",
+            "spatie/laravel-multitenancy"
+          ]
+        }
+      ],
+      "docs": "docs/models.md",
+      "status": "stable",
+      "replaces": {
+        "composer": [
+          "stancl/tenancy",
+          "spatie/laravel-multitenancy",
+          "laravel/jetstream"
+        ]
+      }
+    },
+    {
+      "id": "mail.layout",
+      "layer": "backend",
+      "group": "mail",
+      "label": "Notifications through the fluent mail composer and branded layout",
+      "feature": "core",
+      "applies": "sends-mail",
+      "uses": {
+        "classes": [
+          "Tey\\Kit\\Mail\\FluentMailMessage"
+        ],
+        "components": [
+          "x-mail::message",
+          "mail::message",
+          "kit-fluent-mail::message"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "mail-view",
+          "without": [
+            "mail::message",
+            "x-mail::message",
+            "kit-fluent-mail::message"
+          ]
+        },
+        {
+          "kind": "file-name",
+          "globs": [
+            "resources/views/vendor/mail/**"
+          ]
+        }
+      ],
+      "docs": "docs/mail.md",
+      "status": "stable",
+      "replaces": {
+        "composer": [
+          "mjml/mjml-php",
+          "spatie/laravel-mjml"
+        ]
+      }
+    },
+    {
+      "id": "mcp.server",
+      "layer": "backend",
+      "group": "platform",
+      "label": "MCP server with consent and connections",
+      "feature": "mcp",
+      "applies": "has-mcp-server",
+      "uses": {
+        "files": [
+          "resources/js/pages/Mcp/Authorize/Page.vue"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "php-class",
+          "extends": [
+            "Laravel\\Mcp\\Server"
+          ]
+        }
+      ],
+      "docs": "docs/mcp-tools.md",
+      "status": "stable"
+    }
+  ],
+  "nonSurfaces": [
+    {
+      "ref": "@/components/Kit:alertVariants",
+      "reason": "Styling helper behind Alert."
+    },
+    {
+      "ref": "@/components/Kit:stageNoticeClass",
+      "reason": "Styling helper behind StageNotice."
+    },
+    {
+      "ref": "@/components/Kit:useStickyBars",
+      "reason": "Internal registry for StickyBar and FloatingToolbar."
+    },
+    {
+      "ref": "@/components/Kit:rowName",
+      "reason": "Accessible-name helper for DataTable rows."
+    },
+    {
+      "ref": "@/components/Kit:confirmationData",
+      "reason": "Visit payload helper behind typed confirmations."
+    },
+    {
+      "ref": "@/components/Kit:typedMatches",
+      "reason": "Comparison helper behind typed confirmations."
+    },
+    {
+      "ref": "@/components/Kit:useLocked",
+      "reason": "Read side of LockedForm."
+    },
+    {
+      "ref": "@/components/Kit:emptyDocument",
+      "reason": "Rich-text document helper."
+    },
+    {
+      "ref": "@/components/Kit:isSafeColor",
+      "reason": "Rich-text sanitising helper."
+    },
+    {
+      "ref": "@/components/Kit:isSafeFontFamily",
+      "reason": "Rich-text sanitising helper."
+    },
+    {
+      "ref": "@/components/Kit:isSafeFontSize",
+      "reason": "Rich-text sanitising helper."
+    },
+    {
+      "ref": "@/components/Kit:isSafeLink",
+      "reason": "Rich-text sanitising helper."
+    },
+    {
+      "ref": "@/components/Kit:RICH_TEXT_ALLOW",
+      "reason": "Rich-text configuration constant."
+    },
+    {
+      "ref": "@/components/Kit:RICH_TEXT_TOOLS",
+      "reason": "Rich-text configuration constant."
+    },
+    {
+      "ref": "@/components/Kit:DEFAULT_REACTIONS",
+      "reason": "EmojiTray configuration constant."
+    },
+    {
+      "ref": "@/components/Kit:emptySelection",
+      "reason": "Selection helper behind BulkBar."
+    },
+    {
+      "ref": "@/components/Kit:isSelected",
+      "reason": "Selection helper behind BulkBar."
+    },
+    {
+      "ref": "@/components/Kit:pageState",
+      "reason": "Selection helper behind BulkBar."
+    },
+    {
+      "ref": "@/components/Kit:toggleSelection",
+      "reason": "Selection helper behind BulkBar."
+    },
+    {
+      "ref": "@/components/Kit:togglePage",
+      "reason": "Selection helper behind BulkBar."
+    },
+    {
+      "ref": "@/components/Kit:DropdownMenuLabel",
+      "reason": "shadcn primitive re-exported for kit menus."
+    },
+    {
+      "ref": "@/components/Kit:DropdownMenuSeparator",
+      "reason": "shadcn primitive re-exported for kit menus."
+    },
+    {
+      "ref": "@/components/Kit:DropdownMenuSub",
+      "reason": "shadcn primitive re-exported for kit menus."
+    },
+    {
+      "ref": "@/components/Kit:DropdownMenuSubContent",
+      "reason": "shadcn primitive re-exported for kit menus."
+    },
+    {
+      "ref": "@/components/Kit:DropdownMenuSubTrigger",
+      "reason": "shadcn primitive re-exported for kit menus."
+    },
+    {
+      "ref": "@/components/Kit:SheetDescription",
+      "reason": "shadcn primitive re-exported for Sheet."
+    },
+    {
+      "ref": "@/components/Kit:SheetTitle",
+      "reason": "shadcn primitive re-exported for Sheet."
+    },
+    {
+      "ref": "@/components/Kit:SheetTrigger",
+      "reason": "shadcn primitive re-exported for Sheet."
+    },
+    {
+      "ref": "@/components/Kit:numberFormat",
+      "reason": "Formatting helper behind InputNumber."
+    },
+    {
+      "ref": "@/components/Kit:useScrollList",
+      "reason": "Composable behind ScrollList."
+    },
+    {
+      "ref": "@/components/Kit:useCursorFeed",
+      "reason": "Composable behind ActivityStream."
+    },
+    {
+      "ref": "@/components/Kit:ACTIVITY_TONES",
+      "reason": "ActivityStream constant."
+    },
+    {
+      "ref": "@/components/Kit:activitySections",
+      "reason": "ActivityStream helper."
+    },
+    {
+      "ref": "@/components/Kit:activityTone",
+      "reason": "ActivityStream helper."
+    },
+    {
+      "ref": "@/components/Kit:createCursorFeed",
+      "reason": "ActivityStream helper."
+    },
+    {
+      "ref": "@/components/Kit:trustedHtml",
+      "reason": "ActivityStream helper."
+    },
+    {
+      "ref": "@/components/Kit:runToolbarAction",
+      "reason": "FloatingToolbar helper."
+    },
+    {
+      "ref": "@/components/Kit:anchorToolbar",
+      "reason": "FloatingToolbar positioning helper."
+    },
+    {
+      "ref": "@/components/Kit:unionRect",
+      "reason": "FloatingToolbar positioning helper."
+    },
+    {
+      "ref": "@/components/Kit:flattenSearch",
+      "reason": "SearchBox helper."
+    },
+    {
+      "ref": "@/components/Kit:moveSearch",
+      "reason": "SearchBox helper."
+    },
+    {
+      "ref": "@/components/Kit:opensSearch",
+      "reason": "SearchBox helper."
+    },
+    {
+      "ref": "@/components/Kit:provideSurface",
+      "reason": "Surface context helper."
+    },
+    {
+      "ref": "@/components/Kit:useSurface",
+      "reason": "Surface context helper."
+    },
+    {
+      "ref": "@/components/Kit:isNavigation",
+      "reason": "ActionBar placement helper."
+    },
+    {
+      "ref": "@/components/Kit:layoutActions",
+      "reason": "ActionBar placement helper."
+    },
+    {
+      "ref": "@/components/Kit:placeActions",
+      "reason": "ActionBar placement helper."
+    },
+    {
+      "ref": "@/components/Kit:fitActions",
+      "reason": "ActionBar fit helper."
+    },
+    {
+      "ref": "@/components/Kit:captureDrop",
+      "reason": "BulkDrop helper."
+    },
+    {
+      "ref": "@/components/Kit:capturePaste",
+      "reason": "BulkDrop helper."
+    },
+    {
+      "ref": "@/components/Kit:checkSelection",
+      "reason": "BulkDrop helper."
+    },
+    {
+      "ref": "@/components/Kit:describeProblem",
+      "reason": "BulkDrop helper."
+    },
+    {
+      "ref": "@/components/Kit:setCaptureFiles",
+      "reason": "BulkDrop helper."
+    },
+    {
+      "ref": "@/components/Kit:useWorkbench",
+      "reason": "Workbench store."
+    },
+    {
+      "ref": "@/components/Kit:releaseWorkbench",
+      "reason": "Workbench store."
+    },
+    {
+      "ref": "@/components/Kit:DOCUMENT",
+      "reason": "Workbench constant."
+    },
+    {
+      "ref": "@/components/Kit:FALLBACK",
+      "reason": "Workbench constant."
+    },
+    {
+      "ref": "@/components/Kit:provideWorkbenchStage",
+      "reason": "Workbench stage helper."
+    },
+    {
+      "ref": "@/components/Kit:useWorkbenchStage",
+      "reason": "Workbench stage helper."
+    },
+    {
+      "ref": "@/components/Kit:selectedRects",
+      "reason": "Workbench stage helper."
+    },
+    {
+      "ref": "@/components/Kit:elementAttributeName",
+      "reason": "Workbench stage helper."
+    },
+    {
+      "ref": "@/components/Kit:DEFAULT_ELEMENT_ATTRIBUTE",
+      "reason": "Workbench stage constant."
+    },
+    {
+      "ref": "feature:notes",
+      "reason": "A sample tenant feature for demonstrating the transports, not a standard every app adopts."
+    }
+  ]
+}

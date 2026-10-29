@@ -1,0 +1,6 @@
+{
+    "name": "fixture/inputs-in-kit",
+    "require": {
+        "tey/kit": "^0.6"
+    }
+}

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`standards:adoption`: `template-tag` signals take optional `where` and `except` attribute filters.** Each maps a static attribute name to a list of literal values; `where` counts a tag only when every named attribute is static with a listed value, `except` drops it when any named static attribute has one. A bound (`:type`, `v-bind:type`) or missing attribute satisfies no `where` and triggers no `except`. Both compose with `min` and `scope`, and a malformed filter fails closed as a schema error. This reads tey/kit's reworked `form.inputs` (`except: {type: [hidden, search, file]}`) and `form.files` (`where: {type: [file]}`) surfaces.
+- **`bin/standards adoption --base=<dir> --inventory=<file> [--json]`: the adoption scan without Laravel**, for bare fixture trees. It uses the tree's `tests/Arch/configuration.php` or the default configuration, exits like `standards:adoption` (2 on usage, an unreadable inventory or a schema error), and its JSON rows also carry `surface`, `facts` and `row`, the fields of a package fixture's `expected.json`.
+
 ## 0.11.45 - 2026-10-29
 
 ### Added
