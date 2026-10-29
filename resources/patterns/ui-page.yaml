@@ -21,11 +21,12 @@ nodes:
       - { answer: "None of these", next: ui-page.app.byo }
   - id: ui-page.shared
     question: Which shared concern?
-    why: Toasts, styling and the signed-in shell each have one app-wide convention and a check.
+    why: Toasts, styling, the signed-in shell and kit adoption each have one app-wide convention and a check.
     options:
       - { answer: "Feedback after a save or a background result (a toast)", next: ui-page.toast }
       - { answer: "Styling: CSS, inline styles, theme tokens or a dynamic value", next: ui-page.styling }
       - { answer: "The signed-in shell: the header, primary nav, account menu or workspace switcher", next: ui-page.shell }
+      - { answer: "Adopting every kit surface across the app (standards:adoption)", next: ui-page.kit-adoption }
       - { answer: "None of these", next: ui-page.shared.byo }
   - id: ui-page.kit-owned
     question: Which kit-owned page?
@@ -201,6 +202,22 @@ nodes:
       - "App parts go in the Layout's slots: mark (the logo), nav and drawer-nav (an app's own module switcher), bar and actions (header controls), extra (account-menu items), user-menu and workspace-switcher (replacements with the same props), footer. Pages come from the server's navigation (Registry::navigation), not a hand-written nav."
       - "Public pages use PublicShell, sign-in pages GuestShell, and a focus flow its own layout; their headers are not signed-in shells. A page's own tabs or section nav inside the content area are fine."
       - "A real exception goes in the allowlist: rule ui.kit-shell, the finding's target and check, a reason and an expires Y-m-d date. An entry without a reason is rejected and one without an expiry fails."
+  - id: ui-page.kit-adoption
+    recipe: Kit adoption
+    summary: >-
+      standards:adoption reads each installed package's adoption surfaces (resources/adoption/surfaces.json) and reports every surface as adopted,
+      hand-rolled, missing, n/a or exempt, plus gaps: app components and libraries no surface covers. Work row by row until every row is adopted or n/a.
+    kit: ['shell Layout (pages/Workspace/Layout.vue)']
+    checks: []
+    paths: ['resources/adoption/surfaces.json', 'resources/js/components/**']
+    keywords: [standards:adoption, kit adoption, kit compliance, adoption surfaces, surfaces.json, hand-rolled, adoption gap]
+    status: draft
+    rules:
+      - "Run php artisan standards:adoption for the table, --ci for day-to-day CI (valid exemptions pass) and --compliance for the compliance PR, which passes only when every row is adopted or n/a and no gap is left: zero exemptions."
+      - "A hand-rolled row: replace the app's own version (the evidence names file:line) with the kit surface its uses list names, then delete the app's copy. A hand-rolled signal wins over a matching use, so the app copy must go."
+      - "A missing row: adopt the surface (the row says what it expects), or install the feature it needs. n/a comes only from the inventory's applies rule, never from an exemption; when a surface does not fit and applies cannot say so, take it to the package lead."
+      - "A gap: map the component or library to a surface (its replaces), replace it with kit, or report it as demand for a new surface."
+      - "An exemption is an allowlist entry: rule adoption.<composer>.<surface-id> (or adoption.gap with the component path or npm:<package> as target), a check, a reason, a date and an expires Y-m-d date. It passes --ci until it expires and always blocks --compliance."
   - id: ui-page.add-button
     recipe: Add action button
     summary: Add, New and Create buttons are kit Buttons carrying the Plus icon.

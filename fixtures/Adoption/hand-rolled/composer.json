@@ -1,0 +1,8 @@
+{
+    "name": "fixture/hand-rolled",
+    "require": {
+        "tey/kit": "^0.7",
+        "laravel/mcp": "^0.6",
+        "stancl/tenancy": "^3.9"
+    }
+}

@@ -1,0 +1,8 @@
+{
+    "name": "fixture/adopted",
+    "require": {
+        "tey/kit": "^0.7",
+        "laravel/mcp": "^0.6",
+        "acme/reports": "^1.0"
+    }
+}
