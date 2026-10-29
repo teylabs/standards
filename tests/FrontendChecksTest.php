@@ -311,3 +311,41 @@ test('js-imports hints the parent\'s range for an undeclared package another dec
         (new Filesystem)->deleteDirectory($base);
     }
 });
+
+test('ui new-tab passes the kit RowActions shape and kit components that add rel themselves', function () {
+    // The kit's own tree (fixtures/KitRowActions mirrors tey/kit's Table/RowActions) is not scanned; a page's kit Button needs no rel of its own.
+    expect((new Conformance(frontendConfiguration('KitRowActions', ['frontendRoots' => ['resources/js']])))->violations('ui new-tab'))->toBe([]);
+});
+
+test('ui new-tab treats only kit-imported components as adding rel', function (string $source, bool $violation) {
+    $base = dirname(__DIR__).'/.phpunit.cache/kit-'.bin2hex(random_bytes(5));
+    mkdir($base.'/client', 0777, true);
+    file_put_contents($base.'/client/Posts.vue', $source);
+    try {
+        expect((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['client']])))->violations('ui new-tab') !== [])->toBe($violation);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+})->with([
+    'kit Button default import' => ["<script setup>import Button from '@/components/Kit/Form/Button.vue';</script><template><Button href=\"/x\" external target=\"_blank\"><ExternalLink />Posts</Button></template>", false],
+    'kit Button barrel import' => ["<script setup>import { Button } from '@/components/Kit';</script><template><Button target=\"_blank\"><ArrowUpRight />Posts</Button></template>", false],
+    'kit alias renamed import' => ["<script setup>import { Button as KitButton } from '@kit/ui';</script><template><Button target=\"_blank\"><ArrowUpRight />Posts</Button></template>", true],
+    'kit Button still needs the icon' => ["<script setup>import { Button } from '@/components/Kit';</script><template><Button target=\"_blank\">Posts</Button></template>", true],
+    'plain anchor without rel' => ["<script setup>import { Button } from '@/components/Kit';</script><template><a target=\"_blank\"><ExternalLink />Posts</a></template>", true],
+    'non-kit Button without rel' => ["<script setup>import { Button } from '@/components/ui/button';</script><template><Button target=\"_blank\"><ExternalLink />Posts</Button></template>", true],
+    'type-only kit import' => ["<script setup>import type { Button } from '@/components/Kit';</script><template><Button target=\"_blank\"><ExternalLink />Posts</Button></template>", true],
+]);
+
+test('ui new-tab still checks a plain anchor beside the kit tree', function () {
+    $base = dirname(__DIR__).'/.phpunit.cache/kit-tree-'.bin2hex(random_bytes(5));
+    mkdir($base.'/resources/js/components/Kit/Table', 0777, true);
+    mkdir($base.'/resources/js/pages', 0777, true);
+    file_put_contents($base.'/resources/js/components/Kit/Table/RowActions.vue', '<template><a target="_blank">Posts</a></template>');
+    file_put_contents($base.'/resources/js/pages/Posts.vue', '<template><a target="_blank">Posts</a></template>');
+    try {
+        expect((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['resources/js']])))->violations('ui new-tab'))
+            ->toBe([['target' => 'resources/js/pages/Posts.vue', 'check' => 'new-tab action needs noopener and external icon']]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
