@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.11.29 - 2026-10-29
 
 ### Fixed
 
 - **`integrations` follows one webhook delegation.** A webhook route whose invokable controller calls an injected handler (`$handler->handleWebhook(...)` on a typed parameter or property) no longer reports "does not go through a signature validator" when that handler's called method verifies (it wraps `(new VerifyWebhookSignature)->handle(`, say) or the handler extends a verifying controller. A subclass of Cashier's `WebhookController` counts as verified, since it inherits the middleware. A delegated handler that doesn't verify is still reported.
+
+### Documentation
+
+- **Helper or feature roots and `preset laravel`** (README, "A modular app's configuration"). An `app/Helpers/*` layout's models, requests and controllers are left out of the stock Laravel preset by adding `App\Helpers` to `presetIgnores` (since 0.11.11). The README gives the trade-off (the whole preset, with placement left to rule 20) and the stale-allowlist cleanup.
 
 ## 0.11.28 - 2026-10-29
 
@@ -26,10 +30,6 @@
 - **`standards:install --dry-run` dry-runs the whole install.** Without `--extract` the flag was ignored and the install wrote skills, hooks and `tests/Arch/configuration.php`. Now every write goes through one place: a dry run lists each file it would write (`created` or `modified`) and writes nothing, and `--json` prints `{dry_run, installed, files}`.
 - **`preset security` leaves seeders and factories out.** `rand()`/`mt_rand()` there make fake data. New `Configuration::$securityExemptRoots` (default `database/seeders`, `database/factories`); app code stays checked.
 - **The kit export snapshot is tey/kit v0.5.13's barrel**, which adds `Badge`, `EmojiTray` and `RadioCardGroup`.
-
-### Documentation
-
-- **Helper or feature roots and `preset laravel`** (README, "A modular app's configuration"). An `app/Helpers/*` layout's models, requests and controllers are left out of the stock Laravel preset by adding `App\Helpers` to `presetIgnores` (since 0.11.11). The README gives the trade-off (the whole preset, with placement left to rule 20) and the stale-allowlist cleanup.
 
 ## 0.11.27 - 2026-10-28
 
