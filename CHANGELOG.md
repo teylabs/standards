@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.11.21 - 2026-10-28
+## 0.11.23 - 2026-10-28
+
+The same change was first tagged v0.11.21, out of order after v0.11.22. Composer resolves 0.11.22 over it, so take 0.11.23.
 
 ### Changed
 
