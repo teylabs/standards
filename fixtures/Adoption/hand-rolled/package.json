@@ -1,0 +1,15 @@
+{
+    "name": "fixture-hand-rolled",
+    "private": true,
+    "dependencies": {
+        "vue": "^3.5",
+        "chart.js": "^4.4",
+        "vue-multiselect": "^3.1",
+        "vue-toastification": "^2.0"
+    },
+    "devDependencies": {
+        "vite": "^7.0",
+        "@vitejs/plugin-vue": "^6.0",
+        "typescript": "^5.8"
+    }
+}

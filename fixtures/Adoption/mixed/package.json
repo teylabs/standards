@@ -1,0 +1,12 @@
+{
+    "name": "fixture-mixed",
+    "private": true,
+    "dependencies": {
+        "vue": "^3.5",
+        "leaflet": "^1.9",
+        "dayjs": "^1.11"
+    },
+    "devDependencies": {
+        "vite": "^7.0"
+    }
+}

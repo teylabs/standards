@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tey\Standards;
 
 use Illuminate\Support\ServiceProvider;
+use Tey\Standards\Enforcement\AdoptionCommand;
 use Tey\Standards\Enforcement\CheckCommand;
 use Tey\Standards\Enforcement\AllowlistCommand;
 use Tey\Standards\Enforcement\InstallCommand;
@@ -40,7 +41,7 @@ final class StandardsServiceProvider extends ServiceProvider
         $this->publishes([__DIR__.'/../config/standards.php' => $this->app->configPath('standards.php')], 'standards-config');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([PreflightCommand::class, CheckCommand::class, PatternCommand::class, InstallCommand::class, MakeCommand::class, AllowlistCommand::class]);
+            $this->commands([PreflightCommand::class, CheckCommand::class, PatternCommand::class, InstallCommand::class, MakeCommand::class, AllowlistCommand::class, AdoptionCommand::class]);
         }
     }
 }

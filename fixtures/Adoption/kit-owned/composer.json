@@ -1,0 +1,6 @@
+{
+    "name": "fixture/kit-owned",
+    "require": {
+        "tey/kit": "^0.7"
+    }
+}
