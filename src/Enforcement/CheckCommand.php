@@ -23,6 +23,10 @@ final class CheckCommand extends Command
         if (($warning = KitExports::mismatch($base)) !== null) {
             fwrite(STDERR, 'Warning: '.$warning.PHP_EOL);
         }
+
+        if (($advisory = KitExports::lag($base)) !== null) {
+            fwrite(STDERR, 'Advisory: '.$advisory.PHP_EOL);
+        }
         $files = array_values(array_filter((array) $this->option('file'), fn (mixed $file): bool => is_string($file) && $file !== ''));
 
         if ($files !== []) {

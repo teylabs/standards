@@ -9,7 +9,9 @@ use InvalidArgumentException;
 /**
  * The component names tey/kit's `@kit/ui` barrel exports. Validation always
  * uses the shipped snapshot, so CI is deterministic; at runtime an installed
- * kit is compared against it and a mismatch only warns.
+ * kit is compared against it: a kit missing snapshot components warns (recipes
+ * may name what it lacks), and a kit that only adds components is an advisory
+ * (the snapshot is older than the kit; refresh it on the next standards release).
  */
 final class KitExports
 {
@@ -71,21 +73,12 @@ final class KitExports
         return count($components).' components from '.$snapshot['source'];
     }
 
-    /** A warning when the app's installed kit exports differ from the snapshot, else null. */
+    /** A warning when the app's installed kit lacks components the snapshot names (recipes may name them), else null. */
     public static function mismatch(string $base): ?string
     {
-        $barrel = $base.'/vendor/tey/kit/'.self::BARREL;
+        [$missing, $extra] = self::compare($base);
 
-        if (! is_file($barrel)) {
-            return null;
-        }
-
-        $installed = self::parse((string) file_get_contents($barrel));
-        $snapshot = self::snapshot();
-        $missing = array_values(array_diff($snapshot, $installed));
-        $extra = array_values(array_diff($installed, $snapshot));
-
-        if ($missing === [] && $extra === []) {
+        if ($missing === []) {
             return null;
         }
 
@@ -93,5 +86,32 @@ final class KitExports
             .($missing === [] ? '' : '; missing: '.implode(', ', $missing))
             .($extra === [] ? '' : '; not in the snapshot: '.implode(', ', $extra))
             .'. Recipes may name components this kit lacks; update tey/standards or tey/kit.';
+    }
+
+    /** An advisory when the installed kit only adds components (a superset of the snapshot): the snapshot is older than the kit, not drift. */
+    public static function lag(string $base): ?string
+    {
+        [$missing, $extra] = self::compare($base);
+
+        if ($missing !== [] || $extra === []) {
+            return null;
+        }
+
+        return 'The pattern catalog\'s kit snapshot is older than the installed tey/kit (new: '.implode(', ', $extra).'). Nothing is missing; recipes just won\'t suggest those yet. A newer tey/standards refreshes it.';
+    }
+
+    /** @return array{0: list<string>, 1: list<string>} [in the snapshot but not installed, installed but not in the snapshot]; both empty without an installed kit */
+    private static function compare(string $base): array
+    {
+        $barrel = $base.'/vendor/tey/kit/'.self::BARREL;
+
+        if (! is_file($barrel)) {
+            return [[], []];
+        }
+
+        $installed = self::parse((string) file_get_contents($barrel));
+        $snapshot = self::snapshot();
+
+        return [array_values(array_diff($snapshot, $installed)), array_values(array_diff($installed, $snapshot))];
     }
 }

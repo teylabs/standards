@@ -496,11 +496,18 @@ test('the kit export snapshot refreshes from a kit checkout and an installed kit
         expect(KitExports::mismatch($kit))->toBeNull();
         mkdir(dirname($kit.'/vendor/tey/kit/'.KitExports::BARREL), 0777, true);
         file_put_contents($kit.'/vendor/tey/kit/'.KitExports::BARREL, $barrel);
-        expect(KitExports::mismatch($kit))->toContain('missing: ActionBar')->toContain('not in the snapshot: Zebra')->not->toContain('DataTable,');
+        expect(KitExports::mismatch($kit))->toContain('missing: ActionBar')->toContain('not in the snapshot: Zebra')->not->toContain('DataTable,')
+            ->and(KitExports::lag($kit))->toBeNull('a kit that lacks components warns, not advises');
+
+        // A kit that only adds components (a superset of the snapshot) is an advisory, not drift.
+        $superset = implode("\n", array_map(fn (string $name): string => "export { default as {$name} } from './{$name}.vue';", [...KitExports::snapshot(), 'Zebra']));
+        file_put_contents($kit.'/vendor/tey/kit/'.KitExports::BARREL, $superset);
+        expect(KitExports::mismatch($kit))->toBeNull()
+            ->and(KitExports::lag($kit))->toContain('older than the installed tey/kit (new: Zebra)');
 
         $same = implode("\n", array_map(fn (string $name): string => "export { default as {$name} } from './{$name}.vue';", KitExports::snapshot()));
         file_put_contents($kit.'/vendor/tey/kit/'.KitExports::BARREL, $same);
-        expect(KitExports::mismatch($kit))->toBeNull();
+        expect(KitExports::mismatch($kit))->toBeNull()->and(KitExports::lag($kit))->toBeNull();
         expect(KitExports::snapshot())->toBe(json_decode(file_get_contents(patternSources().'/kit-exports.json'), true)['components']);
     } finally {
         (new Filesystem)->deleteDirectory($kit);
@@ -744,14 +751,14 @@ test('make model emits a domain model with its migration, factory, enums and tes
     }
 });
 
-test('the kit export snapshot is tey/kit v0.5.4\'s @kit/ui barrel: an app on that kit gets no mismatch warning', function () {
-    // The barrel as tey/kit v0.5.4 ships it (fixtures/KitExports), installed in a synthetic app.
+test('the kit export snapshot is tey/kit v0.5.13\'s @kit/ui barrel: an app on that kit gets no mismatch warning', function () {
+    // The barrel as tey/kit v0.5.13 ships it (fixtures/KitExports), installed in a synthetic app.
     $app = sys_get_temp_dir().'/standards-kit-exports-'.bin2hex(random_bytes(6));
     mkdir(dirname($app.'/vendor/tey/kit/'.KitExports::BARREL), 0777, true);
-    copy(dirname(__DIR__).'/fixtures/KitExports/index-v0.5.4.ts.stub', $app.'/vendor/tey/kit/'.KitExports::BARREL);
+    copy(dirname(__DIR__).'/fixtures/KitExports/index-v0.5.13.ts.stub', $app.'/vendor/tey/kit/'.KitExports::BARREL);
 
     try {
-        expect(KitExports::snapshot())->toContain('PasskeyOffer')->toContain('PasswordRules')->toContain('StageNotice')->toContain('Surface')->toContain('Collapsible')->toContain('DescriptionList')->toContain('EmptyState')
+        expect(KitExports::snapshot())->toContain('PasskeyOffer')->toContain('PasswordRules')->toContain('StageNotice')->toContain('Surface')->toContain('Collapsible')->toContain('DescriptionList')->toContain('EmptyState')->toContain('Badge')->toContain('EmojiTray')->toContain('RadioCardGroup')
             ->and(KitExports::mismatch($app))->toBeNull();
     } finally {
         (new Illuminate\Filesystem\Filesystem)->deleteDirectory($app);
