@@ -13,6 +13,7 @@ Usage: standards ci [--strict] [--json] [--base=<dir>]
        standards hook <stop|pre-commit|pre-write|post-edit>
        standards patterns:compile [--check]
        standards kit-exports --refresh --from=<tey/kit checkout>
+       standards adoption [--base=<dir>] [--inventory=<file>]... [--json] [--ci|--compliance]
        standards [--help]
 
 Inspect .github/workflows offline, without booting Laravel.
@@ -20,6 +21,7 @@ Settings: flags > PREFLIGHT_CI_* environment > composer.json extra.tey-standards
 Defaults: current directory, main, auto-detected distribution, enforcement off, drafts lint.
 Exit: 0 for advisory runs; 1 for findings with --strict and enforcement on; 2 for invalid usage.
 report aggregates standards:check --json files; --strict exits 1 on regressions against --previous.
+adoption runs the standards:adoption scan without Laravel; exit 2 on usage, an unreadable inventory or a schema error.
 hook runs a Claude Code hook (JSON on stdin) and exits 0 outside an app that requires tey/standards.
 TEXT;
 
@@ -53,7 +55,7 @@ $locate = function (): void {
     require_once $autoload;
 };
 
-if (in_array($arguments[0], ['hook', 'report', 'patterns:compile', 'kit-exports'], true)) {
+if (in_array($arguments[0], ['hook', 'report', 'patterns:compile', 'kit-exports', 'adoption'], true)) {
     $command = array_shift($arguments);
 
     if ($command === 'hook') {
@@ -79,6 +81,13 @@ if (in_array($arguments[0], ['hook', 'report', 'patterns:compile', 'kit-exports'
     }
 
     $locate();
+
+    if ($command === 'adoption') {
+        $result = Tey\Standards\Adoption\Cli::run(array_values($arguments), (string) getcwd());
+        fwrite(STDOUT, $result['stdout']);
+        fwrite(STDERR, $result['stderr']);
+        exit($result['exit']);
+    }
 
     if ($command === 'kit-exports') {
         $from = null;

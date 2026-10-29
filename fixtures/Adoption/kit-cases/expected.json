@@ -1,0 +1,60 @@
+{
+  "format": 1,
+  "description": "Sample app trees and the row standards:adoption should report for one surface each. The kit test checks the surfaces and states exist; standards validates the outcomes against these trees.",
+  "cases": [
+    {
+      "app": "mail-adopted",
+      "surface": "mail.layout",
+      "facts": {
+        "sends-mail": true
+      },
+      "row": "adopted",
+      "why": "A notification through FluentMailMessage and a mail view on x-mail::message, which the kit brands."
+    },
+    {
+      "app": "mail-hand-rolled",
+      "surface": "mail.layout",
+      "facts": {
+        "sends-mail": true
+      },
+      "row": "hand-rolled",
+      "why": "A published resources/views/vendor/mail layout replaces the kit's branded one."
+    },
+    {
+      "app": "inputs-hidden-search",
+      "surface": "form.inputs",
+      "facts": {
+        "has-forms": true
+      },
+      "row": "missing",
+      "why": "Hidden inputs (CSRF, method spoofing) and a lone search box are not hand-rolled form controls; nothing adopts the kit inputs either."
+    },
+    {
+      "app": "inputs-raw",
+      "surface": "form.inputs",
+      "facts": {
+        "has-forms": true
+      },
+      "row": "hand-rolled",
+      "why": "One raw form control on a page is hand-rolled; zero exemptions, so no count threshold."
+    },
+    {
+      "app": "inputs-in-kit",
+      "surface": "form.inputs",
+      "facts": {
+        "has-forms": true
+      },
+      "row": "adopted",
+      "why": "Raw inputs inside the kit tree are kit-owned; the page uses the kit Input."
+    },
+    {
+      "app": "files-raw",
+      "surface": "form.files",
+      "facts": {
+        "has-file-uploads": true
+      },
+      "row": "hand-rolled",
+      "why": "A raw file input sets has-file-uploads and is the hand-rolled signal: uploads go through the kit FileInput or BulkDrop."
+    }
+  ]
+}

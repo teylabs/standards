@@ -1,0 +1,6 @@
+{
+    "name": "fixture/mail-adopted",
+    "require": {
+        "tey/kit": "^0.6"
+    }
+}

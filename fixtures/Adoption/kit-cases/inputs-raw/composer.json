@@ -1,0 +1,6 @@
+{
+    "name": "fixture/inputs-raw",
+    "require": {
+        "tey/kit": "^0.6"
+    }
+}

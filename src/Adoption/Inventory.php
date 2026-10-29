@@ -15,13 +15,13 @@ final readonly class Inventory
 
     public const GROUPS = ['layout', 'navigation', 'action', 'form', 'data', 'feedback', 'overlay', 'content', 'auth', 'account', 'workspace', 'access', 'mail', 'jobs', 'documents', 'activity', 'modules', 'platform'];
 
-    /** Signal kind => [allowed fields => type], where type is `list` (of strings), `string`, `int`, `scope` or `requires`. */
+    /** Signal kind => [allowed fields => type], where type is `list` (of strings), `string`, `int`, `scope`, `requires` or `attributes`. */
     public const SIGNALS = [
         'rule' => ['rule' => 'string', 'scope' => 'scope'],
         'vue-root' => ['tags' => 'list', 'requires' => 'requires', 'scope' => 'scope'],
         'file-name' => ['globs' => 'list', 'scope' => 'scope'],
         'import' => ['specifiers' => 'list', 'scope' => 'scope'],
-        'template-tag' => ['tags' => 'list', 'min' => 'int', 'scope' => 'scope'],
+        'template-tag' => ['tags' => 'list', 'min' => 'int', 'where' => 'attributes', 'except' => 'attributes', 'scope' => 'scope'],
         'mail-view' => ['without' => 'list', 'scope' => 'scope'],
         'php-class' => ['extends' => 'list', 'implements' => 'list', 'names' => 'list'],
         'composer' => ['packages' => 'list'],
@@ -203,6 +203,7 @@ final readonly class Inventory
                 'int' => is_int($value) && $value >= 1 ? null : throw new AdoptionError("{$where}.{$field} must be an integer of at least 1"),
                 'scope' => self::enum($value, ['signed-in', 'public', 'any'], "{$where}.{$field}"),
                 'requires' => self::requires($value, "{$where}.{$field}"),
+                'attributes' => self::attributes($value, "{$where}.{$field}"),
             };
         }
         // An empty php-class signal would match every class: refuse it rather than guess.
@@ -211,6 +212,23 @@ final readonly class Inventory
         }
         if ($kind === 'rule' && ! array_key_exists($signal['rule'], \Tey\Standards\Conformance::TESTS)) {
             throw new AdoptionError("{$where}: rule [{$signal['rule']}] is not a standards rule");
+        }
+    }
+
+    /** A template-tag `where`/`except` filter: a non-empty object of attribute name => non-empty list of literal string values. */
+    private static function attributes(mixed $value, string $where): void
+    {
+        if (! is_array($value) || $value === [] || array_is_list($value)) {
+            throw new AdoptionError("{$where} must be a non-empty object of attribute name => list of values");
+        }
+        foreach ($value as $attribute => $values) {
+            if (! is_string($attribute) || preg_match('/\A[a-z][a-z0-9-]*\z/', $attribute) !== 1) {
+                throw new AdoptionError("{$where}: ".json_encode($attribute).' is not a static attribute name (lowercase, no `:`, `@` or `v-` prefix)');
+            }
+            if (! is_array($values) || ! array_is_list($values) || $values === []) {
+                throw new AdoptionError("{$where}.{$attribute} must be a non-empty list of strings");
+            }
+            self::strings($values, "{$where}.{$attribute}");
         }
     }
 

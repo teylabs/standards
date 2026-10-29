@@ -76,6 +76,60 @@ final class Code
         return preg_match('~\A<input\b~i', $element) === 1 && preg_match('~(?<![:\w-])type\s*=\s*(["\']?)hidden\1(?![\w-])~i', $element) === 1;
     }
 
+    /**
+     * The static attributes of the element starting at $offset (its `<`), lower-cased name => value (`''` for a bare attribute). Bound
+     * (`:type`, `v-bind:type`, `v-bind="..."`), event and directive attributes are left out: their value is not known statically. Quoted
+     * values may hold `>`; the element ends at the first unquoted `>`. The first static occurrence of a name wins.
+     *
+     * @return array<string, string>
+     */
+    public static function staticAttributes(string $source, int $offset): array
+    {
+        if (preg_match('~\G<[A-Za-z][\w.:-]*~', $source, $tag, 0, $offset) !== 1) {
+            return [];
+        }
+        $attributes = [];
+        $position = $offset + strlen($tag[0]);
+        $pattern = '~\G\s*(?:([^\s"\'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'=<>`]+)))?|/)~';
+        while (preg_match($pattern, $source, $match, PREG_UNMATCHED_AS_NULL, $position) === 1 && $match[0] !== '') {
+            $position += strlen($match[0]);
+            $name = $match[1] === null ? null : strtolower($match[1]);
+            if ($name === null || preg_match('~\A(?::|@|#|v-)~', $name) === 1 || array_key_exists($name, $attributes)) {
+                continue;
+            }
+            $attributes[$name] = $match[2] ?? $match[3] ?? $match[4] ?? '';
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * Whether an element's static attributes pass a template-tag signal's `where` (every named attribute is static with a listed value) and
+     * `except` (no named static attribute has a listed value). A bound or missing attribute satisfies no `where` and triggers no `except`.
+     * Values compare case-insensitively, as HTML reads `type`.
+     *
+     * @param  array<string, string>  $attributes
+     * @param  array<string, list<string>>  $where
+     * @param  array<string, list<string>>  $except
+     */
+    public static function attributesPass(array $attributes, array $where, array $except): bool
+    {
+        $listed = fn (string $name, array $values): bool => array_key_exists($name, $attributes)
+            && in_array(strtolower($attributes[$name]), array_map('strtolower', $values), true);
+        foreach ($where as $name => $values) {
+            if (! $listed($name, $values)) {
+                return false;
+            }
+        }
+        foreach ($except as $name => $values) {
+            if ($listed($name, $values)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /** Whether a template tag matches a name: exact, or the kebab-case form of a PascalCase name. */
     public static function tagIs(string $tag, string $name): bool
     {

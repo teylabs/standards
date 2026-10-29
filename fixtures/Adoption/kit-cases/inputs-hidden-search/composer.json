@@ -1,0 +1,6 @@
+{
+    "name": "fixture/inputs-hidden-search",
+    "require": {
+        "tey/kit": "^0.6"
+    }
+}

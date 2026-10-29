@@ -1,0 +1,6 @@
+{
+    "name": "fixture/mail-hand-rolled-notifying",
+    "require": {
+        "tey/kit": "^0.6"
+    }
+}
