@@ -227,8 +227,9 @@ final class Compiler
 
         $make = $node['make'] ?? null;
 
-        if ($make === null && $node['status'] === 'ready') {
-            throw new InvalidArgumentException("Ready leaf {$id} needs a make command.");
+        // A Bakery recipe is a generator too: a ready leaf needs one or the other.
+        if ($make === null && ($node['recipe_make'] ?? null) === null && $node['status'] === 'ready') {
+            throw new InvalidArgumentException("Ready leaf {$id} needs a make or recipe_make command.");
         }
 
         if ($make !== null) {

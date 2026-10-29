@@ -191,7 +191,7 @@ test('the compiler rejects a ready leaf without make, an unknown generator and a
 
     expect(fn () => Compiler::compile($directory))->toThrow(InvalidArgumentException::class, $message);
 })->with([
-    'missing make' => ['make', null, 'Ready leaf settings.form needs a make command'],
+    'missing make' => ['make', null, 'Ready leaf settings.form needs a make or recipe_make command'],
     'unknown unit' => ['make', 'standards:make widget --flavor=form', 'known unit and flavor'],
     'unknown check' => ['checks', ['nope'], 'unknown check [nope]'],
     'bad status' => ['status', 'done', 'status must be ready, draft, gap or byo'],
@@ -336,7 +336,7 @@ test('every ready leaf\'s make command emits code that passes standards:check in
     } finally {
         (new Filesystem)->deleteDirectory($base);
     }
-})->with(fn (): array => array_values(array_map(fn (Leaf $leaf): string => $leaf->id, array_filter(TreeCatalog::shipped()->leaves(), fn (Leaf $leaf): bool => $leaf->status === 'ready'))));
+})->with(fn (): array => array_values(array_map(fn (Leaf $leaf): string => $leaf->id, array_filter(TreeCatalog::shipped()->leaves(), fn (Leaf $leaf): bool => $leaf->status === 'ready' && $leaf->make !== null))));
 
 test('the fixture app alone passes, and a hand-rolled violation fails the same check', function () {
     $base = fixtureApp();
@@ -382,7 +382,7 @@ test('recipe_make is optional, validated, and preferred only when the recipe pac
     expect((new Lookup($catalog, recipes: true))->recipe('mcp.write'))
         ->toMatchArray(['preferred_make' => 'mod:butter/mcp-parity <Name>', 'preferred_make_source' => 'butter/bakery']);
     expect((new Lookup($catalog, recipes: true))->recipe('mcp.read')['preferred_make_source'])->toBe('tey/standards');
-    expect($catalog->node('data-actions.document'))->toMatchObject(['recipe' => 'pdf-reports', 'recipeMake' => 'mod:butter/pdf-reports {Name}', 'status' => 'draft']);
+    expect($catalog->node('data-actions.document'))->toMatchObject(['recipe' => 'pdf-reports', 'recipeMake' => 'mod:butter/pdf-reports {Name}', 'status' => 'ready']);
 
     $directory = mutatedPatterns('settings', function (array $source): array {
         $source['nodes'][nodeAt($source, 'settings.form')]['recipe_make'] = 'butter mcp-parity';
@@ -895,9 +895,9 @@ test('the PDF report leaf prefers the Bakery recipe and carries its rules, with 
     $pdf = (new Lookup(TreeCatalog::shipped(), recipes: true))->recipe('data-actions.document');
     $rules = implode("\n", $pdf['conventions']['rules']);
 
-    expect($pdf)->toMatchArray(['status' => 'draft', 'preferred_make' => 'mod:butter/pdf-reports <Name>', 'preferred_make_source' => 'butter/bakery'])
+    expect($pdf)->toMatchArray(['status' => 'ready', 'preferred_make' => 'mod:butter/pdf-reports <Name>', 'preferred_make_source' => 'butter/bakery'])
         ->and($rules)->toContain('Render through the Renderer contract; the mPDF implementation stays behind it.')
-        ->toContain('Authorize through a generated policy.')
+        ->toContain('Authorize through a generated policy, with its 403 test.')
         ->toContain('nosniff')->toContain('Content-Disposition')
         ->toContain('No PII in logs.')
         ->toContain('The app requires mpdf/mpdf.')
@@ -931,4 +931,25 @@ test('make declares the routes it writes in the capability manifest: an existing
     } finally {
         (new Filesystem)->deleteDirectory($base);
     }
+});
+
+test('a ready leaf may carry only a Bakery recipe_make, and the new recipe leaves are reachable', function () {
+    $catalog = TreeCatalog::shipped();
+    $lookup = new Lookup($catalog, recipes: true);
+
+    expect($catalog->node('mcp.agent-docs'))->toMatchObject(['status' => 'ready', 'make' => null, 'recipeMake' => 'mod:butter/agent-docs {Name}'])
+        ->and($catalog->node('mail-notifications.intake'))->toMatchObject(['status' => 'ready', 'make' => null, 'recipeMake' => 'mod:butter/email-intake {Name}'])
+        ->and($catalog->parentOf('mail-notifications.intake')->id)->toBe('mail-notifications');
+    expect($lookup->recipe('mail-notifications.intake'))->toMatchArray(['preferred_make' => 'mod:butter/email-intake <Name>', 'preferred_make_source' => 'butter/bakery'])
+        ->and(implode("\n", $lookup->recipe('mail-notifications.intake')['conventions']['rules']))->toContain('hash_equals')->toContain('insertOrIgnore')->toContain('ShouldQueue')->toContain('never log');
+    expect((new Lookup($catalog))->recipe('mcp.agent-docs'))->toMatchArray(['preferred_make' => null, 'preferred_make_source' => null]);
+
+    $directory = mutatedPatterns('settings', function (array $source): array {
+        $at = nodeAt($source, 'settings.form');
+        unset($source['nodes'][$at]['make']);
+        $source['nodes'][$at]['recipe_make'] = 'mod:butter/settings {Name}';
+
+        return $source;
+    });
+    expect(fn () => Compiler::compile($directory))->not->toThrow(InvalidArgumentException::class);
 });

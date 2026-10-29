@@ -6,6 +6,7 @@ nodes:
     options:
       - { answer: "Mail", next: mail-notifications.mail }
       - { answer: "SMS or an agent", next: mail-notifications.custom-channel }
+      - { answer: "Receive email into the app", next: mail-notifications.intake }
       - { answer: "None of these", next: mail-notifications.byo }
   - id: mail-notifications.mail
     question: What does the mail carry?
@@ -51,6 +52,23 @@ nodes:
     keywords: [sms, text message, agent, channel]
     status: gap
     evidence: { apps: 1, count: 9, prs: 9 }
+  - id: mail-notifications.intake
+    recipe: email-intake
+    recipe_make: "mod:butter/email-intake {Name}"
+    summary: Inbound email through a provider webhook (Resend by default) with a verified signature, idempotent storage and queued extraction into a draft a person reviews. Scaffold it with the Bakery's email-intake recipe.
+    kit: []
+    checks: []
+    paths: []
+    keywords: [inbound email, email-in, forward an email, webhook, resend inbound, draft records, ai extraction, inbound, email, intake, parse]
+    status: ready
+    rules:
+      - "Receive through the InboundDriver contract (verify and parse); ResendDriver is the default."
+      - "Verify the provider signature: Svix-style HMAC-SHA256 over id.timestamp.body, keyed with the base64 secret after whsec_, compared with hash_equals against the v1 entries, with a 300-second tolerance. A missing secret or an unsigned or stale request gets 401 invalid_signature."
+      - "Idempotent message ids: a unique provider_id and insertOrIgnore. A duplicate gets 200 duplicate and queues nothing; an unparseable event gets 200 ignored."
+      - "Queued processing: the webhook only stores the envelope (sender and subject, truncated) and dispatches a ShouldQueue job; extraction runs in the job behind the Extractor contract (Simple or Ai)."
+      - "Nothing becomes a record without review: extraction produces a Draft a person accepts or discards (AcceptDraft, DiscardDraft), authorized through a generated policy."
+      - "No PII in logs: never log the email's text; store attachment metadata as JSON."
+      - "Rule 55: the webhook is a provider callback, not a user operation; declare it uiOnly or exclude it."
   - id: mail-notifications.byo
     recipe: Build your own
     summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
