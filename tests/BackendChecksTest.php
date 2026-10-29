@@ -273,3 +273,36 @@ test('no-dev ignores Laravel\'s generated bootstrap/cache manifests, but a real 
     file_put_contents($this->backendBase.'/bootstrap/app.php', '<?php return Illuminate\Foundation\Application::configure()->withProviders([App\Support\TypeScriptProvider::class])->create();');
     expect($run())->toContain('app/Support/TypeScriptProvider.php');
 });
+
+test('toast accepts a guest form whose back() returns to a page rendering kit FormStatus, and nothing less provable', function (string $routes, string $page, string $show, string $store, bool $fails) {
+    file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\ContactController; '.$routes);
+    mkdir($this->backendBase.'/resources/js/pages/Public', 0777, true);
+    file_put_contents($this->backendBase.'/resources/js/pages/Public/Contact.vue', $page);
+    $controller = 'namespace App; use Inertia\Inertia; class ContactController { public function show($name) { '.$show.' } public function store() { '.$store.' } }';
+    expect(($this->backend)('toast', $controller, ['pageRoots' => ['resources/js/pages']], 'src/Controllers/ContactController.php'))->toHaveCount($fails ? 1 : 0);
+})->with(function () {
+    $guest = 'Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"])->middleware("throttle:6,1");';
+    $status = "<script setup lang=\"ts\">\nimport { FormStatus, Button } from '@/components/Kit';\n</script>\n<template>\n    <FormStatus />\n</template>\n";
+    $render = 'return Inertia::render("Public/Contact");';
+
+    return [
+        'guest page with FormStatus' => [$guest, $status, $render, 'return back();', false],
+        'guest page importing from Kit/Form, inertia() helper, redirect()->back()' => [$guest, str_replace("'@/components/Kit'", "'@/components/Kit/Form'", $status), 'return inertia("Public/Contact");', 'return redirect()->back()->withInput();', false],
+        'guest group with prefix and guest middleware' => ['Route::middleware(["guest"])->prefix("site")->group(function () { Route::get("contact", [ContactController::class, "show"]); Route::post("contact", [ContactController::class, "store"]); });', $status, $render, 'return back();', false],
+        'guest page without FormStatus' => [$guest, "<template>\n    <form />\n</template>\n", $render, 'return back();', true],
+        'FormStatus rendered but not imported from kit' => [$guest, str_replace("'@/components/Kit'", "'@/components/FormStatus'", $status), $render, 'return back();', true],
+        'FormStatus imported but not rendered' => [$guest, str_replace('<FormStatus />', '<div />', $status), $render, 'return back();', true],
+        'signed-in route with FormStatus' => ['Route::middleware("auth")->group(function () { Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]); });', $status, $render, 'return back();', true],
+        'auth middleware after the verb' => ['Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"])->middleware(["throttle:6,1", "auth"]);', $status, $render, 'return back();', true],
+        'non-literal middleware' => ['Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"])->middleware($stack);', $status, $render, 'return back();', true],
+        'unresolvable page name' => [$guest, $status, 'return Inertia::render($name);', 'return back();', true],
+        'two pages from one action' => [$guest, $status, 'return $name ? Inertia::render("Public/Contact") : Inertia::render("Public/Other");', 'return back();', true],
+        'missing page file' => [$guest, $status, 'return Inertia::render("Public/Missing");', 'return back();', true],
+        'no GET route for the URI' => ['Route::get("/contact-us", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]);', $status, $render, 'return back();', true],
+        'no route at all' => ['', $status, $render, 'return back();', true],
+        'array-form group' => ['Route::group(["middleware" => "web"], function () { Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]); });', $status, $render, 'return back();', true],
+        'also registered by a resource' => [$guest.' Route::resource("contacts", ContactController::class);', $status, $render, 'return back();', true],
+        'route file included inside a group' => [$guest.' Route::middleware("auth")->group(function () { require __DIR__."/account.php"; });', $status, $render, 'return back();', true],
+        'redirect to a route instead of back' => [$guest, $status, $render, 'return to_route("home");', true],
+    ];
+});

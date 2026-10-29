@@ -36,6 +36,7 @@ final class Toast
                 }
             }
         }
+        $formStatus = null;
         $invokables = $this->mutatingInvokables();
         foreach ($this->source->files($this->config->controllerRoots) as $path => $text) {
             if ($this->source->inside($path, $this->config->uiRoots)) {
@@ -58,7 +59,8 @@ final class Toast
                         }
                     }
                     foreach ($this->returns($method->stmts ?? []) as $return) {
-                        if ($return->expr !== null && $this->redirectWithoutToast($return->expr)) {
+                        // A guest form's back() to a page that renders kit's <FormStatus> confirms in place: no toast (GuestFormStatus).
+                        if ($return->expr !== null && $this->redirectWithoutToast($return->expr) && ! (GuestFormStatus::isBack($return->expr) && ($formStatus ??= new GuestFormStatus($this->config, $this->source))->proves($class, $name))) {
                             $violations[] = ['target' => $path, 'check' => $class->name.'::'.$name.' redirect must chain ->toast*()'];
                         }
                     }
