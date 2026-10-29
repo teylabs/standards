@@ -26,10 +26,19 @@ afterEach(function () {
 
 test('MCP declaration findings support exact ratchets and stale entry detection', function () {
     $bad = (new McpParity(dirname(__DIR__).'/fixtures/Bad'))->violations();
-    expect(array_column($bad, 'check'))->toBe(['capability 1 has a missing or incomplete MCP path', 'UI inventory entry 1 has missing or unmapped semantic variants']);
+    expect(array_column($bad, 'check'))->toBe([
+        'capability 1 has a missing or incomplete MCP path',
+        'UI inventory entry 1 has missing or unmapped semantic variants',
+        // The Bad fixture's mutating routes are declared nowhere in its manifest.
+        'mutating route POST /invoices/pay -> FixtureBad\\Domain\\Billing\\Http\\Controllers\\InvoiceController@pay has no MCP capability or uiOnly declaration',
+        'mutating route POST /invoices (invoices.store) -> FixtureBad\\Domain\\Billing\\Http\\Controllers\\InvoiceController@store has no MCP capability or uiOnly declaration',
+        'mutating route PUT|PATCH /invoices/{invoice} (invoices.update) -> FixtureBad\\Domain\\Billing\\Http\\Controllers\\InvoiceController@update has no MCP capability or uiOnly declaration',
+        'mutating route DELETE /invoices/{invoice} (invoices.destroy) -> FixtureBad\\Domain\\Billing\\Http\\Controllers\\InvoiceController@destroy has no MCP capability or uiOnly declaration',
+        'mutating route POST /invoices/reorder -> FixtureBad\\Domain\\Billing\\Http\\Controllers\\InvoiceController@reorder has no MCP capability or uiOnly declaration',
+    ]);
     $ratchet = new Ratchet(array_map(fn (array $finding): array => ['rule' => '55', ...$finding, 'reason' => 'Fixture MCP debt', 'date' => '2026-10-24', 'expires' => '2099-12-31'], $bad));
     expect($ratchet->failures('55', $bad))->toBe([])
-        ->and($ratchet->failures('55', (new McpParity($this->base))->violations()))->toHaveCount(2);
+        ->and($ratchet->failures('55', (new McpParity($this->base))->violations()))->toHaveCount(7);
 });
 
 test('MCP declarations reject malformed JSON and preserve JSON value types', function (string $json, string $check) {
@@ -126,4 +135,61 @@ test('MCP semantic object key order has no effect but list order and types do', 
     $data->capabilities[0]->variants[0]->mcp->options = (object) ['fields' => ['title', 'date'], 'enabled' => true];
     file_put_contents($this->manifest, json_encode($data));
     expect((new McpParity($this->base))->violations())->toBe([]);
+});
+
+test('MCP route coverage reports undeclared mutating routes and accepts MCP or reasoned uiOnly capabilities', function () {
+    $this->files->ensureDirectoryExists($this->base.'/app/Modules/Billing/routes');
+    file_put_contents($this->base.'/routes/web.php', <<<'PHP'
+        <?php
+
+        use App\Http\Controllers\RecordController;
+        use Illuminate\Support\Facades\Route;
+
+        Route::post('/records', [RecordController::class, 'store'])->name('records.store');
+        Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
+            Route::controller(RecordController::class)->group(function () {
+                Route::delete('/records/{record}', 'destroy')->name('records.destroy');
+            });
+        });
+        Route::patch('/records/{record}/archive', [RecordController::class, 'archive']);
+        Route::resource('notes', RecordController::class)->only(['store', 'update']);
+        Route::get('/records', [RecordController::class, 'index'])->name('records.index');
+        Route::post('/logout', [RecordController::class, 'logout'])->name('logout');
+        Route::post('/user/two-factor-authentication', [RecordController::class, 'enable']);
+        Route::post('/webhooks/stripe', [RecordController::class, 'hook'])->middleware(VerifyStripeSignature::class);
+        Route::post('/webhooks/unsigned', [RecordController::class, 'hook']);
+        PHP);
+    file_put_contents($this->base.'/app/Modules/Billing/routes/web.php', "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n\nRoute::put('/invoices/{invoice}', [Invoices::class, 'update'])->name('invoices.update');\n");
+    $data = json_decode(file_get_contents($this->manifest));
+    $data->capabilities[0]->routes = ['records.store', 'patch /records/{record}/archive'];
+    $data->capabilities[] = (object) ['id' => 'notes.ui', 'uiOnly' => 'Drag-and-drop note editing has no agent use', 'routes' => ['notes.store']];
+    file_put_contents($this->manifest, json_encode($data));
+    $check = fn (array $roots = ['routes', 'app/Modules/*/routes'], array $exclusions = McpParity::ROUTE_EXCLUSIONS): array => array_map(fn (array $finding): string => $finding['target'].':'.($finding['line'] ?? '-').' '.$finding['check'], (new McpParity($this->base, routeRoots: $roots, routeExclusions: $exclusions))->violations());
+
+    expect($check())->toBe([
+        'app/Modules/Billing/routes/web.php:5 mutating route PUT /invoices/{invoice} (invoices.update) -> Invoices@update has no MCP capability or uiOnly declaration',
+        'routes/web.php:9 mutating route DELETE /admin/records/{record} (admin.records.destroy) -> App\Http\Controllers\RecordController@destroy has no MCP capability or uiOnly declaration',
+        'routes/web.php:13 mutating route PUT|PATCH /notes/{note} (notes.update) -> App\Http\Controllers\RecordController@update has no MCP capability or uiOnly declaration',
+        'routes/web.php:18 mutating route POST /webhooks/unsigned -> App\Http\Controllers\RecordController@hook has no MCP capability or uiOnly declaration',
+    ])
+        // Configured exclusions replace the defaults: framework routes are then reported like any other.
+        ->and($check(['routes'], ['admin.*', 'notes.*', '/webhooks/*']))->toBe([
+            'routes/web.php:15 mutating route POST /logout (logout) -> App\Http\Controllers\RecordController@logout has no MCP capability or uiOnly declaration',
+            'routes/web.php:16 mutating route POST /user/two-factor-authentication -> App\Http\Controllers\RecordController@enable has no MCP capability or uiOnly declaration',
+        ]);
+
+    $data->capabilities[1]->uiOnly = ' ';
+    file_put_contents($this->manifest, json_encode($data));
+    expect(array_column((new McpParity($this->base, routeRoots: ['routes'], routeExclusions: [...McpParity::ROUTE_EXCLUSIONS, 'admin.*', 'notes.update', '/webhooks/*']))->violations(), 'check'))->toBe(['capability 2 is uiOnly without a reason']);
+});
+
+test('MCP route coverage fails closed when routes cannot be enumerated and keeps the missing-manifest finding alone', function () {
+    file_put_contents($this->base.'/routes/web.php', "<?php\n\nRoute::post(\$uri, fn () => null);\n");
+    expect(array_map(fn (array $finding): string => $finding['target'].':'.($finding['line'] ?? '-').' '.$finding['check'], (new McpParity($this->base))->violations()))
+        ->toBe(['routes/web.php:3 mutating routes could not be enumerated: Route::post has a non-literal URI'])
+        ->and(array_column((new McpParity($this->base, routeRoots: ['absent']))->violations(), 'check'))->toBe(['mutating routes could not be enumerated: no route files under the configured routeRoots']);
+    file_put_contents($this->base.'/routes/web.php', '<?php Route::post(');
+    expect(array_column((new McpParity($this->base))->violations(), 'check'))->toBe(['mutating routes could not be enumerated: the route file does not parse']);
+    unlink($this->manifest);
+    expect(array_column((new McpParity($this->base))->violations(), 'check'))->toBe(['capability inventory is missing or is a symlink']);
 });

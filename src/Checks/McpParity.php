@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tey\Standards\Checks;
 
+use Illuminate\Support\Str;
 use JsonException;
 use stdClass;
 
@@ -12,18 +13,32 @@ final class McpParity
 {
     private const CATEGORIES = ['success', 'authorization', 'validation', 'privacy', 'audit', 'retry', 'stale', 'confirmation', 'uncertain_outcome', 'handoff', 'status', 'no_bypass', 'error', 'recovery'];
 
+    /** Auth, framework and broadcasting routes an app may publish into its own route files; Fortify, Sanctum and other package routes live in vendor and are never scanned. */
+    public const ROUTE_EXCLUSIONS = [
+        'login', 'logout', 'register', 'password.*', 'verification.*', 'two-factor.*', 'user-password.*', 'user-profile-information.*', 'sanctum.*', 'broadcasting.*', 'livewire.*',
+        '/login', '/logout', '/register', '/forgot-password', '/reset-password', '/two-factor-challenge', '/email/*', '/user/password', '/user/confirm-password', '/user/confirmed-password-status', '/user/profile-information', '/user/two-factor-*', '/sanctum/*', '/broadcasting/*', '/livewire/*',
+    ];
+
     /** @var list<string> */
     private array $findings = [];
+
+    /** @var list<array{target: string, check: string, line?: int}> */
+    private array $routeFindings = [];
 
     /** @var list<string> */
     private array $locked = [];
 
-    public function __construct(private readonly string $base, private readonly string $manifest = 'docs/mcp-capabilities.json') {}
+    /**
+     * @param  list<string>  $routeRoots  route roots scanned for mutating routes, module globs included
+     * @param  list<string>  $routeExclusions  Str::is patterns against a route's name or "/uri"
+     */
+    public function __construct(private readonly string $base, private readonly string $manifest = 'docs/mcp-capabilities.json', private readonly array $routeRoots = ['routes'], private readonly array $routeExclusions = self::ROUTE_EXCLUSIONS) {}
 
     /** @return list<array{target: string, check: string}> */
     public function violations(): array
     {
         $this->findings = [];
+        $this->routeFindings = [];
         $this->locked = [];
         try {
             $lock = $this->readJson('composer.lock');
@@ -55,7 +70,41 @@ final class McpParity
             }
         }
 
-        return array_map(fn (string $check): array => ['target' => $this->manifest, 'check' => $check], $this->findings);
+        return [...array_map(fn (string $check): array => ['target' => $this->manifest, 'check' => $check], $this->findings), ...$this->routeFindings];
+    }
+
+    /**
+     * Every mutating route in the app's route files needs a capability that lists it in `routes`, by name or as "METHOD /uri":
+     * one with an MCP path, or one marked `uiOnly` with the reason it stays out of MCP.
+     *
+     * @param  array<string, list<string>>  $covered  capability id => declared route keys
+     */
+    private function routeCoverage(array $covered): void
+    {
+        $routes = new McpRoutes($this->base, $this->routeRoots);
+        $this->routeFindings = $routes->errors;
+        $keys = array_merge(...array_values($covered ?: [[]]));
+        foreach ($routes->routes as $route) {
+            $candidates = [...($route['name'] === null ? [] : [$route['name']]), ...array_map(fn (string $method): string => $method.' '.$route['uri'], explode('|', $route['methods']))];
+            if (array_intersect($candidates, $keys) !== [] || $this->excluded($route)) {
+                continue;
+            }
+            $this->routeFindings[] = [
+                'target' => $route['path'],
+                'check' => 'mutating route '.$route['methods'].' '.$route['uri'].($route['name'] === null ? '' : ' ('.$route['name'].')').($route['action'] === null ? '' : ' -> '.$route['action']).' has no MCP capability or uiOnly declaration',
+                'line' => $route['line'],
+            ];
+        }
+    }
+
+    /** @param array{name: ?string, uri: string, middleware: list<string>} $route */
+    private function excluded(array $route): bool
+    {
+        if (stripos($route['uri'], 'webhook') !== false && preg_grep('/signature|signed|verif/i', $route['middleware']) !== []) {
+            return true;
+        }
+
+        return Str::is($this->routeExclusions, $route['uri']) || ($route['name'] !== null && Str::is($this->routeExclusions, $route['name']));
     }
 
     /** @param list<mixed> $inventory
@@ -63,7 +112,7 @@ final class McpParity
      */
     private function inventory(array $inventory, array $capabilities): void
     {
-        $ids = $uiPaths = $variantIds = [];
+        $ids = $uiPaths = $variantIds = $routeKeys = [];
         foreach ($capabilities as $number => $capability) {
             $label = 'capability '.($number + 1);
             if (! $capability instanceof stdClass) {
@@ -78,6 +127,21 @@ final class McpParity
                 continue;
             }
             $ids[] = $name;
+            if (property_exists($capability, 'routes') && ! $this->strings($capability->routes)) {
+                $this->findings[] = $label.' needs routes as a non-empty list of route names or "METHOD /uri"';
+            } elseif (property_exists($capability, 'routes')) {
+                $routeKeys[$name] = array_map(fn (string $key): string => preg_match('/^([A-Za-z]+)\s+(\S+)$/D', $key, $m) === 1 ? strtoupper($m[1]).' /'.trim($m[2], '/') : $key, $capability->routes);
+            }
+            if (property_exists($capability, 'uiOnly')) {
+                if (! $this->text($capability->uiOnly)) {
+                    $this->findings[] = $label.' is uiOnly without a reason';
+                }
+                if (! property_exists($capability, 'routes')) {
+                    $this->findings[] = $label.' is uiOnly but lists no routes';
+                }
+
+                continue;
+            }
             $kind = $capability->kind ?? null;
             if (! in_array($kind, ['read', 'write', 'external'], true)) {
                 $this->findings[] = $label.' needs read, write or external kind';
@@ -190,6 +254,7 @@ final class McpParity
                 }
             }
         }
+        $this->routeCoverage($routeKeys);
     }
 
     /** @param list<string> $required */
