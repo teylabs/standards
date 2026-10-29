@@ -77,7 +77,7 @@ test('the gate reports unexcepted violations with fix hints and passes excepted 
         ->and($result['allowlist']['count'])->toBe(1)
         ->and($result['violations'])->not->toBeEmpty()
         ->and(array_unique(array_column($result['violations'], 'kind')))->toBe(['violation'])
-        ->and($result['skipped'])->toBe(['destructive-db', '51']);
+        ->and($result['skipped'])->toBe(['ui header-actions', 'destructive-db', '51']);
 
     foreach ($result['violations'] as $finding) {
         expect($finding['hint'])->not->toBe('');
