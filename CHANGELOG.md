@@ -5,6 +5,8 @@
 ### Changed
 
 - **Pattern `ui-page.kit-adoption` carries the migration recipe.** `standards:pattern "ui-page.kit-adoption"` now lists the steps in dependency order, shell, then layout, then actions and toast, then forms, then data: the hand-rolled signal each surface reads, the tey/kit feature and components that replace it, and how to verify (the `standards:adoption` row reads adopted with no signals, then `--ci` and `--compliance` pass). It also says what the tool can't see (Blade, Livewire and Filament UI among it) and what to do where kit has no component yet. The leaf stays `draft`: it has no generator.
+- **The FormStatus exemption follows the page's component tree.** A guest form's `back()` now also passes when a `.vue` file the page imports, up to three import levels below it, renders `<FormStatus>` imported from `@/components/Kit` (or `Kit/Form`); a kit-owned file counts as the importer, and an import cycle ends the walk. `ui.kit-shell`'s import walker moved to `Checks\VueImports`, which both rules use; ui.kit-shell behaves as before.
+- **A named flash shown by FormStatus passes both toast checks.** `back()->with('<key>', ...)` or `->with(['<key>' => ...])` on a provably guest route passes when a `<FormStatus>` in the page tree binds `:message` to `flash.<key>`, `$page.props.flash.<key>`, `usePage().props.flash.<key>` or a page prop declared as `<key>`. The `flash outcomes through Toastable` check accepts `status` and the other outcome keys under the same proof, and `ui toast` no longer counts a kit FormStatus `:message` binding as loose flash text. A key that is set but not read, or a non-literal key, still fails. Fortify's vendor responses were never flagged, so no Fortify exemption was needed.
 
 ### Fixed
 

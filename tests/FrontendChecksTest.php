@@ -164,6 +164,9 @@ test('frontend static UI checks cover self-closing actions, rel tokens, raw inpu
     'toast import' => ['ui toast', "<script>import 'vue-sonner';</script>", true],
     'loose flash' => ['ui toast', '<template><p>{{ page.props.flash?.success }}</p></template>', true],
     'commented flash' => ['ui toast', '<template><!-- {{ flash.success }} --></template>', false],
+    'flash shown through kit FormStatus' => ['ui toast', "<script setup>import { FormStatus } from '@/components/Kit';</script><template><FormStatus :message=\"\$page.props.flash.status\" /></template>", false],
+    'flash on a FormStatus not imported from kit' => ['ui toast', "<script setup>import FormStatus from '@/components/FormStatus.vue';</script><template><FormStatus :message=\"flash.status\" /></template>", true],
+    'flash beside a kit FormStatus' => ['ui toast', "<script setup>import { FormStatus } from '@/components/Kit';</script><template><FormStatus /><p>{{ flash.status }}</p></template>", true],
 ]);
 
 test('frontend declarations and explicit missing roots are checked', function () {
