@@ -18,7 +18,7 @@ use Throwable;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'queue.failed-store', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate'];
 
     /**
      * SHA-256 of upstream public/favicon.ico, favicon.svg and apple-touch-icon.png.
@@ -121,6 +121,7 @@ final readonly class CoreCheck implements Check
             'mail.reply-to' => $this->mailReplyTo(),
             'queue.connection' => $this->queueConnection(),
             'queue.worker' => $this->queueWorker(),
+            'queue.failed-store' => $this->queueFailedStore(),
             'cache.store' => $this->result(! $this->production() || $this->config->get('cache.default') !== 'array', 'Set CACHE_STORE to a persistent store in production.'),
             'app.url' => $this->result($this->set('app.url') && (! $this->production() || (filter_var($this->config->get('app.url'), FILTER_VALIDATE_URL) !== false && parse_url((string) $this->config->get('app.url'), PHP_URL_SCHEME) === 'https')), 'Set APP_URL to the public HTTPS URL in production.'),
             'logging.channel' => $this->result($this->set('logging.default') && $this->set('logging.channels.'.$this->config->get('logging.default').'.driver'), 'Set LOG_CHANNEL to a configured logging channel.'),
@@ -411,6 +412,42 @@ final readonly class CoreCheck implements Check
         }
 
         return Result::pass('Queue connection matches the sync until needed policy.');
+    }
+
+    /**
+     * On a Laravel Cloud managed queue, failed jobs are kept by the platform and never reach the failed_jobs table, so a post-deploy
+     * "0 failed jobs" check that reads only the database reports 0 while jobs fail. Managed means the default connection's driver (or its
+     * name) is `cloud`, which creating a managed queue switches QUEUE_CONNECTION to, or a committed Cloud config that names a managed queue.
+     */
+    private function queueFailedStore(): Result
+    {
+        $default = (string) $this->config->get('queue.default');
+        $table = (string) $this->config->get('queue.failed.table', 'failed_jobs');
+        $managed = $this->config->get('queue.connections.'.$default.'.driver') === 'cloud' || $default === 'cloud' || $this->cloudConfigNamesManagedQueue();
+
+        if (! $managed) {
+            return Result::pass('Failed jobs have one store (queue.failed, the '.$table.' table when it is the database): a post-deploy "0 failed jobs" check of it covers them.');
+        }
+
+        if ($this->config->get('preflight.queue.failed_store_checked') === true) {
+            return Result::pass('Laravel Cloud managed queue: the declared post-deploy check covers both failed-job stores.');
+        }
+
+        // Advisory level: a failure exits 0, and 1 only under --strict, until the post-deploy check is declared.
+        return Result::fail('Laravel Cloud managed queue: failed jobs live in two stores, and the managed queue\'s never reach the '.$table.' table. A post-deploy "0 failed jobs" check must read both: `php artisan queue:failed` (the '.$table.' table) and `cloud managed-queue:failed-jobs <env> --json -n`. Once the post-deploy check covers both, set PREFLIGHT_QUEUE_FAILED_STORE_CHECKED=true.');
+    }
+
+    private function cloudConfigNamesManagedQueue(): bool
+    {
+        foreach (['cloud.yml', 'cloud.yaml', '.cloud/*'] as $pattern) {
+            foreach (glob($this->base.'/'.$pattern) ?: [] as $file) {
+                if (is_file($file) && preg_match('/managed[\s_-]*queue/i', (string) file_get_contents($file)) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function queueWorker(): Result

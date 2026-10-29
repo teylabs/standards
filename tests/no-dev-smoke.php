@@ -189,10 +189,10 @@ try {
         return;
     }
 
-    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate', 'install.mail', 'install.filesystems', 'install.drivers', 'install.tables', 'install.extensions', 'install.secrets', 'install.vite', 'install.sessions'];
+    $expected = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'queue.failed-store', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate', 'install.mail', 'install.filesystems', 'install.drivers', 'install.tables', 'install.extensions', 'install.secrets', 'install.vite', 'install.sessions'];
 
     if ($exit !== 0 || $json['exit_code'] !== 0 || array_column($json['results'], 'check') !== $expected
-        || array_column($json['results'], 'status') !== [...array_fill(0, 12, 'pass'), 'skipped', ...array_fill(0, 10, 'pass')]) {
+        || array_column($json['results'], 'status') !== [...array_fill(0, 13, 'pass'), 'skipped', ...array_fill(0, 10, 'pass')]) {
         throw new RuntimeException('Registered preflight did not pass deployment checks and skip CI: '.$stdout);
     }
 
