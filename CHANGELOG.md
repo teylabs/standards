@@ -21,6 +21,10 @@
 - **`preset security` leaves seeders and factories out.** `rand()`/`mt_rand()` there make fake data. New `Configuration::$securityExemptRoots` (default `database/seeders`, `database/factories`); app code stays checked.
 - **The kit export snapshot is tey/kit v0.5.13's barrel**, which adds `Badge`, `EmojiTray` and `RadioCardGroup`.
 
+### Documentation
+
+- **Helper or feature roots and `preset laravel`** (README, "A modular app's configuration"). An `app/Helpers/*` layout's models, requests and controllers are left out of the stock Laravel preset by adding `App\Helpers` to `presetIgnores` (since 0.11.11). The README gives the trade-off (the whole preset, with placement left to rule 20) and the stale-allowlist cleanup.
+
 ## 0.11.27 - 2026-10-28
 
 ### Fixed
