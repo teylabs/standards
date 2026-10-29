@@ -58,7 +58,8 @@
     "autoload-dev": {
         "psr-4": {
             "FixtureGood\\": "fixtures/Good/src/",
-            "FixtureBad\\": "fixtures/Bad/src/"
+            "FixtureBad\\": "fixtures/Bad/src/",
+            "FixtureUnserialize\\": "fixtures/Unserialize/src/"
         }
     },
     "bin": [

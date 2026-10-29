@@ -87,6 +87,38 @@ test('only Spatie\'s own API counts: an app-side boundary or $tenant->execute in
     expect($checks)->toBe(['FixtureScratch\\PurgeCommand touches tenant-scoped FixtureScratch\\Ledger without TenantAware']);
 });
 
+test('a command scoped to one tenant from an argument, failing on a missing one, passes when all its work runs inside run/execute', function (string $body, bool $passes) {
+    $workspace = "use Illuminate\\Database\\Eloquent\\Model;\n\nfinal class Workspace extends Model\n{\n    public function run(callable \$callback): mixed { return \$callback(); }\n}\n";
+    $command = "use Illuminate\\Console\\Command;\n\nfinal class SyncCommand extends Command\n{\n    protected \$signature = 'sync {workspace} {--force}';\n\n    public function handle(): int\n    {\n        {$body}\n    }\n}\n";
+    $checks = array_column((new Conformance(tenantConfiguration(tenantApp(['Ledger.php' => TENANT_MODEL, 'Workspace.php' => $workspace, 'SyncCommand.php' => $command]))))->violations('tenant-aware'), 'check');
+
+    expect($checks)->toBe($passes ? [] : ['FixtureScratch\\SyncCommand touches tenant-scoped FixtureScratch\\Ledger without TenantAware']);
+})->with([
+    'findOrFail then run' => ['$workspace = Workspace::findOrFail($this->argument(\'workspace\')); $this->info(\'Syncing\'); $workspace->run(fn () => Ledger::query()->count()); return self::SUCCESS;', true],
+    'firstOrFail on an option, execute with a block' => ['$slug = (string) $this->option(\'force\'); $workspace = Workspace::where(\'slug\', $slug)->firstOrFail(); $workspace->execute(function (): void { Ledger::query()->delete(); }); return 0;', true],
+    'find with a failing null check' => ['$workspace = Workspace::find($this->argument(\'workspace\')); if (! $workspace) {     $this->error(\'No such workspace\');     return self::FAILURE; } return $workspace->run(fn () => Ledger::query()->count());', true],
+    'find with a throwing null check' => ['$workspace = Workspace::find($this->argument(\'workspace\')); if ($workspace === null) {     throw new \\RuntimeException(\'missing\'); } $workspace->run(fn () => Ledger::query()->count()); return 0;', true],
+    'chained findOrFail()->run' => ['return Workspace::findOrFail($this->argument(\'workspace\'))->run(fn () => Ledger::query()->count());', true],
+    'find without a null check' => ['$workspace = Workspace::find($this->argument(\'workspace\')); $workspace->run(fn () => Ledger::query()->count()); return 0;', false],
+    'chained find()->run' => ['return Workspace::find($this->argument(\'workspace\'))->run(fn () => Ledger::query()->count());', false],
+    'nullsafe run' => ['return Workspace::find($this->argument(\'workspace\'))?->run(fn () => Ledger::query()->count());', false],
+    'a null check that does not fail' => ['$workspace = Workspace::find($this->argument(\'workspace\')); if (! $workspace) {     $this->error(\'No such workspace\'); } $workspace->run(fn () => Ledger::query()->count()); return 0;', false],
+    'tenant work outside the callback' => ['$workspace = Workspace::findOrFail($this->argument(\'workspace\')); Ledger::query()->delete(); $workspace->run(fn () => Ledger::query()->count()); return 0;', false],
+    'other work outside the callback' => ['$workspace = Workspace::findOrFail($this->argument(\'workspace\')); \\Illuminate\\Support\\Facades\\DB::table(\'ledgers\')->delete(); $workspace->run(fn () => Ledger::query()->count()); return 0;', false],
+    'work after the callback' => ['$workspace = Workspace::findOrFail($this->argument(\'workspace\')); $workspace->run(fn () => 1); Ledger::query()->delete(); return 0;', false],
+    'tenant not from an argument' => ['$workspace = Workspace::query()->firstOrFail(); $workspace->run(fn () => Ledger::query()->count()); return 0;', false],
+    'tenant from config' => ['$workspace = Workspace::findOrFail(config(\'app.workspace\')); $workspace->run(fn () => Ledger::query()->count()); return 0;', false],
+    'output that calls something' => ['$workspace = Workspace::findOrFail($this->argument(\'workspace\')); $this->info(Ledger::query()->count()); $workspace->run(fn () => 1); return 0;', false],
+    'never runs' => ['$workspace = Workspace::findOrFail($this->argument(\'workspace\')); return Ledger::query()->count();', false],
+]);
+
+test('an argument-scoped command still fails when another method touches a tenant model outside the callback', function () {
+    $command = "use Illuminate\\Console\\Command;\n\nfinal class SyncCommand extends Command\n{\n    public function handle(): int\n    {\n        \\App\\Workspace::findOrFail(\$this->argument('workspace'))->run(fn () => \$this->sync());\n        return 0;\n    }\n\n    private function sync(): int\n    {\n        return Ledger::query()->count();\n    }\n}\n";
+    $checks = array_column((new Conformance(tenantConfiguration(tenantApp(['Ledger.php' => TENANT_MODEL, 'SyncCommand.php' => $command]))))->violations('tenant-aware'), 'check');
+
+    expect($checks)->toBe(['FixtureScratch\\SyncCommand touches tenant-scoped FixtureScratch\\Ledger without TenantAware']);
+});
+
 test('a deliberate cross-tenant admin command is declared in the allowlist, with a reason and an expiry', function () {
     $command = "use Illuminate\\Console\\Command;\n\nfinal class AuditCommand extends Command\n{\n    public function handle(): int\n    {\n        return Ledger::query()->count();\n    }\n}\n";
     $base = tenantApp(['Ledger.php' => TENANT_MODEL, 'AuditCommand.php' => $command]);
