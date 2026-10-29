@@ -105,9 +105,9 @@ final class TenantAware
 
             [$model, $line] = $touch;
 
-            if ($kind === 'command' && ! in_array($name, $landlord['commands'], true) && ! $this->usesAny($class, [self::COMMAND_TRAIT], $classes)) {
+            if ($kind === 'command' && ! in_array($name, $landlord['commands'], true) && ! $this->usesAny($class, [self::COMMAND_TRAIT], $classes) && ! $this->scopedByArgument($class, $tenantModels)) {
                 $violations[] = ['target' => $path, 'check' => $name.' touches tenant-scoped '.$model.' without TenantAware', 'line' => $line,
-                    'hint' => 'Use Spatie\Multitenancy\Commands\Concerns\TenantAware in the command (it then runs per tenant: --tenant=*). A deliberate cross-tenant admin command goes in the allowlist with a reason and an expiry; a landlord command that runs before any tenant exists goes in Configuration::$landlordCommands with its reason.'];
+                    'hint' => 'Use Spatie\Multitenancy\Commands\Concerns\TenantAware in the command (it then runs per tenant: --tenant=*), or resolve one tenant from an argument or option with findOrFail/firstOrFail (or find plus a failing null check) and do all of handle()\'s work inside $tenant->run(fn ...) or execute(fn ...). A deliberate cross-tenant admin command goes in the allowlist with a reason and an expiry; a landlord command that runs before any tenant exists goes in Configuration::$landlordCommands with its reason.'];
             }
 
             if ($kind === 'job') {
@@ -139,6 +139,174 @@ final class TenantAware
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    /**
+     * A command scoped to ONE tenant named by an argument or option: handle() resolves it with X::findOrFail(...), a query ending in
+     * ->firstOrFail(), or X::find(...) / ->first() followed by `if (! $t) { ...; return / throw / abort }`, where the lookup reads
+     * $this->argument() or $this->option() (directly or through a variable assigned from one). All the work then runs inside a closure
+     * passed to $t->run(...) or $t->execute(...). Conservative: handle() may hold only the argument reads, the lookup, the null check,
+     * plain output lines ($this->info/line/...) whose arguments call nothing, the run/execute call and a constant return. Any other
+     * statement, a tenant-model reference anywhere outside that closure (including other methods), an unchecked find(), a nullsafe
+     * ->run, or a tenant from anywhere but an argument or option, and the command still needs TenantAware.
+     *
+     * @param  array<string, true>  $tenantModels
+     */
+    private function scopedByArgument(Node\Stmt\Class_ $class, array $tenantModels): bool
+    {
+        $handle = $class->getMethod('handle');
+
+        if ($handle === null || $handle->stmts === null) {
+            return false;
+        }
+
+        $finder = new NodeFinder;
+        $input = [];
+        $nullable = [];
+        $proven = [];
+        $callbacks = [];
+        $ran = false;
+        $calls = fn (Node $node): bool => $finder->findFirst([$node], fn (Node $inner): bool => $inner instanceof Node\Expr\CallLike || $inner instanceof Node\Expr\Closure
+            || $inner instanceof Node\Expr\ArrowFunction || $inner instanceof Node\Expr\Assign || $inner instanceof Node\Expr\AssignOp || $inner instanceof Node\Expr\AssignRef) !== null;
+        $reads = fn (Node\Expr $expr): bool => $expr instanceof Node\Expr\MethodCall && $expr->var instanceof Node\Expr\Variable && $expr->var->name === 'this'
+            && $expr->name instanceof Node\Identifier && in_array($expr->name->toString(), ['argument', 'option'], true) && ! $expr->isFirstClassCallable()
+            && array_filter($expr->getArgs(), fn (Node\Arg $arg): bool => ! $arg->value instanceof Node\Scalar\String_) === [];
+        $unwrap = fn (Node\Expr $expr): Node\Expr => $expr instanceof Node\Expr\Cast ? $expr->expr : $expr;
+        $output = fn (Node\Expr $expr): bool => $expr instanceof Node\Expr\MethodCall && $expr->var instanceof Node\Expr\Variable && $expr->var->name === 'this'
+            && $expr->name instanceof Node\Identifier && in_array($expr->name->toString(), ['info', 'line', 'error', 'warn', 'comment', 'question', 'alert', 'newLine'], true)
+            && array_filter($expr->getArgs(), fn (Node\Arg $arg): bool => $calls($arg->value)) === [];
+        // The lookup: a chain rooted in a static call on a class, reading an argument or option, ending in findOrFail/firstOrFail (proven) or find/first (nullable).
+        $lookup = function (Node\Expr $expr) use ($finder, $reads, &$input): ?bool {
+            if (! ($expr instanceof Node\Expr\StaticCall || $expr instanceof Node\Expr\MethodCall) || ! $expr->name instanceof Node\Identifier) {
+                return null;
+            }
+            $end = $expr->name->toString();
+            $root = $expr;
+            while ($root instanceof Node\Expr\MethodCall) {
+                $root = $root->var;
+            }
+            if (! $root instanceof Node\Expr\StaticCall || ! $root->class instanceof Node\Name || in_array($root->class->toLowerString(), ['self', 'static', 'parent'], true)) {
+                return null;
+            }
+            $sourced = $finder->findFirst([$expr], fn (Node $node): bool => ($node instanceof Node\Expr\MethodCall && $reads($node))
+                || ($node instanceof Node\Expr\Variable && is_string($node->name) && isset($input[$node->name]))) !== null;
+            $foreign = $finder->findFirst([$expr], fn (Node $node): bool => ($node instanceof Node\Expr\Variable && $node->name !== 'this' && ! (is_string($node->name) && isset($input[$node->name])))
+                || $node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction || $node instanceof Node\Expr\FuncCall || $node instanceof Node\Expr\New_
+                || ($node instanceof Node\Expr\MethodCall && $node->var instanceof Node\Expr\Variable && $node->var->name === 'this' && ! $reads($node))) !== null;
+            if (! $sourced || $foreign) {
+                return null;
+            }
+
+            return match ($end) {
+                'findOrFail', 'firstOrFail', 'sole' => true,
+                'find', 'first' => false,
+                default => null,
+            };
+        };
+        $variable = fn (?Node $node): ?string => $node instanceof Node\Expr\Variable && is_string($node->name) ? $node->name : null;
+        // The null check: if (! $t) / ($t === null) / (null === $t) / (is_null($t)) whose body only prints and ends by failing.
+        $guard = function (Node\Stmt\If_ $if) use ($variable, $output): ?string {
+            $cond = $if->cond;
+            $name = match (true) {
+                $cond instanceof Node\Expr\BooleanNot => $variable($cond->expr),
+                $cond instanceof Node\Expr\BinaryOp\Identical && $cond->right instanceof Node\Expr\ConstFetch && $cond->right->name->toLowerString() === 'null' => $variable($cond->left),
+                $cond instanceof Node\Expr\BinaryOp\Identical && $cond->left instanceof Node\Expr\ConstFetch && $cond->left->name->toLowerString() === 'null' => $variable($cond->right),
+                $cond instanceof Node\Expr\FuncCall && $cond->name instanceof Node\Name && $cond->name->toLowerString() === 'is_null' && count($cond->getArgs()) === 1 => $variable($cond->getArgs()[0]->value),
+                default => null,
+            };
+            if ($name === null || $if->elseifs !== [] || $if->else !== null || $if->stmts === []) {
+                return null;
+            }
+            $last = $if->stmts[count($if->stmts) - 1];
+            $fails = $last instanceof Node\Stmt\Return_ || ($last instanceof Node\Stmt\Expression && $last->expr instanceof Node\Expr\Throw_)
+                || ($last instanceof Node\Stmt\Expression && $last->expr instanceof Node\Expr\FuncCall && $last->expr->name instanceof Node\Name && in_array($last->expr->name->toLowerString(), ['abort', 'abort_if', 'abort_unless'], true))
+                || ($last instanceof Node\Stmt\Expression && $last->expr instanceof Node\Expr\MethodCall && $last->expr->var instanceof Node\Expr\Variable && $last->expr->var->name === 'this' && $last->expr->name instanceof Node\Identifier && $last->expr->name->toString() === 'fail');
+            foreach (array_slice($if->stmts, 0, -1) as $stmt) {
+                if (! $stmt instanceof Node\Stmt\Expression || ! $output($stmt->expr)) {
+                    return null;
+                }
+            }
+
+            return $fails ? $name : null;
+        };
+        // The run: $t->run(closure) or $t->execute(closure) on a proven tenant (also chained straight onto a findOrFail lookup).
+        $run = function (Node\Expr $expr) use (&$proven, &$callbacks, $variable, $lookup): bool {
+            if (! $expr instanceof Node\Expr\MethodCall || ! $expr->name instanceof Node\Identifier || ! in_array($expr->name->toString(), ['run', 'execute'], true)
+                || $expr->isFirstClassCallable() || count($expr->getArgs()) !== 1) {
+                return false;
+            }
+            $callback = $expr->getArgs()[0]->value;
+            $receiver = $variable($expr->var);
+            if (! ($callback instanceof Node\Expr\Closure || $callback instanceof Node\Expr\ArrowFunction)
+                || ! (($receiver !== null && isset($proven[$receiver])) || ($receiver === null && $lookup($expr->var) === true))) {
+                return false;
+            }
+            $callbacks[] = $callback;
+
+            return true;
+        };
+
+        foreach ($handle->stmts as $stmt) {
+            if ($stmt instanceof Node\Stmt\Nop) {
+                continue;
+            }
+            if ($stmt instanceof Node\Stmt\Expression && $stmt->expr instanceof Node\Expr\Assign && ($name = $variable($stmt->expr->var)) !== null && $name !== 'this'
+                && ! isset($input[$name]) && ! isset($nullable[$name]) && ! isset($proven[$name])) {
+                $value = $unwrap($stmt->expr->expr);
+                if (! $ran && $value instanceof Node\Expr\MethodCall && $reads($value)) {
+                    $input[$name] = true;
+
+                    continue;
+                }
+                if (! $ran && ($found = $lookup($stmt->expr->expr)) !== null) {
+                    $found ? $proven[$name] = true : $nullable[$name] = true;
+
+                    continue;
+                }
+                if ($run($stmt->expr->expr)) {
+                    $ran = true;
+
+                    continue;
+                }
+
+                return false;
+            }
+            if ($stmt instanceof Node\Stmt\If_ && ! $ran && ($name = $guard($stmt)) !== null && isset($nullable[$name])) {
+                unset($nullable[$name]);
+                $proven[$name] = true;
+
+                continue;
+            }
+            if ($stmt instanceof Node\Stmt\Expression && ($output($stmt->expr) || $run($stmt->expr))) {
+                $ran = $ran || ! $output($stmt->expr);
+
+                continue;
+            }
+            if ($stmt instanceof Node\Stmt\Return_ && $stmt->expr !== null && $run($stmt->expr)) {
+                $ran = true;
+
+                continue;
+            }
+            if ($stmt instanceof Node\Stmt\Return_ && ($stmt->expr === null || $stmt->expr instanceof Node\Scalar\Int_ || $stmt->expr instanceof Node\Expr\ClassConstFetch)) {
+                continue;
+            }
+
+            return false;
+        }
+
+        if (! $ran || $nullable !== []) {
+            return false;
+        }
+
+        // Every tenant-model reference in the class lies inside a run/execute callback.
+        foreach ($finder->findInstanceOf($class->stmts, Node\Name::class) as $name) {
+            $resolved = ltrim(($name->getAttribute('resolvedName') ?? $name)->toString(), '\\');
+            if (isset($tenantModels[$resolved]) && array_filter($callbacks, fn (Node $callback): bool => $name->getStartFilePos() >= $callback->getStartFilePos() && $name->getEndFilePos() <= $callback->getEndFilePos()) === []) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
