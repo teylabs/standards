@@ -20,6 +20,9 @@ use Tey\Standards\Configuration;
  */
 final class App
 {
+    /** Module route folders read even without a configuration naming them: tey/mod's `app/Modules`, and the `app-modules`/`modules` layouts. */
+    public const MODULE_ROUTES = ['app/Modules/*/routes', 'app-modules/*/routes', 'modules/*/routes'];
+
     private const SKIP = ['vendor', 'node_modules', '.git', 'storage', 'bootstrap/cache', 'public/build'];
 
     /** A path segment that names a public, guest or focus surface (as ui.kit-shell reads it). Everything else is the signed-in app. */
@@ -37,6 +40,9 @@ final class App
     /** @var list<string>|null */
     private ?array $views = null;
 
+    /** @var list<string>|null */
+    private ?array $routes = null;
+
     private readonly KitOwnership $kit;
 
     /** @var list<string> */
@@ -45,11 +51,20 @@ final class App
     /** @var list<string> */
     public readonly array $phpRoots;
 
+    /**
+     * Route roots: `routes`, the configuration's `routeRoots` (module globs such as `app/Modules/*\/routes`, as rule 55 reads them), and
+     * the module layouts an app without a configuration may use (MODULE_ROUTES).
+     *
+     * @var list<string>
+     */
+    public readonly array $routeRoots;
+
     public function __construct(public readonly string $base, ?Configuration $config = null)
     {
         $this->kit = KitOwnership::of($config ?? self::bare($base));
         $this->frontendRoots = array_values(array_unique(array_map(fn (string $root): string => trim($root, '/'), $config === null ? ['resources/js'] : ($config->frontendRoots ?? ['resources/js', ...$config->uiRoots]))));
         $this->phpRoots = array_values(array_unique(array_map(fn (string $root): string => trim($root, '/'), ['app', 'src', 'modules', 'routes', 'database/migrations', 'config', ...array_keys($config?->classRoots ?? []), ...($config?->sourceRoots ?? [])])));
+        $this->routeRoots = array_values(array_unique(array_map(fn (string $root): string => trim($root, '/'), ['routes', ...($config?->routeRoots ?? []), ...self::MODULE_ROUTES])));
     }
 
     /** A Configuration that names only the base, for KitOwnership when the app has none (a calibration scan). */
@@ -82,10 +97,20 @@ final class App
         return $this->views ??= array_values(array_filter($this->files(['resources/views'], ['php']), fn (string $path): bool => str_ends_with($path, '.blade.php')));
     }
 
-    /** @return list<string> */
+    /** @return list<string> project-relative route files: PHP under `routes/` and every module route root (globs expanded), sorted */
     public function routes(): array
     {
-        return array_values(array_filter($this->php(), fn (string $path): bool => str_starts_with($path, 'routes/')));
+        if ($this->routes !== null) {
+            return $this->routes;
+        }
+        $roots = [];
+        foreach ($this->routeRoots as $root) {
+            foreach (str_contains($root, '*') ? (glob($this->base.'/'.$root, GLOB_ONLYDIR) ?: []) : [$this->base.'/'.$root] as $directory) {
+                $roots[] = str_replace('\\', '/', substr($directory, strlen($this->base) + 1));
+            }
+        }
+
+        return $this->routes = array_values(array_filter($this->files(array_values(array_unique($roots)), ['php']), fn (string $path): bool => ! str_ends_with($path, '.blade.php')));
     }
 
     /** @return list<string> */

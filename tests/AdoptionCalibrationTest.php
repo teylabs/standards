@@ -75,3 +75,23 @@ test('path globs match page-path segments case-insensitively: pages/ matches Pag
         ->and(App::pathGlob('resources/js/pages/**/Login.vue', 'resources/js/components/Login.vue'))->toBeFalse()
         ->and(App::glob('*Button', 'button'))->toBeFalse();
 });
+
+test('route analyses read module route files: tey/mod app/Modules/*/routes, app-modules/*/routes and configured routeRoots', function () {
+    $facts = new Facts(new App(calibrationBase('modules')));
+    $evidence = fn (string $name): ?string => $facts->analysis($name)['evidence'];
+
+    // Positive: every route analysis finds its evidence in a module route file, without a configuration.
+    expect($evidence('destructive-routes'))->toBe('app/Modules/Billing/routes/web.php:8')
+        ->and($evidence('settings-routes'))->toBe('app/Modules/Billing/routes/web.php:7')
+        ->and($evidence('search-route'))->toBe('app-modules/reports/routes/web.php:6')
+        ->and($evidence('signed-in-pages'))->toBe('app-modules/reports/routes/web.php:5')
+        // Negative: a module's controller is not a route file, so its 'login' string is no auth route.
+        ->and($evidence('auth-routes'))->toBeNull()
+        ->and((new App(calibrationBase('modules')))->routes())->toBe(['app-modules/reports/routes/web.php', 'app/Modules/Billing/routes/web.php', 'routes/web.php']);
+
+    // A configured routeRoots glob is read too; a module folder outside every route root is not.
+    $base = calibrationBase('modules');
+    expect((new App($base, calibrationConfiguration($base, ['routeRoots' => ['app/Modules/*/Http']])))->routes())
+        ->toBe(['app-modules/reports/routes/web.php', 'app/Modules/Billing/Http/Controllers/InvoiceController.php', 'app/Modules/Billing/routes/web.php', 'routes/web.php'])
+        ->and((new Facts(new App(calibrationBase('page-case'))))->analysis('destructive-routes')['value'])->toBeFalse();
+});
