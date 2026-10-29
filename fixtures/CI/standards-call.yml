@@ -1,0 +1,21 @@
+name: standards
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  standards:
+    uses: teylabs/standards/.github/workflows/standards.yml@v0.11
+    with:
+      base-ref: ${{ github.base_ref }}
+      runs-on: ubuntu-24.04
+      timeout-minutes: 20

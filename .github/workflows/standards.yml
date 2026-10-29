@@ -14,14 +14,22 @@ on:
         description: Ref --changed compares against; empty runs the full check.
         type: string
         default: ''
+      runs-on:
+        description: Runner label for the standards job.
+        type: string
+        default: ubuntu-latest
+      timeout-minutes:
+        description: Job timeout in minutes.
+        type: number
+        default: 15
 
 permissions:
   contents: read
 
 jobs:
   standards:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
