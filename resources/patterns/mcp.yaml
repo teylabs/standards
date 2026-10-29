@@ -46,14 +46,20 @@ nodes:
     keywords: [mcp, queued, long running, external, run token]
     status: gap
   - id: mcp.agent-docs
-    recipe: Agent docs and parity guard
-    summary: A capability manifest, generated llms.txt and an architecture test that keeps routes and MCP tools in parity.
+    recipe: agent-docs
+    recipe_make: "mod:butter/agent-docs {Name}"
+    summary: A public /llms.txt markdown index built from a feature registry in config, validated on boot and guarded in CI against drift. Scaffold it with the Bakery's agent-docs recipe.
     kit: []
-    checks: ['55']
-    paths: ['docs/mcp-capabilities.json']
-    keywords: [llms.txt, manifest, capabilities, parity, agent docs]
-    status: gap
+    checks: []
+    paths: ['config/agent-docs.php']
+    keywords: [llms.txt, agent-readable docs, public feature registry, agent docs, manifest]
+    status: ready
     evidence: { apps: 7, count: 10, prs: 10 }
+    rules:
+      - "GET /llms.txt (route agent-docs.index) serves a markdown index as text/plain; charset=UTF-8, built from config agent-docs.features (title, description, route, path)."
+      - "The registry is public and unauthenticated: list public information only."
+      - "Keep the validator: it rejects an empty registry, invalid or duplicate paths (same-origin, absolute), titles or descriptions with newlines or brackets, and routes that don't exist or aren't public."
+      - "Keep the check script and the Check agent docs workflow, which fail CI when /llms.txt drifts from the registry."
   - id: mcp.module-placement
     recipe: MCP files in a module
     summary: Where MCP tools, resources and servers live inside a module.
