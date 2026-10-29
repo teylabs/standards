@@ -17,8 +17,15 @@ nodes:
       - { answer: "It extends a kit-owned page", next: ui-page.kit-owned }
       - { answer: "It is one of the app's own pages", next: ui-page.own }
       - { answer: "Several CRUD screens at once, or a bespoke workflow", next: ui-page.larger }
-      - { answer: "Feedback after a save or a background result (a toast)", next: ui-page.toast }
+      - { answer: "Something every page shares: feedback toasts, or how pages are styled", next: ui-page.shared }
       - { answer: "None of these", next: ui-page.app.byo }
+  - id: ui-page.shared
+    question: Which shared concern?
+    why: Toasts and styling each have one app-wide convention and a check.
+    options:
+      - { answer: "Feedback after a save or a background result (a toast)", next: ui-page.toast }
+      - { answer: "Styling: CSS, inline styles, theme tokens or a dynamic value", next: ui-page.styling }
+      - { answer: "None of these", next: ui-page.shared.byo }
   - id: ui-page.kit-owned
     question: Which kit-owned page?
     options:
@@ -153,6 +160,23 @@ nodes:
     paths: []
     keywords: [toast, toaster, notification, flash, feedback, saved, confirmation, snackbar, undo, toast position]
     status: ready
+  - id: ui-page.styling
+    recipe: Pure Tailwind styling
+    summary: >-
+      Rule styling.pure-tailwind. The app styles with Tailwind utility classes and @theme tokens, never its own CSS: no <style> block in a .vue file,
+      no style="..." attribute in .vue or Blade templates, no :style binding that sets a real CSS property, and no selector rules in app .css beyond
+      Tailwind's directives, @font-face and custom-property tokens on :root and .dark. Kit-owned files, Filament theme CSS and resources/views/vendor/ are not scanned.
+    kit: []
+    checks: ['styling.pure-tailwind']
+    paths: ['resources/css/**']
+    keywords: [styling.pure-tailwind, pure tailwind, inline style, style block, custom css, theme token]
+    status: draft
+    rules:
+      - "Static styling: Tailwind utility classes in the template. style=\"color:red\" becomes class=\"text-red-600\"; a <style> block's rules become classes on the elements."
+      - "Design tokens: declare them in @theme (--color-brand: oklch(...), then bg-brand) or, for a value that changes with the theme, as --token on :root and .dark. A reusable compound is an @utility; an animation is --animate-* with its @keyframes inside @theme."
+      - "Dynamic values: bind a custom property and read it in an arbitrary-value class: :style=\"{ '--x': v }\" with class=\"[color:var(--x)]\" or w-(--x). Only quoted '--name' keys pass; :style=\"{ width: w }\" or :style=\"styles\" fails. In Blade, style=\"--x: {{ $v }}\" (custom properties only)."
+      - "A real exception goes in the allowlist: rule styling.pure-tailwind, the finding's target and check, a reason and an expires Y-m-d date. An entry without a reason is rejected and one without an expiry fails."
+      - "A file the rule cannot read or parse is a finding, not a pass: fix the markup."
   - id: ui-page.add-button
     recipe: Add action button
     summary: Add, New and Create buttons are kit Buttons carrying the Plus icon.
@@ -374,6 +398,14 @@ nodes:
     keywords: []
     status: byo
   - id: ui-page.actions.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.shared.byo
     recipe: Build your own
     summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
     kit: []

@@ -1,0 +1,6 @@
+/* Self-hosted font: @font-face is allowed. */
+@font-face {
+    font-family: 'Fixture Sans';
+    font-weight: 400;
+    src: url('/fonts/fixture-sans.woff2') format('woff2');
+}

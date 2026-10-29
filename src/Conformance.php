@@ -31,6 +31,7 @@ final class Conformance
         'ui new-tab' => '[ui new-tab] new-tab actions carry noopener and an external icon',
         'ui dropzone' => '[ui dropzone] only the configured dropzone owns file inputs',
         'ui toast' => '[ui toast] notifications use one configured toast path',
+        'styling.pure-tailwind' => '[styling.pure-tailwind] app UI styles with Tailwind classes and @theme tokens, not its own CSS',
         'operator' => '[operator] commands that write offer a dry run and a production guard',
         'integrations' => '[integrations] webhooks verify their sender and API calls go through a contract',
         'versioned-writes' => '[versioned-writes] query-builder writes on a versioned model bump its version',
@@ -133,6 +134,7 @@ final class Conformance
             'ui new-tab' => (new Checks\UiNewTab)->violations($this->config),
             'ui dropzone' => (new Checks\UiDropzone)->violations($this->config),
             'ui toast' => (new Checks\UiToast)->violations($this->config),
+            'styling.pure-tailwind' => (new Checks\PureTailwind)->violations($this->config),
             default => null,
         };
         if ($frontend !== null) {

@@ -1,0 +1,18 @@
+@import 'tailwindcss';
+
+:root {
+    --background: oklch(1 0 0);
+    color: black;
+}
+
+.btn-primary {
+    background: blue;
+}
+
+@layer components {
+    .card { padding: 1rem; }
+}
+
+@keyframes spin-slow {
+    to { transform: rotate(360deg); }
+}

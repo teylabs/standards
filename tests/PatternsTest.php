@@ -953,3 +953,23 @@ test('a ready leaf may carry only a Bakery recipe_make, and the new recipe leave
     });
     expect(fn () => Compiler::compile($directory))->not->toThrow(InvalidArgumentException::class);
 });
+
+test('`standards:pattern "rule <key>"`, as a finding hint names it, resolves to a leaf that runs the rule; rules without one are a known, shrinking list', function () {
+    $lookup = new Lookup(TreeCatalog::shipped());
+    $uncovered = [];
+
+    foreach (array_keys(Tey\Standards\Conformance::TESTS) as $rule) {
+        $rule = (string) $rule;
+        $found = $lookup->find(['intent' => 'rule '.$rule]);
+        $ids = $found['type'] === 'leaf' ? [$found['id']] : array_column($found['candidates'] ?? [], 'id');
+        $leaves = array_map(fn (string $id) => TreeCatalog::shipped()->node($id), $ids);
+
+        if ($leaves === [] || array_filter($leaves, fn ($leaf): bool => ! in_array($rule, $leaf->checks, true)) !== []) {
+            $uncovered[] = $rule;
+        }
+    }
+
+    // Rules that predate this test and have no catalog entry yet. Do not add to it: give a new rule a leaf whose `checks` name it.
+    expect($uncovered)->toEqualCanonicalizing(['providers', 'destructive-db', '14', '22', '29', '12', '51', 'boost', 'no-dev', 'pest-only', 'php-tag', 'tia', 'ui toast', 'versioned-writes', 'preset laravel', 'preset security', 'preset php'])
+        ->and($lookup->find(['intent' => 'rule styling.pure-tailwind']))->toMatchArray(['type' => 'leaf', 'id' => 'ui-page.styling']);
+});
