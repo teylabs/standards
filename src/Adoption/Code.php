@@ -130,6 +130,12 @@ final class Code
         return true;
     }
 
+    /** The PascalCase form of a kebab-case tag (`primary-button` => `PrimaryButton`); a tag without `-` is returned as is. */
+    public static function pascal(string $tag): string
+    {
+        return str_contains($tag, '-') ? str_replace(' ', '', ucwords(str_replace('-', ' ', $tag))) : $tag;
+    }
+
     /** Whether a template tag matches a name: exact, or the kebab-case form of a PascalCase name. */
     public static function tagIs(string $tag, string $name): bool
     {

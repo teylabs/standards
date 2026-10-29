@@ -1,0 +1,6 @@
+{
+    "name": "fixture/uninstalled",
+    "require": {
+        "laravel/framework": "^13.0"
+    }
+}
