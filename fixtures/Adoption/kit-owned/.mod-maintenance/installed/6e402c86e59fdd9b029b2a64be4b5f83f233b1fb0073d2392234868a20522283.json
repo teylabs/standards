@@ -1,0 +1,11 @@
+{
+    "format": 1,
+    "owner": "tey/mod:installed",
+    "artifact": {
+        "name": "tey/kit:shell",
+        "files": {
+            "resources/js/pages/Workspace/Dashboard/Page.vue": "PHNjcmlwdCBzZXR1cCBsYW5nPSJ0cyI+CmltcG9ydCB7IFBhZ2UgfSBmcm9tICdAL2NvbXBvbmVudHMvS2l0JzsKPC9zY3JpcHQ+Cgo8dGVtcGxhdGU+CiAgICA8UGFnZSB0aXRsZT0iRGFzaGJvYXJkIj48UHJpbWFyeU5hdiAvPjwvUGFnZT4KPC90ZW1wbGF0ZT4K",
+            "resources/js/pages/Workspace/Settings/Page.vue": "PHNjcmlwdCBzZXR1cCBsYW5nPSJ0cyI+CmltcG9ydCB7IFBhZ2UgfSBmcm9tICdAL2NvbXBvbmVudHMvS2l0JzsKPC9zY3JpcHQ+Cgo8dGVtcGxhdGU+CiAgICA8UGFnZSB0aXRsZT0iU2V0dGluZ3MiIC8+CjwvdGVtcGxhdGU+Cg=="
+        }
+    }
+}

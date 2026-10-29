@@ -1,0 +1,6 @@
+{
+    "name": "fixture/missing",
+    "require": {
+        "tey/kit": "^0.7"
+    }
+}

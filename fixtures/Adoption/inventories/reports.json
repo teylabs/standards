@@ -1,0 +1,22 @@
+{
+    "format": 1,
+    "package": { "composer": "acme/reports" },
+    "facts": [
+        { "id": "has-index-pages", "description": "An app-owned page lists records.", "computed": { "signals": [{ "kind": "template-tag", "tags": ["table"] }, { "kind": "import", "specifiers": ["@kit/ui#DataTable"] }, { "kind": "file-name", "globs": ["resources/js/**/*Pagination*.vue"] }] } }
+    ],
+    "surfaces": [
+        {
+            "id": "export.csv", "layer": "backend", "group": "documents", "label": "CSV export", "feature": "core", "applies": "has-index-pages",
+            "uses": { "classes": ["Acme\\Reports\\Exporter"] },
+            "handRolled": [{ "kind": "php-class", "names": ["*CsvExport*"] }],
+            "docs": "docs/export.md", "status": "stable"
+        },
+        {
+            "id": "export.pdf", "layer": "backend", "group": "documents", "label": "PDF export", "feature": "core", "applies": true,
+            "uses": { "classes": ["Acme\\Reports\\PdfExporter"] },
+            "handRolled": [{ "kind": "composer", "packages": ["barryvdh/laravel-dompdf"] }],
+            "docs": "docs/pdf.md", "status": "stable"
+        }
+    ],
+    "nonSurfaces": []
+}
