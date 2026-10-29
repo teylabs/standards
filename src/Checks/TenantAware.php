@@ -25,7 +25,7 @@ use Tey\Standards\Source;
  *   execute() has restored the previous tenant. Use a block closure, or dispatch a resolved job through Bus::dispatch.
  *
  * Which models are tenant-scoped: Configuration::$tenantModels, when the app sets it, is the whole answer (traits a model uses, or classes it is
- * or extends). Otherwise they are detected: Spatie's UsesTenantConnection; a tenant-style trait (BelongsToTenant and the like, or kit's BelongsToWorkspace; never kit's
+ * or extends). Otherwise they are detected: Spatie's UsesTenantConnection; a tenant-style trait (BelongsToTenant, BelongsToWorkspace, WorkspaceScoped and the like; never kit's
  * HasWorkspaces, the user's memberships);
  * a global scope that names a tenant (a scope class or a closure on a tenant key); or, for a single-database app scoped by a column, a tenant key
  * (Configuration::$tenantKeys, default workspace_id and tenant_id) in $fillable or in the model's table in database/migrations. Active when the
@@ -40,11 +40,12 @@ final class TenantAware
 {
     private const COMMAND = 'Illuminate\Console\Command';
 
-    /** Workspace traits that scope a model's queries: tey/kit's Tey\Kit\Features\Workspaces\Concerns\BelongsToWorkspace. */
-    private const WORKSPACE_SCOPE_TRAITS = ['BelongsToWorkspace'];
-
-    /** Membership traits on the user model, never a tenant scope: tey/kit's Tey\Kit\Features\Workspaces\Concerns\HasWorkspaces. */
-    private const MEMBERSHIP_TRAITS = ['HasWorkspaces', 'HasWorkspace'];
+    /**
+     * tey/kit traits that never scope a model's queries, excluded by short name before the tenant-trait pattern:
+     * HasWorkspaces (Tey\Kit\Features\Workspaces\Concerns\HasWorkspaces, the user model's memberships and team roles) and its
+     * singular HasWorkspace, IsKitWorkspace (the workspace model itself) and GuardsStaleWrites (optimistic locking).
+     */
+    private const MEMBERSHIP_TRAITS = ['HasWorkspaces', 'HasWorkspace', 'IsKitWorkspace', 'GuardsStaleWrites'];
 
     private const SHOULD_QUEUE = 'Illuminate\Contracts\Queue\ShouldQueue';
 
@@ -425,13 +426,10 @@ final class TenantAware
     }
 
     /**
-     * A tenant-scoping trait. For workspaces that is only tey/kit's scoping trait,
-     * Tey\Kit\Features\Workspaces\Concerns\BelongsToWorkspace (it adds the `workspace` global scope), matched by short name
-     * so an app's own BelongsToWorkspace counts too. Kit's other workspace traits do not scope a model's queries and never count:
-     * HasWorkspaces (Tey\Kit\Features\Workspaces\Concerns\HasWorkspaces) is the user model's memberships and team roles,
-     * IsKitWorkspace is the workspace model itself, and GuardsStaleWrites is optimistic locking. A model using HasWorkspaces
-     * and BelongsToWorkspace is still scoped, through BelongsToWorkspace. Tenant-named traits are matched as before:
-     * BelongsToTenant, HasTenant, ScopedToTenant, TenantScoped, TenantOwned, TenantAware and the like.
+     * A trait named for a tenant or a workspace: BelongsToTenant, BelongsToWorkspace (tey/kit's scoping trait,
+     * Tey\Kit\Features\Workspaces\Concerns\BelongsToWorkspace), TenantScoped, WorkspaceScoped, ScopedToWorkspace, ForWorkspace and the like.
+     * Kit's non-scoping traits are excluded by name (MEMBERSHIP_TRAITS: HasWorkspaces, HasWorkspace, IsKitWorkspace, GuardsStaleWrites);
+     * a model that also uses a scoping trait, such as HasWorkspaces with BelongsToWorkspace, is still scoped.
      *
      * @param  array<string, array{0: string, 1: Node\Stmt\Class_}>  $classes
      */
@@ -444,7 +442,7 @@ final class TenantAware
                     if (in_array($short, self::MEMBERSHIP_TRAITS, true)) {
                         continue;
                     }
-                    if (in_array($short, self::WORKSPACE_SCOPE_TRAITS, true) || preg_match('/^(BelongsTo|Has|ScopedTo|ScopedBy|For)Tenants?$|^Tenant(Scoped|Owned|Aware)$/', $short) === 1) {
+                    if (preg_match('/^(BelongsTo|Has|ScopedTo|ScopedBy|For)(Tenant|Workspace)s?$|^(Tenant|Workspace)(Scoped|Owned|Aware)$/', $short) === 1) {
                         return true;
                     }
                 }

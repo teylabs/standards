@@ -255,11 +255,14 @@ test('a single-database app scoped by a column is detected by default: fillable,
         ->toBe(['FixtureScratch\\TouchNoteCommand touches tenant-scoped FixtureScratch\\Note without TenantAware']);
 });
 
-test('kit\'s HasWorkspaces (the user\'s memberships) is not a tenant scope; BelongsToWorkspace is, alone or alongside it', function () {
+test('kit\'s HasWorkspaces (the user\'s memberships) is not a tenant scope; BelongsToWorkspace and WorkspaceScoped are, alone or alongside it', function () {
     $command = fn (string $model): string => "use Illuminate\\Console\\Command;\n\nfinal class Touch{$model}Command extends Command\n{\n    public function handle(): int\n    {\n        return {$model}::query()->count();\n    }\n}\n";
     $base = tenantApp([
         'Concerns/HasWorkspaces.php' => "trait HasWorkspaces\n{\n}\n",
         'Concerns/BelongsToWorkspace.php' => "trait BelongsToWorkspace\n{\n}\n",
+        'Concerns/WorkspaceScoped.php' => "trait WorkspaceScoped\n{\n}\n",
+        'Slide.php' => "use Illuminate\\Database\\Eloquent\\Model;\nuse FixtureScratch\\Concerns\\WorkspaceScoped;\n\nfinal class Slide extends Model\n{\n    use WorkspaceScoped;\n}\n",
+        'TouchSlideCommand.php' => $command('Slide'),
         'User.php' => "use Illuminate\\Foundation\\Auth\\User as Authenticatable;\nuse FixtureScratch\\Concerns\\HasWorkspaces;\n\nfinal class User extends Authenticatable\n{\n    use HasWorkspaces;\n}\n",
         'Deck.php' => "use Illuminate\\Database\\Eloquent\\Model;\nuse FixtureScratch\\Concerns\\BelongsToWorkspace;\n\nfinal class Deck extends Model\n{\n    use BelongsToWorkspace;\n}\n",
         'Member.php' => "use Illuminate\\Database\\Eloquent\\Model;\nuse FixtureScratch\\Concerns\\BelongsToWorkspace;\nuse FixtureScratch\\Concerns\\HasWorkspaces;\n\nfinal class Member extends Model\n{\n    use HasWorkspaces, BelongsToWorkspace;\n}\n",
@@ -274,7 +277,8 @@ test('kit\'s HasWorkspaces (the user\'s memberships) is not a tenant scope; Belo
     expect($checks)->toBe([
         'FixtureScratch\\TouchDeckCommand touches tenant-scoped FixtureScratch\\Deck without TenantAware',
         'FixtureScratch\\TouchMemberCommand touches tenant-scoped FixtureScratch\\Member without TenantAware',
-    ], 'User (HasWorkspaces only) is not tenant-scoped; Deck and Member (BelongsToWorkspace) are');
+        'FixtureScratch\\TouchSlideCommand touches tenant-scoped FixtureScratch\\Slide without TenantAware',
+    ], 'User (HasWorkspaces only) is not tenant-scoped; Deck and Member (BelongsToWorkspace) and Slide (WorkspaceScoped) are');
 });
 
 test('tenancy with no tenant-scoped model found is an advisory (checked nothing), never a silent pass; the gate fails it only under --strict', function () {

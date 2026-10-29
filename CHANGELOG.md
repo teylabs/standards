@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- **`tenant-aware` no longer treats tey/kit's `HasWorkspaces` as a tenant scope.** The trait-name pattern matched `HasWorkspaces`, the user model's memberships and team roles, so every User query was reported as tenant work. For workspaces, a trait now counts only when it is tey/kit's scoping trait `BelongsToWorkspace` (`Tey\Kit\Features\Workspaces\Concerns\BelongsToWorkspace`, matched by short name); `HasWorkspaces` and `HasWorkspace` never count. A model using both is still scoped. Tenant-named traits (`BelongsToTenant`, `TenantScoped` and the like), Spatie's `UsesTenantConnection`, tenant global scopes and tenant keys detect as before.
+- **`tenant-aware` no longer treats tey/kit's `HasWorkspaces` as a tenant scope.** The trait-name pattern matched `HasWorkspaces`, the user model's memberships and team roles, so every User query was reported as tenant work. Kit's non-scoping traits `HasWorkspaces`, `HasWorkspace`, `IsKitWorkspace` and `GuardsStaleWrites` are now excluded by name. Every other tenant- or workspace-named trait detects as before (`BelongsToWorkspace`, kit's scoping trait `Tey\Kit\Features\Workspaces\Concerns\BelongsToWorkspace`; `WorkspaceScoped`, `ScopedToWorkspace`, `BelongsToTenant` and the like), and a model using `HasWorkspaces` with a scoping trait is still scoped.
 
 ## 0.11.46 - 2026-10-29
 
