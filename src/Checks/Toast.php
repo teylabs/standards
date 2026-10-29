@@ -27,8 +27,7 @@ final class Toast
                     continue;
                 }
                 $method = strtolower($call->name->toString());
-                $key = $call->getArgs()[0]->value ?? null;
-                $outcome = $key instanceof Node\Scalar\String_ && in_array($key->value, ['status', 'success', 'message', 'error', 'flash'], true);
+                $outcome = self::flashesOutcome($call);
                 $session = $call instanceof Node\Expr\MethodCall && $call->var instanceof Node\Expr\FuncCall && $call->var->name instanceof Node\Name && $call->var->name->toString() === 'session';
                 $facade = $call instanceof Node\Expr\StaticCall && $call->class instanceof Node\Name ? $call->class->toString() : null;
                 // A guest form's back()->with('<key>', ...) that a FormStatus on the page it returns to shows (GuestFormStatus) is not a loose flash.
@@ -72,6 +71,43 @@ final class Toast
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    private const OUTCOME_KEYS = ['status', 'success', 'message', 'error', 'flash'];
+
+    /**
+     * Whether a `with(...)` / `flash(...)` call's first argument may name an outcome key: a literal outcome key, an array with a literal
+     * outcome key, or anything the rule can't read key by key (a spread, a non-literal array key, a lone non-array argument such as
+     * `->with($data)`), which fails closed. Implicit and integer keys are literal and never outcomes.
+     */
+    private static function flashesOutcome(Node\Expr\MethodCall|Node\Expr\StaticCall $call): bool
+    {
+        $arguments = $call->getArgs();
+        $first = $arguments[0] ?? null;
+        if ($first === null) {
+            return false;
+        }
+        if ($first->unpack) {
+            return true;
+        }
+        $key = $first->value;
+        if ($key instanceof Node\Scalar\String_) {
+            return in_array($key->value, self::OUTCOME_KEYS, true);
+        }
+        if ($key instanceof Node\Expr\Array_) {
+            foreach ($key->items as $item) {
+                if ($item === null || $item->unpack || ($item->key !== null && ! $item->key instanceof Node\Scalar\String_ && ! $item->key instanceof Node\Scalar\Int_)) {
+                    return true;
+                }
+                if ($item->key instanceof Node\Scalar\String_ && in_array($item->key->value, self::OUTCOME_KEYS, true)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return count($arguments) === 1 && $first->name === null && ! $key instanceof Node\Scalar && ! $key instanceof Node\Expr\Closure && ! $key instanceof Node\Expr\ArrowFunction;
     }
 
     private ?GuestFormStatus $formStatus = null;
