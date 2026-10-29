@@ -162,6 +162,22 @@ test('missing, n/a from applies, and a surface whose feature is not installed', 
         ->and($report['facts']['tey/kit']['has-search'])->toMatchArray(['value' => false, 'evidence' => null]);
 });
 
+test('a hand-rolled signal is evidence on its own: it reads hand-rolled when the package is not installed, and only a silent surface reads missing', function () {
+    $report = adoptionReport('uninstalled');
+    $rows = array_column($report['rows'], null, 'id');
+
+    expect($report['inventories'][0]['installed'])->toBeFalse()
+        // Positive: vue-toastification fires feedback.toast's signal although tey/kit is not installed.
+        ->and($rows['feedback.toast']['status'])->toBe('hand-rolled')
+        ->and($rows['feedback.toast']['installed'])->toBeFalse()
+        ->and($rows['feedback.toast']['note'])->toBe('tey/kit is not installed')
+        ->and(array_map(adoptionWhere(...), $rows['feedback.toast']['evidence']))->toBe(['resources/js/pages/Orders/Page.vue:2'])
+        // Negative: an applicable surface with no signal still reads missing, with no evidence; n/a still wins over both.
+        ->and($rows['shell.workspace']['status'])->toBe('missing')
+        ->and($rows['shell.workspace']['evidence'])->toBe([])
+        ->and($rows['navigation.search']['status'])->toBe('n/a');
+});
+
 test('kit-owned files never count as adoption; an edited lineage copy is the app\'s own', function () {
     $rows = array_column(adoptionReport('kit-owned')['rows'], null, 'id');
 
@@ -201,7 +217,7 @@ test('gaps: a third-party import, a generic name and a package.json library; a d
 });
 
 test('the generic-name, framework-runtime and tooling lists are closed and versioned', function () {
-    expect(Lists::VERSION)->toBe(1)
+    expect(Lists::VERSION)->toBe(2)
         ->and(Lists::generic('Button'))->toBeTrue()
         ->and(Lists::generic('InputText'))->toBeTrue()
         ->and(Lists::generic('MenuBar'))->toBeTrue()
@@ -379,7 +395,7 @@ test('--json is a stable format-1 document with rows, evidence, gaps, facts, inv
     $report = adoptionReport('mixed', 'ci', ['kit', 'reports']);
 
     expect(array_keys($report))->toBe(['format', 'app', 'generated_at', 'mode', 'lists', 'overridden', 'inventories', 'facts', 'adopted_tables', 'rows', 'gaps', 'exemptions', 'warnings', 'summary', 'blocking', 'exit_code'])
-        ->and($report)->toMatchArray(['format' => 1, 'app' => 'fixture/mixed', 'generated_at' => '2026-10-29', 'mode' => 'ci', 'lists' => 1])
+        ->and($report)->toMatchArray(['format' => 1, 'app' => 'fixture/mixed', 'generated_at' => '2026-10-29', 'mode' => 'ci', 'lists' => 2])
         ->and(array_keys($report['rows'][0]))->toBe(['package', 'id', 'layer', 'group', 'label', 'feature', 'installed', 'applies', 'status', 'underlying', 'new', 'since', 'note', 'cause', 'evidence', 'signals', 'matches', 'replaced', 'uses', 'docs', 'exemption'])
         ->and(array_keys($report['gaps'][0]))->toBe(['subject', 'kind', 'file', 'line', 'detail', 'exemption'])
         ->and(array_keys($report['blocking'][0]))->toBe(['kind', 'package', 'subject', 'evidence', 'expects', 'cause'])
