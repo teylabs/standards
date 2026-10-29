@@ -186,6 +186,7 @@ final class CruddyGuard
             }
         }
 
+        $found = Ignored::filterKeys($this->base, $found);
         ksort($found);
 
         return $found;
@@ -208,8 +209,12 @@ final class CruddyGuard
                 continue;
             }
 
+            $relatives = [];
             foreach ((new Finder)->files()->in($this->base.'/'.$root)->name('*.php')->notPath('vendor') as $file) {
-                $relative = $this->relative($file->getRealPath());
+                $relatives[] = $this->relative($file->getRealPath());
+            }
+
+            foreach (Ignored::filter($this->base, $relatives) as $relative) {
                 $isController = str_ends_with($relative, $this->controllerSuffix.'.php');
                 $isRouteFile = (bool) preg_match('#(^|/)'.preg_quote($this->routeDirectory, '#').'/[^/]+\.php$#', $relative);
 

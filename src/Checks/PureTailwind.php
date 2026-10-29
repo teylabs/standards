@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tey\Standards\Checks;
 
+use Tey\Standards\Ignored;
 use RuntimeException;
 use Symfony\Component\Finder\Finder;
 use Tey\Standards\Configuration;
@@ -97,6 +98,7 @@ final class PureTailwind
             }
         }
 
+        $files = Ignored::filterKeys($config->base, $files);
         ksort($files);
 
         return $files;
@@ -195,10 +197,20 @@ final class PureTailwind
         return $declarations !== [] && array_filter($declarations, fn (string $part): bool => preg_match('~^--[\w-]+\s*:~', $part) !== 1) === [];
     }
 
-    /** `{ '--a': x, "--b": y }` and nothing else: any other expression could set a real property. */
+    /**
+     * `{ '--a': x, "--b": y }`, or a ternary (nested too) whose every branch is one of those, `{}`, `undefined` or `null`.
+     * Any other expression, or any other branch (a variable, a call), could set a real property.
+     */
     private static function bindsCustomPropertiesOnly(string $expression): bool
     {
-        $expression = trim($expression);
+        $expression = self::unwrap($expression);
+        if (in_array($expression, ['undefined', 'null'], true)) {
+            return true;
+        }
+        $ternary = self::ternary($expression);
+        if ($ternary !== null) {
+            return self::bindsCustomPropertiesOnly($ternary[0]) && self::bindsCustomPropertiesOnly($ternary[1]);
+        }
         if (! str_starts_with($expression, '{') || ! str_ends_with($expression, '}')) {
             return false;
         }
@@ -213,6 +225,65 @@ final class PureTailwind
         }
 
         return true;
+    }
+
+    /** The expression without whitespace and redundant outer parentheses. */
+    private static function unwrap(string $expression): string
+    {
+        $expression = trim($expression);
+        while (str_starts_with($expression, '(') && str_ends_with($expression, ')') && self::splitTopLevel(substr($expression, 1, -1)) !== null) {
+            $expression = trim(substr($expression, 1, -1));
+        }
+
+        return $expression;
+    }
+
+    /**
+     * The two branches of a top-level `condition ? a : b`, or null when the expression is not one (or does not balance).
+     * `?.` and `??` are not ternaries; a nested ternary in the first branch is matched by counting.
+     *
+     * @return array{string, string}|null
+     */
+    private static function ternary(string $expression): ?array
+    {
+        $depth = 0;
+        $quote = null;
+        $question = null;
+        $pending = 0;
+        $length = strlen($expression);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $expression[$i];
+            if ($quote !== null) {
+                if ($char === '\\') {
+                    $i++;
+                } elseif ($char === $quote) {
+                    $quote = null;
+                }
+
+                continue;
+            }
+            if (in_array($char, ['"', "'", '`'], true)) {
+                $quote = $char;
+            } elseif (in_array($char, ['(', '[', '{'], true)) {
+                $depth++;
+            } elseif (in_array($char, [')', ']', '}'], true)) {
+                $depth--;
+            } elseif ($depth === 0 && $char === '?') {
+                $next = $expression[$i + 1] ?? '';
+                if ($next === '?') {
+                    $i++;
+                } elseif ($next === '.' && ! ctype_digit($expression[$i + 2] ?? '')) {
+                    $i++;
+                } else {
+                    $question ??= $i;
+                    $pending++;
+                }
+            } elseif ($depth === 0 && $char === ':' && $question !== null && --$pending === 0) {
+                return [substr($expression, $question + 1, $i - $question - 1), substr($expression, $i + 1)];
+            }
+        }
+
+        return null;
     }
 
     /** @return list<string>|null the comma-separated parts at depth 0, or null when brackets or quotes do not balance */

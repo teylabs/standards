@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tey\Standards\Checks;
 
+use Tey\Standards\Ignored;
 use Illuminate\Support\Str;
 use PhpParser\Error;
 use PhpParser\Node;
@@ -56,7 +57,7 @@ final class McpRoutes
                 }
             }
         }
-        $files = array_values(array_unique($files));
+        $files = Ignored::filter(rtrim($base, '/'), array_values(array_unique($files)));
         sort($files);
         if ($files === []) {
             $this->errors[] = ['target' => $roots === [] ? 'routeRoots' : implode(', ', $roots), 'check' => 'mutating routes could not be enumerated: no route files under the configured routeRoots'];
