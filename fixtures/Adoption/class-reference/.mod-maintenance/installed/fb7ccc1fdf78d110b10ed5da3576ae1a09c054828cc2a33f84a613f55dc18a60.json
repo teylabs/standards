@@ -1,0 +1,10 @@
+{
+    "format": 1,
+    "owner": "tey/mod:installed",
+    "artifact": {
+        "name": "tey/kit:documents",
+        "files": {
+            "app/Generated/KitRenderer.php": "PD9waHAKCm5hbWVzcGFjZSBBcHBcR2VuZXJhdGVkOwoKZmluYWwgY2xhc3MgS2l0UmVuZGVyZXIKewogICAgcHVibGljIGZ1bmN0aW9uIG1ha2UoKTogXE1wZGZcTXBkZgogICAgewogICAgICAgIHJldHVybiBuZXcgXE1wZGZcTXBkZjsKICAgIH0KfQo="
+        }
+    }
+}
