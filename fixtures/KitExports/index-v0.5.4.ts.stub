@@ -6,6 +6,7 @@ export { default as AppearanceToggle } from './Appearance/AppearanceToggle.vue';
 export { initializeTheme, useAppearance } from './Appearance/useAppearance';
 export { browserTimezone, syncTimezoneCookie } from './timezone';
 export { default as Placeholder } from './Feedback/Placeholder.vue';
+export { default as EmptyState } from './Feedback/EmptyState.vue';
 export { default as Alert } from './Feedback/Alert.vue';
 export { default as PasskeyOffer } from './Feedback/PasskeyOffer.vue';
 export { alertVariants } from './Feedback/alertVariants';
@@ -83,6 +84,8 @@ export { runToolbarAction, type ToolbarAction } from './Layout/toolbarAction';
 export { anchorToolbar, unionRect, type AnchorRect, type ToolbarAnchor } from './Layout/toolbarAnchor';
 // A disclosure section (inspector sections): a real button with aria-expanded/aria-controls, `v-model:open`, content hidden while closed.
 export { default as Collapsible } from './Layout/Collapsible.vue';
+export { default as DescriptionList } from './Layout/DescriptionList.vue';
+export type { DescriptionItem } from './Layout/DescriptionList.vue';
 // The page's own bottom-edge bar (registered with useStickyBars, like FloatingToolbar) and the end-of-page Back to top.
 export { default as StickyBar } from './Layout/StickyBar.vue';
 export { default as PageEnd } from './Layout/PageEnd.vue';
@@ -91,7 +94,7 @@ export { default as SearchBox } from './Search/SearchBox.vue';
 export { flatten as flattenSearch, move as moveSearch, opensSearch, type SearchGroup, type SearchResult } from './Search/search';
 export { default as Surface } from './Surface/Surface.vue';
 export { provideSurface, useSurface } from './Surface/surface';
-export type { Surface } from './Surface/surface';
+export type { Surface as SurfaceContext } from './Surface/surface';
 export { default as ActionBar } from './Action/ActionBar.vue';
 export { default as ActionLabel } from './Action/ActionLabel.vue';
 export { default as ButtonGroup } from './Action/ButtonGroup.vue';

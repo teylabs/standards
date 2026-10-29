@@ -1,5 +1,5 @@
 {
-    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.4.33",
+    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.5.4",
     "module": "@kit/ui",
     "components": [
         "ActionBar",
@@ -21,6 +21,7 @@
         "ComputedValueScope",
         "ComputedValueToggle",
         "DataTable",
+        "DescriptionList",
         "Dialog",
         "Dropdown",
         "DropdownAction",
@@ -39,6 +40,7 @@
         "DropdownMenuTrigger",
         "DropdownModalLink",
         "EditOnly",
+        "EmptyState",
         "Field",
         "FileInput",
         "FloatingToolbar",
