@@ -12,6 +12,10 @@
 - **File-scanning rules skip Vite build output and git-ignored paths.** `styling.pure-tailwind` scanned an app's gitignored `public/build/` and reported the bundled CSS of its dependencies. One shared helper (`Tey\Standards\Ignored`) now drops `public/build/` and `public/hot` always, and in a git work tree every path `git check-ignore` reports (a tracked file under an ignored pattern is still scanned). Without git it reads the root `.gitignore` statically. It is applied by `Source::files()` (every PHP and frontend rule built on it, such as `php-tag`, Conformance and the UI rules), `styling.pure-tailwind`, `ui.kit-shell`, the MCP route scan, `tenant-aware`'s migration scan, the Cruddy guard and the `standards:adoption` scanner.
 - **`styling.pure-tailwind` accepts a conditional `:style` of custom properties.** A ternary, nested ones included, passes when every branch is an object literal with only quoted `'--x'` keys, `{}`, `undefined` or `null` (`color ? { '--avatar-color': color } : undefined`). A non-custom property, a variable or a call in any branch still fails, and `&&`/`||` forms still fail as before.
 
+### Changed
+
+- **The reusable `standards.yml` check name is a documented, tested contract.** Its job id stays `standards` with no `name:` key, so a caller's required check reads `Standards / standards`. README documents it, and a test parsing the workflow fails if the job id changes or the job gains a `name:`.
+
 ## 0.11.45 - 2026-10-29
 
 ### Added

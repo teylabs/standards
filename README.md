@@ -581,6 +581,8 @@ jobs:
 
 Optional inputs: `php-version` (default `'8.4'`), `base-ref` (default empty, a full check), `runs-on` (runner label, default `ubuntu-latest`) and `timeout-minutes` (default `15`). GitHub does not allow `timeout-minutes` on a job that calls a reusable workflow, so pass both through `with:`; rule 51 reads them there (see [CI triggers](#ci-triggers)).
 
+**Stable contract: the check name.** The workflow's only job keeps the id `standards` and has no `name:` key, so GitHub reports it as `<caller job name> / standards`; with a caller job named `Standards`, the required check reads `Standards / standards`. A release never renames that job or gives it a `name:`, so a branch-protection rule set on it keeps matching (a test fails if it changes).
+
 It uploads `standards-report.json` as the `standards-report` artifact. **Pre-push.** `standards:install` installs a pre-push hook running `standards:check --changed`, in `.git/hooks` or in `core.hooksPath` when that points inside the repository. When `core.hooksPath` points outside it, it writes nothing and prints the line to add there. That includes a hooks folder set **globally** (`git config --global core.hooksPath ~/.git-hooks`): the setting applies to every repository, so no `.git/hooks/pre-push` would ever run and installing one would be a false comfort. `git config --show-origin core.hooksPath` shows where it comes from. Add the printed line to that folder's `pre-push`, or unset the global setting to use `.git/hooks`. It never replaces a hook it didn't write. Add the line to yours instead.
 
 ### 2. Agent guardrails: `standards:install`
