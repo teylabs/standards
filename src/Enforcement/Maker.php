@@ -232,6 +232,8 @@ final class Maker
                     "{$tests}/Console/{$base}CommandTest.php" => ["command/{$flavor}.test.stub", $values],
                 ], null];
             })(),
+            // NOTE: a downstream scaffold mirrors `standards:make capability-tool --flavor=write` and has a drift test. Any change to this generator's
+            // output shape (its stubs, paths or placeholders) must be announced in the CHANGELOG under Changed.
             'capability-tool' => [[
                 "{$app}/Mcp/Tools/{$name}Tool.php" => 'capability-tool.stub',
                 "{$tests}/Mcp/{$name}ToolTest.php" => 'capability-tool.test.stub',

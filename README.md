@@ -597,7 +597,7 @@ Every path ends in a leaf. Gap and byo leaves return their nearest recipes, the 
 | Unit | Flavors | Writes |
 | ---- | ------- | ------ |
 | `page` | `index`, `show`, `form` | controller, `Page.vue` built from `@kit/ui` exports, `Route::controller()` group, Pest test; `form` adds a FormRequest and an Action |
-| `capability-tool` | `read`, `write` | tey/kit `CapabilityTool` with `#[Capability]`, `rules()` and `call(Principal, int, array $validated)`, matching the kit's abstract methods, plus a Pest test |
+| `capability-tool` | `read`, `write` | tey/kit `CapabilityTool` with `#[Capability]`, `rules()` and `call(Principal, int, array $validated)`, matching the kit's abstract methods, plus a Pest test. A downstream scaffold mirrors `--flavor=write` and has a drift test, so any change to this generator's output shape is announced in the CHANGELOG under Changed. |
 | `settings-section` | `form`, `toggles` | settings controller, FormRequest, Action, `pages/settings/<Name>/Page.vue`, routes, test |
 | `action` | `plain` | Action class and test |
 | `workbench` | `page` | a tey/kit Workbench page in a workspace (needs tey/kit 0.4.20+): provider (capability, permissions, routes, navigation, `stale_write` as 409), policy, page and order controllers, the order FormRequest, a principal-first `Reorder<Name>Workbench` Action guarded by a version, a stand-in item Query to replace with your model, a `WorkbenchViewModel`, `pages/<Names>/Workbench/Page.vue` with one inspector, and a feature test |

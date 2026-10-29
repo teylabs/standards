@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The PDF report leaf (`data-actions.document`) has a recipe:** the Bakery's `mod:butter/pdf-reports {Name}`. It's now `draft`, not `gap`.
+  - Its rules: render through the Renderer contract (mPDF stays behind it); authorize through a generated policy; stream with `nosniff` and `Content-Disposition`; no PII in logs; the app requires `mpdf/mpdf`.
+  - Sending or attaching the PDF is marked as not covered yet.
+- **Contributors:** a downstream scaffold mirrors `standards:make capability-tool --flavor=write` and has a drift test. Any change to that generator's output shape is announced here under Changed (noted in `Maker` and the README).
+
 ## 0.11.20 - 2026-10-28
 
 ### Changed
