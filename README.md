@@ -764,6 +764,8 @@ Allowed: Tailwind's `@import`, `@theme`, `@source`, `@plugin`, `@utility` and `@
 
 **Fix recipes.** Static styling: replace the CSS with Tailwind classes in the template (`style="color:red"` becomes `class="text-red-600"`). A design value used in many places: a token in `@theme` (`--color-brand: oklch(...)`, then `bg-brand`), or on `:root`/`.dark` for a themed value. A reusable compound: `@utility`. An animation: `--animate-*` with its `@keyframes` inside `@theme`. A dynamic value: a custom property, as above.
 
+`php artisan standards:pattern "rule styling.pure-tailwind"` shows these recipes (pattern `ui-page.styling`).
+
 **Fails closed.** A file the rule cannot read (`could not read the file`) or parse (`could not parse the file`: an unclosed comment, `<script>`, `<style>`, tag or `{`) is a finding, not a pass. Findings carry `file:line`; the allowlist key is target and check without the line, so an entry survives edits above it. A real exception goes in the allowlist with a `reason` and an `expires` date, as for any rule: an entry without a reason is rejected, and one without an expiry fails.
 
 All options below are trailing named constructor arguments. Defaults preserve optional UI enforcement as off. Explicit frontend roots must exist (unmatched globs may be empty); overlapping roots are deduplicated.

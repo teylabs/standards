@@ -4,10 +4,13 @@
 
 ### Added
 
+- **Pattern `ui-page.styling`** (draft) carries the rule's fix recipes; `standards:pattern "rule styling.pure-tailwind"` resolves to it.
+- **`standards:pattern "rule <key>"` resolves by rule.** The intent `rule <key>`, which every finding's fallback hint names, now answers with the leaves whose `checks` run that rule, before falling back to keyword search. A test lists the rules with no such leaf yet, so a new rule must ship one.
 - **Rule `styling.pure-tailwind`: app UI styles with Tailwind classes and `@theme` tokens, not its own CSS.** It fails on a `<style>` block in a `.vue` file, a `style="..."` attribute in a `.vue` or Blade template, a `:style` binding that sets anything but CSS custom properties, and a `.css` file with selector rules beyond Tailwind's directives (`@import`, `@theme`, `@source`, `@plugin`, `@utility`, `@layer`), `@font-face` and `--token` declarations on `:root` and `.dark`. Kit-owned files (the Kit tree, and unedited files tey/mod records), Filament theme CSS and published views under `resources/views/vendor/` are not scanned. `:style="{ '--x': value }"` is the documented way to bind a server value. A file it cannot read or parse is a finding. Findings carry `file:line`. The rule is required, not opt-in.
 
 ### Upgrading
 
+- styling.pure-tailwind is a required rule; on bump, apps with <style> blocks, inline styles or custom CSS classes get findings. Fix them or allowlist each with a reason and an expiry.
 - **Apps may see new `styling.pure-tailwind` findings** on their own `.vue`, Blade and `.css` files. Fix them rather than allowlisting: replace `<style>` blocks and `style="..."` with Tailwind classes, move shared values to `@theme` tokens (or `:root`/`.dark` custom properties), use `@utility` for a reusable compound, and bind a dynamic value as a custom property (``:style="{ '--progress': `${p}%` }"`` with `class="w-(--progress)"`). Where styling has to stay for now, add an allowlist entry with `rule: 'styling.pure-tailwind'`, the finding's target and check, a `reason` and an `expires` date.
 
 ## 0.11.40 - 2026-10-29

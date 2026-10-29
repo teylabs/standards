@@ -57,6 +57,16 @@ final class Lookup
                 return $this->match($query['path'], 'path');
             }
 
+            // `rule <key>`, as a finding's hint names it: the leaves whose checks run that rule, whatever their status.
+            if (is_string($query['intent'] ?? null) && preg_match('/^\s*rule\s+(.+?)\s*$/i', $query['intent'], $rule) === 1 && ($leaves = $this->forRule($rule[1])) !== []) {
+                if (count($leaves) === 1) {
+                    return $this->leaf($leaves[0], $this->pathTo($leaves[0]->id), []);
+                }
+                $parent = $this->catalog->parentOf($leaves[0]->id) ?? $this->catalog->root();
+
+                return $this->question($parent, $this->pathTo($parent->id), array_slice($leaves, 0, 5));
+            }
+
             if (is_string($query['intent'] ?? null) && trim($query['intent']) !== '') {
                 $feature = $this->feature($query['intent']);
 
@@ -71,6 +81,12 @@ final class Lookup
         } catch (InvalidArgumentException $error) {
             return self::error($error->getMessage());
         }
+    }
+
+    /** @return list<Leaf> the leaves whose checks name the rule */
+    public function forRule(string $rule): array
+    {
+        return array_values(array_filter($this->catalog->leaves(), fn (Leaf $leaf): bool => in_array($rule, $leaf->checks, true)));
     }
 
     /** @return list<string> every leaf keyword */
