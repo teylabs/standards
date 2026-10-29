@@ -413,3 +413,69 @@ test('the frontend rules skip a page tey/mod records as kit-generated while it i
         (new Filesystem)->deleteDirectory($base);
     }
 })->with('kit-owned violations');
+
+function headerActionsViewModel(string $actions, string $base = 'PageViewModel'): string
+{
+    return <<<PHP
+        <?php
+
+        namespace App\ViewModels;
+
+        use Tey\Kit\Features\Core\Data\Action;
+        use Tey\Kit\Features\Core\ViewModels\\{$base};
+
+        final class PostViewModel extends {$base}
+        {
+            public function title(): string
+            {
+                return 'Post';
+            }
+
+            public function actions(): array
+            {
+                return [{$actions}];
+            }
+        }
+        PHP;
+}
+
+test('ui header-actions reads a page ViewModel\'s literal actions and a #actions slot', function (array $files, array $checks) {
+    $base = kitOwnershipApp($files);
+    try {
+        $config = frontendConfiguration(overrides: ['base' => $base, 'sourceRoots' => ['app'], 'frontendRoots' => ['resources/js'], 'optionalRules' => ['ui header-actions']]);
+
+        expect(array_column((new Conformance($config))->violations('ui header-actions'), 'check'))->toBe($checks);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+})->with([
+    'three without priority' => [['app/ViewModels/PostViewModel.php' => headerActionsViewModel("new Action('Edit', '/e'), new Action('Copy', '/c'), new Action('Share', '/s')")], []],
+    'four without priority' => [['app/ViewModels/PostViewModel.php' => headerActionsViewModel("new Action('Edit', '/e'), new Action('Copy', '/c'), new Action('Share', '/s'), new Action('Archive', '/a')")],
+        ['more than 3 header actions with no priority; set priority to choose the visible ones']],
+    'four with a primary' => [['app/ViewModels/PostViewModel.php' => headerActionsViewModel("new Action('Edit', '/e', priority: 'primary'), new Action('Copy', '/c'), new Action('Share', '/s'), new Action('Archive', '/a')")], []],
+    'two primaries' => [['app/ViewModels/PostViewModel.php' => headerActionsViewModel("new Action('Edit', '/e', priority: 'primary'), Action::disabled('Publish', '/p', 'post', 'Draft', priority: 'primary')")],
+        ['header actions declare more than one primary']],
+    'four visible' => [['app/ViewModels/PostViewModel.php' => headerActionsViewModel("new Action('Edit', '/e', priority: 'primary'), new Action('Copy', '/c', priority: 'secondary'), new Action('Share', '/s', priority: 'secondary'), new Action('Archive', '/a', priority: 'secondary')")],
+        ['header actions show more than 3; mark the rest overflow']],
+    'a workbench ViewModel' => [['app/ViewModels/PostViewModel.php' => headerActionsViewModel("new Action('A', '/a'), new Action('B', '/b'), new Action('C', '/c'), new Action('D', '/d')", 'WorkbenchViewModel')],
+        ['more than 3 header actions with no priority; set priority to choose the visible ones']],
+    'a non-page class' => [['app/Support/PostActions.php' => str_replace('extends PageViewModel', '', headerActionsViewModel("new Action('A', '/a'), new Action('B', '/b'), new Action('C', '/c'), new Action('D', '/d')"))], []],
+    'a slot with four controls' => [['resources/js/pages/Posts.vue' => '<template><Page><template #actions><Button>A</Button><Button>B</Button><a href="/c">C</a><button>D</button></template></Page></template>'],
+        ['header #actions slot holds more than 3 controls; pass descriptors to Page :actions']],
+    'a slot with three controls' => [['resources/js/pages/Posts.vue' => '<template><Page><template #actions><Button>A</Button><Button>B</Button><button>C</button></template></Page></template>'], []],
+]);
+
+test('ui header-actions is optional and skips the kit tree', function () {
+    $slot = '<template><Page><template #actions><Button>A</Button><Button>B</Button><Button>C</Button><Button>D</Button></template></Page></template>';
+    $base = kitOwnershipApp(['resources/js/components/Kit/Layout/Demo.vue' => $slot, 'resources/js/pages/Posts.vue' => $slot]);
+    try {
+        $disabled = new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['resources/js'], 'optionalRules' => []]));
+        expect($disabled->violations('ui header-actions'))->toBe([]);
+        expect(fn () => $disabled->assert('ui header-actions'))->toThrow(SkippedWithMessageException::class, 'disabled');
+
+        $enabled = new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['resources/js'], 'optionalRules' => ['ui header-actions']]));
+        expect(array_column($enabled->violations('ui header-actions'), 'target'))->toBe(['resources/js/pages/Posts.vue']);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});

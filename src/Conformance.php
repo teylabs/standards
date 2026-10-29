@@ -31,6 +31,7 @@ final class Conformance
         'ui new-tab' => '[ui new-tab] new-tab actions carry noopener and an external icon',
         'ui dropzone' => '[ui dropzone] only the configured dropzone owns file inputs',
         'ui toast' => '[ui toast] notifications use one configured toast path',
+        'ui header-actions' => '[ui header-actions] a page header shows at most one primary and three visible actions',
         'styling.pure-tailwind' => '[styling.pure-tailwind] app UI styles with Tailwind classes and @theme tokens, not its own CSS',
         'ui.kit-shell' => '[ui.kit-shell] signed-in pages use kit\'s Workspace Layout, not an app-owned header, once the shell is adopted',
         'operator' => '[operator] commands that write offer a dry run and a production guard',
@@ -91,7 +92,7 @@ final class Conformance
 
     public function assert(string $rule): void
     {
-        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'destructive-db'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             Assert::markTestSkipped('Optional rule ['.$rule.'] is disabled; enable it in Configuration::optionalRules.');
         }
 
@@ -124,7 +125,7 @@ final class Conformance
     /** @return list<array{target: string, check: string}> */
     public function violations(string $rule): array
     {
-        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'destructive-db'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             return [];
         }
 
@@ -135,6 +136,7 @@ final class Conformance
             'ui new-tab' => (new Checks\UiNewTab)->violations($this->config),
             'ui dropzone' => (new Checks\UiDropzone)->violations($this->config),
             'ui toast' => (new Checks\UiToast)->violations($this->config),
+            'ui header-actions' => (new Checks\UiHeaderActions)->violations($this->config, $this->source),
             'styling.pure-tailwind' => (new Checks\PureTailwind)->violations($this->config),
             'ui.kit-shell' => (new Checks\KitShell)->violations($this->config),
             default => null,
