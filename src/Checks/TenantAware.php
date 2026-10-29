@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tey\Standards\Checks;
 
+use Tey\Standards\Ignored;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use Tey\Standards\Configuration;
@@ -509,10 +510,14 @@ final class TenantAware
         $finder = new NodeFinder;
         $parser = (new \PhpParser\ParserFactory)->createForNewestSupportedVersion();
 
+        $migrations = [];
         foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
-            if (! str_ends_with($file->getFilename(), '.php')) {
-                continue;
+            if (str_ends_with($file->getFilename(), '.php')) {
+                $migrations[str_replace('\\', '/', substr($file->getPathname(), strlen($this->config->base) + 1))] = $file;
             }
+        }
+
+        foreach (Ignored::filterKeys($this->config->base, $migrations) as $file) {
 
             try {
                 $nodes = $parser->parse((string) file_get_contents($file->getPathname())) ?? [];

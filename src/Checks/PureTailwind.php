@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tey\Standards\Checks;
 
+use Tey\Standards\Ignored;
 use RuntimeException;
 use Symfony\Component\Finder\Finder;
 use Tey\Standards\Configuration;
@@ -97,6 +98,7 @@ final class PureTailwind
             }
         }
 
+        $files = Ignored::filterKeys($config->base, $files);
         ksort($files);
 
         return $files;

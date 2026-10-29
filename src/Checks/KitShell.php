@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tey\Standards\Checks;
 
+use Tey\Standards\Ignored;
 use Symfony\Component\Finder\Finder;
 use Tey\Standards\Configuration;
 use Tey\Standards\Source;
@@ -157,6 +158,7 @@ final class KitShell
                 }
             }
         }
+        $files = Ignored::filterKeys($base, $files);
         ksort($files);
         $findings = [];
         foreach ($files as $path => $source) {

@@ -64,6 +64,7 @@ final class Source
             }
         }
 
+        $files = Ignored::filterKeys($this->config->base, $files);
         ksort($files);
 
         return $files;

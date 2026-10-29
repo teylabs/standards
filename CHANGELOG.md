@@ -7,6 +7,10 @@
 - **`standards:adoption`: `template-tag` signals take optional `where` and `except` attribute filters.** Each maps a static attribute name to a list of literal values; `where` counts a tag only when every named attribute is static with a listed value, `except` drops it when any named static attribute has one. A bound (`:type`, `v-bind:type`) or missing attribute satisfies no `where` and triggers no `except`. Both compose with `min` and `scope`, and a malformed filter fails closed as a schema error. This reads tey/kit's reworked `form.inputs` (`except: {type: [hidden, search, file]}`) and `form.files` (`where: {type: [file]}`) surfaces.
 - **`bin/standards adoption --base=<dir> --inventory=<file> [--json]`: the adoption scan without Laravel**, for bare fixture trees. It uses the tree's `tests/Arch/configuration.php` or the default configuration, exits like `standards:adoption` (2 on usage, an unreadable inventory or a schema error), and its JSON rows also carry `surface`, `facts` and `row`, the fields of a package fixture's `expected.json`.
 
+### Fixed
+
+- **File-scanning rules skip Vite build output and git-ignored paths.** `styling.pure-tailwind` scanned an app's gitignored `public/build/` and reported the bundled CSS of its dependencies. One shared helper (`Tey\Standards\Ignored`) now drops `public/build/` and `public/hot` always, and in a git work tree every path `git check-ignore` reports (a tracked file under an ignored pattern is still scanned). Without git it reads the root `.gitignore` statically. It is applied by `Source::files()` (every PHP and frontend rule built on it, such as `php-tag`, Conformance and the UI rules), `styling.pure-tailwind`, `ui.kit-shell`, the MCP route scan, `tenant-aware`'s migration scan, the Cruddy guard and the `standards:adoption` scanner.
+
 ## 0.11.45 - 2026-10-29
 
 ### Added

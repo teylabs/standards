@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tey\Standards\Adoption;
 
+use Tey\Standards\Ignored;
 use FilesystemIterator;
 use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
@@ -213,7 +214,7 @@ final class App
                 }
             }
         }
-        $found = array_values(array_unique($found));
+        $found = Ignored::filter($this->base, array_values(array_unique($found)));
         sort($found);
 
         return $found;
