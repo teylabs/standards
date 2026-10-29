@@ -13,8 +13,9 @@ use Tey\Standards\Source;
  * Rule `integrations` (patterns integrations.webhook and integrations.api-client), advisory unless listed in Configuration::optionalRules:
  *
  * - A route whose URI mentions `webhook` must reach a handler that verifies its sender: spatie/laravel-webhook-client (`Route::webhooks()`, or a
- *   controller that runs WebhookProcessor) with a configured signature validator, Cashier's webhook controller, or a controller whose source verifies a
- *   signature (hash_equals, a SignatureValidator, a verify call, Stripe's constructEvent).
+ *   controller that runs WebhookProcessor) with a configured signature validator, Cashier's webhook controller (or a subclass of it), or a controller
+ *   whose source verifies a signature (hash_equals, a SignatureValidator, a verify call, Stripe's constructEvent). One delegation is followed: a call on
+ *   an injected dependency (`$handler->handleWebhook(...)`) counts when that dependency's called method verifies, or it extends a verifying controller.
  * - App code calls another service through a contract: an `Http::` call in a class that implements no interface (a service provider, which defines
  *   macros, is exempt) should move behind one, with a fake for tests.
  *
@@ -98,27 +99,170 @@ final class Integrations
         return $violations;
     }
 
+    /**
+     * Whether the routed class verifies its sender: it is (or extends) a verifying controller (Cashier's WebhookController registers
+     * VerifyWebhookSignature in its constructor, so a subclass inherits it), its source names a verifier, or it follows ONE delegation:
+     * a call on an injected dependency (a typed parameter or property, `$handler->handleWebhook(...)`) whose called method verifies.
+     */
     private function verifies(string $controller): bool
     {
         if (in_array($controller, self::VERIFIED_CONTROLLERS, true)) {
             return true;
         }
-        foreach ($this->config->classRoots as $root => $namespace) {
-            $prefix = rtrim($namespace, '\\').'\\';
-            if (str_starts_with($controller, $prefix)) {
-                $file = $this->config->base.'/'.rtrim($root, '/').'/'.str_replace('\\', '/', substr($controller, strlen($prefix))).'.php';
-                if (is_file($file)) {
-                    $source = (string) file_get_contents($file);
-                    foreach (self::VERIFIES as $marker) {
-                        if (str_contains($source, $marker)) {
-                            return true;
-                        }
-                    }
-                }
+
+        $class = $this->classNode($controller);
+
+        if ($class === null) {
+            return false;
+        }
+
+        if ($this->extendsVerified($class) || $this->names($this->text($controller), $class)) {
+            return true;
+        }
+
+        foreach ($this->delegations($class) as [$dependency, $method]) {
+            if ($this->methodVerifies($dependency, $method)) {
+                return true;
             }
         }
 
         return false;
+    }
+
+    /** The one delegated hop: the dependency is a verifying controller, extends one, or its called method names a verifier. */
+    private function methodVerifies(string $dependency, string $method): bool
+    {
+        if (in_array($dependency, self::VERIFIED_CONTROLLERS, true)) {
+            return true;
+        }
+
+        $class = $this->classNode($dependency);
+
+        if ($class === null) {
+            return false;
+        }
+
+        if ($this->extendsVerified($class)) {
+            return true;
+        }
+
+        $node = $class->getMethod($method);
+
+        return $node !== null && $this->names($this->text($dependency), $node);
+    }
+
+    /**
+     * Calls on injected dependencies: `$param->m()` where $param is a typed method parameter, and `$this->prop->m()` where prop is a typed
+     * (or constructor-promoted) property. Only app classes and the verifying controllers are worth following.
+     *
+     * @return list<array{0: string, 1: string}> [dependency class, method]
+     */
+    private function delegations(Node\Stmt\Class_ $class): array
+    {
+        $finder = new NodeFinder;
+        $properties = [];
+
+        foreach ($class->getProperties() as $property) {
+            if ($property->type instanceof Node\Name) {
+                foreach ($property->props as $prop) {
+                    $properties[$prop->name->toString()] = $property->type->toString();
+                }
+            }
+        }
+
+        $calls = [];
+
+        foreach ($class->getMethods() as $method) {
+            $parameters = [];
+
+            foreach ($method->params as $param) {
+                if ($param->type instanceof Node\Name && $param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
+                    $parameters[$param->var->name] = $param->type->toString();
+
+                    if ($param->flags !== 0) {
+                        $properties[$param->var->name] = $param->type->toString();
+                    }
+                }
+            }
+
+            foreach ($finder->findInstanceOf($method->stmts ?? [], Node\Expr\MethodCall::class) as $call) {
+                if (! $call->name instanceof Node\Identifier) {
+                    continue;
+                }
+
+                $type = match (true) {
+                    $call->var instanceof Node\Expr\Variable && is_string($call->var->name) => $parameters[$call->var->name] ?? null,
+                    $call->var instanceof Node\Expr\PropertyFetch && $call->var->var instanceof Node\Expr\Variable && $call->var->var->name === 'this' && $call->var->name instanceof Node\Identifier => $properties[$call->var->name->toString()] ?? null,
+                    default => null,
+                };
+
+                if ($type !== null) {
+                    $calls[] = [ltrim($type, '\\'), $call->name->toString()];
+                }
+            }
+        }
+
+        return $calls;
+    }
+
+    private function extendsVerified(Node\Stmt\Class_ $class): bool
+    {
+        return $class->extends !== null && in_array(ltrim($class->extends->toString(), '\\'), self::VERIFIED_CONTROLLERS, true);
+    }
+
+    /** Whether the node's own source (a class or one method) names a verifier. */
+    private function names(string $text, Node $node): bool
+    {
+        $source = substr($text, $node->getStartFilePos(), $node->getEndFilePos() - $node->getStartFilePos() + 1);
+
+        foreach (self::VERIFIES as $marker) {
+            if (str_contains($source, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function path(string $class): ?string
+    {
+        foreach ($this->config->classRoots as $root => $namespace) {
+            $prefix = rtrim($namespace, '\\').'\\';
+
+            if (str_starts_with($class, $prefix)) {
+                $path = rtrim($root, '/').'/'.str_replace('\\', '/', substr($class, strlen($prefix))).'.php';
+
+                if (is_file($this->config->base.'/'.$path)) {
+                    return $path;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function text(string $class): string
+    {
+        $path = $this->path($class);
+
+        return $path === null ? '' : (string) file_get_contents($this->config->base.'/'.$path);
+    }
+
+    private function classNode(string $class): ?Node\Stmt\Class_
+    {
+        $path = $this->path($class);
+
+        if ($path === null) {
+            return null;
+        }
+
+        foreach ((new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Stmt\Class_::class) as $node) {
+            if ($node->namespacedName?->toString() === $class) {
+                return $node;
+            }
+        }
+
+        return null;
     }
 
     /** @return array<string, bool> webhook name => whether config/webhook-client.php gives it a signature validator */

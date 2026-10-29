@@ -36,6 +36,21 @@ test('a webhook route must reach a handler that verifies its sender', function (
     ]);
 });
 
+test('one delegation is followed: an invokable controller calling an injected handler whose method verifies passes; an unverified one is reported', function () {
+    // Delegated + verified: the handler's method wraps Cashier's VerifyWebhookSignature middleware.
+    ($this->put)('src/Http/StripeWebhook.php', "<?php namespace App\\Http; use App\\Services\\StripeHandler; final class StripeWebhook { public function __construct(private StripeHandler \$handler) {} public function __invoke(\$request) { return \$this->handler->handleWebhook(\$request); } }");
+    ($this->put)('src/Services/StripeHandler.php', "<?php namespace App\\Services; use Laravel\\Cashier\\Http\\Middleware\\VerifyWebhookSignature; final class StripeHandler { public function handleWebhook(\$request) { return (new VerifyWebhookSignature)->handle(\$request, fn (\$request) => \$this->process(\$request)); } private function process(\$request) { return response()->noContent(); } }");
+    // Delegated + unverified: a method parameter this time, and the verifier sits in a method the controller never calls.
+    ($this->put)('src/Http/PaddleWebhook.php', "<?php namespace App\\Http; use App\\Services\\PaddleHandler; final class PaddleWebhook { public function __invoke(\$request, PaddleHandler \$handler) { return \$handler->handleWebhook(\$request); } }");
+    ($this->put)('src/Services/PaddleHandler.php', "<?php namespace App\\Services; final class PaddleHandler { public function handleWebhook(\$request) { return response()->noContent(); } public function unused(\$request) { return hash_equals('a', 'b'); } }");
+    // A Cashier WebhookController subclass inherits the middleware Cashier's constructor registers; delegating to one counts too.
+    ($this->put)('src/Http/CashierHook.php', "<?php namespace App\\Http; use Laravel\\Cashier\\Http\\Controllers\\WebhookController; final class CashierHook extends WebhookController { protected function handleInvoicePaid(array \$payload) { return \$this->successMethod(); } }");
+    ($this->put)('src/Http/Forwarder.php', "<?php namespace App\\Http; final class Forwarder { public function __construct(private CashierHook \$cashier) {} public function __invoke(\$request) { return \$this->cashier->handleWebhook(\$request); } }");
+    ($this->put)('routes/webhooks.php', "<?php use App\\Http\\CashierHook; use App\\Http\\Forwarder; use App\\Http\\PaddleWebhook; use App\\Http\\StripeWebhook; use Illuminate\\Support\\Facades\\Route;\nRoute::post('stripe/webhook', StripeWebhook::class);\nRoute::post('paddle/webhook', PaddleWebhook::class);\nRoute::post('cashier/webhook', [CashierHook::class, 'handleWebhook']);\nRoute::post('forward/webhook', Forwarder::class);");
+
+    expect(array_column(($this->rule)(), 'check'))->toBe(['webhook route paddle/webhook does not go through a signature validator']);
+});
+
 test('inline Http:: is a finding outside a class that implements a contract, and a service provider is exempt', function () {
     ($this->put)('src/Services/Inline.php', "<?php namespace App\\Services; use Illuminate\\Support\\Facades\\Http; final class Inline { public function go() { return Http::get('https://x.test'); } }");
     ($this->put)('src/Services/Wrapped.php', "<?php namespace App\\Services; use Illuminate\\Support\\Facades\\Http; final class Wrapped implements Client { public function go() { return Http::get('https://x.test'); } }");
