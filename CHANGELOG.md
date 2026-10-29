@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **`ui-page.external-sync`:**
+  - Credentials stay server-side. A client-side picker (a provider's browser file picker, say) may receive a short-lived, narrowly scoped access token and a restricted, referrer-locked API key, but never a refresh token.
+  - Replace uses the kit's typed confirmation (ConfirmDialog `confirmText` / descriptor `confirm.typed`) once it ships.
+
 ## 0.11.19 - 2026-10-28
 
 ### Fixed
