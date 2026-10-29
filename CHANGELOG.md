@@ -4,7 +4,7 @@
 
 ### Changed
 
-- **Kit export snapshot refreshed to tey/kit v0.5.21** (`standards kit-exports --refresh`), adding `ActivityStream`. The snapshot test's fixture is now v0.5.21's barrel (`fixtures/KitExports/index-v0.5.21.ts.stub`) and expects it.
+- **Kit export snapshot refreshed to tey/kit v0.5.22** (`standards kit-exports --refresh`), adding `ActivityStream`. The snapshot test's fixture is now v0.5.22's barrel (`fixtures/KitExports/index-v0.5.22.ts.stub`) and expects it.
 
 ## 0.11.30 - 2026-10-29
 

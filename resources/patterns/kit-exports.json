@@ -1,5 +1,5 @@
 {
-    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.5.21",
+    "source": "tey/kit resources/features/core/components/Kit/index.ts.stub (the @kit/ui barrel) v0.5.22",
     "module": "@kit/ui",
     "components": [
         "ActionBar",
