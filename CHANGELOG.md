@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`ui new-tab` no longer flags the kit's own components or a kit component without rel.** The rule read each tag on its own, so a kit `Button` with `target="_blank"` and no `rel` failed although the Button renders `rel="noopener noreferrer"` itself, and tey/kit's `Table/RowActions.vue` failed on its menu's new-tab link, which the kit labels by the action label rather than an icon. A tag whose component the file imports from the kit (`@/components/Kit`, a path under it, or `@kit/ui`; type-only imports excluded) now satisfies the `noopener` half; the external icon is still required. Files under `resources/js/components/Kit/`, the kit's copy that `kit:update` replaces, are no longer scanned. A plain `<a target="_blank">` or a non-kit `Button` without `rel` still fails.
+
+### Upgrading
+
+- Apps can drop the ratchet or allowlist entry they carry for `ui new-tab` on `resources/js/components/Kit/Table/RowActions.vue`.
+
 ## 0.11.32 - 2026-10-29
 
 ### Fixed
