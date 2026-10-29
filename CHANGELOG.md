@@ -15,6 +15,11 @@
 - **The `security` preset accepts `unserialize()` restricted by a literal `allowed_classes`**: `['allowed_classes' => [Foo::class, ...]]` or `['allowed_classes' => false]`. No options, `true`, a variable options array or `allowed_classes`, a spread, or other keys only still fail, and so does any file with one such call.
 - **`tenant-aware` accepts a command scoped to one tenant by an argument or option.** `handle()` resolves it with `findOrFail`, `firstOrFail`, or `find` plus a null check that returns, throws or aborts, then does all its work inside `$tenant->run(fn …)` or `execute(fn …)`. Work outside the callback (any statement but argument reads, the lookup, the check, plain output and the call), an unchecked `find`, a nullsafe `?->run`, or a tenant from anywhere else still fails. Spatie's `TenantAware` trait is still accepted.
 - **Rule 51 accepts a job calling the standards reusable workflow.** GitHub rejects `timeout-minutes` on a `uses:` job, so for `teylabs/standards/.github/workflows/standards.yml@<any ref>` the rule now reads `with.timeout-minutes` and `with.runs-on` instead. A missing `with.timeout-minutes` passes on the bounded 15-minute default; zero, negative, fractional or non-numeric values fail. Other `uses:` jobs and normal jobs are judged as before.
+- **Rule 51 now validates a job's own `timeout-minutes`**, not just its presence, with the same check as the reusable workflow's `with.timeout-minutes`: it must be a positive whole number, so `0`, negatives, fractions and text fail. A `${{ … }}` expression cannot be checked statically and passes, in either place.
+
+### Upgrading
+
+- A job with `timeout-minutes: 0` or a non-numeric value now fails rule 51.
 
 ## 0.11.44 - 2026-10-29
 
