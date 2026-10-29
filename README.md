@@ -697,6 +697,70 @@ Every path ends in a leaf. Gap and byo leaves return their nearest recipes, the 
 
 **Coverage and limits.** These are static checks and generated scaffolds. The hooks rely on Claude Code's hook contract. Other agents get AGENTS.md and the Boost skills only. `--changed` needs a fetched base ref. Without a merge base it checks working-tree changes and says so. The package's suite requires the real tey/kit (^0.4.4) and laravel/mcp as dev dependencies, so generated kit classes are proven against the kit's actual signatures. The generators don't run `mod:*` commands. They emit from recipe stubs that an app or kit can override.
 
+### 5. Kit adoption: `standards:adoption`
+
+`php artisan standards:adoption` reports which package surfaces the app adopted, hand-rolled, is missing or doesn't need, and which of its own components and libraries no surface covers. It reads each package's adoption surfaces file, format 1 (the JSON Schema is tey/kit's `resources/adoption/surfaces.schema.json`): every installed `vendor/*/*/resources/adoption/surfaces.json`, plus any `--inventory=<path>` (repeatable). An explicit file replaces the installed copy of the same package, and two explicit files for one package fail. Explicit paths also let a scan run on an app that doesn't have the package installed; every surface there reads `missing` (`<package> is not installed`). The scan is static. It reads the allowlist from the same configuration as `standards:check` (`standards.configuration`), and it executes no app code.
+
+**Modes and exit codes.**
+
+| Mode | Exits 1 when | Exit 0 otherwise |
+| --- | --- | --- |
+| (none) | never: prints the report | always (2 on an error) |
+| `--ci` | any hand-rolled or missing row, or gap, without a valid exemption; any expired, undated or stale adoption exemption | a missing surface whose `status` is `new` only warns while the installed package is the release in its `since` (or its version is unknown) |
+| `--compliance` | any hand-rolled, missing, exempt or gap row, including `new` surfaces and exempt gaps (zero exemptions) | every row adopted or n/a, no gaps, no adoption allowlist entries |
+
+Exit 2 means it fails closed: an unreadable or invalid inventory, an unknown format, field, group, signal kind, fact analysis or condition, a `new` surface without `since`, a `rule` signal naming no standards rule (or used to compute a fact), an invalid allowlist entry (no reason, bad dates), a missing configuration, or an app file it can't read. With `--ci` or `--compliance`, the output ends with every blocking item in a stable order: rows (by package, then group, then file order), then gaps (components by path, then libraries), then problem exemptions. Each line gives the kind (`hand-rolled`, `missing`, `exempt` or `gap`), the package and surface id (or the gap's component or `npm:<package>`) and its `file:line` evidence. A missing row gives what the surface `expects` (its `uses`), and an exempt one cites the allowlist entry's `file:line`.
+
+**Statuses and precedence.** For each surface, in this order:
+
+1. `n/a`: its `applies` condition is false for the app's facts.
+2. `missing`: the package, or the surface's `feature`, isn't installed (`core` ships with the package). Another feature counts as installed when `config/<package name>.php` sets `features` to a literal list naming it, or, with no such list, when a tey/mod lineage record names `<composer>:<feature>`.
+3. `hand-rolled`: any `handRolled` signal fires in an app-owned file, even when `uses` also match. The row lists both (`signals`, `matches`).
+4. `adopted`: any `uses` entry matches in an app-owned file. `imports` (`"<alias>:Name"`) match a named import from the alias or a deep `<alias>/**` module, or a default import of `<alias>/**/Name.vue`; `@kit/ui` and `@/components/Kit` are the same module. `components` are template tags (PascalCase or kebab-case), `classes` are references to the FQCN in app PHP, and `config` keys are found in order in `config/<file>.php`. `files` count by presence, whoever owns them, because the package installs them.
+5. `hand-rolled`, when nothing above matched but an app component, library or composer package maps to the surface through `replaces`.
+6. `missing` otherwise.
+
+`exempt` replaces a hand-rolled or missing status when a valid allowlist entry covers it. Kit-owned files never count as adoption or as a hand-rolled signal: `resources/js/components/Kit/**` and lineage-recorded files whose bytes are unchanged (KitOwnership). An edited copy is the app's own.
+
+**Signals.** `rule`: that standards rule's findings (`ui.kit-shell` today, through Conformance) mean hand-rolled. `vue-root`: an app `.vue` file whose first template element is one of `tags`; with `requires`, at least `min` (default 1) of its `routes` (a quoted route name or path ending in it) and `components` (tag-name globs) must appear, and either list may be absent. `file-name`: globs on the app-relative path (or the basename, for a glob without `/`) of frontend files and Blade views. `import`: a module or `pkg/**` import, and `pkg#Named` needs that named import (`@/components/Kit#Name` also matches `@kit/ui` and deep kit modules). `template-tag`: pages only, at least `min` tags. `mail-view`: a Blade view under a `mail`/`emails` folder, or one using `mail::` components, that contains none of `without` (an empty list matches every mail view). `php-class`: every criterion given must hold (`extends` is the direct parent's FQCN, `implements` any one interface, `names` short-name globs). `composer`: a `require` or `require-dev` package. `migration`: a table an app migration creates with `Schema::create` (never `Schema::table`). A table recorded in tey/kit's `kit_adoptions` is adopted, not hand-rolled; the command reads that table from the app's default database when it exists, and says so when it can't. UI signals take `scope`: `public` is a path whose segment names a public, guest or focus surface (Auth, Login, Guest, Public, Marketing, Landing, Welcome, Focus, Docs, Legal, Help, Error, Print), and `signed-in` is everything else.
+
+**Facts.** Each fact in an inventory declares how it is computed. `{"signals": [...]}` is true when any of its signals fires in an app-owned file (not `rule`). An app that already adopted the kit component still "has the need", because a kit import counts as a signal. `{"analysis": "<name>"}` names one of standards' own analyses. Kit-installed files and routes count for analyses; vendor code never does. Each analysis is true only on evidence:
+
+| Analysis | True when |
+| --- | --- |
+| `signed-in-pages` | a route file applies the auth middleware (`'auth'`, `'auth:<guard>'`, `Authenticate::class`) |
+| `public-pages` | a route file has a top-level `Route::get`/`view`/`inertia` outside any group, with no middleware in its statement and not an auth screen's URI; or a page path names Public, Marketing, Landing, Welcome, Legal or Docs |
+| `auth-routes` | composer.json requires laravel/fortify, breeze, ui or jetstream, or a route file names a login, forgot-password, `password.request`/`password.reset`, `verification.notice` or `email/verify` route |
+| `workspace-model` | an app class is named Workspace, Team, Organisation or Organization, or a migration creates such a table |
+| `mail-notifications` | an app class extends `Illuminate\Mail\Mailable`, or defines `toMail()` |
+| `mcp-server` | composer.json requires laravel/mcp, `routes/ai.php` exists, or a route file calls `Mcp::web()`/`Mcp::local()` |
+| `settings-routes` | a route file has a URI containing `settings` |
+| `search-route` | a route file has a URI or name containing `search` |
+| `destructive-routes` | a route file registers `Route::delete`, a resource controller (`resource`, `apiResource`, `resources`) or `->delete('...')` |
+
+**Gaps (direction 2).** An app-owned `.vue` component outside `pages/` is a gap candidate when it imports a third-party library (a bare npm module that isn't the app itself, an inventory's own npm package, `@kit/ui` or a framework runtime), or when its name is on the generic-name list. A domain-prefixed name such as `InvoiceTable` is a candidate only through an import. Each package.json dependency that isn't a runtime or build/type/lint/test tooling is also a candidate. A candidate that matches any surface's `replaces` (`components` name globs, `npm` packages, or `pkg#Export` for an import) maps to that surface, and makes it hand-rolled unless it is otherwise adopted. Anything else is a gap row. A composer package a surface `replaces` maps the same way, but an unmapped one is never a gap. `src/Adoption/Lists.php` holds the lists (versioned; the report carries `lists`):
+
+- generic names: Button, Input\*, Select\*, Modal, Dialog, Dropdown\*, Table, DataTable, Tabs, Toast, Tooltip, Badge, Card, Avatar, Pagination, DatePicker, Combobox, Menu\*;
+- framework runtimes: vue, @inertiajs/\*, @vueuse/\*;
+- tooling: vite, @vitejs/\*, laravel-vite-plugin, typescript, vue-tsc, @types/\*, ESLint, Prettier, Tailwind, PostCSS, Sass, Vitest, Playwright, husky, lint-staged and similar.
+
+**Exemptions.** These are allowlist entries in the same Configuration `allowlist`. For a surface the rule is `adoption.<composer>.<surface-id>` (for example `adoption.tey/kit.layout.page`); for a gap it is `adoption.gap` with the component path or `npm:<package>` as `target`. Each also needs `target`, `check`, `reason` and `date`, as every entry does, plus an `expires` date. An expired or undated entry exempts nothing and blocks `--ci`, and so does a stale one (its row is adopted or n/a, or its gap is gone). `standards:check` accepts `adoption.*` rules and still reports an entry without an expiry. n/a comes only from `applies`, never from an exemption.
+
+**`--json`** (format 1): `format`, `app`, `generated_at`, `mode`, `lists` (the Lists version), `inventories` (`[{package, npm, alias, origin: vendor|option, source, version, installed, surfaces}]`), `facts` (`{<composer>: {<id>: {value, evidence, computed}}}`), `adopted_tables`, `rows` (`[{package, id, layer, group, label, feature, installed, applies, status, underlying, new, since, note, evidence, signals, matches, replaced, uses, docs, exemption}]`, where evidence items are `{file, line, detail}` and `underlying` is the status before an exemption), `gaps` (`[{subject, kind: component|library, file, line, detail, exemption}]`), `exemptions` (`{invalid, stale}`), `warnings`, `summary` (a count per status, plus `gaps` and `exempt_gaps`), `blocking` (`[{kind, package, subject, evidence: [{file, line}], expects, problem?}]` for the mode, or what `--compliance` would block for the plain report) and `exit_code`. An error prints `{format, mode, error, exit_code: 2}`.
+
+**Blind spots.** It is static and conservative:
+
+- Routes, classes and views that vendor packages register (kit's own session or settings routes, for example) are invisible to the analyses, so a fact may read false and its surface n/a.
+- Route groups are found by brace depth only.
+- `php-class` checks the direct parent, not the ancestor chain.
+- Imports are static `import` statements, so dynamic `import()`, `require` and globals are not seen.
+- A component registered globally and used without an import is seen only through its template tag.
+- Scope comes from path names only.
+- `session-ui` is not treated as carrying `shell`, unlike ui.kit-shell.
+- Without the app's database, `kit_adoptions` reads as empty.
+
+The pattern leaf `ui-page.kit-adoption` carries the recipes.
+
 ## Agent guidance
 
 The package ships a Laravel Boost guideline. Select `tey/standards` during `php artisan boost:install` to include it in the application's agent instructions. `standards:install` adds the pattern index, per-recipe skills and Claude hooks described above.
