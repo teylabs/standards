@@ -420,10 +420,10 @@ nodes:
     keywords: [sync, external source, sync with, connect a source, linked source, sync now, last sync, replace from source, import from, google, provider sync, import from google, sync from a service, connect an external account]
     status: draft
     rules:
-      - "The page's actions are server action descriptors: Link; Sync now; and Unlink and Replace from source in the ⌄ menu. Each is confirmed, and Replace needs a typed confirmation (the user types the source's name)."
+      - "The page's actions are server action descriptors: Link; Sync now; and Unlink and Replace from source in the ⌄ menu. Each is confirmed, and Replace needs a typed confirmation (the user types the source's name), using the kit's typed confirmation (ConfirmDialog confirmText / descriptor confirm.typed) once it ships."
       - "Sync runs as a queued TenantAware job (background.job), and answers a run token the page polls (or a broadcast it listens to)."
       - "The last run's status and result show with kit Feedback (Alert or StageNotice), completion raises a toast, and the page has an empty state (kit EmptyState) while nothing is linked."
-      - "The outside source's credentials and tokens live server-side only: never in page props, the run token or the client."
+      - "Credentials stay server-side. A client-side picker (e.g. a provider's browser file picker) may receive a short-lived, narrowly scoped access token and a restricted, referrer-locked API key, never a refresh token."
       - "Tests: a sync that succeeds and one that fails, a typed confirmation refused, unlink, and the job failing loudly with no tenant."
     related: [background.job, ui-page.external-link]
     graduate: "Graduate to a kit recipe when a second app needs it."

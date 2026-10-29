@@ -377,7 +377,7 @@ test('recipe_make is optional, validated, and preferred only when the recipe pac
     expect((new Lookup($catalog, recipes: true))->recipe('mcp.write'))
         ->toMatchArray(['preferred_make' => 'mod:butter/mcp-parity <Name>', 'preferred_make_source' => 'butter/bakery']);
     expect((new Lookup($catalog, recipes: true))->recipe('mcp.read')['preferred_make_source'])->toBe('tey/standards');
-    expect($catalog->node('data-actions.document'))->toMatchObject(['recipe' => 'pdf-reports', 'recipeMake' => 'mod:butter/pdf-reports {Name}', 'status' => 'gap']);
+    expect($catalog->node('data-actions.document'))->toMatchObject(['recipe' => 'pdf-reports', 'recipeMake' => 'mod:butter/pdf-reports {Name}', 'status' => 'draft']);
 
     $directory = mutatedPatterns('settings', function (array $source): array {
         $source['nodes'][nodeAt($source, 'settings.form')]['recipe_make'] = 'butter mcp-parity';
@@ -876,3 +876,16 @@ test('real phrasings rank the right build-your-own leaf first', function (string
     // A feature's own phrase still plans the feature.
     ['manage records', 'plan:manage-records'],
 ]);
+
+test('the PDF report leaf prefers the Bakery recipe and carries its rules, with sending marked not covered', function () {
+    $pdf = (new Lookup(TreeCatalog::shipped(), recipes: true))->recipe('data-actions.document');
+    $rules = implode("\n", $pdf['conventions']['rules']);
+
+    expect($pdf)->toMatchArray(['status' => 'draft', 'preferred_make' => 'mod:butter/pdf-reports <Name>', 'preferred_make_source' => 'butter/bakery'])
+        ->and($rules)->toContain('Render through the Renderer contract; the mPDF implementation stays behind it.')
+        ->toContain('Authorize through a generated policy.')
+        ->toContain('nosniff')->toContain('Content-Disposition')
+        ->toContain('No PII in logs.')
+        ->toContain('The app requires mpdf/mpdf.')
+        ->toContain('Not covered yet: sending or attaching the PDF');
+});

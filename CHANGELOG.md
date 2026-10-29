@@ -9,6 +9,23 @@
   - `ui-page.external-sync` gains a "not linked" EmptyState, offering Link;
   - `ui-page.live-console` gains a "no session" EmptyState (compact inside a panel), and both leaves' empty-state rules name it.
 
+## 0.11.22 - 2026-10-28
+
+### Changed
+
+- **The PDF report leaf (`data-actions.document`) has a recipe:** the Bakery's `mod:butter/pdf-reports {Name}`. It's now `draft`, not `gap`.
+  - Its rules: render through the Renderer contract (mPDF stays behind it); authorize through a generated policy; stream with `nosniff` and `Content-Disposition`; no PII in logs; the app requires `mpdf/mpdf`.
+  - Sending or attaching the PDF is marked as not covered yet.
+- **Contributors:** a downstream scaffold mirrors `standards:make capability-tool --flavor=write` and has a drift test. Any change to that generator's output shape is announced here under Changed (noted in `Maker` and the README).
+
+## 0.11.20 - 2026-10-28
+
+### Changed
+
+- **`ui-page.external-sync`:**
+  - Credentials stay server-side. A client-side picker (a provider's browser file picker, say) may receive a short-lived, narrowly scoped access token and a restricted, referrer-locked API key, but never a refresh token.
+  - Replace uses the kit's typed confirmation (ConfirmDialog `confirmText` / descriptor `confirm.typed`) once it ships.
+
 ## 0.11.19 - 2026-10-28
 
 ### Fixed

@@ -1616,10 +1616,10 @@
                 }
             ],
             "rules": [
-                "The page's actions are server action descriptors: Link; Sync now; and Unlink and Replace from source in the ⌄ menu. Each is confirmed, and Replace needs a typed confirmation (the user types the source's name).",
+                "The page's actions are server action descriptors: Link; Sync now; and Unlink and Replace from source in the ⌄ menu. Each is confirmed, and Replace needs a typed confirmation (the user types the source's name), using the kit's typed confirmation (ConfirmDialog confirmText / descriptor confirm.typed) once it ships.",
                 "Sync runs as a queued TenantAware job (background.job), and answers a run token the page polls (or a broadcast it listens to).",
                 "The last run's status and result show with kit Feedback (Alert or StageNotice), completion raises a toast, and the page has an empty state (kit EmptyState) while nothing is linked.",
-                "The outside source's credentials and tokens live server-side only: never in page props, the run token or the client.",
+                "Credentials stay server-side. A client-side picker (e.g. a provider's browser file picker) may receive a short-lived, narrowly scoped access token and a restricted, referrer-locked API key, never a refresh token.",
                 "Tests: a sync that succeeds and one that fails, a typed confirmation refused, unlink, and the job failing loudly with no tenant."
             ],
             "related": [
@@ -2013,7 +2013,7 @@
         "data-actions.document": {
             "id": "data-actions.document",
             "recipe": "pdf-reports",
-            "summary": "A frozen document rendered to PDF through one renderer contract.",
+            "summary": "A frozen document rendered to PDF through one renderer contract. Scaffold it with the Bakery's pdf-reports recipe; sending or attaching the PDF is not covered yet.",
             "kit": [],
             "make": null,
             "checks": [],
@@ -2024,7 +2024,7 @@
                 "render",
                 "invoice"
             ],
-            "status": "gap",
+            "status": "draft",
             "recipe_make": "mod:butter/pdf-reports {Name}",
             "evidence": {
                 "apps": 3,
@@ -2032,7 +2032,15 @@
                 "prs": 11,
                 "past_apps": 16,
                 "past_count": 46
-            }
+            },
+            "rules": [
+                "Render through the Renderer contract; the mPDF implementation stays behind it.",
+                "Authorize through a generated policy.",
+                "Stream with X-Content-Type-Options: nosniff and a Content-Disposition header.",
+                "No PII in logs.",
+                "The app requires mpdf/mpdf.",
+                "Not covered yet: sending or attaching the PDF (mail). Build that part to the mail conventions and stamp it."
+            ]
         },
         "data-actions.api-op": {
             "id": "data-actions.api-op",
