@@ -19,8 +19,9 @@ use Tey\Standards\Source;
  *     (array, invokable class or group-controller string action), and every middleware on it and its enclosing groups is a literal from
  *     GUEST_MIDDLEWARE. Any other middleware, a non-literal one, a non-literal prefix, a `Route::group([...])` array, or an include/require inside a
  *     group anywhere in the route roots makes it unprovable. A controller that declares `middleware()` or calls `$this->middleware()` is never guest.
- *  2. For each such route, exactly one GET route with the same full literal URI exists, on the same controller.
- *  3. Every return of that GET action is `Inertia::render('<literal>')` or `inertia('<literal>')`, all the same page.
+ *  2. For each such route, exactly one GET route with the same full literal URI exists: a controller action (the same controller, or one
+ *     class declared exactly once under the controller roots), or `Route::inertia('<uri>', '<literal page>')`.
+ *  3. Every return of that GET action is `Inertia::render('<literal>')` or `inertia('<literal>')`, all the same page (Route::inertia names it).
  *  4. That page is exactly one `<page>.vue` under the page roots, and it, or a `.vue` file it imports (app- or kit-owned, up to three import levels,
  *     `@/` and relative specifiers only, cycles cut), has a script that imports FormStatus from `@/components/Kit` or `@/components/Kit/Form`
  *     and a template that renders `<FormStatus`.
@@ -52,7 +53,7 @@ final class GuestFormStatus
 
     private ?bool $environment = null;
 
-    /** @var ?list<array{verbs: list<string>, uri: ?string, class: ?string, method: ?string, guest: bool}> */
+    /** @var ?list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool}> */
     private ?array $routes = null;
 
     public function __construct(private readonly Configuration $config, private readonly Source $source) {}
@@ -77,10 +78,15 @@ final class GuestFormStatus
                 return false;
             }
             $pages = array_values(array_filter($routes, fn (array $route): bool => in_array('get', $route['verbs'], true) && ($route['uri'] === null || $route['uri'] === $mutation['uri'])));
-            if (count($pages) !== 1 || $pages[0]['uri'] === null || $pages[0]['class'] !== $controller || $pages[0]['method'] === null) {
+            if (count($pages) !== 1 || $pages[0]['uri'] === null) {
                 return false;
             }
-            $page = $this->renderedPage($class, $pages[0]['method']);
+            if ($pages[0]['page'] !== null) {
+                $page = $pages[0]['page'];
+            } else {
+                $show = $pages[0]['class'] === $controller ? $class : ($pages[0]['class'] === null ? null : $this->controllerClass($pages[0]['class']));
+                $page = $show === null || $pages[0]['method'] === null ? null : $this->renderedPage($show, $pages[0]['method']);
+            }
             if ($page === null || ! $this->rendersFormStatus($page, $keys)) {
                 return false;
             }
@@ -122,8 +128,8 @@ final class GuestFormStatus
         return $back ? array_values(array_unique($keys)) : null;
     }
 
-    /** @return ?list<string> the literal keys one `->with(...)` flashes, or null */
-    private static function withKeys(Node\Expr\MethodCall $call): ?array
+    /** @return ?list<string> the literal keys one `->with(...)` or `Inertia::flash(...)` flashes, or null */
+    public static function withKeys(Node\Expr\MethodCall|Node\Expr\StaticCall $call): ?array
     {
         $arguments = $call->getArgs();
         $first = $arguments[0] ?? null;
@@ -331,6 +337,27 @@ final class GuestFormStatus
             && $node->name instanceof Node\Identifier && strtolower($node->name->toString()) === 'middleware') !== null;
     }
 
+    /** @var array<string, ?Node\Stmt\Class_> */
+    private array $classes = [];
+
+    /** The one class declaration named `$name` under the controller roots, or null when there is none or more than one. */
+    private function controllerClass(string $name): ?Node\Stmt\Class_
+    {
+        if (array_key_exists($name, $this->classes)) {
+            return $this->classes[$name];
+        }
+        $found = [];
+        foreach ($this->source->files($this->config->controllerRoots) as $path => $text) {
+            foreach ((new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Stmt\Class_::class) as $candidate) {
+                if (isset($candidate->namespacedName) && $candidate->namespacedName->toString() === $name) {
+                    $found[] = $candidate;
+                }
+            }
+        }
+
+        return $this->classes[$name] = count($found) === 1 ? $found[0] : null;
+    }
+
     /** The one literal page every return of the action renders, or null. */
     private function renderedPage(Node\Stmt\Class_ $class, string $method): ?string
     {
@@ -393,24 +420,54 @@ final class GuestFormStatus
     }
 
     /**
-     * Whether a `<FormStatus>` in the file binds `message` (`:message` or `v-bind:message`, FormStatus's text prop in kit) to an expression
-     * that reads the flashed key: `flash.<key>`, `$page.props.flash.<key>` or `usePage().props.flash.<key>` (`?.` allowed), or, on the page
-     * itself, `<key>` / `props.<key>` when its defineProps declares `<key>`. A bare `<FormStatus />` reads the `status` page prop, which a
-     * flash reaches only through shared props this reader does not follow, so it never proves a key.
+     * Whether a `<FormStatus>` in the file reads the flashed key. Its `:message` / `v-bind:message` (FormStatus's text prop in kit) may read it
+     * through `flash.<key>`, the Inertia v2 shared prop `$page.props.flash.<key>` / `usePage().props.flash.<key>`, the Inertia v3 page flash
+     * `$page.flash.<key>` / `usePage().flash.<key>`, or `page.flash.<key>` / `page.props.flash.<key>` where the script binds
+     * `const page = usePage()` (or `let`); `?.` is allowed at every step. usePage() returns a reactive object, not a ref, so `page.value.flash`
+     * is not read. On the page itself, `<key>` / `props.<key>` counts when its defineProps declares `<key>`. kit FormStatus's `flash-key` /
+     * `flashKey` prop counts when it is the static string `<key>` or bound to the string literal `'<key>'`; a bound variable does not.
+     * A bare `<FormStatus />` reads the `status` page prop, which a flash reaches only through shared props this reader does not follow, so it
+     * never proves a key.
      */
     public static function keyReferenced(string $source, string $key, bool $page): bool
     {
         $quoted = preg_quote($key, '~');
-        $flash = '~(?:(?<![\w$.])|(?<=\$page\.props\.)|(?<=usePage\(\)\.props\.))flash\??\.'.$quoted.'(?![\w$])~';
-        $prop = '~(?<![\w$.])(?:props\??\.)?'.$quoted.'(?![\w$])~';
-        $declared = $page && self::declaresProp(VueImports::code(VueImports::scripts($source)), $key);
+        $code = VueImports::code(VueImports::scripts($source));
+        $roots = ['\\$page', 'usePage\\(\\)'];
+        if (preg_match_all('~\\b(?:const|let)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*usePage\\s*\\(\\s*\\)~', $code, $aliases) > 0) {
+            $roots = [...$roots, ...array_map(fn (string $alias): string => preg_quote($alias, '~'), $aliases[1])];
+        }
+        $flash = '~(?:(?<![\\w$.])(?:'.implode('|', $roots).')\\??\\.(?:props\\??\\.)?|(?<![\\w$.]))flash\\??\\.'.$quoted.'(?![\\w$])~';
+        $prop = '~(?<![\\w$.])(?:props\\??\\.)?'.$quoted.'(?![\\w$])~';
+        $declared = $page && self::declaresProp($code, $key);
         foreach (self::formStatusMessages($source) as $expression) {
             if (preg_match($flash, $expression) === 1 || ($declared && preg_match($prop, $expression) === 1)) {
                 return true;
             }
         }
 
-        return false;
+        return in_array($key, self::formStatusFlashKeys($source), true);
+    }
+
+    /** @return list<string> every literal key a `<FormStatus>` names through `flash-key="<key>"` / `flashKey="<key>"` or `:flash-key="'<key>'"` */
+    public static function formStatusFlashKeys(string $source): array
+    {
+        preg_match_all('~<FormStatus\\b((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>~', FrontendSource::template($source), $tags);
+        $keys = [];
+        foreach ($tags[1] as $attributes) {
+            preg_match_all('~(?<![\\w:.-])(:|v-bind:)?(?:flash-key|flashKey)\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')~', $attributes, $bindings, PREG_SET_ORDER);
+            foreach ($bindings as $binding) {
+                $value = ($binding[2] ?? '') !== '' ? $binding[2] : ($binding[3] ?? '');
+                if ($binding[1] !== '') {
+                    $value = preg_match('~\\A\\s*(?:\'([^\'\\\\]*)\'|"([^"\\\\]*)"|`([^`$\\\\]*)`)\\s*\\z~', $value, $literal) === 1 ? ($literal[1] ?? '').($literal[2] ?? '').($literal[3] ?? '') : '';
+                }
+                if ($value !== '') {
+                    $keys[] = $value;
+                }
+            }
+        }
+
+        return $keys;
     }
 
     /** @return list<string> the expression of every `:message` / `v-bind:message` on a `<FormStatus>` tag in the template */
@@ -461,7 +518,7 @@ final class GuestFormStatus
         return $path !== null && str_ends_with($path, '.vue') && is_file($base.'/'.$path) && ! is_link($base.'/'.$path) ? $path : null;
     }
 
-    /** @return list<array{verbs: list<string>, uri: ?string, class: ?string, method: ?string, guest: bool}> */
+    /** @return list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool}> */
     private function routes(): array
     {
         if ($this->routes !== null) {
@@ -481,7 +538,7 @@ final class GuestFormStatus
             foreach ($finder->find($this->source->nodes($path), fn (Node $node): bool => ($node instanceof Node\Expr\StaticCall || $node instanceof Node\Expr\MethodCall) && $node->name instanceof Node\Identifier) as $call) {
                 /** @var Node\Expr\StaticCall|Node\Expr\MethodCall $call */
                 $verb = strtolower($call->name->toString());
-                if (! in_array($verb, ['get', 'match', 'any', 'resource', 'apiresource', 'resources', 'apiresources', ...self::MUTATING], true) || $call->isFirstClassCallable()) {
+                if (! in_array($verb, ['get', 'inertia', 'match', 'any', 'resource', 'apiresource', 'resources', 'apiresources', ...self::MUTATING], true) || $call->isFirstClassCallable()) {
                     continue;
                 }
                 $chain = [];
@@ -494,18 +551,20 @@ final class GuestFormStatus
                     continue;
                 }
                 $arguments = $call->getArgs();
-                if (! in_array($verb, ['get', ...self::MUTATING], true)) {
+                if (! in_array($verb, ['get', 'inertia', ...self::MUTATING], true)) {
                     // match, any and resource registrations are not read: whatever controller they name gets an unprovable mutation entry.
                     foreach ((new NodeFinder)->findInstanceOf($arguments, Node\Expr\ClassConstFetch::class) as $named) {
                         if ($named->class instanceof Node\Name) {
-                            $routes[] = ['verbs' => self::MUTATING, 'uri' => null, 'class' => $named->class->toString(), 'method' => '*', 'guest' => false];
+                            $routes[] = ['verbs' => self::MUTATING, 'page' => null, 'uri' => null, 'class' => $named->class->toString(), 'method' => '*', 'guest' => false];
                         }
                     }
 
                     continue;
                 }
                 $uri = ($arguments[0]->value ?? null) instanceof Node\Scalar\String_ ? $arguments[0]->value->value : null;
-                [$class, $method] = $this->action($arguments[1]->value ?? null, $call);
+                // Route::inertia('<uri>', '<literal page>') renders that page directly; a non-literal page name proves nothing.
+                $rendered = $verb === 'inertia' && ($arguments[1]->value ?? null) instanceof Node\Scalar\String_ && $arguments[1]->name === null ? $arguments[1]->value->value : null;
+                [$class, $method] = $verb === 'inertia' ? [null, null] : $this->action($arguments[1]->value ?? null, $call);
                 $guest = ! $includedInGroup;
                 // Builder calls before the verb (Route::middleware(...)->post) and after it (->post(...)->middleware(...)).
                 $after = [];
@@ -525,7 +584,7 @@ final class GuestFormStatus
                 if ($prefix === null) {
                     $uri = null;
                 }
-                $routes[] = ['verbs' => [$verb], 'uri' => $uri === null ? null : trim(($prefix ?? '').'/'.trim($uri, '/'), '/'), 'class' => $class, 'method' => $method, 'guest' => $guest];
+                $routes[] = ['verbs' => [$verb === 'inertia' ? 'get' : $verb], 'page' => $rendered, 'uri' => $uri === null ? null : trim(($prefix ?? '').'/'.trim($uri, '/'), '/'), 'class' => $class, 'method' => $method, 'guest' => $guest];
             }
         }
 

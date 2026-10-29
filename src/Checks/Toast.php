@@ -62,7 +62,7 @@ final class Toast
                     }
                     foreach ($this->returns($method->stmts ?? []) as $return) {
                         // A guest form's back() to a page that renders kit's <FormStatus> confirms in place: no toast (GuestFormStatus).
-                        if ($return->expr !== null && $this->redirectWithoutToast($return->expr) && ! (($keys = GuestFormStatus::backFlashKeys($return->expr)) !== null && $this->formStatus()->proves($class, $name, $keys))) {
+                        if ($return->expr !== null && $this->redirectWithoutToast($return->expr) && ! (($keys = self::returnFlashKeys($method, $return)) !== null && $this->formStatus()->proves($class, $name, $keys))) {
                             $violations[] = ['target' => $path, 'check' => $class->name.'::'.$name.' redirect must chain ->toast*()'];
                         }
                     }
@@ -193,6 +193,76 @@ final class Toast
         $keys = GuestFormStatus::backFlashKeys($top);
 
         return $keys !== null && $keys !== [] && $this->formStatus()->proves($class, $method->name->toString(), $keys);
+    }
+
+    /**
+     * The keys a guest `back()` return flashes: its own `->with(...)` keys plus the literal keys of every `Inertia::flash('<key>', ...)` /
+     * `Inertia::flash(['<key>' => ...])` written as a top-level statement of the method before the top-level statement holding the return,
+     * so it runs on every path to it. Null (unprovable) when the return is not such a back(), or when the method holds any other
+     * `Inertia::flash` outside closures: one inside an if, loop, try or other expression, or one whose keys are not literal identifiers.
+     */
+    private static function returnFlashKeys(Node\Stmt\ClassMethod $method, Node\Stmt\Return_ $return): ?array
+    {
+        $keys = $return->expr === null ? null : GuestFormStatus::backFlashKeys($return->expr);
+        if ($keys === null) {
+            return null;
+        }
+        $top = $return;
+        while (($parent = $top->getAttribute('parent')) instanceof Node && $parent !== $method) {
+            $top = $parent;
+        }
+        $counted = [];
+        $before = true;
+        foreach ($method->stmts ?? [] as $statement) {
+            if ($statement === $top) {
+                $before = false;
+            }
+            $call = $statement instanceof Node\Stmt\Expression ? $statement->expr : null;
+            if ($before && $call instanceof Node\Expr\StaticCall && self::inertiaFlash($call)) {
+                $named = GuestFormStatus::withKeys($call);
+                if ($named === null) {
+                    return null;
+                }
+                $keys = [...$keys, ...$named];
+                $counted[] = $call;
+            }
+        }
+        $all = array_filter(self::outsideClosures($method->stmts ?? []), fn (Node $node): bool => $node instanceof Node\Expr\StaticCall && self::inertiaFlash($node));
+        foreach ($all as $flash) {
+            if (! in_array($flash, $counted, true) && ! ($flash->getAttribute('parent') instanceof Node\Stmt\Expression && $flash->getAttribute('parent')->getAttribute('parent') === $method)) {
+                return null;
+            }
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    private static function inertiaFlash(Node\Expr\StaticCall $call): bool
+    {
+        return $call->class instanceof Node\Name && $call->class->toString() === 'Inertia\Inertia' && $call->name instanceof Node\Identifier && strtolower($call->name->toString()) === 'flash';
+    }
+
+    /** @param array<Node> $nodes
+     * @return array<Node> the nodes with every closure, arrow function and nested declaration dropped */
+    private static function outsideClosures(array $nodes): array
+    {
+        $kept = [];
+        foreach ($nodes as $node) {
+            if ($node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction || $node instanceof Node\Stmt\ClassLike || $node instanceof Node\Stmt\Function_) {
+                continue;
+            }
+            $kept[] = $node;
+            foreach ($node->getSubNodeNames() as $key) {
+                $child = $node->$key;
+                if ($child instanceof Node) {
+                    $kept = [...$kept, ...self::outsideClosures([$child])];
+                } elseif (is_array($child)) {
+                    $kept = [...$kept, ...self::outsideClosures(array_values(array_filter($child, fn ($value): bool => $value instanceof Node)))];
+                }
+            }
+        }
+
+        return $kept;
     }
 
     /** @param array<Node> $nodes

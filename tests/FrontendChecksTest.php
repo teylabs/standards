@@ -167,6 +167,12 @@ test('frontend static UI checks cover self-closing actions, rel tokens, raw inpu
     'flash shown through kit FormStatus' => ['ui toast', "<script setup>import { FormStatus } from '@/components/Kit';</script><template><FormStatus :message=\"\$page.props.flash.status\" /></template>", false],
     'flash on a FormStatus not imported from kit' => ['ui toast', "<script setup>import FormStatus from '@/components/FormStatus.vue';</script><template><FormStatus :message=\"flash.status\" /></template>", true],
     'flash beside a kit FormStatus' => ['ui toast', "<script setup>import { FormStatus } from '@/components/Kit';</script><template><FormStatus /><p>{{ flash.status }}</p></template>", true],
+    'v3 $page.flash shown through kit FormStatus' => ['ui toast', "<script setup>import { FormStatus } from '@/components/Kit';</script><template><FormStatus :message=\"\$page?.flash?.status\" /></template>", false],
+    'v3 usePage().flash shown through kit FormStatus' => ['ui toast', "<script setup>import { FormStatus } from '@/components/Kit';</script><template><FormStatus :message=\"usePage().flash.success\" /></template>", false],
+    'v3 page.flash shown through kit FormStatus' => ['ui toast', "<script setup>import { usePage } from '@inertiajs/vue3'; import { FormStatus } from '@/components/Kit'; const page = usePage();</script><template><FormStatus :message=\"page.flash.message\" /></template>", false],
+    'kit FormStatus flash-key names an outcome key' => ['ui toast', "<script setup>import { FormStatus } from '@/components/Kit';</script><template><FormStatus flash-key=\"status\" /><FormStatus :flash-key=\"'success'\" /></template>", false],
+    'v3 page.flash beside a kit FormStatus' => ['ui toast', "<script setup>import { FormStatus } from '@/components/Kit'; const page = usePage();</script><template><FormStatus flash-key=\"status\" /><p>{{ page.flash.status }}</p></template>", true],
+    'v3 $page.flash on a FormStatus not imported from kit' => ['ui toast', "<script setup>import FormStatus from '@/components/FormStatus.vue';</script><template><FormStatus :message=\"\$page.flash.error\" /></template>", true],
 ]);
 
 test('frontend declarations and explicit missing roots are checked', function () {
