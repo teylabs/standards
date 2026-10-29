@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **The `descriptors` rule no longer flags ARIA or domain roles.**
+  - The bare comparison `role === …` matched an ARIA role (`el.role === 'textbox'`, `role: 'textbox'` in an editor config) and a domain role (`FeedRole`, `node[role]`, `item.role === 'object'`), giving five false positives in one client app.
+  - A role or permission comparison is now flagged only against a known role name (`owner`, `admin`, `member`, `editor`, `viewer` and the like), in either order.
+  - The other auth-shaped checks are unchanged, and `cannot(` and `hasAnyRole(`-style helpers are now caught too.
+
 ## 0.11.23 - 2026-10-28
 
 The same change was first tagged v0.11.21, out of order after v0.11.22. Composer resolves 0.11.22 over it, so take 0.11.23.

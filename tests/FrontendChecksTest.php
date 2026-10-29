@@ -237,3 +237,47 @@ test('js-imports reads static vite resolve.alias keys and ignores dynamic ones',
     'object keys' => ["export default defineConfig({ resolve: { alias: { '@app': path.resolve('x'), '#shared': 'y', [dynamicKey]: 'z', ...spread } } });"],
     'find array' => ["export default { resolve: { alias: [{ find: '@app', replacement: 'x' }, { find: \"#shared\", replacement: 'y' }, { find: /^re/, replacement: 'z' }, { find: dynamicFind, replacement: 'w' }] } };"],
 ]);
+
+/** The `descriptors` findings for one frontend file in a scratch app. */
+function descriptorFindings(string $file, string $code): array
+{
+    $base = sys_get_temp_dir().'/standards-descriptors-'.bin2hex(random_bytes(6));
+    mkdir($base.'/resources/js', 0777, true);
+    mkdir($base.'/routes');
+    file_put_contents($base.'/resources/js/'.$file, $code);
+
+    try {
+        return array_column((new Conformance(frontendConfiguration('Bad', ['base' => $base])))->violations('descriptors'), 'check');
+    } finally {
+        (new Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
+    }
+}
+
+test('descriptors still catches every auth-shaped check', function (string $file, string $code, string $check) {
+    expect(descriptorFindings($file, $code))->toContain($check);
+})->with([
+    'roles.includes' => ['x.ts', "const ok = user.roles.includes('owner');", 'role or permission check'],
+    'hasRole(' => ['x.ts', "if (hasRole('admin')) {}", 'role or permission check'],
+    'hasPermission(' => ['x.ts', "hasPermission('posts.edit')", 'role or permission check'],
+    'can(' => ['x.ts', "if (can('update')) {}", 'role or permission check'],
+    'cannot(' => ['x.ts', "if (cannot('update')) {}", 'role or permission check'],
+    'permissions lookup' => ['x.ts', "const ok = user.permissions.includes('posts.edit');", 'role or permission check'],
+    'permissions[' => ['x.ts', "const ok = permissions['posts.edit'];", 'role or permission check'],
+    '$page.props.auth roles' => ['x.vue', "<script setup>\nconst r = \$page.props.auth.user.roles;\n</script>\n<template><div/></template>", 'role or permission check'],
+    'roles in a template expression' => ['x.vue', "<script setup></script>\n<template><div v-if=\"user.roles.includes('admin')\"/></template>", 'role or permission check'],
+    'role compared to a role name' => ['x.ts', "if (user.role === 'admin') {}", 'role or permission check'],
+    'a role name compared to a role' => ['x.ts', "if ('owner' !== user.role) {}", 'role or permission check'],
+    'is_admin' => ['x.ts', "if (user.is_admin) {}", 'role or permission check'],
+    'isAdmin' => ['x.ts', "if (user.isAdmin) {}", 'role or permission check'],
+    'boolean can-map' => ['x.ts', 'const a = props.can.update;', 'boolean can-map'],
+]);
+
+test('descriptors ignores ARIA roles, domain roles and identifiers that merely contain "role"', function (string $file, string $code) {
+    expect(descriptorFindings($file, $code))->toBe([]);
+})->with([
+    'an ARIA role attribute' => ['x.vue', "<script setup></script>\n<template><div role=\"group\" :role=\"'group'\"/></template>"],
+    'an ARIA role in an object literal' => ['x.ts', "const config = { role: 'textbox', ariaLabel: 'Body' };\nif (el.role === 'textbox') {}"],
+    'a domain Role type' => ['x.ts', "type FeedRole = 'actor' | 'object' | 'target';\nconst role: FeedRole = 'actor';\nif (role === 'actor') {}"],
+    'a node[role] index' => ['x.ts', "const label = node[role];\nconst kind = item.role === 'object' ? 1 : 2;"],
+    'identifiers containing role' => ['x.ts', "const controller = makeController();\nconst payroleCount = 2;\nconst rolesOfSpeech = ['a'];"],
+]);
