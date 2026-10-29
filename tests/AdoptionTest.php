@@ -383,7 +383,8 @@ test('tey/kit\'s real inventory (feat/adoption-surfaces 791fadb) reads with the 
         ->and($inventory->facts)->toHaveCount(count($data['facts']))
         ->and(array_values(array_unique(array_filter(array_map(fn (array $fact): ?string => $fact['computed']['analysis'] ?? null, $inventory->facts)))))->toEqualCanonicalizing(Facts::ANALYSES)
         ->and(array_values(array_unique(array_merge(...array_map(fn (array $s): array => array_column($s['handRolled'], 'kind'), $inventory->surfaces)))))
-        ->toEqualCanonicalizing(array_keys(Inventory::SIGNALS));
+        // class-reference postdates this snapshot of kit's inventory; every older kind is still exercised.
+        ->toEqualCanonicalizing(array_values(array_diff(array_keys(Inventory::SIGNALS), ['class-reference'])));
 
     $base = adoptionFixture('adopted');
     $config = adoptionConfiguration($base);

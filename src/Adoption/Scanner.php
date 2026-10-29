@@ -470,6 +470,26 @@ final class Scanner
                     }
                 }
                 break;
+            case 'class-reference':
+                foreach ($this->owned($this->app->php()) as $path) {
+                    if (! $inScope($path)) {
+                        continue;
+                    }
+                    $source = $this->app->source($path);
+                    $references = [];
+                    $imports = [];
+                    foreach ($signal['classes'] as $class) {
+                        $found = Code::classReferences($source, $class);
+                        [$references, $imports] = [[...$references, ...$found['references']], [...$imports, ...$found['imports']]];
+                    }
+                    // A `use` import counts as one reference when nothing else in the file names the class (as uses.classes reads it); otherwise
+                    // only the uses count, so `use X; new X;` is one reference, not two.
+                    $offsets = $references !== [] ? $references : array_slice($imports, 0, 1);
+                    if ($offsets !== [] && count($offsets) >= ($signal['min'] ?? 1)) {
+                        $fired[] = self::evidence($path, App::line($source, min($offsets)), ($references === [] ? 'imports ' : count($offsets).' × reference to ').implode('|', array_map(fn (string $class): string => ltrim($class, '\\'), $signal['classes'])));
+                    }
+                }
+                break;
             case 'composer':
                 foreach ($signal['packages'] as $package) {
                     if (array_key_exists($package, $this->app->composerPackages())) {
@@ -536,11 +556,13 @@ final class Scanner
             }
         }
         foreach ($uses['classes'] ?? [] as $class) {
-            $pattern = '~(?<![\w\\\\])\\\\?'.preg_quote(ltrim($class, '\\'), '~').'(?![\w\\\\])~';
             foreach ($this->owned($this->app->php()) as $path) {
                 $source = $this->app->source($path);
-                if (preg_match($pattern, Code::withoutComments($source), $match, PREG_OFFSET_CAPTURE) === 1) {
-                    $evidence[] = self::evidence($path, App::line($source, $match[0][1]), 'references '.ltrim($class, '\\'));
+                $found = Code::classReferences($source, $class);
+                // A `use` import alone counts, as the class-reference signal's does; the first reference or import is the evidence line.
+                $offsets = [...$found['references'], ...$found['imports']];
+                if ($offsets !== []) {
+                    $evidence[] = self::evidence($path, App::line($source, min($offsets)), 'references '.ltrim($class, '\\'));
                 }
             }
         }

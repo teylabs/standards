@@ -15,7 +15,7 @@ final readonly class Inventory
 
     public const GROUPS = ['layout', 'navigation', 'action', 'form', 'data', 'feedback', 'overlay', 'content', 'auth', 'account', 'workspace', 'access', 'mail', 'jobs', 'documents', 'activity', 'modules', 'platform'];
 
-    /** Signal kind => [allowed fields => type], where type is `list` (of strings), `string`, `int`, `scope`, `requires` or `attributes`. */
+    /** Signal kind => [allowed fields => type], where type is `list` (of strings), `items` (a non-empty list of strings), `classes` (a non-empty list of FQCNs), `string`, `int`, `scope`, `requires` or `attributes`. */
     public const SIGNALS = [
         'rule' => ['rule' => 'string', 'scope' => 'scope'],
         'vue-root' => ['tags' => 'list', 'requires' => 'requires', 'scope' => 'scope'],
@@ -24,11 +24,12 @@ final readonly class Inventory
         'template-tag' => ['tags' => 'list', 'min' => 'int', 'where' => 'attributes', 'except' => 'attributes', 'scope' => 'scope'],
         'mail-view' => ['without' => 'list', 'scope' => 'scope'],
         'php-class' => ['extends' => 'list', 'implements' => 'list', 'names' => 'list'],
+        'class-reference' => ['classes' => 'classes', 'min' => 'int', 'scope' => 'scope'],
         'composer' => ['packages' => 'list'],
         'migration' => ['tables' => 'list'],
     ];
 
-    private const REQUIRED_SIGNAL_FIELDS = ['rule' => ['rule'], 'vue-root' => ['tags'], 'file-name' => ['globs'], 'import' => ['specifiers'], 'template-tag' => ['tags'], 'mail-view' => ['without'], 'php-class' => [], 'composer' => ['packages'], 'migration' => ['tables']];
+    private const REQUIRED_SIGNAL_FIELDS = ['rule' => ['rule'], 'vue-root' => ['tags'], 'file-name' => ['globs'], 'import' => ['specifiers'], 'template-tag' => ['tags'], 'mail-view' => ['without'], 'php-class' => [], 'class-reference' => ['classes'], 'composer' => ['packages'], 'migration' => ['tables']];
 
     private const SLUG = '/\A[a-z][a-z0-9]*([.-][a-z0-9]+)*\z/';
 
@@ -199,6 +200,8 @@ final readonly class Inventory
             $value = $signal[$field];
             match ($type) {
                 'list' => self::strings($value, "{$where}.{$field}"),
+                'items' => self::items($value, "{$where}.{$field}"),
+                'classes' => self::classNames($value, "{$where}.{$field}"),
                 'string' => self::string($value, "{$where}.{$field}"),
                 'int' => is_int($value) && $value >= 1 ? null : throw new AdoptionError("{$where}.{$field} must be an integer of at least 1"),
                 'scope' => self::enum($value, ['signed-in', 'public', 'any'], "{$where}.{$field}"),
@@ -325,6 +328,25 @@ final readonly class Inventory
         foreach (self::list($value, $where) as $item) {
             if (! is_string($item) || $item === '') {
                 throw new AdoptionError("{$where} must be a list of non-empty strings");
+            }
+        }
+    }
+
+    private static function items(mixed $value, string $where): void
+    {
+        if ($value === []) {
+            throw new AdoptionError("{$where} must be a non-empty list of strings");
+        }
+        self::strings($value, $where);
+    }
+
+    /** Fully qualified class names, a leading `\` optional: `Mpdf\Mpdf`, `\Barryvdh\DomPDF\Facade\Pdf`. */
+    private static function classNames(mixed $value, string $where): void
+    {
+        self::items($value, $where);
+        foreach ($value as $class) {
+            if (preg_match('/\A\\\\?[A-Za-z_][A-Za-z0-9_]*(?:\\\\[A-Za-z_][A-Za-z0-9_]*)*\z/', $class) !== 1) {
+                throw new AdoptionError("{$where}: ".json_encode($class).' is not a fully qualified class name');
             }
         }
     }

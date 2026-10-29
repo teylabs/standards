@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **Adoption signal `class-reference`.** A format-1 inventory may now list `{"kind": "class-reference", "classes": [FQCN, ...], "min"?: int, "scope"?: "signed-in"|"public"|"any"}` in a fact's `computed.signals` or a surface's `handRolled`. It fires on app PHP that references a listed class at least `min` times in one file: the FQCN written out (`new \Mpdf\Mpdf(...)`, `X::method()`, `X::class`, a type hint), or its `use`-imported short name or alias (`use Barryvdh\DomPDF\Facade\Pdf;` then `Pdf::loadView(...)`). A leading `\` in the inventory is optional, and Laravel facade aliases are not followed. A `use` import with no other reference counts as one reference, as `uses.classes` always counted it. Kit-owned files and `vendor/` never count. It shares one matcher with `uses.classes`, which now also follows short names and aliases; a file it matched before still matches, with the same evidence line. An unknown key, an empty or non-list `classes`, a non-string or non-FQCN entry, or an invalid `min` or `scope` is a schema error (exit 2). It replaces the earlier `php-call` idea.
+
 ### Changed
 
 - **Pattern `ui-page.kit-adoption` carries the migration recipe.** `standards:pattern "ui-page.kit-adoption"` now lists the steps in dependency order, shell, then layout, then actions and toast, then forms, then data: the hand-rolled signal each surface reads, the tey/kit feature and components that replace it, and how to verify (the `standards:adoption` row reads adopted with no signals, then `--ci` and `--compliance` pass). It also says what the tool can't see (Blade, Livewire and Filament UI among it) and what to do where kit has no component yet. The leaf stays `draft`: it has no generator.

@@ -151,12 +151,7 @@ final class Code
     {
         $code = self::withoutComments($source);
         $namespace = preg_match('~^\s*namespace\s+([\w\\\\]+)\s*;~m', $code, $ns) === 1 ? $ns[1] : '';
-        $uses = [];
-        preg_match_all('~^\s*use\s+([\w\\\\]+)(?:\s+as\s+(\w+))?\s*;~m', $code, $imports, PREG_SET_ORDER);
-        foreach ($imports as $import) {
-            $alias = $import[2] ?? '';
-            $uses[$alias !== '' ? $alias : substr((string) strrchr('\\'.$import[1], '\\'), 1)] = ltrim($import[1], '\\');
-        }
+        $uses = array_map(fn (array $import): string => $import['class'], self::phpImports($code));
         $resolve = function (string $name) use ($namespace, $uses): string {
             if (str_starts_with($name, '\\')) {
                 return ltrim($name, '\\');
@@ -182,6 +177,72 @@ final class Code
         }
 
         return $classes;
+    }
+
+    /**
+     * A PHP file's `use` imports (comments already removed), short name or alias => the imported FQCN and the statement's offset and
+     * length. Group imports (`use A\{B, C}`), `use function` and `use const` are not read.
+     *
+     * @return array<string, array{class: string, offset: int, length: int, at: int}> `at` is the imported name's offset
+     */
+    public static function phpImports(string $code): array
+    {
+        $uses = [];
+        preg_match_all('~^\s*use\s+([\w\\\\]+)(?:\s+as\s+(\w+))?\s*;~m', $code, $imports, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+        foreach ($imports as $import) {
+            $alias = isset($import[2]) && $import[2][1] >= 0 ? $import[2][0] : '';
+            $uses[$alias !== '' ? $alias : substr((string) strrchr('\\'.$import[1][0], '\\'), 1)] = ['class' => ltrim($import[1][0], '\\'), 'offset' => $import[0][1], 'length' => strlen($import[0][0]), 'at' => $import[1][1]];
+        }
+
+        return $uses;
+    }
+
+    /**
+     * References to one class in PHP source, comments ignored: the FQCN written out (a leading `\` optional) anywhere, which covers
+     * `new X`, `X::method()`, `X::class`, type hints and string literals naming it; and, after a `use` import of the class (or of a
+     * namespace above it), its short name or alias (`Pdf::loadView`, `new Engine`, `Facade\Pdf::x`). `->Name` and `::Name` (a member that
+     * shares the name) and `$Name` are not references. Laravel facade aliases from config/app.php are not followed.
+     *
+     * @return array{references: list<int>, imports: list<int>} offsets of the references outside `use` statements, and of the imports
+     */
+    public static function classReferences(string $source, string $class): array
+    {
+        $class = ltrim($class, '\\');
+        $code = self::withoutComments($source);
+        $imports = self::phpImports($code);
+        $inImport = function (int $offset) use ($imports): bool {
+            foreach ($imports as $import) {
+                if ($offset >= $import['offset'] && $offset < $import['offset'] + $import['length']) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+        $patterns = ['~(?<![\w\\\\$])\\\\?'.preg_quote($class, '~').'(?![\w\\\\])~'];
+        $importOffsets = [];
+        foreach ($imports as $name => $import) {
+            if ($import['class'] === $class) {
+                $patterns[] = '~(?<![\w\\\\$]|->|::)'.preg_quote($name, '~').'(?![\w\\\\])~';
+                $importOffsets[] = $import['at'];
+            } elseif (str_starts_with($class, $import['class'].'\\')) {
+                $patterns[] = '~(?<![\w\\\\$]|->|::)'.preg_quote($name.substr($class, strlen($import['class'])), '~').'(?![\w\\\\])~';
+                $importOffsets[] = $import['at'];
+            }
+        }
+        $references = [];
+        foreach ($patterns as $pattern) {
+            preg_match_all($pattern, $code, $matches, PREG_OFFSET_CAPTURE);
+            foreach ($matches[0] as [, $offset]) {
+                if (! $inImport($offset)) {
+                    $references[$offset] = $offset;
+                }
+            }
+        }
+        sort($references);
+        sort($importOffsets);
+
+        return ['references' => array_values($references), 'imports' => $importOffsets];
     }
 
     /** Tables a migration creates with `Schema::create('<table>'` (never `Schema::table`, which alters). @return list<array{table: string, offset: int}> */
