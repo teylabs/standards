@@ -449,3 +449,58 @@ test('the FormStatus exemption fails closed unless bootstrap/app.php and the app
     'provider pushes PrepareKitRequest to web' => [guestBootstrap(''), 'app("router")->pushMiddlewareToGroup("web", \Tey\Kit\Features\SessionUi\Http\Middleware\PrepareKitRequest::class);', false],
     'provider loads a route file' => [guestBootstrap(''), '$this->loadRoutesFrom(__DIR__."/../../routes/extra.php");', true],
 ]);
+
+
+test('a guest form passes through Inertia v3 flash reads, kit FormStatus flash-key, and top-level Inertia::flash calls', function (string $store, string $page, string $routes, array $checks) {
+    file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\JoinPage; use App\JoinStore; '.$routes);
+    file_put_contents($this->backendBase.'/bootstrap/app.php', guestBootstrap(''));
+    @mkdir($this->backendBase.'/resources/js/pages/Public', 0777, true);
+    file_put_contents($this->backendBase.'/resources/js/pages/Public/Join.vue', $page);
+    $controllers = 'namespace App; use Inertia\Inertia; use Illuminate\Http\RedirectResponse; '
+        .'class JoinPage { public function __invoke() { return Inertia::render("Public/Join"); } } '
+        .'class JoinStore { public function __invoke($request, $key): RedirectResponse { '.$store.' } }';
+    $found = array_column(($this->backend)('toast', $controllers, ['pageRoots' => ['resources/js/pages']], 'src/Controllers/Join.php'), 'check');
+    expect($found)->toBe($checks);
+})->with(function () {
+    $routes = 'Route::get("/join", JoinPage::class); Route::post("/join", JoinStore::class)->middleware("throttle:6,1");';
+    $view = fn (string $attributes, string $script = ''): string => "<script setup lang=\"ts\">\nimport { usePage } from '@inertiajs/vue3';\nimport { FormStatus } from '@/components/Kit';\n{$script}</script>\n<template>\n    <FormStatus {$attributes}/>\n</template>\n";
+    $redirect = 'JoinStore::__invoke redirect must chain ->toast*()';
+    $toastable = 'flash outcomes through Toastable, not session keys';
+    $flash = 'if (! $request->filled("website")) { Interests::record($request); } Inertia::flash("joined", "thanks"); return back();';
+    $read = $view(':message="$page.flash.joined" ');
+
+    return [
+        // The reported shape: an invokable store whose GET page is another controller.
+        'Inertia::flash, read through $page.flash' => [$flash, $read, $routes, []],
+        'Inertia::flash, GET page through Route::inertia' => [$flash, $read, 'Route::inertia("/join", "Public/Join"); Route::post("/join", JoinStore::class);', []],
+        'Inertia::flash, page without FormStatus' => [$flash, "<template>\n    <form />\n</template>\n", $routes, [$redirect]],
+        'Inertia::flash, key not read' => [$flash, $view(':message="$page.flash.other" '), $routes, [$redirect]],
+        'Inertia::flash inside an if' => ['if ($request->filled("email")) { Inertia::flash("joined", "thanks"); } return back();', $read, $routes, [$redirect]],
+        'Inertia::flash inside a try' => ['try { Inertia::flash("joined", "thanks"); } finally {} return back();', $read, $routes, [$redirect]],
+        'Inertia::flash with a non-literal key' => ['Inertia::flash($key, "thanks"); return back();', $read, $routes, [$toastable, $redirect]],
+        'Inertia::flash array, every key read' => ['Inertia::flash(["joined" => "thanks"]); return back();', $read, $routes, []],
+        'Inertia::flash array with an unread key' => ['Inertia::flash(["joined" => "thanks", "ref" => "A-1"]); return back();', $read, $routes, [$redirect]],
+        'Inertia::flash plus ->with, both read' => ['Inertia::flash("joined", "thanks"); return back()->with("ref", "A-1");', $view(':message="flash.joined ?? flash.ref" '), $routes, []],
+        'Inertia::flash with an outcome key stays a Toastable violation' => ['Inertia::flash("status", "thanks"); return back();', $view(':message="$page.flash.status" '), $routes, [$toastable]],
+        'Route::inertia with a non-literal page' => [$flash, $read, 'Route::inertia("/join", $page); Route::post("/join", JoinStore::class);', [$redirect]],
+        // Inertia v3 read paths.
+        '$page?.flash?.joined' => [$flash, $view(':message="$page?.flash?.joined" '), $routes, []],
+        'usePage().flash.joined' => [$flash, $view(':message="usePage().flash.joined" '), $routes, []],
+        'usePage()?.flash.joined, wrong key' => [$flash, $view(':message="usePage()?.flash.other" '), $routes, [$redirect]],
+        'const page = usePage(), page.flash.joined' => [$flash, $view(':message="page.flash.joined" ', "const page = usePage();\n"), $routes, []],
+        'let p = usePage(), p.flash?.joined' => [$flash, $view(':message="p.flash?.joined" ', "let p = usePage();\n"), $routes, []],
+        'page.flash.joined with page not bound to usePage()' => [$flash, $view(':message="page.flash.joined" ', "const page = useSomethingElse();\n"), $routes, [$redirect]],
+        'page.flash.other, wrong key' => [$flash, $view(':message="page.flash.other" ', "const page = usePage();\n"), $routes, [$redirect]],
+        'page.value.flash is not read (usePage() is reactive, not a ref)' => [$flash, $view(':message="page.value.flash.joined" ', "const page = usePage();\n"), $routes, [$redirect]],
+        // kit FormStatus flash-key prop.
+        'static flash-key' => [$flash, $view('flash-key="joined" '), $routes, []],
+        'static flashKey' => [$flash, $view('flashKey="joined" '), $routes, []],
+        'bound flash-key, string literal' => [$flash, $view(":flash-key=\"'joined'\" "), $routes, []],
+        'static flash-key, wrong key' => [$flash, $view('flash-key="other" '), $routes, [$redirect]],
+        'bound flash-key, variable' => [$flash, $view(':flash-key="joined" ', "const joined = 'joined';\n"), $routes, [$redirect]],
+        // Inertia v2 forms are still accepted.
+        'v2 $page.props.flash.joined' => [$flash, $view(':message="$page.props.flash.joined" '), $routes, []],
+        'v2 usePage().props?.flash?.joined' => [$flash, $view(':message="usePage().props?.flash?.joined" '), $routes, []],
+        'v2 back()->with read through page.props.flash' => ['return back()->with("joined", "thanks");', $view(':message="page.props.flash.joined" ', "const page = usePage();\n"), $routes, []],
+    ];
+});
