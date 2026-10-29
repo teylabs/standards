@@ -14,6 +14,7 @@
 ### Upgrading
 
 - Apps with a capability manifest will see new rule 55 findings, one per undeclared mutating route. Declare each route in the `routes` of the capability whose MCP tool covers it, or in a capability marked `"uiOnly"` with the reason it stays out of MCP. Extend `mcpRouteExclusions` for app-specific framework routes, or allowlist a finding with a reason and expiry.
+- When `standards:make` adds capability entries, it rewrites `docs/mcp-capabilities.json` as pretty-printed JSON with 4-space indents, so an existing manifest in another style may be reformatted. Review the diff, and commit the reformat on its own if you want a clean history.
 
 ## 0.11.31 - 2026-10-29
 
