@@ -180,13 +180,26 @@ final class App
         return substr_count($source, "\n", 0, max(0, min($offset, strlen($source)))) + 1;
     }
 
-    /** `**` crosses directories, `*` stays within one segment, `?` is one character. */
-    public static function glob(string $glob, string $value): bool
+    /**
+     * `**` crosses directories, `*` stays within one segment, `?` is one character. Case-sensitive: a component or class name glob
+     * (`*Button`) means that case.
+     */
+    public static function glob(string $glob, string $value, bool $caseless = false): bool
     {
         $pattern = preg_quote($glob, '#');
         $pattern = str_replace(['/\*\*/', '\*\*', '\*', '\?'], ['/(?:.*/)?', '.*', '[^/]*', '[^/]'], $pattern);
 
-        return preg_match('#\A'.$pattern.'\z#', $value) === 1;
+        return preg_match('#\A'.$pattern.'\z#'.($caseless ? 'i' : ''), $value) === 1;
+    }
+
+    /**
+     * A path glob (one with a `/`) against a project-relative path, case-insensitively: `resources/js/pages/Auth/**` also matches the
+     * Jetstream/Breeze layout's `resources/js/Pages/Auth/Login.vue`, and any other segment (`settings/` or `Settings/`) likewise. The
+     * match is string-based, so it is the same on a case-sensitive file system.
+     */
+    public static function pathGlob(string $glob, string $path): bool
+    {
+        return self::glob($glob, $path, true);
     }
 
     /**

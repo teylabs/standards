@@ -370,7 +370,7 @@ final class Scanner
             case 'file-name':
                 foreach ($this->owned([...$this->app->frontend(), ...$this->app->views()]) as $path) {
                     foreach ($signal['globs'] as $glob) {
-                        if ($inScope($path) && App::glob($glob, str_contains($glob, '/') ? $path : basename($path))) {
+                        if ($inScope($path) && (str_contains($glob, '/') ? App::pathGlob($glob, $path) : App::glob($glob, basename($path)))) {
                             $fired[] = self::evidence($path, null, 'file name matches '.$glob);
                             break;
                         }
