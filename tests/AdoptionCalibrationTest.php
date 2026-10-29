@@ -118,3 +118,22 @@ test('Laravel Mix and webpack-era build tooling is never a library gap; a UI lib
         ->and(Lists::tooling('@babel/runtime'))->toBeTrue()
         ->and(Lists::tooling('axios'))->toBeFalse();
 });
+
+test('Storybook files are excluded from every signal, fact and gap scan: *.stories.*, .storybook/ and a stories/ folder outside pages/', function () {
+    $base = calibrationBase('storybook');
+    $inventory = calibrationInventory(
+        ['workbench' => [['kind' => 'import', 'specifiers' => ['vuedraggable']]], 'layout.header' => [['kind' => 'vue-root', 'tags' => ['header']]]],
+        [['id' => 'has-page-actions', 'description' => 'A header holds buttons.', 'computed' => ['signals' => [['kind' => 'vue-root', 'tags' => ['header'], 'requires' => ['components' => ['*Button'], 'min' => 1]]]]]],
+    );
+    $report = calibrationReport('storybook', $inventory);
+
+    // Negative: the three Storybook forms never reach a signal, a fact or a gap (stories/PageHeader.vue would fire all three).
+    expect((new App($base))->frontend())->toBe(['resources/js/components/Button.vue', 'resources/js/pages/stories/Index.vue'])
+        ->and($report['facts']['tey/kit']['has-page-actions']['value'])->toBeFalse()
+        ->and(calibrationEvidence($report)['layout.header'])->toBe([])
+        ->and(array_column($report['gaps'], 'subject'))->toBe(['resources/js/components/Button.vue'])
+        // Positive: a domain `pages/stories/` page is the app's own and still counts.
+        ->and(calibrationEvidence($report)['workbench'])->toBe(['resources/js/pages/stories/Index.vue'])
+        ->and(App::storybook('resources/js/components/Card.stories.vue'))->toBeTrue()
+        ->and(App::storybook('resources/js/components/Stories.vue'))->toBeFalse();
+});

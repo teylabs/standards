@@ -157,6 +157,17 @@ final class App
         return false;
     }
 
+    /**
+     * Storybook, never the app's UI: a `*.stories.*` file, anything under `.storybook/`, and a lowercase `stories/` folder outside a
+     * `pages/` folder (a component library's story set). Excluded from every signal, fact and gap scan.
+     */
+    public static function storybook(string $path): bool
+    {
+        return str_contains(basename($path), '.stories.')
+            || preg_match('~(?:^|/)\.storybook/~', $path) === 1
+            || (preg_match('~(?:^|/)stories/~', $path) === 1 && preg_match('~(?:^|/)[Pp]ages/(?:.+/)?stories/~', $path) !== 1);
+    }
+
     /** `public` when a path segment names a public, guest or focus surface, else `signed-in`. */
     public static function scope(string $path): string
     {
@@ -252,7 +263,7 @@ final class App
                 }
             }
         }
-        $found = Ignored::filter($this->base, array_values(array_unique($found)));
+        $found = Ignored::filter($this->base, array_values(array_filter(array_unique($found), fn (string $path): bool => ! self::storybook($path))));
         sort($found);
 
         return $found;
