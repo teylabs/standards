@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Rule `tenant-aware` takes an explicit landlord opt-out, `Configuration::$landlordCommands`.** A provisioning command that runs before any tenant exists (creating the first owner, sending an invite) cannot use `TenantAware`, so the rule failed it. Declare it as `landlordCommands: [CreateOwnerCommand::class => 'reason']` and it is no longer required to be `TenantAware`. The rule still fails closed: nothing is skipped implicitly, an empty or blank reason is a finding and leaves the command checked, a class that is not a command in the source roots is a finding, and so is a declared command that also uses `TenantAware`. It is a configuration list rather than an attribute, so it works whether the app requires tey/standards in production or only in development.
+- **The package ships `docs/schemas/mcp-capabilities.schema.json`,** the capability declaration schema with the `uiOnly` fix below, for apps that validate their rule 55 manifest with a JSON schema.
+
+### Fixed
+
+- **The MCP capability schema accepts a minimal `uiOnly` entry.** The schema apps vendored required `kind`, `ui`, `domain`, `mcp`, `tests` and `variants` on every capability, so the `uiOnly` entry the README describes (and `standards:make` writes) failed an app's schema test although rule 55 accepted it. Each capability is now one of two shapes: a full capability, or a `uiOnly` entry requiring `id`, a non-empty `uiOnly` reason and a non-empty `routes` list. A `uiOnly` entry with a blank reason or no routes, and a full capability missing a section, still fail.
+- **`descriptors`, `ui plus`, `ui dropzone` and `ui toast` no longer scan the kit's own files.** 0.11.36 skipped `resources/js/components/Kit/` for `ui new-tab` only, so `ui dropzone` still flagged the kit's `Form/FileInput.vue`. All five rules now share one ownership check, which also skips a file tey/mod's installed lineage records (`.mod-maintenance/installed/*.json`, or the older `installed.json`) list as generated, such as the kit's `resources/js/pages/Workspace/Settings/Members/Page.vue`, while its contents equal the recorded bytes. An edited generated file, and the same code anywhere else, is still checked.
+- **Rule 19 no longer flags a trait that uses `InteractsWithMedia`.** A trait cannot implement `HasMedia`, so "media model must implement HasMedia" fired on it with no possible fix. Traits are skipped; a class that uses the media trait, directly or through such a trait, without `HasMedia` still fails.
+- **`no-dev` no longer flags a dev-only provider registered behind `class_exists` for that same class.** `...(class_exists(X::class) ? [X::class] : [])`, a ternary or `if` on `class_exists(X::class)`, and `array_filter([...], class_exists(...))` in `bootstrap/providers.php` are accepted, as the `providers` rule already accepted them, and so is the class's `use` import when every reference to it is guarded. An unguarded reference, a guard on another class or a reference in the else branch still fails.
+
+### Upgrading
+
+- Apps that vendor the capability schema can replace their copy with `vendor/tey/standards/docs/schemas/mcp-capabilities.schema.json`, and drop any workaround that padded `uiOnly` entries with placeholder sections.
+- Apps can drop the ratchet or allowlist entries they carry for `ui dropzone`, `ui plus`, `ui toast` or `descriptors` on files under `resources/js/components/Kit/`, and for `descriptors` (or another of those rules) on unedited kit-generated pages that tey/mod records. The entries then go stale.
+- Apps can drop the rule 19 entries for traits that use `InteractsWithMedia`, and the `no-dev` entries for providers registered behind `class_exists` of the same class.
+- Declare landlord provisioning commands in the trailing `landlordCommands` argument of `Configuration`, each with the reason it runs outside any tenant, and drop the `tenant-aware` allowlist entries that covered them. Keep the allowlist (with an expiry) for cross-tenant admin commands that are debt rather than design.
+
 ## 0.11.36 - 2026-10-29
 
 ### Fixed

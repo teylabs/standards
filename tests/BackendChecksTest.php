@@ -184,3 +184,22 @@ test('providers does not flag entries guarded by class_exists but still flags un
     expect($run('return array_filter([\Pest\TestSuite::class], fn ($provider) => $provider !== null);'))->toBe([['target' => 'bootstrap/providers.php', 'check' => 'provider list must be a literal array']]);
     expect($run('return [class_exists(\Other\Thing::class) ? \Pest\TestSuite::class : null];'))->toBe([$dev]);
 });
+
+test('no-dev accepts a dev provider guarded by class_exists for that same class, and still flags an unguarded one', function () {
+    // bootstrap/ as a discovery root, as an app that registers a dev-only provider (spatie/typescript-transformer's, say) behind class_exists.
+    // The rule loads the class roots first, so they hold one autoloadable fixture class.
+    copy(dirname(__DIR__).'/fixtures/Good/src/UI/Link.php', $this->backendBase.'/src/UI/Link.php');
+    $run = fn (string $source): array => ($this->backend)('no-dev', $source, ['discoveryRoots' => ['bootstrap'], 'developmentNamespaces' => ['Pest']], 'bootstrap/providers.php');
+    $dev = ['target' => 'bootstrap/providers.php', 'check' => 'depends on Pest\TestSuite'];
+
+    expect($run('return [\Tey\Standards\StandardsServiceProvider::class, ...(class_exists(\Pest\TestSuite::class) ? [\Pest\TestSuite::class] : [])];'))->toBe([])
+        ->and($run('use Pest\TestSuite; return [...(class_exists(TestSuite::class) ? [TestSuite::class] : [])];'))->toBe([])
+        ->and($run('return [class_exists(\Pest\TestSuite::class) ? \Pest\TestSuite::class : null];'))->toBe([])
+        ->and($run('return array_filter([\Pest\TestSuite::class], class_exists(...));'))->toBe([])
+        ->and($run('if (class_exists(\Pest\TestSuite::class)) { return [\Pest\TestSuite::class]; } return [];'))->toBe([])
+        ->and($run('return [\Pest\TestSuite::class];'))->toBe([$dev])
+        ->and($run('use Pest\TestSuite; return [TestSuite::class, ...(class_exists(TestSuite::class) ? [TestSuite::class] : [])];'))->toBe([$dev])
+        ->and($run('return [...(class_exists(\Other\Thing::class) ? [\Pest\TestSuite::class] : [])];'))->toBe([$dev])
+        ->and($run('return [...(class_exists(\Pest\TestSuite::class) ? [] : [\Pest\TestSuite::class])];'))->toBe([$dev])
+        ->and($run('return array_filter([\Pest\TestSuite::class], fn ($provider) => $provider !== null);'))->toBe([$dev]);
+});

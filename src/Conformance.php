@@ -209,11 +209,25 @@ final class Conformance
         $violations = [];
 
         foreach ($this->source->files($roots) as $path => $text) {
-            foreach ((new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Name::class) as $name) {
+            $names = (new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Name::class);
+            // no-dev: a reference that only runs when its class exists is safe, and so is the import of a class every use of which is guarded.
+            $unguarded = [];
+            $used = [];
+            foreach ($attributesOnly ? $names : [] as $name) {
+                if (! $name->getAttribute('parent') instanceof Node\UseItem) {
+                    $used[$name->toString()] = true;
+                    if (! Checks\Providers::guarded($name)) {
+                        $unguarded[$name->toString()] = true;
+                    }
+                }
+            }
+
+            foreach ($names as $name) {
                 $dependency = $name->toString();
                 $parent = $name->getAttribute('parent');
                 $permitted = $attributesOnly
-                    ? in_array($dependency, $allowed, true) && ($parent instanceof Node\Attribute || $parent instanceof Node\UseItem)
+                    ? (in_array($dependency, $allowed, true) && ($parent instanceof Node\Attribute || $parent instanceof Node\UseItem))
+                        || ($parent instanceof Node\UseItem ? isset($used[$dependency]) && ! isset($unguarded[$dependency]) : Checks\Providers::guarded($name))
                     : Source::within($dependency, $allowed);
 
                 if (Source::within($dependency, $banned) && ! $permitted) {
@@ -323,6 +337,11 @@ final class Conformance
         $violations = [];
 
         foreach ($classes as $class => $path) {
+            // A trait cannot implement an interface; the classes that use it are checked through their expanded trait list below.
+            if ((new ReflectionClass($class))->isTrait()) {
+                continue;
+            }
+
             $traits = [];
 
             for ($reflection = new ReflectionClass($class); $reflection !== false; $reflection = $reflection->getParentClass()) {

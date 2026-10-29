@@ -23,6 +23,18 @@ final class FrontendSource
         return (new Source($this->config))->files($roots, '/\.(vue|ts|js)$/');
     }
 
+    /**
+     * The files the app owns: files() without the ones tey/kit owns (KitOwnership), for the rules that judge the app's own UI code.
+     *
+     * @return array<string, string>
+     */
+    public function appFiles(): array
+    {
+        $kit = KitOwnership::of($this->config);
+
+        return array_filter($this->files(), fn (string $source, string $path): bool => ! $kit->owns($path, $source), ARRAY_FILTER_USE_BOTH);
+    }
+
     public static function script(string $path, string $source): string
     {
         if (! str_ends_with($path, '.vue')) {

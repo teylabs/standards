@@ -12,7 +12,7 @@ final class UiDropzone
     public function violations(Configuration $config): array
     {
         $violations = [];
-        foreach ((new FrontendSource($config))->files() as $path => $source) {
+        foreach ((new FrontendSource($config))->appFiles() as $path => $source) {
             if ($path === $config->uiDropzone || ! str_ends_with($path, '.vue')) {
                 continue;
             }

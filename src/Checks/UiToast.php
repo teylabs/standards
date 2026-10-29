@@ -12,7 +12,7 @@ final class UiToast
     public function violations(Configuration $config): array
     {
         $violations = [];
-        foreach ((new FrontendSource($config))->files() as $path => $source) {
+        foreach ((new FrontendSource($config))->appFiles() as $path => $source) {
             if ($path !== $config->uiToastModule && ! in_array($path, $config->uiToastRenderers, true) && array_any(FrontendSource::imports(FrontendSource::script($path, $source)), fn (string $specifier): bool => $specifier === $config->uiToastLibrary || str_starts_with($specifier, $config->uiToastLibrary.'/'))) {
                 $violations[] = ['target' => $path, 'check' => 'toast library imported outside configured module'];
             }

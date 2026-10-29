@@ -29,7 +29,10 @@ use Tey\Standards\Source;
  * (Configuration::$tenantKeys, default workspace_id and tenant_id) in $fillable or in the model's table in database/migrations. Active when the
  * app requires spatie/laravel-multitenancy, tey/kit or tey/concierge, or sets $tenantModels. An active rule that finds no tenant-scoped model at
  * all reports an advisory, never a silent pass: it checked nothing. Deliberate cross-tenant admin commands are declared in the allowlist (a
- * reason and an expiry), never by a marker.
+ * reason and an expiry), never by a marker. A landlord command, one that runs before any tenant exists (it creates the first owner or sends
+ * an invite), is declared in Configuration::$landlordCommands with its reason. Nothing is skipped implicitly: an entry with an empty reason is
+ * reported and the command is still checked, and an entry that names no command in the source roots, or a command that is also TenantAware,
+ * is reported too.
  */
 final class TenantAware
 {
@@ -67,15 +70,16 @@ final class TenantAware
             }
         }
 
+        $landlord = $this->landlordCommands($classes);
         $tenantModels = $this->tenantModels($classes);
 
         if ($tenantModels === []) {
-            return [['target' => 'tests/Arch/configuration.php', 'check' => 'tenant-aware checked nothing: no tenant-scoped model found', 'advisory' => true,
+            return [...$landlord['violations'], ['target' => 'tests/Arch/configuration.php', 'check' => 'tenant-aware checked nothing: no tenant-scoped model found', 'advisory' => true,
                 'hint' => 'This app has tenancy, but no model was recognised as tenant-scoped, so no command or job was checked. Set Configuration::$tenantModels to the app\'s tenant-scoped models (or their trait or base class), or $tenantKeys to the column it scopes by.']];
         }
 
         $queue = $this->queueConfig();
-        $violations = [];
+        $violations = $landlord['violations'];
 
         foreach ($classes as $name => [$path, $class]) {
             $kind = $this->kind($class, $classes);
@@ -101,9 +105,9 @@ final class TenantAware
 
             [$model, $line] = $touch;
 
-            if ($kind === 'command' && ! $this->usesAny($class, [self::COMMAND_TRAIT], $classes)) {
+            if ($kind === 'command' && ! in_array($name, $landlord['commands'], true) && ! $this->usesAny($class, [self::COMMAND_TRAIT], $classes)) {
                 $violations[] = ['target' => $path, 'check' => $name.' touches tenant-scoped '.$model.' without TenantAware', 'line' => $line,
-                    'hint' => 'Use Spatie\Multitenancy\Commands\Concerns\TenantAware in the command (it then runs per tenant: --tenant=*). A deliberate cross-tenant admin command goes in the allowlist with a reason and an expiry.'];
+                    'hint' => 'Use Spatie\Multitenancy\Commands\Concerns\TenantAware in the command (it then runs per tenant: --tenant=*). A deliberate cross-tenant admin command goes in the allowlist with a reason and an expiry; a landlord command that runs before any tenant exists goes in Configuration::$landlordCommands with its reason.'];
             }
 
             if ($kind === 'job') {
@@ -135,6 +139,39 @@ final class TenantAware
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    /**
+     * The declared landlord commands that count, and a finding for each declaration that does not: an empty reason, a class that is not a
+     * command in the source roots, or a command that is also TenantAware (it cannot be both).
+     *
+     * @param  array<string, array{0: string, 1: Node\Stmt\Class_}>  $classes
+     * @return array{commands: list<string>, violations: list<array{target: string, check: string, line?: int, hint: string}>}
+     */
+    private function landlordCommands(array $classes): array
+    {
+        $commands = [];
+        $violations = [];
+
+        foreach ($this->config->landlordCommands as $name => $reason) {
+            $name = ltrim((string) $name, '\\');
+            [$path, $class] = $classes[$name] ?? [null, null];
+
+            if ($class === null || $this->kind($class, $classes) !== 'command') {
+                $violations[] = ['target' => 'tests/Arch/configuration.php', 'check' => 'landlord command '.$name.' is not a command in the source roots',
+                    'hint' => 'Configuration::$landlordCommands names a class that is not an artisan command under the source roots. Fix the class name, or remove the entry.'];
+            } elseif (! is_string($reason) || trim($reason) === '') {
+                $violations[] = ['target' => $path, 'check' => $name.' is declared a landlord command without a reason', 'line' => $class->getStartLine(),
+                    'hint' => 'Give the entry in Configuration::$landlordCommands the reason it runs outside any tenant, such as \'creates the first owner before any workspace exists\'. Until it has one, the command is checked as tenant work.'];
+            } elseif ($this->usesAny($class, [self::COMMAND_TRAIT], $classes)) {
+                $violations[] = ['target' => $path, 'check' => $name.' is declared a landlord command but is TenantAware', 'line' => $class->getStartLine(),
+                    'hint' => 'A TenantAware command runs once per tenant, so it is not a landlord command. Remove the entry from Configuration::$landlordCommands, or the TenantAware trait.'];
+            } else {
+                $commands[] = $name;
+            }
+        }
+
+        return ['commands' => $commands, 'violations' => $violations];
     }
 
     /** spatie/laravel-multitenancy, tey/kit or tey/concierge (workspaces) is required, or the app named its own tenant-model traits or classes. */

@@ -349,3 +349,67 @@ test('ui new-tab still checks a plain anchor beside the kit tree', function () {
         (new Filesystem)->deleteDirectory($base);
     }
 });
+
+/** A scratch app with the given files under its base; the frontend roots are resources/js. */
+function kitOwnershipApp(array $files): string
+{
+    $base = dirname(__DIR__).'/.phpunit.cache/kit-owned-'.bin2hex(random_bytes(5));
+    foreach ($files as $path => $contents) {
+        is_dir(dirname($base.'/'.$path)) || mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $contents);
+    }
+
+    return $base;
+}
+
+/** tey/mod's installed lineage record shape: format 1, owner tey/mod:installed, artifact.files path => base64 bytes. */
+function kitInstalledRecord(array $files, string $owner = 'tey/mod:installed'): string
+{
+    return (string) json_encode(['format' => 1, 'owner' => $owner, 'app_id' => 'scratch', 'root' => '/app', 'artifact' => [
+        'name' => 'tey/kit', 'version' => '0.4.20', 'files' => array_map(base64_encode(...), $files), 'groups' => [], 'checks' => [], 'host_owned' => [],
+    ]]);
+}
+
+dataset('kit-owned violations', [
+    'ui plus' => ['ui plus', '<template><Button>Add post</Button></template>'],
+    'ui new-tab' => ['ui new-tab', '<template><a target="_blank">Posts</a></template>'],
+    'ui dropzone' => ['ui dropzone', '<template><input type="file"></template>'],
+    'ui toast' => ['ui toast', '<template><p>{{ flash.success }}</p></template>'],
+    'descriptors' => ['descriptors', "<script setup>const admin = hasRole('admin');</script><template><p /></template>"],
+]);
+
+test('the frontend rules skip the kit tree and still check the same code beside it', function (string $rule, string $source) {
+    $base = kitOwnershipApp(['resources/js/components/Kit/Form/FileInput.vue' => $source, 'resources/js/pages/Posts.vue' => $source]);
+    try {
+        $targets = array_column((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['resources/js']])))->violations($rule), 'target');
+
+        expect(array_values(array_unique($targets)))->toBe(['resources/js/pages/Posts.vue']);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+})->with('kit-owned violations');
+
+test('the frontend rules skip a page tey/mod records as kit-generated while it is unchanged, and check an edited or unrecorded one', function (string $rule, string $source) {
+    $page = 'resources/js/pages/Workspace/Settings/Members/Page.vue';
+    $base = kitOwnershipApp([
+        $page => $source,
+        'resources/js/pages/Workspace/Settings/Billing/Page.vue' => $source.'<!-- edited -->',
+        'resources/js/pages/Posts.vue' => $source,
+        '.mod-maintenance/installed/'.hash('sha256', 'tey/kit').'.json' => kitInstalledRecord([$page => $source, 'resources/js/pages/Workspace/Settings/Billing/Page.vue' => $source]),
+    ]);
+    $run = fn (): array => array_values(array_unique(array_column((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['resources/js']])))->violations($rule), 'target')));
+    try {
+        expect($run())->toBe(['resources/js/pages/Posts.vue', 'resources/js/pages/Workspace/Settings/Billing/Page.vue']);
+
+        // A record that is not tey/mod's installed format names nothing.
+        file_put_contents($base.'/.mod-maintenance/installed/'.hash('sha256', 'tey/kit').'.json', kitInstalledRecord([$page => $source], owner: 'someone/else'));
+        expect($run())->toContain($page);
+
+        // The 0.8 single-lineage record is read too.
+        unlink($base.'/.mod-maintenance/installed/'.hash('sha256', 'tey/kit').'.json');
+        file_put_contents($base.'/.mod-maintenance/installed.json', kitInstalledRecord([$page => $source]));
+        expect($run())->not->toContain($page);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+})->with('kit-owned violations');

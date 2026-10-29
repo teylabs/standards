@@ -1,0 +1,429 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MCP capability declaration v1",
+  "description": "Declaration only; exact-revision behavioural evidence and full inventory review remain required.",
+  "type": "object",
+  "required": [
+    "version",
+    "inventory",
+    "capabilities"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "inventory": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "capabilities",
+          "variants"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capabilities": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "variants": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/capability"
+          },
+          {
+            "$ref": "#/$defs/uiOnlyCapability"
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "capability": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "ui",
+        "domain",
+        "mcp",
+        "tests",
+        "variants"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "kind": {
+          "enum": [
+            "read",
+            "write",
+            "external"
+          ]
+        },
+        "ui": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "symbol"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "symbol": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "domain": {
+          "type": "object",
+          "required": [
+            "path",
+            "symbol"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "symbol": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "mcp": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "implemented",
+                "missing",
+                "partial"
+              ]
+            },
+            "kind": {
+              "enum": [
+                "tool",
+                "resource",
+                "protocol"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "entrypoint": {
+              "type": "object",
+              "required": [
+                "path",
+                "symbol"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "symbol": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "scopes": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "handoff": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confirmation": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "implemented"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "kind",
+                  "name",
+                  "entrypoint",
+                  "scopes"
+                ]
+              }
+            },
+            {
+              "if": {
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "protocol"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "handoff"
+                ]
+              }
+            }
+          ]
+        },
+        "tests": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/variant"
+          }
+        },
+        "routes": {
+          "$ref": "#/$defs/routes"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "external"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "mcp": {
+                "required": [
+                  "confirmation"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "not": {
+        "required": [
+          "uiOnly"
+        ]
+      }
+    },
+    "uiOnlyCapability": {
+      "type": "object",
+      "description": "A capability with no MCP path: its routes stay UI-only for the stated reason. The parity inventory must not name it.",
+      "required": [
+        "id",
+        "uiOnly",
+        "routes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "uiOnly": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Why this capability stays out of MCP."
+        },
+        "routes": {
+          "$ref": "#/$defs/routes"
+        }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "description": "Mutating routes this capability covers, by route name or as \"METHOD /uri\".",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "\\S"
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "path",
+        "name",
+        "covers"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^tests/"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "covers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "success",
+              "authorization",
+              "validation",
+              "privacy",
+              "audit",
+              "retry",
+              "stale",
+              "confirmation",
+              "uncertain_outcome",
+              "handoff",
+              "status",
+              "no_bypass",
+              "error",
+              "recovery"
+            ]
+          }
+        }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "required": [
+        "id",
+        "ui",
+        "mcp",
+        "tests"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "ui": {
+          "type": "object",
+          "required": [
+            "options",
+            "defaults",
+            "effects"
+          ],
+          "properties": {
+            "options": {
+              "type": "object"
+            },
+            "defaults": {
+              "type": "object"
+            },
+            "effects": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "mcp": {
+          "type": "object",
+          "required": [
+            "options",
+            "defaults",
+            "effects",
+            "status"
+          ],
+          "properties": {
+            "options": {
+              "type": "object"
+            },
+            "defaults": {
+              "type": "object"
+            },
+            "effects": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "status": {
+              "enum": [
+                "implemented",
+                "missing",
+                "partial",
+                "excluded"
+              ]
+            }
+          }
+        },
+        "tests": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    }
+  }
+}
