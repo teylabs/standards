@@ -48,6 +48,45 @@ test('toast resolves facade aliases and ignores strings comments and UI internal
     'session helper' => 'session()->flash("anything", "Saved");',
     'session facade' => 'use Illuminate\Support\Facades\Session as State; State::flash("notice", "Saved");',
     'inertia alias' => 'use Inertia\Inertia as Page; Page::flash("error", "Failed");',
+    'with an array' => 'back()->with(["status" => "Saved"]);',
+    'with an array among other keys' => 'back()->with(["ref" => "A-1", "success" => "Saved"]);',
+    'with a non-literal array key' => 'back()->with([$key => "Saved"]);',
+    'with a spread' => 'back()->with([...$data]);',
+    'with a spread argument' => 'back()->with(...$data);',
+    'with a variable' => 'back()->with($data);',
+    'inertia array' => 'use Inertia\Inertia; Inertia::flash(["error" => "Failed"]);',
+    'session helper array' => 'session()->flash(["anything" => "Saved"]);',
+    'session facade array' => 'use Illuminate\Support\Facades\Session; Session::flash(["notice" => "Saved"]);',
+]);
+
+test('toast reads an array flash key by key and lets literal non-outcome keys through', function (string $source) {
+    expect(($this->backend)('toast', $source))->toBe([]);
+})->with([
+    'literal non-outcome keys' => 'back()->with(["ref" => "A-1", "count" => 2]);',
+    'implicit and integer keys' => 'Post::query()->with(["author", 3 => "tags"]);',
+    'inertia non-outcome key' => 'use Inertia\Inertia; Inertia::flash(["ref" => "A-1"]);',
+    'a literal non-outcome key on a redirect' => 'back()->with("notice", "x");',
+    'a query builder with a non-literal key and a callback' => 'Post::query()->with($key, $cb);',
+    'a query builder with a variable' => 'Post::query()->with($relations);',
+    'a model with a variable' => 'Post::with($relations);',
+    'a query variable with a variable' => '$query->with($r);',
+    'a query variable with a spread' => 'function f() { $query = Post::query(); $query->with([...$r]); }',
+    'an unknown method result with a variable' => '$this->builder()->with($data);',
+    'a variable reassigned off a redirect' => 'function f() { $r = back(); $r = Post::query(); $r->with($data); }',
+]);
+
+test('toast fails closed on an unreadable flash argument when the chain is rooted in a redirect or response', function (string $source) {
+    expect(($this->backend)('toast', $source))->toContain(['target' => 'src/Controllers/PostsController.php', 'check' => 'flash outcomes through Toastable, not session keys']);
+})->with([
+    'redirect()->back()->with($data)' => 'redirect()->back()->with($data);',
+    'back()->with([...$x])' => 'back()->with([...$x]);',
+    'a variable assigned from redirect()->route()' => 'function f() { $r = redirect()->route("x"); return $r->with($data); }',
+    'to_route()' => 'to_route("x")->with($data);',
+    'Redirect facade' => 'use Illuminate\Support\Facades\Redirect; Redirect::to("/x")->with([$k => "Saved"]);',
+    'response()' => 'response()->redirectTo("/x")->with($data);',
+    'back()->with($key, ...)' => 'back()->with($key, "x");',
+    'Inertia::flash($data)' => 'use Inertia\Inertia; Inertia::flash($data);',
+    'literal outcome key on an unknown root, as before' => '$this->builder()->with(["status" => "Saved"]);',
 ]);
 
 test('toast checks each literal redirect branch and accepts all toast macro forms', function (string $expression, bool $fails) {
@@ -362,9 +401,14 @@ test('a guest back()->with(<key>) passes both toast checks only when a FormStatu
         'one of two keys not referenced' => ['return back()->with(["notice" => "Thanks", "ref" => "A-1"]);', $view(':message="flash.notice" '), [], $guest, [$redirect]],
         'a key prefixing the referenced one' => ['return back()->with("note", "Thanks");', $view(':message="flash.notes" '), [], $guest, [$redirect]],
         'a page prop named like the key on a child, not the page' => ['return back()->with("notice", "Thanks");', $child, ['resources/js/components/ContactForm.vue' => $view(':message="notice" ', "defineProps<{ notice?: string }>();\n")], $guest, [$redirect]],
-        'non-literal key' => ['return back()->with($key, "Thanks");', $view(':message="flash.notice" '), [], $guest, [$redirect]],
+        'non-literal key' => ['return back()->with($key, "Thanks");', $view(':message="flash.notice" '), [], $guest, [$toastable, $redirect]],
         'status not referenced: both checks fail' => ['return back()->with("status", "Sent");', $view(':message="flash.notice" '), [], $guest, [$toastable, $redirect]],
         'status on a signed-in route: both checks fail' => ['return back()->with("status", "Sent");', $view(':message="flash.status" '), [], 'Route::middleware("auth")->group(function () { '.$guest.' });', [$toastable, $redirect]],
+        'status in an array flash, not referenced' => ['return back()->with(["status" => "Sent", "ref" => "A-1"]);', $view(':message="flash.notice" '), [], $guest, [$toastable, $redirect]],
+        'status in an array flash read through flash' => ['return back()->with(["status" => "We emailed you a link."]);', $view(':message="flash.status" '), [], $guest, []],
+        'status and an unread key in one array flash' => ['return back()->with(["status" => "Sent", "ref" => "A-1"]);', $view(':message="flash.status" '), [], $guest, [$toastable, $redirect]],
+        'a variable array flash' => ['$data = ["status" => "Sent"]; return back()->with($data);', $view(':message="flash.status" '), [], $guest, [$toastable, $redirect]],
+        'a spread array flash' => ['$data = ["status" => "Sent"]; return back()->with([...$data]);', $view(':message="flash.status" '), [], $guest, [$toastable, $redirect]],
         'status flashed inside a closure' => ['return tap(back(), fn () => back()->with("status", "Sent"));', $view(':message="flash.status" '), [], $guest, [$toastable]],
     ];
 });

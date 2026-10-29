@@ -27,8 +27,7 @@ final class Toast
                     continue;
                 }
                 $method = strtolower($call->name->toString());
-                $key = $call->getArgs()[0]->value ?? null;
-                $outcome = $key instanceof Node\Scalar\String_ && in_array($key->value, ['status', 'success', 'message', 'error', 'flash'], true);
+                $outcome = self::flashesOutcome($call);
                 $session = $call instanceof Node\Expr\MethodCall && $call->var instanceof Node\Expr\FuncCall && $call->var->name instanceof Node\Name && $call->var->name->toString() === 'session';
                 $facade = $call instanceof Node\Expr\StaticCall && $call->class instanceof Node\Name ? $call->class->toString() : null;
                 // A guest form's back()->with('<key>', ...) that a FormStatus on the page it returns to shows (GuestFormStatus) is not a loose flash.
@@ -72,6 +71,93 @@ final class Toast
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    private const OUTCOME_KEYS = ['status', 'success', 'message', 'error', 'flash'];
+
+    /**
+     * Whether a `with(...)` / `flash(...)` call's first argument may name an outcome key: a literal outcome key, an array with a literal
+     * outcome key, or, on a chain provably rooted in a redirect or response, anything the rule can't read key by key (a spread, a non-literal
+     * array key, a lone non-array argument such as `->with($data)`, a non-literal key in `->with($key, $value)`), which fails closed. Implicit and integer keys are literal and never outcomes.
+     */
+    private static function flashesOutcome(Node\Expr\MethodCall|Node\Expr\StaticCall $call): bool
+    {
+        $arguments = $call->getArgs();
+        $first = $arguments[0] ?? null;
+        if ($first === null) {
+            return false;
+        }
+        $redirect = self::redirectRooted($call);
+        if ($first->unpack) {
+            return $redirect;
+        }
+        $key = $first->value;
+        if ($key instanceof Node\Scalar\String_) {
+            return in_array($key->value, self::OUTCOME_KEYS, true);
+        }
+        if ($key instanceof Node\Expr\Array_) {
+            foreach ($key->items as $item) {
+                if ($item === null || $item->unpack || ($item->key !== null && ! $item->key instanceof Node\Scalar\String_ && ! $item->key instanceof Node\Scalar\Int_)) {
+                    if ($redirect) {
+                        return true;
+                    }
+
+                    continue;
+                }
+                if ($item->key instanceof Node\Scalar\String_ && in_array($item->key->value, self::OUTCOME_KEYS, true)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return $redirect && $first->name === null && ! $key instanceof Node\Scalar && ! $key instanceof Node\Expr\Closure && ! $key instanceof Node\Expr\ArrowFunction;
+    }
+
+    /**
+     * Whether a call's chain provably starts at a redirect or response: `redirect()`, `back()`, `to_route()`, `response()`, `Redirect::*`,
+     * `Inertia::*`, or a variable that every assignment in the enclosing function sets to such a chain. Models, query builders, unknown
+     * variables and method results are not.
+     */
+    private static function redirectRooted(Node\Expr $expression, int $depth = 0): bool
+    {
+        while ($expression instanceof Node\Expr\MethodCall || $expression instanceof Node\Expr\NullsafeMethodCall) {
+            $expression = $expression->var;
+        }
+        if ($expression instanceof Node\Expr\FuncCall) {
+            return $expression->name instanceof Node\Name && in_array(strtolower($expression->name->toString()), ['redirect', 'back', 'to_route', 'response'], true);
+        }
+        if ($expression instanceof Node\Expr\StaticCall) {
+            return $expression->class instanceof Node\Name && in_array($expression->class->toString(), ['Illuminate\Support\Facades\Redirect', 'Illuminate\Support\Facades\Response', 'Inertia\Inertia'], true);
+        }
+        if (! $expression instanceof Node\Expr\Variable || ! is_string($expression->name) || $depth > 3) {
+            return false;
+        }
+        $scope = $expression->getAttribute('parent');
+        while ($scope instanceof Node && ! $scope instanceof Node\FunctionLike) {
+            $scope = $scope->getAttribute('parent');
+        }
+        if (! $scope instanceof Node\FunctionLike) {
+            return false;
+        }
+        $name = $expression->name;
+        $assigned = (new NodeFinder)->find($scope->getStmts() ?? [], fn (Node $node): bool => ($node instanceof Node\Expr\Assign || $node instanceof Node\Expr\AssignRef) && $node->var instanceof Node\Expr\Variable && $node->var->name === $name);
+        foreach ($scope->getParams() as $param) {
+            if ($param->var instanceof Node\Expr\Variable && $param->var->name === $name) {
+                return false;
+            }
+        }
+        if ($assigned === []) {
+            return false;
+        }
+        foreach ($assigned as $assign) {
+            if (! $assign instanceof Node\Expr\Assign || ! self::redirectRooted($assign->expr, $depth + 1)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private ?GuestFormStatus $formStatus = null;
