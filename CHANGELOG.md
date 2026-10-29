@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **README: fixture CI on older PHP or Laravel.** A package that can't `require-dev` tey/standards (PHP < 8.4.1 or Illuminate < 13) runs `bin/standards adoption` from an isolated `tools/standards` Composer project. The README gives the layout, the install and scan commands, and a sample GitHub Actions job (PHP 8.4 on ubuntu-latest, a 10-minute timeout, a Composer cache keyed on `tools/standards/composer.lock`, a loop over the fixtures). The job is `fixtures/CI/adoption-fixtures.yml`, which the suite checks against rule 51 with `bin/standards ci` and against the README byte for byte. The README also says in one line why there is no PHAR yet.
+
 ### Fixed
 
 - **`standards:adoption`: route analyses follow route files a group includes.** A group whose callback `require`s or `include`s another route file, or `->group(base_path('routes/x.php'))` / `->group(__DIR__.'/x.php')`, now applies its middleware and prefix to that file's routes, through chains of includes, with loops cut off. An auth group that requires `routes/app.php` with `Inertia::render` pages makes `signed-in-pages` true, and those routes are no longer `public-pages`; under an `api` group they never count. Only literal paths (`__DIR__.'/…'`, `base_path('…')`, a quoted string) are resolved; a non-literal include is not read and is reported as a warning (a blind spot).

@@ -731,6 +731,66 @@ Exit 2 means it fails closed: an unreadable or invalid inventory, an unknown for
 
 **Without Laravel: `bin/standards adoption`.** `vendor/bin/standards adoption --base=<dir> --inventory=<file> [--json] [--ci|--compliance]` runs the same scan on a tree with no Laravel app (a package's adoption fixtures in its CI, say): `--base` (default the current directory) and `--inventory` also take a separate value (`--base <dir>`), and a relative `--inventory` is relative to where it runs. It reads the tree's `tests/Arch/configuration.php` when there is one, else the default configuration (frontend under `resources/js`, pages under any `pages/` directory there). It reads no database, so `kit_adoptions` is never consulted. Exit codes match the artisan command: 0 for a report, 1 for blocking rows under `--ci` or `--compliance`, and 2 for usage, an unreadable inventory or a schema error. As there, `--ci` and `--compliance` refuse an `--inventory` for a package the tree requires (exit 2), so a fixture tree that requires tey/kit is checked with the plain report. `--json` is the format-1 report, and each row also carries `surface` (its id), `facts` (each fact its `applies` names, with its value) and `row` (its status): the fields of a package fixture's `expected.json` case, so the package can diff against them.
 
+**Fixture CI on older PHP or Laravel.** tey/standards needs PHP 8.4.1+ and Illuminate 13, so a package that supports older PHP or Laravel can't `require-dev` it. Such a package runs its adoption fixtures from an isolated tools project instead: `tools/standards/composer.json` requires only `tey/standards` (`{"require": {"tey/standards": "^0.11"}}`) and keeps its own `composer.lock`, committed or not as you prefer (committed pins the scan; uncommitted takes the newest release each run). It never touches the package's own dependency graph. Install it with `composer install --working-dir=tools/standards`, then run `tools/standards/vendor/bin/standards adoption --base <fixture> --inventory resources/adoption/surfaces.json --json` per fixture and diff the result against that fixture's `expected.json`. This job passes rule 51 (the package suite runs `bin/standards ci` over this exact workflow; for a distributed package, its Windows leg stays in the main test workflow, since `windows-gap` is judged across all workflows). It assumes fixtures under `tests/fixtures/adoption/<case>/` and an `expected.json` holding each row's `surface`, `facts` and `row`; adjust the `jq` projection to your file's shape.
+
+```yaml
+name: adoption fixtures
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.draft }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  adoption-fixtures:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir --working-dir=tools/standards)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: standards-tools-${{ hashFiles('tools/standards/composer.lock') }}
+          restore-keys: standards-tools-
+
+      - run: composer install --working-dir=tools/standards --no-interaction --no-progress
+
+      - name: Diff every adoption fixture against its expected.json
+        run: |
+          status=0
+          for fixture in tests/fixtures/adoption/*/; do
+            tools/standards/vendor/bin/standards adoption --base "$fixture" --inventory resources/adoption/surfaces.json --json \
+              | jq -S '[.rows[] | {surface, facts, row}]' > /tmp/actual.json
+            if ! diff -u <(jq -S . "$fixture/expected.json") /tmp/actual.json; then
+              echo "::error::adoption fixture $fixture differs from its expected.json"
+              status=1
+            fi
+          done
+          exit $status
+```
+
+There is no PHAR yet: the CLI still needs PHP 8.4 and the Illuminate 13 components it loads, so a PHAR would only repackage what the isolated tools project already installs, plus a signed release artifact to maintain.
+
 **Signals.** `rule`: that standards rule's findings (`ui.kit-shell` today, through Conformance) mean hand-rolled. `vue-root`: an app `.vue` file whose first template element is one of `tags`; with `requires`, at least `min` (default 1) of its `routes` (a quoted route name or path ending in it) and `components` (tag-name globs, matched against a kebab-case tag's PascalCase form too, so `<primary-button>` matches `*Button`) must appear, and either list may be absent. `file-name`: globs on the app-relative path (or the basename, for a glob without `/`) of frontend files and Blade views. A path glob matches case-insensitively, so `resources/js/pages/Auth/**` also matches the Jetstream/Breeze `resources/js/Pages/Auth/Login.vue` (and `settings/` matches `Settings/`); a basename glob keeps its case, because it names a component. `import`: a module or `pkg/**` import, and `pkg#Named` needs that named import (`@/components/Kit#Name` also matches `@kit/ui` and deep kit modules). `template-tag`: pages only, at least `min` tags that pass its optional `where` and `except` filters; an `<input type="hidden">` (any quoting or case) never counts, since CSRF and method-spoofing fields are not hand-rolled inputs. `where` and `except` each map a static attribute name to a non-empty list of literal values: `{"where": {"type": ["file"]}}` counts only tags whose every named attribute is static with a listed value, and `{"except": {"type": ["hidden", "search", "file"]}}` drops a tag when any named static attribute has a listed value. A bound attribute (`:type`, `v-bind:type`) or a missing one matches neither: it never satisfies `where` and is never dropped by `except`. Values compare case-insensitively, a bare attribute reads as `""`, and both compose with `min` (counted after filtering) and `scope`. Listing `hidden` in `except` repeats the built-in drop and counts nothing twice. An unknown key, an empty or non-object filter, a non-list value, an empty list, a non-string literal or a bound attribute name (`:type`) is a schema error (exit 2). `mail-view`: a Blade view under a `mail`/`emails` folder, or one using `mail::` components, that contains none of `without` (an empty list matches every mail view). `php-class`: every criterion given must hold (`extends` is the direct parent's FQCN, `implements` any one interface, `names` short-name globs). `composer`: a `require` or `require-dev` package. `migration`: a table an app migration creates with `Schema::create` (never `Schema::table`). A table recorded in tey/kit's `kit_adoptions` is adopted, not hand-rolled; the command reads that table from the app's default database when it exists. When the table exists but can't be read, it warns, every created table reads hand-rolled, and each such row's blocking line carries the cause `adoption records unreadable (kit_adoptions)` (`cause` in `--json`). Storybook is never the app's UI: a `*.stories.*` file, anything under `.storybook/`, and a lowercase `stories/` folder outside `pages/` are left out of every signal, fact and gap scan. UI signals take `scope`: `public` is a path whose segment names a public, guest or focus surface (Auth, Login, Guest, Public, Marketing, Landing, Welcome, Focus, Docs, Legal, Help, Error, Print), and `signed-in` is everything else.
 
 **Facts.** Each fact in an inventory declares how it is computed. `{"signals": [...]}` is true when any of its signals fires in an app-owned file (not `rule`). An app that already adopted the kit component still "has the need", because a kit import counts as a signal. `{"analysis": "<name>"}` names one of standards' own analyses. Kit-installed files and routes count for analyses; vendor code never does. A "route file" is any PHP file under `routes/`, under the configuration's `routeRoots` (module globs such as `app/Modules/*/routes`, as rule 55 reads them), or under a module layout read even without a configuration: `app/Modules/*/routes`, `app-modules/*/routes` and `modules/*/routes`. A route group whose callback `require`s or `include`s another route file, or a `->group(<file>)` call, applies its middleware and prefix to the included file's routes, along every chain of includes (a loop is cut off). Only a literal path is followed: `__DIR__.'/x.php'`, `base_path('x.php')` or a quoted string. A non-literal one (a variable, `config()`, string building) is not guessed at: its routes are not read, and the report warns `<file>:<line> includes a route file standards cannot resolve (...)`. Each analysis is true only on evidence:
