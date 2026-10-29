@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- ui.kit-shell's account-menu signal now matches Menu-prefixed component names such as UserMenuContent. A `User`, `Account` or `Profile` name may carry a PascalCase suffix after `Menu` (`UserMenuContent`, `UserMenuTrigger`, `AccountMenuItems`) or a kebab-case one (`user-menu-content`); `Dropdown`, `Nav` and `Navigation` are unchanged, and names without that prefix (`NavigationMenu`, `MenuButton`) still do not count.
+
 ## 0.11.42 - 2026-10-29
 
 ### Added
