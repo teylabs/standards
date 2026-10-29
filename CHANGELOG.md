@@ -1,10 +1,9 @@
 # Changelog
 
-## 0.11.33 - 2026-10-29
+## Unreleased
 
 ### Added
 
-- **New opt-in rule `destructive-db` checks that a service provider prohibits destructive database commands outside testing.** A `migrate:fresh --env=testing` with no `.env.testing` silently falls back to `.env` and wipes the local database. Listed in `Configuration::optionalRules`, the rule requires a service provider's `boot()` to call `DB::prohibitDestructiveCommands(...)` with a guard that is true outside testing, such as `! $this->app->runningUnitTests() && ! config('database.allow_destructive')`. A missing call, a bare call or `true` (which blocks `RefreshDatabase` too), a production-only guard and `env()` in the guard are reported. A deliberate local reset uses a one-off `ALLOW_DESTRUCTIVE_DB=1 php artisan migrate:fresh`, read through a config key; the README explains why the flag never goes in `.env`. Off by default, so existing apps see no change.
 - **Catalog leaf `mail-notifications.intake` for inbound email**, ready with the Bakery's `mod:butter/email-intake {Name}` recipe. The mail-notifications branch reaches it through a new answer, "Receive email into the app". Its rules cover a verified provider signature (Svix-style HMAC-SHA256 with a 300-second tolerance), idempotent message ids, queued extraction into a draft a person reviews, no PII in logs, and the webhook's rule 55 declaration.
 
 ### Changed
@@ -12,6 +11,12 @@
 - **`data-actions.document` is ready.** It is built with the Bakery's pdf-reports recipe. Its summary and rules now name the generated policy's 403 test, and sending or attaching the PDF is still marked as not covered.
 - **`mcp.agent-docs` is ready, with the Bakery's `mod:butter/agent-docs {Name}` recipe.** It serves a public `/llms.txt` index built from the `agent-docs.features` registry, plus the registry validator and the CI drift check. The leaf no longer claims rule 55, because the capability manifest and parity guard belong to `mcp.write`.
 - **A ready catalog leaf needs a `make` or a `recipe_make` command**, so a leaf that only the Bakery generates can be ready. Its `preferred_make` is null when the recipe package is not installed.
+
+## 0.11.33 - 2026-10-29
+
+### Added
+
+- **New opt-in rule `destructive-db` checks that a service provider prohibits destructive database commands outside testing.** A `migrate:fresh --env=testing` with no `.env.testing` silently falls back to `.env` and wipes the local database. Listed in `Configuration::optionalRules`, the rule requires a service provider's `boot()` to call `DB::prohibitDestructiveCommands(...)` with a guard that is true outside testing, such as `! $this->app->runningUnitTests() && ! config('database.allow_destructive')`. A missing call, a bare call or `true` (which blocks `RefreshDatabase` too), a production-only guard and `env()` in the guard are reported. A deliberate local reset uses a one-off `ALLOW_DESTRUCTIVE_DB=1 php artisan migrate:fresh`, read through a config key; the README explains why the flag never goes in `.env`. Off by default, so existing apps see no change.
 
 ## 0.11.32 - 2026-10-29
 
