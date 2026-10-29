@@ -220,7 +220,7 @@ test('gaps: a third-party import, a generic name and a package.json library; a d
 });
 
 test('the generic-name, framework-runtime and tooling lists are closed and versioned', function () {
-    expect(Lists::VERSION)->toBe(2)
+    expect(Lists::VERSION)->toBe(3)
         ->and(Lists::generic('Button'))->toBeTrue()
         ->and(Lists::generic('InputText'))->toBeTrue()
         ->and(Lists::generic('MenuBar'))->toBeTrue()
@@ -398,9 +398,9 @@ test('--json is a stable format-1 document with rows, evidence, gaps, facts, inv
     $report = adoptionReport('mixed', 'ci', ['kit', 'reports']);
 
     expect(array_keys($report))->toBe(['format', 'app', 'generated_at', 'mode', 'lists', 'overridden', 'inventories', 'facts', 'adopted_tables', 'rows', 'gaps', 'exemptions', 'warnings', 'summary', 'blocking', 'exit_code'])
-        ->and($report)->toMatchArray(['format' => 1, 'app' => 'fixture/mixed', 'generated_at' => '2026-10-29', 'mode' => 'ci', 'lists' => 2])
+        ->and($report)->toMatchArray(['format' => 1, 'app' => 'fixture/mixed', 'generated_at' => '2026-10-29', 'mode' => 'ci', 'lists' => 3])
         ->and(array_keys($report['rows'][0]))->toBe(['package', 'id', 'layer', 'group', 'label', 'feature', 'installed', 'applies', 'status', 'underlying', 'new', 'since', 'note', 'cause', 'evidence', 'signals', 'matches', 'replaced', 'uses', 'docs', 'exemption', 'skipped'])
-        ->and(array_keys($report['gaps'][0]))->toBe(['subject', 'kind', 'file', 'line', 'detail', 'exemption'])
+        ->and(array_keys($report['gaps'][0]))->toBe(['subject', 'kind', 'file', 'line', 'detail', 'files', 'exemption'])
         ->and(array_keys($report['blocking'][0]))->toBe(['kind', 'package', 'subject', 'evidence', 'expects', 'cause'])
         ->and(array_keys($report['inventories'][0]))->toBe(['package', 'npm', 'alias', 'origin', 'source', 'version', 'installed', 'surfaces'])
         ->and(array_keys($report['facts']))->toBe(['acme/reports', 'tey/kit'])
