@@ -556,7 +556,7 @@
         "ui-page.actions": {
             "id": "ui-page.actions",
             "question": "Which kind of control?",
-            "why": "Add buttons, external links, action menus and uploads each have a kit component and a check.",
+            "why": "Add buttons, external links, action menus, page header actions and uploads each have a kit component and a check.",
             "options": [
                 {
                     "answer": "An add or create button",
@@ -567,8 +567,8 @@
                     "next": "ui-page.external-link"
                 },
                 {
-                    "answer": "A menu of actions on a record",
-                    "next": "ui-page.action-menu"
+                    "answer": "Actions on a page header or a record",
+                    "next": "ui-page.action-place"
                 },
                 {
                     "answer": "A file upload field",
@@ -577,6 +577,25 @@
                 {
                     "answer": "None of these",
                     "next": "ui-page.actions.byo"
+                }
+            ]
+        },
+        "ui-page.action-place": {
+            "id": "ui-page.action-place",
+            "question": "Where do the actions sit?",
+            "why": "The page header splits its actions into a primary, secondaries and More; a record's menu holds its actions behind one trigger.",
+            "options": [
+                {
+                    "answer": "In the page header, beside the title",
+                    "next": "ui-page.header-actions"
+                },
+                {
+                    "answer": "In a menu on one record",
+                    "next": "ui-page.action-menu"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.action-place.byo"
                 }
             ]
         },
@@ -1105,6 +1124,49 @@
                 }
             ]
         },
+        "ui-page.header-actions": {
+            "id": "ui-page.header-actions",
+            "recipe": "Page header actions",
+            "summary": "A page header shows one filled primary, up to two secondaries and a More menu, split by the kit from server descriptors with a priority.",
+            "kit": [
+                "@kit/ui Page",
+                "@kit/ui FloatingToolbar",
+                "@kit/ui ActionBar"
+            ],
+            "make": "standards:make page --flavor=show",
+            "checks": [
+                "ui header-actions"
+            ],
+            "paths": [],
+            "keywords": [
+                "header actions",
+                "page actions",
+                "primary action",
+                "more menu",
+                "overflow",
+                "toolbar"
+            ],
+            "status": "ready",
+            "components": [
+                {
+                    "name": "page header",
+                    "kit_component": "Page",
+                    "use": "Pass the page's action descriptors as :actions; the kit splits them",
+                    "props_hint": "actions, status"
+                },
+                {
+                    "name": "floating toolbar",
+                    "kit_component": "FloatingToolbar",
+                    "use": "The same split on a floating toolbar",
+                    "props_hint": "actions, status, @page-action"
+                }
+            ],
+            "rules": [
+                "Header actions are server descriptors passed to Page :actions (or FloatingToolbar), not hand-placed buttons in the #actions slot; the slot is the escape hatch for a control that is not an action.",
+                "Set `priority` on the Action: at most one `primary`, up to two `secondary`, the rest `overflow`. With more than 3 actions and no priority the kit folds the extras into More by position.",
+                "On phone only the primary stays visible; everything else is in More. A status (saving, saved, error) goes in the #status slot or the status prop, which is aria-live polite."
+            ]
+        },
         "ui-page.action-menu": {
             "id": "ui-page.action-menu",
             "recipe": "Record action menu",
@@ -1629,6 +1691,17 @@
         },
         "ui-page.actions.byo": {
             "id": "ui-page.actions.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.action-place.byo": {
+            "id": "ui-page.action-place.byo",
             "recipe": "Build your own",
             "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
             "kit": [],

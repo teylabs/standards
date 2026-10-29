@@ -6,6 +6,7 @@ namespace Tey\Standards\Adoption;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use Tey\Standards\Checks\KitShell;
 use Tey\Standards\Configuration;
 use Tey\Standards\Conformance;
 use Tey\Standards\Ratchet;
@@ -685,13 +686,18 @@ final class Scanner
     }
 
     /**
-     * `core` ships with the package. Another feature is installed when `config/<package name>.php` sets `features` to a literal list naming it,
+     * `core` ships with the package. tey/kit's `shell` is installed exactly when ui.kit-shell reads it adopted (KitShell::adopted: `shell` or
+     * `session-ui`, which carries it). Another feature is installed when `config/<package name>.php` sets `features` to a literal list naming it,
      * or, with no such list, when an installed tey/mod lineage record names `<composer>:<feature>`.
      */
     private function featureInstalled(string $package, string $feature): bool
     {
         if ($feature === 'core') {
             return true;
+        }
+        // kit installs shell with session-ui: ui.kit-shell's own reading (features list, else lineage records) decides, so the two agree.
+        if ($package === 'tey/kit' && $feature === 'shell') {
+            return KitShell::adopted($this->app->base);
         }
         $config = 'config/'.explode('/', $package)[1].'.php';
         if ($this->app->exists($config)) {

@@ -485,3 +485,38 @@ test('an adoption.* allowlist entry is not an unregistered rule for the conforma
     expect(fn () => (new Tey\Standards\Ratchet([$entry]))->assertRules(['ui.kit-shell']))->not->toThrow(InvalidArgumentException::class)
         ->and(fn () => (new Tey\Standards\Ratchet([['rule' => 'adoptions.x'] + $entry]))->assertRules(['ui.kit-shell']))->toThrow(InvalidArgumentException::class, 'unregistered rule [adoptions.x]');
 });
+
+test('kit\'s shell reads installed when session-ui is, from a features list or a lineage record, as ui.kit-shell reads it', function (string $how) {
+    $directory = sys_get_temp_dir().'/adoption-'.bin2hex(random_bytes(4));
+    $files = [
+        'composer.json' => '{"name": "fixture/session-ui", "require": {"tey/kit": "^0.7"}}',
+        'routes/web.php' => "<?php\n\nRoute::middleware(['auth'])->get('/dashboard', fn () => inertia('Dashboard/Page'));\n",
+        'resources/js/pages/Workspace/Layout.vue' => "<template>\n    <slot />\n</template>\n",
+    ];
+    $files += $how === 'features'
+        ? ['config/kit.php' => "<?php\n\nreturn ['features' => ['session-ui']];\n"]
+        : ['.mod-maintenance/installed/'.hash('sha256', 'session-ui').'.json' => json_encode(['format' => 1, 'owner' => 'tey/mod:installed', 'artifact' => ['name' => 'tey/kit:session-ui', 'files' => []]])];
+    foreach ($files as $path => $content) {
+        is_dir(dirname($directory.'/'.$path)) || mkdir(dirname($directory.'/'.$path), 0777, true);
+        file_put_contents($directory.'/'.$path, $content);
+    }
+
+    try {
+        $config = adoptionConfiguration($directory);
+        $row = fn (): array => array_column((new Scanner(new App($directory, $config), [Inventory::load(adoptionFixture('inventories/kit.json'), 'option')], $config, new DateTimeImmutable('2026-10-29')))->report()['rows'], null, 'id')['shell.workspace'];
+
+        expect(Tey\Standards\Checks\KitShell::adopted($directory))->toBeTrue()
+            ->and($row())->toMatchArray(['installed' => true, 'status' => 'adopted', 'note' => null]);
+
+        // A literal features list without shell or session-ui means not installed, whatever the records say, as in ui.kit-shell.
+        is_dir($directory.'/config') || mkdir($directory.'/config');
+        file_put_contents($directory.'/config/kit.php', "<?php\n\nreturn ['features' => ['workspaces']];\n");
+        expect($row())->toMatchArray(['installed' => false, 'status' => 'missing', 'note' => 'feature shell is not installed']);
+    } finally {
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($iterator as $file) {
+            $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+        }
+        rmdir($directory);
+    }
+})->with(['features', 'lineage']);
