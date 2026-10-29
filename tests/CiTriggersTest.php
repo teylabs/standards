@@ -585,3 +585,26 @@ test('the reusable standards workflow declares runs-on and timeout-minutes input
         ->and($workflow['jobs']['standards']['runs-on'])->toBe('${{ inputs.runs-on }}')
         ->and($workflow['jobs']['standards']['timeout-minutes'])->toBe('${{ inputs.timeout-minutes }}');
 });
+
+test('[rule 51] a normal job timeout-minutes must be a positive whole number or an expression', function (mixed $minutes, array $reasons) {
+    $workflow = Yaml::parseFile(dirname(__DIR__).'/fixtures/CI/compliant.yml');
+    $workflow['jobs']['test']['timeout-minutes'] = $minutes;
+    file_put_contents($this->ciBase.'/.github/workflows/tests.yml', Yaml::dump($workflow, 10));
+
+    expect(array_column((new CiTriggers($this->ciBase, distribution: 'app'))->findings(), 'reason'))->toBe($reasons);
+})->with([
+    'valid int' => [10, []],
+    'digit string' => ['25', []],
+    'inputs expression' => ['${{ inputs.timeout-minutes }}', []],
+    'matrix expression' => ['${{ matrix.x }}', []],
+    'zero' => [0, ['timeout: timeout-minutes must be a positive whole number of minutes.']],
+    'negative' => [-5, ['timeout: timeout-minutes must be a positive whole number of minutes.']],
+    'fraction' => [1.5, ['timeout: timeout-minutes must be a positive whole number of minutes.']],
+    'text' => ['soon', ['timeout: timeout-minutes must be a positive whole number of minutes.']],
+]);
+
+test('[rule 51] the standards reusable workflow itself passes with its expression timeout', function () {
+    copy(dirname(__DIR__).'/.github/workflows/standards.yml', $this->ciBase.'/.github/workflows/standards.yml');
+
+    expect(array_filter((new CiTriggers($this->ciBase, distribution: 'app'))->findings(), fn ($f) => str_starts_with($f['reason'], 'timeout')))->toBe([]);
+});

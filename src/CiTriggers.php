@@ -228,6 +228,8 @@ final readonly class CiTriggers
                 }
             } elseif (! isset($job['timeout-minutes'])) {
                 $findings[] = ['job' => $name, 'reason' => 'timeout: set timeout-minutes on every job.'];
+            } elseif (! $this->positiveMinutes($job['timeout-minutes'])) {
+                $findings[] = ['job' => $name, 'reason' => 'timeout: timeout-minutes must be a positive whole number of minutes.'];
             }
         }
 
@@ -270,8 +272,13 @@ final readonly class CiTriggers
         return is_string($uses) && preg_match('#^teylabs/standards/\.github/workflows/standards\.ya?ml@\S+$#i', trim($uses)) === 1;
     }
 
+    /** A whole number of minutes above zero; a ${{ }} expression cannot be resolved statically and passes. */
     private function positiveMinutes(mixed $value): bool
     {
+        if (is_string($value) && preg_match('/^\s*\$\{\{.*\}\}\s*$/s', $value) === 1) {
+            return true;
+        }
+
         if (is_int($value)) {
             return $value > 0;
         }
