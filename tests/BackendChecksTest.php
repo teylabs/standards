@@ -66,6 +66,25 @@ test('toast reads an array flash key by key and lets literal non-outcome keys th
     'implicit and integer keys' => 'Post::query()->with(["author", 3 => "tags"]);',
     'inertia non-outcome key' => 'use Inertia\Inertia; Inertia::flash(["ref" => "A-1"]);',
     'two-argument non-literal key, as before' => 'back()->with($key, "Saved");',
+    'a query builder with a variable' => 'Post::query()->with($relations);',
+    'a model with a variable' => 'Post::with($relations);',
+    'a query variable with a variable' => '$query->with($r);',
+    'a query variable with a spread' => 'function f() { $query = Post::query(); $query->with([...$r]); }',
+    'an unknown method result with a variable' => '$this->builder()->with($data);',
+    'a variable reassigned off a redirect' => 'function f() { $r = back(); $r = Post::query(); $r->with($data); }',
+]);
+
+test('toast fails closed on an unreadable flash argument when the chain is rooted in a redirect or response', function (string $source) {
+    expect(($this->backend)('toast', $source))->toContain(['target' => 'src/Controllers/PostsController.php', 'check' => 'flash outcomes through Toastable, not session keys']);
+})->with([
+    'redirect()->back()->with($data)' => 'redirect()->back()->with($data);',
+    'back()->with([...$x])' => 'back()->with([...$x]);',
+    'a variable assigned from redirect()->route()' => 'function f() { $r = redirect()->route("x"); return $r->with($data); }',
+    'to_route()' => 'to_route("x")->with($data);',
+    'Redirect facade' => 'use Illuminate\Support\Facades\Redirect; Redirect::to("/x")->with([$k => "Saved"]);',
+    'response()' => 'response()->redirectTo("/x")->with($data);',
+    'Inertia::flash($data)' => 'use Inertia\Inertia; Inertia::flash($data);',
+    'literal outcome key on an unknown root, as before' => '$this->builder()->with(["status" => "Saved"]);',
 ]);
 
 test('toast checks each literal redirect branch and accepts all toast macro forms', function (string $expression, bool $fails) {
