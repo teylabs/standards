@@ -8,6 +8,10 @@
 - **The FormStatus exemption follows the page's component tree.** A guest form's `back()` now also passes when a `.vue` file the page imports, up to three import levels below it, renders `<FormStatus>` imported from `@/components/Kit` (or `Kit/Form`); a kit-owned file counts as the importer, and an import cycle ends the walk. `ui.kit-shell`'s import walker moved to `Checks\VueImports`, which both rules use; ui.kit-shell behaves as before.
 - **A named flash shown by FormStatus passes both toast checks.** `back()->with('<key>', ...)` or `->with(['<key>' => ...])` on a provably guest route passes when a `<FormStatus>` in the page tree binds `:message` to `flash.<key>`, `$page.props.flash.<key>`, `usePage().props.flash.<key>` or a page prop declared as `<key>`. The `flash outcomes through Toastable` check accepts `status` and the other outcome keys under the same proof, and `ui toast` no longer counts a kit FormStatus `:message` binding as loose flash text. A key that is set but not read, or a non-literal key, still fails. Fortify's vendor responses were never flagged, so no Fortify exemption was needed.
 
+### Fixed
+
+- **`standards:adoption` and `bin/standards adoption`: a `{kind: rule}` signal that can't run is skipped instead of exiting 2.** When the standards process cannot load Pest, pest-plugin-arch or nikic/php-parser (the `Architecture checks require…` condition, now `Conformance::missingDependencies()` and a typed `Tey\Standards\RuleUnavailable`), the plain report records the signal in the row's new `skipped` list (`[{signal, kind: 'rule', rule, reason}]`, additive to format 1), lets the surface's other signals decide the row, shows a `skipped [n]` marker with a footnote, and exits 0. `--ci` and `--compliance` still exit 2, naming the surface, rule and reason. Any other rule failure still exits 2. Before, kit's fixture CI, which runs `vendor/bin/standards` without Pest, exited 2 on any surface with a `ui.kit-shell` signal.
+
 ## 0.11.47 - 2026-10-29
 
 ### Fixed

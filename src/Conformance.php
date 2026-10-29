@@ -66,8 +66,8 @@ final class Conformance
 
     public function __construct(private readonly Configuration $config)
     {
-        if (! class_exists(TestSuite::class) || ! interface_exists(ArchExpectation::class) || ! class_exists(ParserFactory::class)) {
-            throw new LogicException('Architecture checks require pestphp/pest ^4.7 || ^5.0, pestphp/pest-plugin-arch ^4.0 || ^5.0 and nikic/php-parser ^5.0 in require-dev.');
+        if (($missing = self::missingDependencies()) !== null) {
+            throw new RuleUnavailable($missing);
         }
 
         self::assertSupportedPest(InstalledVersions::isInstalled('pestphp/pest') ? InstalledVersions::getPrettyVersion('pestphp/pest') : null);
@@ -75,6 +75,16 @@ final class Conformance
         $this->source = new Source($config);
         $this->ratchet = new Ratchet($config->allowlist);
         $this->ratchet->assertRules(array_map('strval', array_keys(self::TESTS)));
+    }
+
+    /** Why architecture checks cannot run in this process (Pest, pest-plugin-arch or nikic/php-parser not loadable), or null when they can. */
+    public static function missingDependencies(): ?string
+    {
+        if (! class_exists(TestSuite::class) || ! interface_exists(ArchExpectation::class) || ! class_exists(ParserFactory::class)) {
+            return 'Architecture checks require pestphp/pest ^4.7 || ^5.0, pestphp/pest-plugin-arch ^4.0 || ^5.0 and nikic/php-parser ^5.0 in require-dev.';
+        }
+
+        return null;
     }
 
     /**
