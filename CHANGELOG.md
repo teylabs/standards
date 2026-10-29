@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`toast`: an array flash no longer slips past `flash outcomes through Toastable`.** `->with([...])` and `Inertia::flash([...])` are now read key by key, as if each key were passed singly: a literal outcome key (`status`, `success`, `message`, `error`, `flash`) is flagged, and literal non-outcome, implicit or integer keys pass. What the rule can't read key by key fails closed when the chain is provably rooted in a redirect or response (`redirect()`, `back()`, `to_route()`, `response()`, `Redirect::*`, `Inertia::*`, or a variable every assignment in the method sets to one of those): a non-literal key, a spread (`[...$data]` or `->with(...$data)`) and a lone non-array argument such as `->with($data)` or `->with(compact(...))`. On such a chain, `->with($key, $value)` with a non-literal `$key` fails closed too; a literal non-outcome key still passes. On a model, a query builder or an unknown variable or method result, such as `Post::query()->with($relations)` or `->with($key, $callback)`, only literal outcome keys are flagged. The FormStatus exemption still applies, to every key in the chain: an array whose keys are all read by a kit FormStatus `:message` on a guest route passes, and one with an unread key is flagged. `session()->flash(...)` and `Session::flash(...)` were already flagged for any key.
+
 ## 0.11.48 - 2026-10-29
 
 ### Added
