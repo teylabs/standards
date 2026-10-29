@@ -408,6 +408,11 @@ final class Conformance
         $paths = [];
 
         foreach ($classes as $class => $path) {
+            // Seeders and factories make fake data with rand()/mt_rand(), which is normal there: leave them out of the security preset only.
+            if ($rule === 'preset security' && $this->source->inside($path, $this->config->securityExemptRoots)) {
+                continue;
+            }
+
             $paths[realpath($this->config->base.'/'.$path) ?: $this->config->base.'/'.$path] = $class;
         }
 

@@ -23,6 +23,10 @@ final class PatternCommand extends Command
             fwrite(STDERR, 'Warning: '.$warning.PHP_EOL);
         }
 
+        if (($advisory = KitExports::lag($this->laravel->basePath())) !== null) {
+            fwrite(STDERR, 'Advisory: '.$advisory.PHP_EOL);
+        }
+
         $lookup = new Lookup(TreeCatalog::shipped(), InstalledVersions::isInstalled(Lookup::RECIPE_PACKAGE));
         $query = $this->argument('query');
         $answers = (array) $this->option('answer');
