@@ -261,6 +261,14 @@ test('descriptors still catches every auth-shaped check', function (string $file
     'hasPermission(' => ['x.ts', "hasPermission('posts.edit')", 'role or permission check'],
     'can(' => ['x.ts', "if (can('update')) {}", 'role or permission check'],
     'cannot(' => ['x.ts', "if (cannot('update')) {}", 'role or permission check'],
+    '$can(' => ['x.vue', "<script setup></script>\n<template><button v-if=\"\$can('update')\"/></template>", 'role or permission check'],
+    'user.can(' => ['x.ts', "if (user.can('update')) {}", 'role or permission check'],
+    'auth user ?.can(' => ['x.ts', "if (auth.user?.can('delete')) {}", 'role or permission check'],
+    '$page.props.auth.can(' => ['x.vue', "<script setup>\nconst ok = \$page.props.auth.can('update');\n</script>\n<template><div/></template>", 'role or permission check'],
+    'page.props.auth.cannot(' => ['x.ts', "const blocked = page.props.auth.cannot('update');", 'role or permission check'],
+    'permissions.can(' => ['x.ts', "permissions.can('posts.edit')", 'role or permission check'],
+    'gate.can(' => ['x.ts', "gate.can('update', post)", 'role or permission check'],
+    'policy.cannot(' => ['x.ts', "policy.cannot('delete')", 'role or permission check'],
     'permissions lookup' => ['x.ts', "const ok = user.permissions.includes('posts.edit');", 'role or permission check'],
     'permissions[' => ['x.ts', "const ok = permissions['posts.edit'];", 'role or permission check'],
     '$page.props.auth roles' => ['x.vue', "<script setup>\nconst r = \$page.props.auth.user.roles;\n</script>\n<template><div/></template>", 'role or permission check'],
@@ -272,7 +280,7 @@ test('descriptors still catches every auth-shaped check', function (string $file
     'boolean can-map' => ['x.ts', 'const a = props.can.update;', 'boolean can-map'],
 ]);
 
-test('descriptors ignores ARIA roles, domain roles and identifiers that merely contain "role"', function (string $file, string $code) {
+test('descriptors ignores ARIA roles, domain roles, identifiers that merely contain "role", and can() on other objects', function (string $file, string $code) {
     expect(descriptorFindings($file, $code))->toBe([]);
 })->with([
     'an ARIA role attribute' => ['x.vue', "<script setup></script>\n<template><div role=\"group\" :role=\"'group'\"/></template>"],
@@ -280,4 +288,7 @@ test('descriptors ignores ARIA roles, domain roles and identifiers that merely c
     'a domain Role type' => ['x.ts', "type FeedRole = 'actor' | 'object' | 'target';\nconst role: FeedRole = 'actor';\nif (role === 'actor') {}"],
     'a node[role] index' => ['x.ts', "const label = node[role];\nconst kind = item.role === 'object' ? 1 : 2;"],
     'identifiers containing role' => ['x.ts', "const controller = makeController();\nconst payroleCount = 2;\nconst rolesOfSpeech = ['a'];"],
+    'Tiptap editor.can().undo()' => ['x.ts', "const undoable = editor.can().undo();\nconst redoable = editor.can().redo();"],
+    'a command chain .can()' => ['x.ts', "const ok = editor.chain().focus().can().toggleBold().run();\nconst c = chain.can();"],
+    'can() on a Vue ref' => ['x.vue', "<script setup>\nconst ok = editorRef.value?.can().undo();\n</script>\n<template><button :disabled=\"!editor.can().redo()\"/></template>"],
 ]);

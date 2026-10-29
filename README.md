@@ -677,7 +677,7 @@ PHP checks resolve imports and aliases and ignore comments and strings. Toast an
 The `descriptors` rule rejects role/permission checks and boolean can-maps in frontend source and PHP response arrays. A role/permission check is auth-shaped:
 
 - `hasRole(`, `hasPermission(` and the like;
-- `can(`/`cannot(`;
+- `can(`/`cannot(` as a bare call (`can('x')`, `$can(`) or on an auth-shaped receiver (`user`, `auth`, `$page.props.auth…`, `permissions`, `gate`, `policy`). A method on any other object, such as Tiptap's `editor.can().undo()` or a command `chain.can()`, is not one;
 - a user's `.roles` or `permissions` lookups (`$page.props.auth…roles` included);
 - an admin flag (`is_admin`, `isAdmin`);
 - a `role` or `permission` compared against a known role name (`owner`, `admin`, `member`, `editor`, `viewer` and the like).
