@@ -31,12 +31,15 @@ final class Toast
                 $outcome = $key instanceof Node\Scalar\String_ && in_array($key->value, ['status', 'success', 'message', 'error', 'flash'], true);
                 $session = $call instanceof Node\Expr\MethodCall && $call->var instanceof Node\Expr\FuncCall && $call->var->name instanceof Node\Name && $call->var->name->toString() === 'session';
                 $facade = $call instanceof Node\Expr\StaticCall && $call->class instanceof Node\Name ? $call->class->toString() : null;
+                // A guest form's back()->with('<key>', ...) that a FormStatus on the page it returns to shows (GuestFormStatus) is not a loose flash.
+                if ($method === 'with' && $outcome && $this->formStatusFlash($call)) {
+                    continue;
+                }
                 if (($method === 'with' && $outcome) || ($method === 'flash' && ($session || $facade === 'Illuminate\Support\Facades\Session' || ($facade === 'Inertia\Inertia' && $outcome)))) {
                     $violations[] = ['target' => $path, 'check' => 'flash outcomes through Toastable, not session keys'];
                 }
             }
         }
-        $formStatus = null;
         $invokables = $this->mutatingInvokables();
         foreach ($this->source->files($this->config->controllerRoots) as $path => $text) {
             if ($this->source->inside($path, $this->config->uiRoots)) {
@@ -60,7 +63,7 @@ final class Toast
                     }
                     foreach ($this->returns($method->stmts ?? []) as $return) {
                         // A guest form's back() to a page that renders kit's <FormStatus> confirms in place: no toast (GuestFormStatus).
-                        if ($return->expr !== null && $this->redirectWithoutToast($return->expr) && ! (GuestFormStatus::isBack($return->expr) && ($formStatus ??= new GuestFormStatus($this->config, $this->source))->proves($class, $name))) {
+                        if ($return->expr !== null && $this->redirectWithoutToast($return->expr) && ! (($keys = GuestFormStatus::backFlashKeys($return->expr)) !== null && $this->formStatus()->proves($class, $name, $keys))) {
                             $violations[] = ['target' => $path, 'check' => $class->name.'::'.$name.' redirect must chain ->toast*()'];
                         }
                     }
@@ -69,6 +72,41 @@ final class Toast
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    private ?GuestFormStatus $formStatus = null;
+
+    private function formStatus(): GuestFormStatus
+    {
+        return $this->formStatus ??= new GuestFormStatus($this->config, $this->source);
+    }
+
+    /**
+     * Whether a `->with(...)` call is part of `return back()->with(...)` in a public method of a class (not in a closure), and
+     * GuestFormStatus proves that method a guest form whose page shows every flashed key through `<FormStatus>`.
+     */
+    private function formStatusFlash(Node\Expr\MethodCall $call): bool
+    {
+        $top = $call;
+        while (($parent = $top->getAttribute('parent')) instanceof Node\Expr\MethodCall && $parent->var === $top) {
+            $top = $parent;
+        }
+        $return = $top->getAttribute('parent');
+        $method = null;
+        if ($return instanceof Node\Stmt\Return_) {
+            // The nearest enclosing function: a closure or arrow function in between means the return is not the action's.
+            $method = $return->getAttribute('parent');
+            while ($method instanceof Node && ! $method instanceof Node\FunctionLike) {
+                $method = $method->getAttribute('parent');
+            }
+        }
+        $class = $method instanceof Node\Stmt\ClassMethod ? $method->getAttribute('parent') : null;
+        if (! $method instanceof Node\Stmt\ClassMethod || ! $method->isPublic() || ! $class instanceof Node\Stmt\Class_) {
+            return false;
+        }
+        $keys = GuestFormStatus::backFlashKeys($top);
+
+        return $keys !== null && $keys !== [] && $this->formStatus()->proves($class, $method->name->toString(), $keys);
     }
 
     /** @param array<Node> $nodes

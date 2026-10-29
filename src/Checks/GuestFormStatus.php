@@ -24,6 +24,8 @@ use Tey\Standards\Source;
  *  4. That page is exactly one `<page>.vue` under the page roots, and it, or a `.vue` file it imports (app- or kit-owned, up to three import levels,
  *     `@/` and relative specifiers only, cycles cut), has a script that imports FormStatus from `@/components/Kit` or `@/components/Kit/Form`
  *     and a template that renders `<FormStatus`.
+ *  5. Each session key the back() flashes (`->with('<key>', ...)` or `->with(['<key>' => ...])`, literal identifier keys only) is shown by a
+ *     `<FormStatus>` in that tree whose `:message` reads it (keyReferenced()). A key set but not read, or a non-literal key, fails.
  */
 final class GuestFormStatus
 {
@@ -55,7 +57,8 @@ final class GuestFormStatus
 
     public function __construct(private readonly Configuration $config, private readonly Source $source) {}
 
-    public function proves(Node\Stmt\Class_ $class, string $action): bool
+    /** @param list<string> $keys session keys the back() flashes; each must be shown by a FormStatus in the page's tree (keyReferenced()) */
+    public function proves(Node\Stmt\Class_ $class, string $action, array $keys = []): bool
     {
         if (! isset($class->namespacedName) || self::declaresMiddleware($class)) {
             return false;
@@ -78,7 +81,7 @@ final class GuestFormStatus
                 return false;
             }
             $page = $this->renderedPage($class, $pages[0]['method']);
-            if ($page === null || ! $this->rendersFormStatus($page)) {
+            if ($page === null || ! $this->rendersFormStatus($page, $keys)) {
                 return false;
             }
         }
@@ -89,15 +92,66 @@ final class GuestFormStatus
     /** `back()` or `redirect()->back()`, without anything chained but `->withInput()` / `->withErrors()`. */
     public static function isBack(Node\Expr $expression): bool
     {
-        while ($expression instanceof Node\Expr\MethodCall && $expression->name instanceof Node\Identifier && in_array(strtolower($expression->name->toString()), ['withinput', 'witherrors'], true)) {
+        return self::backFlashKeys($expression) === [];
+    }
+
+    /**
+     * The session keys a `back()` / `redirect()->back()` flashes through `->with('<key>', ...)` or `->with(['<key>' => ...])`, in a chain that
+     * holds nothing else but `->withInput()` / `->withErrors()`; [] for a plain back(). Null when it is not such a chain, or when any key is
+     * not a literal identifier (`flash.<key>` must be able to name it).
+     *
+     * @return ?list<string>
+     */
+    public static function backFlashKeys(Node\Expr $expression): ?array
+    {
+        $keys = [];
+        while ($expression instanceof Node\Expr\MethodCall && $expression->name instanceof Node\Identifier && in_array(strtolower($expression->name->toString()), ['withinput', 'witherrors', 'with'], true)) {
+            if (strtolower($expression->name->toString()) === 'with') {
+                $named = self::withKeys($expression);
+                if ($named === null) {
+                    return null;
+                }
+                $keys = [...$keys, ...$named];
+            }
             $expression = $expression->var;
         }
-        if ($expression instanceof Node\Expr\FuncCall && $expression->name instanceof Node\Name && $expression->name->toString() === 'back') {
-            return true;
+        $back = ($expression instanceof Node\Expr\FuncCall && $expression->name instanceof Node\Name && $expression->name->toString() === 'back')
+            || ($expression instanceof Node\Expr\MethodCall && $expression->name instanceof Node\Identifier && strtolower($expression->name->toString()) === 'back'
+                && $expression->var instanceof Node\Expr\FuncCall && $expression->var->name instanceof Node\Name && $expression->var->name->toString() === 'redirect' && $expression->var->getArgs() === []);
+
+        return $back ? array_values(array_unique($keys)) : null;
+    }
+
+    /** @return ?list<string> the literal keys one `->with(...)` flashes, or null */
+    private static function withKeys(Node\Expr\MethodCall $call): ?array
+    {
+        $arguments = $call->getArgs();
+        $first = $arguments[0] ?? null;
+        if ($call->isFirstClassCallable() || $first === null || $first->unpack || $first->name !== null) {
+            return null;
+        }
+        $keys = [];
+        if ($first->value instanceof Node\Scalar\String_ && count($arguments) === 2) {
+            $keys[] = $first->value;
+        } elseif ($first->value instanceof Node\Expr\Array_ && count($arguments) === 1 && $first->value->items !== []) {
+            foreach ($first->value->items as $item) {
+                if ($item === null || $item->unpack || ! $item->key instanceof Node\Scalar\String_) {
+                    return null;
+                }
+                $keys[] = $item->key;
+            }
+        } else {
+            return null;
+        }
+        $names = [];
+        foreach ($keys as $key) {
+            if (preg_match('~\A[A-Za-z_$][\w$]*\z~', $key->value) !== 1) {
+                return null;
+            }
+            $names[] = $key->value;
         }
 
-        return $expression instanceof Node\Expr\MethodCall && $expression->name instanceof Node\Identifier && strtolower($expression->name->toString()) === 'back'
-            && $expression->var instanceof Node\Expr\FuncCall && $expression->var->name instanceof Node\Name && $expression->var->name->toString() === 'redirect' && $expression->var->getArgs() === [];
+        return $names;
     }
 
     /**
@@ -307,7 +361,8 @@ final class GuestFormStatus
         return count($pages) === 1 ? (string) array_key_first($pages) : null;
     }
 
-    private function rendersFormStatus(string $page): bool
+    /** @param list<string> $keys */
+    private function rendersFormStatus(string $page, array $keys): bool
     {
         if (str_contains($page, '..') || $page === '') {
             return false;
@@ -324,14 +379,70 @@ final class GuestFormStatus
             return false;
         }
         $page = substr($files[0], strlen($this->config->base) + 1);
+        $follow = fn (array $import, string $from): ?string => self::component($this->config->base, $import, $from);
+        if ($keys === []) {
+            return VueImports::reaches($this->config->base, $page, self::LEVELS, fn (string $path, string $source): bool => self::rendersKitFormStatus($source), $follow);
+        }
+        foreach ($keys as $key) {
+            if (! VueImports::reaches($this->config->base, $page, self::LEVELS, fn (string $path, string $source): bool => self::rendersKitFormStatus($source) && self::keyReferenced($source, $key, $path === $page), $follow)) {
+                return false;
+            }
+        }
 
-        return VueImports::reaches(
-            $this->config->base,
-            $page,
-            self::LEVELS,
-            fn (string $path, string $source): bool => self::rendersKitFormStatus($source),
-            fn (array $import, string $from): ?string => self::component($this->config->base, $import, $from),
-        );
+        return true;
+    }
+
+    /**
+     * Whether a `<FormStatus>` in the file binds `message` (`:message` or `v-bind:message`, FormStatus's text prop in kit) to an expression
+     * that reads the flashed key: `flash.<key>`, `$page.props.flash.<key>` or `usePage().props.flash.<key>` (`?.` allowed), or, on the page
+     * itself, `<key>` / `props.<key>` when its defineProps declares `<key>`. A bare `<FormStatus />` reads the `status` page prop, which a
+     * flash reaches only through shared props this reader does not follow, so it never proves a key.
+     */
+    public static function keyReferenced(string $source, string $key, bool $page): bool
+    {
+        $quoted = preg_quote($key, '~');
+        $flash = '~(?:(?<![\w$.])|(?<=\$page\.props\.)|(?<=usePage\(\)\.props\.))flash\??\.'.$quoted.'(?![\w$])~';
+        $prop = '~(?<![\w$.])(?:props\??\.)?'.$quoted.'(?![\w$])~';
+        $declared = $page && self::declaresProp(VueImports::code(VueImports::scripts($source)), $key);
+        foreach (self::formStatusMessages($source) as $expression) {
+            if (preg_match($flash, $expression) === 1 || ($declared && preg_match($prop, $expression) === 1)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @return list<string> the expression of every `:message` / `v-bind:message` on a `<FormStatus>` tag in the template */
+    public static function formStatusMessages(string $source): array
+    {
+        preg_match_all('~<FormStatus\b((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>~', FrontendSource::template($source), $tags);
+        $expressions = [];
+        foreach ($tags[1] as $attributes) {
+            preg_match_all('~(?<![\w:-])(?::|v-bind:)message\s*=\s*(?:"([^"]*)"|\'([^\']*)\')~', $attributes, $bindings, PREG_SET_ORDER);
+            foreach ($bindings as $binding) {
+                $expressions[] = ($binding[1] ?? '') !== '' ? $binding[1] : ($binding[2] ?? '');
+            }
+        }
+
+        return $expressions;
+    }
+
+    /** Whether defineProps declares the key: `defineProps<{ key: ... }>()`, `defineProps({ key: ... })` or `defineProps(['key'])`. */
+    private static function declaresProp(string $code, string $key): bool
+    {
+        $quoted = preg_quote($key, '~');
+        if (preg_match_all('~\bdefineProps\s*(?:<\s*\{([^}]*)\}\s*>|\(\s*\{([^}]*)\}|\(\s*\[([^\]]*)\])~', $code, $matches, PREG_SET_ORDER) === 0) {
+            return false;
+        }
+        foreach ($matches as $match) {
+            $body = ($match[1] ?? '').($match[2] ?? '');
+            if (preg_match('~(?:^|[\s,;{])[\'"]?'.$quoted.'[\'"]?\s*\??\s*:~', $body) === 1 || preg_match('~[\'"]'.$quoted.'[\'"]~', $match[3] ?? '') === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Whether a `.vue` file's script imports FormStatus (not renamed) from `@/components/Kit` or `@/components/Kit/Form` and its template renders `<FormStatus`. */

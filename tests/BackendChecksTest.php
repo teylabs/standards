@@ -334,6 +334,41 @@ test('the FormStatus exemption follows the page\'s .vue imports three levels dee
     ];
 });
 
+test('a guest back()->with(<key>) passes both toast checks only when a FormStatus in the page tree binds :message to that key', function (string $store, string $page, array $components, string $routes, array $checks) {
+    file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\ContactController; '.$routes);
+    file_put_contents($this->backendBase.'/bootstrap/app.php', guestBootstrap(''));
+    foreach (['resources/js/pages/Public/Contact.vue' => $page, ...$components] as $path => $source) {
+        @mkdir(dirname($this->backendBase.'/'.$path), 0777, true);
+        file_put_contents($this->backendBase.'/'.$path, $source);
+    }
+    $controller = 'namespace App; use Inertia\Inertia; class ContactController { public function show() { return Inertia::render("Public/Contact"); } public function store($key) { '.$store.' } }';
+    $found = array_column(($this->backend)('toast', $controller, ['pageRoots' => ['resources/js/pages']], 'src/Controllers/ContactController.php'), 'check');
+    expect($found)->toBe($checks);
+})->with(function () {
+    $guest = 'Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]);';
+    $view = fn (string $message, string $script = ''): string => "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit';\n{$script}</script>\n<template>\n    <FormStatus {$message}/>\n</template>\n";
+    $toastable = 'flash outcomes through Toastable, not session keys';
+    $redirect = 'ContactController::store redirect must chain ->toast*()';
+    $child = "<script setup lang=\"ts\">\nimport ContactForm from '@/components/ContactForm.vue';\n</script>\n<template>\n    <ContactForm />\n</template>\n";
+
+    return [
+        'named key read through $page.props.flash' => ['return back()->with("notice", "Thanks");', $view(':message="$page.props.flash.notice" '), [], $guest, []],
+        'named key read through usePage().props.flash?.' => ['return back()->withInput()->with("notice", "Thanks");', $view(':message="usePage().props.flash?.notice ?? null" '), [], $guest, []],
+        'named key read by a child component' => ['return back()->with(["notice" => "Thanks"]);', $child, ['resources/js/components/ContactForm.vue' => $view('v-bind:message="flash.notice" ')], $guest, []],
+        'named key as a declared page prop' => ['return back()->with("notice", "Thanks");', $view(':message="props.notice" ', "const props = defineProps<{ notice?: string }>();\n"), [], $guest, []],
+        'status read through flash: both checks pass' => ['if ($key) { return back()->with("status", "We emailed you a link."); } return back();', $view(':message="flash.status" '), [], $guest, []],
+        'named key not referenced' => ['return back()->with("notice", "Thanks");', $view(':message="$page.props.flash.other" '), [], $guest, [$redirect]],
+        'named key with a bare FormStatus' => ['return back()->with("notice", "Thanks");', $view(''), [], $guest, [$redirect]],
+        'one of two keys not referenced' => ['return back()->with(["notice" => "Thanks", "ref" => "A-1"]);', $view(':message="flash.notice" '), [], $guest, [$redirect]],
+        'a key prefixing the referenced one' => ['return back()->with("note", "Thanks");', $view(':message="flash.notes" '), [], $guest, [$redirect]],
+        'a page prop named like the key on a child, not the page' => ['return back()->with("notice", "Thanks");', $child, ['resources/js/components/ContactForm.vue' => $view(':message="notice" ', "defineProps<{ notice?: string }>();\n")], $guest, [$redirect]],
+        'non-literal key' => ['return back()->with($key, "Thanks");', $view(':message="flash.notice" '), [], $guest, [$redirect]],
+        'status not referenced: both checks fail' => ['return back()->with("status", "Sent");', $view(':message="flash.notice" '), [], $guest, [$toastable, $redirect]],
+        'status on a signed-in route: both checks fail' => ['return back()->with("status", "Sent");', $view(':message="flash.status" '), [], 'Route::middleware("auth")->group(function () { '.$guest.' });', [$toastable, $redirect]],
+        'status flashed inside a closure' => ['return tap(back(), fn () => back()->with("status", "Sent"));', $view(':message="flash.status" '), [], $guest, [$toastable]],
+    ];
+});
+
 function guestBootstrap(string $middleware): string
 {
     return '<?php use Illuminate\Foundation\Application; use Illuminate\Foundation\Configuration\Middleware; return Application::configure(basePath: dirname(__DIR__))->withRouting(web: __DIR__."/../routes/web.php")->withMiddleware(function (Middleware $middleware): void { '.$middleware.' })->create();';
