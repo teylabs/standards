@@ -40,13 +40,13 @@ final class Lists
 
     /**
      * package.json dependencies that are not UI: HTTP clients, id generators, query strings, cookies, crypto, realtime transports,
-     * routing helpers, the framework (Inertia, Vue, its router and stores) and validation. Never gap candidates. Same matching as TOOLING.
-     * Version 3 adds this list. lodash and lodash-es are deliberately left out (they are arguably UI-adjacent utility); that is left for
-     * review. Date libraries (dayjs, date-fns, moment, luxon) also stay gaps, because a kit surface may cover date display.
+     * routing helpers, general utilities (lodash), the framework (Inertia, Vue, its router and stores) and validation. Never gap candidates. Same matching as TOOLING.
+     * Version 3 adds this list. Date libraries (dayjs, date-fns, moment, luxon) also stay gaps, because a kit surface may cover date display.
      */
     public const NON_UI = [
         'axios', 'ky', 'ofetch', 'uuid', 'nanoid', 'qs', 'query-string', 'crypto-js', 'js-cookie', 'pusher-js', 'laravel-echo',
-        'socket.io-client', 'ziggy-js', '@inertiajs/*', 'vue', 'vue-router', 'pinia', 'vuex', '@vueuse/core', 'mitt', 'zod', 'yup',
+        'socket.io-client', 'ziggy-js', '@inertiajs/*', 'vue', 'vue-router', 'pinia', 'vuex', '@vueuse/core', 'mitt', 'zod', 'yup', 'lodash',
+        'lodash-es',
     ];
 
     public static function generic(string $name): bool

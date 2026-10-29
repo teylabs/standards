@@ -181,8 +181,8 @@ test('non-UI libraries are never gaps, as packages or as a component\'s imports;
     $report = calibrationReport('non-ui', calibrationInventory(['layout.page' => [['kind' => 'file-name', 'globs' => ['Nothing.vue']]]]));
 
     // Negative: every other dependency is on Lists::NON_UI, and ProjectLoader imports only axios and nanoid. Positive: dayjs (date
-    // display), lodash and lodash-es (left for review), vue-select, and ProjectPicker through vue-select alone.
-    expect(array_column($report['gaps'], 'subject'))->toBe(['resources/js/components/ProjectPicker.vue', 'npm:dayjs', 'npm:lodash', 'npm:lodash-es', 'npm:vue-select'])
+    // display), vue-select, and ProjectPicker through vue-select alone.
+    expect(array_column($report['gaps'], 'subject'))->toBe(['resources/js/components/ProjectPicker.vue', 'npm:dayjs', 'npm:vue-select'])
         ->and(array_column($report['gaps'], 'detail'))->toContain('app component: imports vue-select')
         ->and($report['lists'])->toBe(3)
         ->and(Lists::nonUi('@inertiajs/vue3'))->toBeTrue()
