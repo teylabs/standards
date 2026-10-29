@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Adoption reads Blade, Livewire and Filament as hand-rolled evidence.** `template-tag` takes an optional `in: ["vue"|"blade", ...]`, defaulting to `["vue"]`, so an existing inventory means what it did; a non-list, empty, duplicated or unknown value is a schema error (exit 2). `in: ["blade"]` reads Blade views under `resources/views` (Livewire and Volt views included), leaving out mail, email and PDF folders, published `vendor/` views, `errors/` and kit-owned files by path. It matches HTML tags and `<x-name>`, `<x-dir.name>` and `<x-dir::name>` components as written, skips `{{-- --}}` comments, `@verbatim`, HTML comments, PHP blocks and echoes, and reads `where`/`except` on static attributes only: `:attr`, an echoed value, `@class`, `@style` and `{{ $attributes }}` match neither. A Blade hit reads `signed-in` or `public` when a route under the signed-in-pages or public-pages reading renders that view (a controller action's `view()`/`View::make`, `Route::view`, a closure, or a Livewire full-page component's `render()`), and `unknown` otherwise; partials and layouts are not followed. `unknown` matches only `scope: any`. Livewire and Filament PHP are read through `class-reference` with `paths`; an `app/Filament/**` hit reads `signed-in` only under a panel provider with `->login()` or a non-empty `->authMiddleware([...])`, else `unknown`. `uses.classes` skips `app/Filament/**`, so Blade and Filament files only ever read hand-rolled. Pattern `ui-page.kit-adoption` says so in a new first step; catalog.json is recompiled.
+
 ## 0.11.49 - 2026-10-29
 
 ### Added

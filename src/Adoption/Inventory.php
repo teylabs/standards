@@ -15,19 +15,22 @@ final readonly class Inventory
 
     public const GROUPS = ['layout', 'navigation', 'action', 'form', 'data', 'feedback', 'overlay', 'content', 'auth', 'account', 'workspace', 'access', 'mail', 'jobs', 'documents', 'activity', 'modules', 'platform'];
 
-    /** Signal kind => [allowed fields => type], where type is `list` (of strings), `items` (a non-empty list of strings), `classes` (a non-empty list of FQCNs), `string`, `int`, `scope`, `requires` or `attributes`. */
+    /** Signal kind => [allowed fields => type], where type is `list` (of strings), `items` (a non-empty list of strings), `classes` (a non-empty list of FQCNs), `string`, `int`, `scope`, `requires`, `attributes` or `formats` (a non-empty list of distinct TEMPLATE_FORMATS). */
     public const SIGNALS = [
         'rule' => ['rule' => 'string', 'scope' => 'scope'],
         'vue-root' => ['tags' => 'list', 'requires' => 'requires', 'scope' => 'scope'],
         'file-name' => ['globs' => 'list', 'except' => 'items', 'scope' => 'scope'],
         'import' => ['specifiers' => 'list', 'scope' => 'scope'],
-        'template-tag' => ['tags' => 'list', 'min' => 'int', 'where' => 'attributes', 'except' => 'attributes', 'scope' => 'scope'],
+        'template-tag' => ['tags' => 'list', 'in' => 'formats', 'min' => 'int', 'where' => 'attributes', 'except' => 'attributes', 'scope' => 'scope'],
         'mail-view' => ['without' => 'list', 'scope' => 'scope'],
         'php-class' => ['extends' => 'list', 'implements' => 'list', 'names' => 'list'],
         'class-reference' => ['classes' => 'classes', 'paths' => 'items', 'min' => 'int', 'scope' => 'scope'],
         'composer' => ['packages' => 'list'],
         'migration' => ['tables' => 'list'],
     ];
+
+    /** What a template-tag signal's `in` may name: `vue` (pages' `.vue` templates, the default) and `blade` (App::bladeFiles). */
+    public const TEMPLATE_FORMATS = ['vue', 'blade'];
 
     private const REQUIRED_SIGNAL_FIELDS = ['rule' => ['rule'], 'vue-root' => ['tags'], 'file-name' => ['globs'], 'import' => ['specifiers'], 'template-tag' => ['tags'], 'mail-view' => ['without'], 'php-class' => [], 'class-reference' => ['classes'], 'composer' => ['packages'], 'migration' => ['tables']];
 
@@ -207,6 +210,7 @@ final readonly class Inventory
                 'scope' => self::enum($value, ['signed-in', 'public', 'any'], "{$where}.{$field}"),
                 'requires' => self::requires($value, "{$where}.{$field}"),
                 'attributes' => self::attributes($value, "{$where}.{$field}"),
+                'formats' => self::formats($value, "{$where}.{$field}"),
             };
         }
         // An empty php-class signal would match every class: refuse it rather than guess.
@@ -232,6 +236,20 @@ final readonly class Inventory
                 throw new AdoptionError("{$where}.{$attribute} must be a non-empty list of strings");
             }
             self::strings($values, "{$where}.{$attribute}");
+        }
+    }
+
+    /** A template-tag `in`: a non-empty list of distinct TEMPLATE_FORMATS. */
+    private static function formats(mixed $value, string $where): void
+    {
+        if (! is_array($value) || ! array_is_list($value) || $value === []) {
+            throw new AdoptionError("{$where} must be a non-empty list of ".implode(', ', self::TEMPLATE_FORMATS));
+        }
+        foreach ($value as $format) {
+            self::enum($format, self::TEMPLATE_FORMATS, $where);
+        }
+        if (count(array_unique($value)) !== count($value)) {
+            throw new AdoptionError("{$where} lists a format twice");
         }
     }
 

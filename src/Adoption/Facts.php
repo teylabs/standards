@@ -38,6 +38,9 @@ final class Facts
     /** @var ?array{into: array<string, list<array{from: string, line: int, context: string}>>, blind: list<string>} */
     private ?array $includes = null;
 
+    /** @var ?array<string, list<string>> */
+    private ?array $viewScopes = null;
+
     /** @param  ?\Closure(array<string, mixed>): list<array{file: string, line: ?int, detail: string}>  $signals  fires one signal (the Scanner's evaluator) */
     public function __construct(private readonly App $app, private readonly ?\Closure $signals = null) {}
 
@@ -244,6 +247,139 @@ final class Facts
         }
 
         return null;
+    }
+
+    /**
+     * The scopes each routed Blade view reads, by its `resources/views/...blade.php` path. A view is `signed-in` when a route that
+     * passes the signed-in-pages reading (auth middleware on its statement, an enclosing group or an including group; never an API
+     * route) renders it, and `public` when a route that passes the public-pages reading does (top-level, no middleware, not an auth
+     * screen's URI, in a file no middleware group includes). A route renders a view through `Route::view('<uri>', '<view>')`, a
+     * literal `view('<view>')` or `View::make('<view>')` in its closure, its controller action (`[Name::class, 'method']`, or
+     * `__invoke` for `Name::class`), or a Livewire full-page component (`Name::class`) whose `render()` names one. A class is found
+     * by its short name and only when exactly one app file has it. Only the routed view itself is scoped: a layout, partial or
+     * component it pulls in is not followed, so it reads `unknown` (absent here).
+     *
+     * @return array<string, list<string>>
+     */
+    public function viewScopes(): array
+    {
+        if ($this->viewScopes !== null) {
+            return $this->viewScopes;
+        }
+        $scopes = [];
+        foreach ($this->app->routes() as $path) {
+            if (basename($path) === 'api.php') {
+                continue;
+            }
+            $code = Code::withoutComments($this->app->source($path));
+            $contexts = $this->contexts($path);
+            preg_match_all('~(?:\bRoute::|->)\s*(get|post|put|patch|delete|options|any|match|view)\s*\(~i', $code, $matches, PREG_OFFSET_CAPTURE);
+            foreach ($matches[0] as $index => [$call, $offset]) {
+                $statement = self::statement($code, $offset);
+                $views = $this->renderedViews($statement, strtolower($matches[1][$index][0]) === 'view');
+                if ($views === []) {
+                    continue;
+                }
+                $headers = self::enclosingHeaders($code, $offset);
+                $uri = preg_match('~\G\s*([\'"])([^\'"]*)\1~', $code, $literal, 0, $offset + strlen($call)) === 1 ? $literal[2] : null;
+                foreach ($contexts as $context) {
+                    $around = $context['middleware'].' '.$headers.' '.$statement;
+                    if (preg_match(self::API, $around) === 1) {
+                        continue;
+                    }
+                    $scope = match (true) {
+                        preg_match(self::AUTH, $around) === 1 => 'signed-in',
+                        trim($headers) === '' && $uri !== null && preg_match(self::AUTH_URIS, $uri) !== 1 && ! str_contains($context['middleware'], 'auth')
+                            && ! str_contains($context['middleware'], 'middleware') && ! str_contains($statement, 'auth') && ! str_contains($statement, 'middleware(') => 'public',
+                        default => null,
+                    };
+                    foreach ($scope === null ? [] : $views as $view) {
+                        $scopes[$view][$scope] = $scope;
+                    }
+                }
+            }
+        }
+
+        return $this->viewScopes = array_map(fn (array $set): array => array_values($set), $scopes);
+    }
+
+    /**
+     * The scope a hit in an `app/Filament/**` file reads: `signed-in` when every panel provider (`app/Providers/Filament/*PanelProvider.php`)
+     * that discovers the file's folder (`discoverResources`/`Pages`/`Widgets`/`Clusters` with a literal `app_path('...')`) calls
+     * `->login()` or passes a non-empty literal array to `->authMiddleware([...])`; else, or when no provider claims the folder, `unknown`
+     * (an empty list). A lone provider that discovers nothing claims every app/Filament file.
+     *
+     * @return list<string>
+     */
+    public function filamentScopes(string $path): array
+    {
+        $providers = array_values(array_filter($this->app->php(), fn (string $file): bool => preg_match('~^app/Providers/Filament/[^/]*PanelProvider\.php$~', $file) === 1));
+        $panels = [];
+        foreach ($providers as $provider) {
+            $code = Code::withoutComments($this->app->source($provider));
+            preg_match_all('~->\s*discover(?:Resources|Pages|Widgets|Clusters)\s*\(\s*(?:in\s*:\s*)?\\\\?app_path\s*\(\s*([\'"])([^\'"$]+)\1\s*\)~', $code, $found);
+            $panels[] = [
+                'folders' => array_map(fn (string $folder): string => 'app/'.trim($folder, '/').'/', $found[2]),
+                'signed' => preg_match('~->\s*login\s*\(|->\s*authMiddleware\s*\(\s*\[\s*[^\s\]]~', $code) === 1,
+            ];
+        }
+        $claiming = array_values(array_filter($panels, fn (array $panel): bool => array_filter($panel['folders'], fn (string $folder): bool => str_starts_with($path, $folder)) !== []));
+        if ($claiming === [] && count($panels) === 1 && $panels[0]['folders'] === []) {
+            $claiming = $panels;
+        }
+
+        return $claiming !== [] && array_filter($claiming, fn (array $panel): bool => ! $panel['signed']) === [] ? ['signed-in'] : [];
+    }
+
+    /**
+     * The Blade view paths a route statement renders (see viewScopes).
+     *
+     * @return list<string>
+     */
+    private function renderedViews(string $statement, bool $viewRoute): array
+    {
+        $names = [];
+        if ($viewRoute && preg_match('~\bview\s*\(\s*([\'"])[^\'"]*\1\s*,\s*([\'"])([\w.-]+)\2~', $statement, $match) === 1) {
+            $names[] = $match[3];
+        }
+        $literal = '~(?:\bview|\bView::make)\s*\(\s*([\'"])([\w.-]+)\1~';
+        preg_match_all($literal, $statement, $inline);
+        array_push($names, ...$inline[2]);
+        preg_match_all('~\b([A-Z]\w*)::class\b(\s*,\s*([\'"])(\w+)\3)?~', $statement, $classes, PREG_SET_ORDER);
+        foreach ($classes as $class) {
+            if (in_array($class[1], ['Route', 'Authenticate'], true)) {
+                continue;
+            }
+            $files = array_values(array_filter($this->phpApp(), fn (string $path): bool => basename($path, '.php') === $class[1]));
+            if (count($files) !== 1) {
+                continue;
+            }
+            $code = Code::withoutComments($this->app->source($files[0]));
+            foreach (isset($class[4]) && $class[4] !== '' ? [$class[4]] : ['__invoke', 'render'] as $method) {
+                preg_match_all($literal, self::method($code, $method), $rendered);
+                array_push($names, ...$rendered[2]);
+            }
+        }
+
+        return array_values(array_unique(array_map(fn (string $name): string => 'resources/views/'.str_replace('.', '/', $name).'.blade.php', $names)));
+    }
+
+    /** The body of a class method (from `function <name>(` to its closing brace), or '' when there is none. */
+    private static function method(string $code, string $name): string
+    {
+        if (preg_match('~\bfunction\s+'.preg_quote($name, '~').'\s*\(~i', $code, $match, PREG_OFFSET_CAPTURE) !== 1 || ($open = strpos($code, '{', $match[0][1])) === false) {
+            return '';
+        }
+        $depth = 0;
+        for ($i = $open, $length = strlen($code); $i < $length; $i++) {
+            if ($code[$i] === '{') {
+                $depth++;
+            } elseif ($code[$i] === '}' && --$depth === 0) {
+                return substr($code, $open, $i - $open + 1);
+            }
+        }
+
+        return substr($code, $open);
     }
 
     /**
