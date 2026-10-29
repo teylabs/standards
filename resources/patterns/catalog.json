@@ -2013,7 +2013,7 @@
         "data-actions.document": {
             "id": "data-actions.document",
             "recipe": "pdf-reports",
-            "summary": "A frozen document rendered to PDF through one renderer contract. Scaffold it with the Bakery's pdf-reports recipe; sending or attaching the PDF is not covered yet.",
+            "summary": "A frozen document rendered to PDF behind a Renderer contract and streamed inline or as a download, with a generated policy. Scaffold it with the Bakery's pdf-reports recipe; sending or attaching the PDF is not covered yet.",
             "kit": [],
             "make": null,
             "checks": [],
@@ -2024,7 +2024,7 @@
                 "render",
                 "invoice"
             ],
-            "status": "draft",
+            "status": "ready",
             "recipe_make": "mod:butter/pdf-reports {Name}",
             "evidence": {
                 "apps": 3,
@@ -2035,7 +2035,7 @@
             },
             "rules": [
                 "Render through the Renderer contract; the mPDF implementation stays behind it.",
-                "Authorize through a generated policy.",
+                "Authorize through a generated policy, with its 403 test.",
                 "Stream with X-Content-Type-Options: nosniff and a Content-Disposition header.",
                 "No PII in logs.",
                 "The app requires mpdf/mpdf.",
@@ -2329,29 +2329,34 @@
         },
         "mcp.agent-docs": {
             "id": "mcp.agent-docs",
-            "recipe": "Agent docs and parity guard",
-            "summary": "A capability manifest, generated llms.txt and an architecture test that keeps routes and MCP tools in parity.",
+            "recipe": "agent-docs",
+            "summary": "A public /llms.txt markdown index built from a feature registry in config, validated on boot and guarded in CI against drift. Scaffold it with the Bakery's agent-docs recipe.",
             "kit": [],
             "make": null,
-            "checks": [
-                "55"
-            ],
+            "checks": [],
             "paths": [
-                "docs/mcp-capabilities.json"
+                "config/agent-docs.php"
             ],
             "keywords": [
                 "llms.txt",
-                "manifest",
-                "capabilities",
-                "parity",
-                "agent docs"
+                "agent-readable docs",
+                "public feature registry",
+                "agent docs",
+                "manifest"
             ],
-            "status": "gap",
+            "status": "ready",
+            "recipe_make": "mod:butter/agent-docs {Name}",
             "evidence": {
                 "apps": 7,
                 "count": 10,
                 "prs": 10
-            }
+            },
+            "rules": [
+                "GET /llms.txt (route agent-docs.index) serves a markdown index as text/plain; charset=UTF-8, built from config agent-docs.features (title, description, route, path).",
+                "The registry is public and unauthenticated: list public information only.",
+                "Keep the validator: it rejects an empty registry, invalid or duplicate paths (same-origin, absolute), titles or descriptions with newlines or brackets, and routes that don't exist or aren't public.",
+                "Keep the check script and the Check agent docs workflow, which fail CI when /llms.txt drifts from the registry."
+            ]
         },
         "mcp.module-placement": {
             "id": "mcp.module-placement",
@@ -2809,6 +2814,10 @@
                     "next": "mail-notifications.custom-channel"
                 },
                 {
+                    "answer": "Receive email into the app",
+                    "next": "mail-notifications.intake"
+                },
+                {
                     "answer": "None of these",
                     "next": "mail-notifications.byo"
                 }
@@ -2923,6 +2932,39 @@
                 "count": 9,
                 "prs": 9
             }
+        },
+        "mail-notifications.intake": {
+            "id": "mail-notifications.intake",
+            "recipe": "email-intake",
+            "summary": "Inbound email through a provider webhook (Resend by default) with a verified signature, idempotent storage and queued extraction into a draft a person reviews. Scaffold it with the Bakery's email-intake recipe.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "inbound email",
+                "email-in",
+                "forward an email",
+                "webhook",
+                "resend inbound",
+                "draft records",
+                "ai extraction",
+                "inbound",
+                "email",
+                "intake",
+                "parse"
+            ],
+            "status": "ready",
+            "recipe_make": "mod:butter/email-intake {Name}",
+            "rules": [
+                "Receive through the InboundDriver contract (verify and parse); ResendDriver is the default.",
+                "Verify the provider signature: Svix-style HMAC-SHA256 over id.timestamp.body, keyed with the base64 secret after whsec_, compared with hash_equals against the v1 entries, with a 300-second tolerance. A missing secret or an unsigned or stale request gets 401 invalid_signature.",
+                "Idempotent message ids: a unique provider_id and insertOrIgnore. A duplicate gets 200 duplicate and queues nothing; an unparseable event gets 200 ignored.",
+                "Queued processing: the webhook only stores the envelope (sender and subject, truncated) and dispatches a ShouldQueue job; extraction runs in the job behind the Extractor contract (Simple or Ai).",
+                "Nothing becomes a record without review: extraction produces a Draft a person accepts or discards (AcceptDraft, DiscardDraft), authorized through a generated policy.",
+                "No PII in logs: never log the email's text; store attachment metadata as JSON.",
+                "Rule 55: the webhook is a provider callback, not a user operation; declare it uiOnly or exclude it."
+            ]
         },
         "mail-notifications.byo": {
             "id": "mail-notifications.byo",

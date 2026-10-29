@@ -69,16 +69,16 @@ nodes:
   - id: data-actions.document
     recipe: pdf-reports
     recipe_make: "mod:butter/pdf-reports {Name}"
-    summary: A frozen document rendered to PDF through one renderer contract. Scaffold it with the Bakery's pdf-reports recipe; sending or attaching the PDF is not covered yet.
+    summary: A frozen document rendered to PDF behind a Renderer contract and streamed inline or as a download, with a generated policy. Scaffold it with the Bakery's pdf-reports recipe; sending or attaching the PDF is not covered yet.
     kit: []
     checks: []
     paths: []
     keywords: [pdf, document, render, invoice]
-    status: draft
+    status: ready
     evidence: { apps: 3, count: 11, prs: 11, past_apps: 16, past_count: 46 }
     rules:
       - "Render through the Renderer contract; the mPDF implementation stays behind it."
-      - "Authorize through a generated policy."
+      - "Authorize through a generated policy, with its 403 test."
       - "Stream with X-Content-Type-Options: nosniff and a Content-Disposition header."
       - "No PII in logs."
       - "The app requires mpdf/mpdf."
