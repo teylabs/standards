@@ -62,7 +62,7 @@ final class Toast
                     }
                     foreach ($this->returns($method->stmts ?? []) as $return) {
                         // A guest form's back() to a page that renders kit's <FormStatus> confirms in place: no toast (GuestFormStatus).
-                        if ($return->expr !== null && $this->redirectWithoutToast($return->expr) && ! (($keys = self::returnFlashKeys($method, $return)) !== null && $this->formStatus()->proves($class, $name, $keys))) {
+                        if ($return->expr !== null && $this->redirectWithoutToast($return->expr) && ! (($target = self::returnFlashKeys($method, $return)) !== null && $this->formStatus()->proves($class, $name, ...$target))) {
                             $violations[] = ['target' => $path, 'check' => $class->name.'::'.$name.' redirect must chain ->toast*()'];
                         }
                     }
@@ -190,23 +190,26 @@ final class Toast
         if (! $method instanceof Node\Stmt\ClassMethod || ! $method->isPublic() || ! $class instanceof Node\Stmt\Class_) {
             return false;
         }
-        $keys = GuestFormStatus::backFlashKeys($top);
+        $target = GuestFormStatus::redirectFlash($top);
 
-        return $keys !== null && $keys !== [] && $this->formStatus()->proves($class, $method->name->toString(), $keys);
+        return $target !== null && $target[0] !== [] && $this->formStatus()->proves($class, $method->name->toString(), ...$target);
     }
 
     /**
-     * The keys a guest `back()` return flashes: its own `->with(...)` keys plus the literal keys of every `Inertia::flash('<key>', ...)` /
+     * The keys a guest `back()` or literal named-route redirect (GuestFormStatus::redirectFlash()) return flashes, with the route name: its own `->with(...)` keys plus the literal keys of every `Inertia::flash('<key>', ...)` /
      * `Inertia::flash(['<key>' => ...])` written as a top-level statement of the method before the top-level statement holding the return,
-     * so it runs on every path to it. Null (unprovable) when the return is not such a back(), or when the method holds any other
+     * so it runs on every path to it. Null (unprovable) when the return is not such a redirect, or when the method holds any other
      * `Inertia::flash` outside closures: one inside an if, loop, try or other expression, or one whose keys are not literal identifiers.
+     *
+     * @return ?array{list<string>, ?string}
      */
     private static function returnFlashKeys(Node\Stmt\ClassMethod $method, Node\Stmt\Return_ $return): ?array
     {
-        $keys = $return->expr === null ? null : GuestFormStatus::backFlashKeys($return->expr);
-        if ($keys === null) {
+        $target = $return->expr === null ? null : GuestFormStatus::redirectFlash($return->expr);
+        if ($target === null) {
             return null;
         }
+        [$keys, $route] = $target;
         $top = $return;
         while (($parent = $top->getAttribute('parent')) instanceof Node && $parent !== $method) {
             $top = $parent;
@@ -234,7 +237,7 @@ final class Toast
             }
         }
 
-        return array_values(array_unique($keys));
+        return [array_values(array_unique($keys)), $route];
     }
 
     private static function inertiaFlash(Node\Expr\StaticCall $call): bool

@@ -418,6 +418,49 @@ function guestBootstrap(string $middleware): string
     return '<?php use Illuminate\Foundation\Application; use Illuminate\Foundation\Configuration\Middleware; return Application::configure(basePath: dirname(__DIR__))->withRouting(web: __DIR__."/../routes/web.php")->withMiddleware(function (Middleware $middleware): void { '.$middleware.' })->create();';
 }
 
+test('a guest form may redirect to a literal named guest GET route whose page reads every flashed key through FormStatus', function (string $store, string $moduleRoutes, string $webRoutes, string $partial, array $checks) {
+    file_put_contents($this->backendBase.'/bootstrap/app.php', guestBootstrap('$middleware->web(append: [\App\Http\Middleware\HandleInertiaRequests::class]);'));
+    $files = [
+        'src/Modules/Signup/routes/web.php' => '<?php use Illuminate\Support\Facades\Route; use App\Modules\Signup\JoinController; '.$moduleRoutes,
+        'routes/web.php' => '<?php use Illuminate\Support\Facades\Route; use App\HomeController; '.$webRoutes,
+        'src/Controllers/HomeController.php' => '<?php namespace App; use Inertia\Inertia; class HomeController { public function __invoke() { return Inertia::render("Welcome/Page"); } }',
+        'resources/js/pages/Welcome/Page.vue' => "<script setup lang=\"ts\">\nimport JoinForm from './Partials/JoinForm.vue';\n</script>\n<template>\n    <JoinForm />\n</template>\n",
+        'resources/js/pages/Welcome/Partials/JoinForm.vue' => $partial,
+    ];
+    mkdir($this->backendBase.'/src/Modules/Signup/Controllers', 0777, true);
+    foreach ($files as $path => $source) {
+        is_dir(dirname($this->backendBase.'/'.$path)) || mkdir(dirname($this->backendBase.'/'.$path), 0777, true);
+        file_put_contents($this->backendBase.'/'.$path, $source);
+    }
+    $controller = 'namespace App\Modules\Signup; use Inertia\Inertia; class JoinController { public function __invoke($key) { '.$store.' } }';
+    $found = array_column(($this->backend)('toast', $controller, ['pageRoots' => ['resources/js/pages'], 'routeRoots' => ['routes', 'src/Modules/*/routes'], 'controllerRoots' => ['src/Controllers', 'src/Modules/*/Controllers']], 'src/Modules/Signup/Controllers/JoinController.php'), 'check');
+    expect($found)->toBe($checks);
+})->with(function () {
+    $post = 'Route::post("/join", JoinController::class)->middleware(["web", "throttle:join"])->name("join.store");';
+    $home = 'Route::get("/", HomeController::class)->name("home");';
+    $partial = fn (string $message): string => "<script setup lang=\"ts\">\nimport { usePage } from '@inertiajs/vue3';\nimport { FormStatus } from '@/components/Kit';\nconst page = usePage();\n</script>\n<template>\n    <FormStatus v-if=\"page.flash?.joined\" :message=\"{$message}\" />\n</template>\n";
+    $reads = $partial('page.flash?.joined as string');
+    $flash = 'Inertia::flash("joined", "Thanks"); ';
+    $redirect = 'JoinController::__invoke redirect must chain ->toast*()';
+
+    return [
+        'to_route to a guest GET whose partial reads the key' => [$flash.'return to_route("home");', $post, $home, $reads, []],
+        'redirect()->route() with a group name prefix' => [$flash.'return redirect()->route("site.home");', $post, 'Route::name("site.")->middleware("web")->group(function () { Route::get("/", HomeController::class)->name("home"); });', $reads, []],
+        'Redirect::route() with a with() key' => ['return \Illuminate\Support\Facades\Redirect::route("home")->with("joined", "Thanks");', $post, $home, $reads, []],
+        'an unknown name' => [$flash.'return to_route("welcome");', $post, $home, $reads, [$redirect]],
+        'two routes with the name' => [$flash.'return to_route("home");', $post, $home.' Route::get("/start", HomeController::class)->name("home");', $reads, [$redirect]],
+        'a non-literal route name elsewhere' => [$flash.'return to_route("home");', $post, $home.' Route::get("/start", HomeController::class)->name($key);', $reads, [$redirect]],
+        'a signed-in target' => [$flash.'return to_route("home");', $post, 'Route::middleware("auth")->group(function () { Route::get("/", HomeController::class)->name("home"); });', $reads, [$redirect]],
+        'a non-literal name' => [$flash.'return to_route($key);', $post, $home, $reads, [$redirect]],
+        'with parameters' => [$flash.'return to_route("home", ["ref" => 1]);', $post, $home, $reads, [$redirect]],
+        'a target with a URI parameter' => [$flash.'return to_route("home");', $post, 'Route::get("/{locale}", HomeController::class)->name("home");', $reads, [$redirect]],
+        'a POST target' => [$flash.'return to_route("join.store");', $post, $home, $reads, [$redirect]],
+        'the key unread' => [$flash.'return to_route("home");', $post, $home, $partial('page.flash?.other as string'), [$redirect]],
+        'no FormStatus' => [$flash.'return to_route("home");', $post, $home, "<template>\n    <form />\n</template>\n", [$redirect]],
+        'a signed-in POST route' => [$flash.'return to_route("home");', 'Route::post("/join", JoinController::class)->middleware(["web", "auth"]);', $home, $reads, [$redirect]],
+    ];
+});
+
 test('the FormStatus exemption fails closed unless bootstrap/app.php and the app providers provably keep the route guest', function (?string $bootstrap, ?string $provider, bool $fails) {
     file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\ContactController; Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]);');
     if ($bootstrap !== null) {
