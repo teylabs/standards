@@ -16,9 +16,11 @@ final readonly class Boost
         'tailwindcss' => [3, 4],
     ];
 
+    private const HINT = 'Commit the skill, or generate it per checkout: list it under "skills" in boost.json, or run boost:update from a composer.json post-install-cmd, post-update-cmd or post-autoload-dump script.';
+
     public function __construct(private Configuration $config) {}
 
-    /** @return list<array{target: string, check: string}> */
+    /** @return list<array{target: string, check: string, hint?: string}> */
     public function violations(): array
     {
         $composer = $this->manifest('composer.json');
@@ -57,11 +59,22 @@ final readonly class Boost
                 continue;
             }
             foreach ($skills as $skill) {
-                $present = array_any($this->config->boostSkillRoots, fn (string $root): bool => is_file($this->config->base.'/'.$root.'/'.$skill.'/SKILL.md')
-                    && trim((string) file_get_contents($this->config->base.'/'.$root.'/'.$skill.'/SKILL.md')) !== '');
-                if (! $present) {
-                    $violations[] = ['target' => 'boost.json', 'check' => 'missing Boost skill '.$skill.' for '.$package];
+                $files = array_values(array_filter(
+                    array_map(fn (string $root): string => $this->config->base.'/'.$root.'/'.$skill.'/SKILL.md', $this->config->boostSkillRoots),
+                    is_file(...),
+                ));
+                if (array_any($files, fn (string $file): bool => trim((string) file_get_contents($file)) !== '')) {
+                    continue;
                 }
+                // Skills on disk are validated; absent ones pass when each checkout generates them.
+                if ($files === [] && $this->generated($skill, $boost, $composer)) {
+                    continue;
+                }
+                $violation = ['target' => 'boost.json', 'check' => 'missing Boost skill '.$skill.' for '.$package];
+                if ($files === []) {
+                    $violation['hint'] = self::HINT;
+                }
+                $violations[] = $violation;
             }
         }
 
@@ -83,6 +96,29 @@ final readonly class Boost
         $constraint = $composer->require->{$package} ?? $composer->{'require-dev'}->{$package} ?? $npm->dependencies->{$package} ?? $npm->devDependencies->{$package} ?? null;
 
         return ! is_string($constraint) || preg_match('/(\d+)/', $constraint, $match) !== 1 || in_array((int) $match[1], $majors, true);
+    }
+
+    /**
+     * Boost writes skills into gitignored agent directories, so a fresh checkout or CI has
+     * none on disk. A skill boost.json tracks under "skills", or a Composer install, update
+     * or autoload-dump hook that runs boost:update or boost:install, regenerates them.
+     */
+    private function generated(string $skill, ?stdClass $boost, stdClass $composer): bool
+    {
+        if (is_array($boost->skills ?? null) && in_array($skill, $boost->skills, true)) {
+            return true;
+        }
+
+        foreach (['post-install-cmd', 'post-update-cmd', 'post-autoload-dump'] as $event) {
+            $commands = $composer->scripts->{$event} ?? [];
+            foreach (is_array($commands) ? $commands : [$commands] as $command) {
+                if (is_string($command) && preg_match('/\bboost:(update|install)\b/', $command) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function manifest(string $path): ?stdClass

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`boost` no longer fails a fresh checkout or CI because generated skills are missing.** Laravel Boost writes skills into gitignored agent directories per checkout, so the rule failed wherever `boost:install` or `boost:update` had not yet run. A required skill absent from every `boostSkillRoots` directory now passes when `boost.json` lists it under `skills`, or when a Composer `post-install-cmd`, `post-update-cmd` or `post-autoload-dump` script runs `boost:update` or `boost:install`. Skill files that are present are still checked, and an absent skill nothing regenerates is still reported, now with a hint to commit it or generate it per checkout.
+
+### Upgrading
+
+- Apps that allowlisted `boost` findings for missing skills can drop those entries once `boost.json` lists the skills or a Composer hook runs `boost:update`; the entries then go stale. The finding text is unchanged, so entries for skills that are still missing keep matching.
+
 ## 0.11.32 - 2026-10-29
 
 ### Fixed

@@ -134,9 +134,35 @@ test('Boost accepts either agent file and configured skill roots and reports abs
     (new Filesystem)->ensureDirectoryExists($this->toolingBase.'/.agents/skills');
     rename($this->toolingBase.'/.claude/skills/testing-best-practices', $this->toolingBase.'/.agents/skills/testing-best-practices');
     expect((new Boost($this->toolingConfig))->violations())->toBe([]);
-    unlink($this->toolingBase.'/.agents/skills/testing-best-practices/SKILL.md');
+    file_put_contents($this->toolingBase.'/.agents/skills/testing-best-practices/SKILL.md', " \n");
     expect((new Boost($this->toolingConfig))->violations())->toBe([
         ['target' => 'boost.json', 'check' => 'missing Boost skill testing-best-practices for pestphp/pest'],
+    ]);
+    unlink($this->toolingBase.'/.agents/skills/testing-best-practices/SKILL.md');
+    expect((new Boost($this->toolingConfig))->violations())->toBe([
+        ['target' => 'boost.json', 'check' => 'missing Boost skill testing-best-practices for pestphp/pest', 'hint' => 'Commit the skill, or generate it per checkout: list it under "skills" in boost.json, or run boost:update from a composer.json post-install-cmd, post-update-cmd or post-autoload-dump script.'],
+    ]);
+});
+
+test('Boost accepts absent skills that boost.json tracks or a Composer hook regenerates per checkout', function (string $file, array $merge) {
+    (new Filesystem)->deleteDirectory($this->toolingBase.'/.claude/skills/testing-best-practices');
+    $path = $this->toolingBase.'/'.$file;
+    file_put_contents($path, json_encode(array_replace(json_decode(file_get_contents($path), true), $merge)));
+    expect((new Boost($this->toolingConfig))->violations())->toBe([]);
+})->with([
+    'boost.json skills' => ['boost.json', ['skills' => ['testing-best-practices']]],
+    'post-update-cmd string' => ['composer.json', ['scripts' => ['post-update-cmd' => '@php artisan boost:update --ansi']]],
+    'post-autoload-dump list' => ['composer.json', ['scripts' => ['post-autoload-dump' => ['@php artisan package:discover', '@php artisan boost:install']]]],
+]);
+
+test('Boost still reports absent skills that nothing regenerates', function () {
+    (new Filesystem)->deleteDirectory($this->toolingBase.'/.claude/skills/testing-best-practices');
+    $boost = json_decode(file_get_contents($this->toolingBase.'/boost.json'), true);
+    file_put_contents($this->toolingBase.'/boost.json', json_encode($boost + ['skills' => ['laravel-best-practices']]));
+    $composer = json_decode(file_get_contents($this->toolingBase.'/composer.json'), true);
+    file_put_contents($this->toolingBase.'/composer.json', json_encode($composer + ['scripts' => ['test' => 'boost:update', 'post-update-cmd' => '@php artisan boost:updated']]));
+    expect((new Boost($this->toolingConfig))->violations())->toBe([
+        ['target' => 'boost.json', 'check' => 'missing Boost skill testing-best-practices for pestphp/pest', 'hint' => 'Commit the skill, or generate it per checkout: list it under "skills" in boost.json, or run boost:update from a composer.json post-install-cmd, post-update-cmd or post-autoload-dump script.'],
     ]);
 });
 
