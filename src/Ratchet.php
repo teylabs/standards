@@ -104,6 +104,29 @@ final class Ratchet
         ];
     }
 
+    /**
+     * For an advisory rule, whose findings never fail: only the entries whose advisory no longer fires, so an allowlisted advisory doesn't
+     * rot unnoticed once it is fixed (findings entries go stale the same way).
+     *
+     * @param  list<array{target: string, check: string}>  $violations
+     * @return list<string>
+     */
+    public function staleAdvisories(string $rule, array $violations): array
+    {
+        $actual = array_map(fn (array $violation): string => $violation['target'].' | '.$violation['check'], $violations);
+        $stale = [];
+
+        foreach ($this->entries as $entry) {
+            $key = $entry['target'].' | '.$entry['check'];
+
+            if ($entry['rule'] === $rule && ! in_array($key, $actual, true)) {
+                $stale[] = "stale exception, delete it: {$key}";
+            }
+        }
+
+        return $stale;
+    }
+
     /** @param list<string> $rules */
     public function assertRules(array $rules): void
     {

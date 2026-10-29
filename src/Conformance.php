@@ -100,6 +100,10 @@ final class Conformance
 
         // Advisory until an app opts in: static write detection can miss a write or flag a non-write.
         if (in_array($rule, ['operator', 'integrations'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+            // An allowlisted advisory that stopped firing is stale, as a findings entry is: fail on it, else skip as advisory.
+            $stale = $this->ratchet->staleAdvisories($rule, $violations);
+            expect($stale)->toBe([], implode("\n", $stale));
+
             Assert::markTestSkipped('Rule ['.$rule.'] is advisory until listed in Configuration::optionalRules ('.count($violations).' findings).');
         }
 

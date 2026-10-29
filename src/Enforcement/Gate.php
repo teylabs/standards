@@ -103,9 +103,30 @@ final class Gate
             }
 
             if (in_array($rule, self::ADVISORY, true) && ! in_array($rule, $this->config->optionalRules, true)) {
+                $listed = [];
+
+                foreach ($ratchet->entries() as $entry) {
+                    if ($entry['rule'] === $rule) {
+                        $listed[$entry['target'].' | '.$entry['check']] = $entry;
+                    }
+                }
+
+                $fired = [];
+
                 foreach ($actual as $violation) {
-                    if ($this->inScope($violation['target'], $paths)) {
+                    $key = $violation['target'].' | '.$violation['check'];
+                    $fired[$key] = true;
+
+                    // An allowlisted advisory is acknowledged: not repeated.
+                    if (! isset($listed[$key]) && $this->inScope($violation['target'], $paths)) {
                         $advisories[] = $this->finding($rule, 'advisory', $violation['target'], $violation['check']);
+                    }
+                }
+
+                // An entry whose advisory no longer fires is stale, as a findings entry is, so it can't rot unnoticed.
+                foreach ($listed as $key => $entry) {
+                    if (! isset($fired[$key]) && $this->inScope($entry['target'], $paths)) {
+                        $violations[] = $this->finding($rule, 'stale', $entry['target'], $entry['check'], 'The advisory no longer fires; delete this allowlist entry.');
                     }
                 }
 

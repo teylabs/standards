@@ -90,3 +90,29 @@ test('standards:make command stamps all three flavors, with a test each, and the
         (new Filesystem)->deleteDirectory($base);
     }
 });
+
+test('a scheduled command is a job, not an operator tool: not reported by class or by name; an unscheduled one still is', function () {
+    $sweep = OPERATOR_HEAD."final class Sweep extends Command { protected \$signature = 'app:sweep {--days=7}'; public function handle(): int { DB::table('jobs')->delete(); return 0; } }";
+    mkdir($this->ruleBase.'/routes');
+
+    file_put_contents($this->ruleBase.'/routes/console.php', "<?php use App\\Console\\Sweep; use Illuminate\\Support\\Facades\\Schedule;\nSchedule::command(Sweep::class)->daily();");
+    expect(($this->rule)($sweep))->toBe([], 'Schedule::command(Sweep::class) in routes/console.php');
+
+    file_put_contents($this->ruleBase.'/routes/console.php', "<?php use Illuminate\\Support\\Facades\\Schedule;\nSchedule::command('app:sweep --days=30')->hourly();");
+    expect(($this->rule)($sweep))->toBe([], 'by its signature name');
+
+    mkdir($this->ruleBase.'/bootstrap');
+    file_put_contents($this->ruleBase.'/routes/console.php', "<?php\n");
+    file_put_contents($this->ruleBase.'/bootstrap/app.php', "<?php use App\\Console\\Sweep; use Illuminate\\Console\\Scheduling\\Schedule;\nreturn Application::configure()->withSchedule(function (Schedule \$schedule) { \$schedule->command(Sweep::class)->daily(); })->create();");
+    expect(($this->rule)($sweep))->toBe([], '$schedule->command in bootstrap withSchedule');
+
+    file_put_contents($this->ruleBase.'/bootstrap/app.php', "<?php use Illuminate\\Console\\Scheduling\\Schedule;\nreturn Application::configure()->withSchedule(function (Schedule \$schedule) { \$schedule->command('app:other')->daily(); })->create();");
+    expect(($this->rule)($sweep))->toHaveCount(2, 'another command is scheduled, not this one');
+});
+
+test('ConfirmableTrait\'s confirmToProceed() is a production guard', function () {
+    $confirmed = OPERATOR_HEAD."use Illuminate\\Console\\ConfirmableTrait; final class Sweep extends Command { use ConfirmableTrait; protected \$signature = 'app:sweep {--dry-run} {--force}'; public function handle(): int { if (! \$this->confirmToProceed()) { return 1; } DB::table('jobs')->delete(); return 0; } }";
+
+    expect(($this->rule)($confirmed))->toBe([])
+        ->and(array_column(($this->rule)(str_replace("if (! \$this->confirmToProceed()) { return 1; } ", '', $confirmed)), 'check'))->toBe(['App\Console\Sweep writes without a production guard: run the work through Operator::run, or refuse production unless forced']);
+});

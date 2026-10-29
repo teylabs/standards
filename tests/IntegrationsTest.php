@@ -69,6 +69,26 @@ test('the rule is advisory until an app opts in', function () {
     expect($enforced['advisories'])->toBe([])->and(array_column($enforced['violations'], 'rule'))->toContain('integrations');
 });
 
+test('an allowlist entry for an advisory is acknowledged while it fires, and stale once it stops, in the gate and in the Pest ratchet', function () {
+    $inline = "<?php namespace App\\Services; use Illuminate\\Support\\Facades\\Http; final class Inline { public function go() { return Http::get('https://x.test'); } }";
+    ($this->put)('src/Services/Inline.php', $inline);
+    $entry = ['rule' => 'integrations', 'target' => 'src/Services/Inline.php', 'check' => 'App\Services\Inline calls Http:: inline: put the call behind a contract (an interface this class implements), with a fake for tests', 'reason' => 'A client is coming.', 'date' => '2026-10-27', 'expires' => '2027-01-31'];
+    // The rule's own findings only: a full run also lists the scratch app's missing configured roots.
+    $gate = fn (): array => array_map(fn (array $findings): array => is_array($findings) && array_is_list($findings) ? array_values(array_filter($findings, fn (mixed $finding): bool => is_array($finding) && ($finding['rule'] ?? null) === 'integrations')) : $findings, (new Gate(($this->configuration)(['allowlist' => [$entry]]), new DateTimeImmutable('2026-10-27')))->run());
+
+    $firing = $gate();
+    expect($firing['advisories'])->toBe([])->and(array_column($firing['violations'], 'kind'))->not->toContain('stale');
+
+    // The advisory stops: the class moves behind a contract.
+    ($this->put)('src/Services/Inline.php', str_replace('final class Inline {', 'final class Inline implements Client {', $inline));
+    $fixed = $gate();
+    expect($fixed['violations'])->toHaveCount(1)
+        ->and($fixed['violations'][0])->toMatchArray(['rule' => 'integrations', 'kind' => 'stale', 'target' => 'src/Services/Inline.php']);
+
+    expect(fn () => (new Conformance(($this->configuration)(['allowlist' => [$entry]])))->assert('integrations'))
+        ->toThrow(PHPUnit\Framework\AssertionFailedError::class, 'stale exception, delete it: src/Services/Inline.php');
+});
+
 test('standards:make webhook writes the provider files, the shared ones once, and merges config, routes, env and providers', function () {
     $base = fixtureApp();
 
