@@ -51,6 +51,12 @@ final class Toast
                     if ($this->flashesKitToast($method->stmts ?? [])) {
                         continue;
                     }
+                    $this->assignments = $this->assignments($method->stmts ?? []);
+                    foreach ($method->params as $param) {
+                        if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
+                            $this->assignments[$param->var->name][] = new Node\Expr\ConstFetch(new Node\Name('null'));
+                        }
+                    }
                     foreach ($this->returns($method->stmts ?? []) as $return) {
                         if ($return->expr !== null && $this->redirectWithoutToast($return->expr)) {
                             $violations[] = ['target' => $path, 'check' => $class->name.'::'.$name.' redirect must chain ->toast*()'];
@@ -132,14 +138,174 @@ final class Toast
             return false;
         }
         $toast = false;
+        $first = null;
         while ($expression instanceof Node\Expr\MethodCall || $expression instanceof Node\Expr\NullsafeMethodCall) {
             $toast = $toast || ($expression->name instanceof Node\Identifier && preg_match('/^toast(?:[A-Z].*)?$/', $expression->name->toString()) === 1);
+            $first = $expression;
             $expression = $expression->var;
+        }
+        // An off-site redirect leaves the app, so no page shows a toast: redirect()->away(<external URL>) or Redirect::away(<external URL>).
+        $away = match (true) {
+            $expression instanceof Node\Expr\FuncCall && $expression->name instanceof Node\Name && $expression->name->toString() === 'redirect' && $expression->getArgs() === []
+                && $first instanceof Node\Expr\MethodCall && $first->name instanceof Node\Identifier && strtolower($first->name->toString()) === 'away' && ! $first->isFirstClassCallable() => $first,
+            $expression instanceof Node\Expr\StaticCall && $expression->class instanceof Node\Name && $expression->class->toString() === 'Illuminate\Support\Facades\Redirect'
+                && $expression->name instanceof Node\Identifier && strtolower($expression->name->toString()) === 'away' && ! $expression->isFirstClassCallable() => $expression,
+            default => null,
+        };
+        if ($away !== null && $this->offSite($away->getArgs()[0] ?? null)) {
+            return false;
         }
         $redirect = ($expression instanceof Node\Expr\FuncCall && $expression->name instanceof Node\Name && in_array($expression->name->toString(), ['redirect', 'back', 'to_route'], true))
             || ($expression instanceof Node\Expr\StaticCall && $expression->class instanceof Node\Name && $expression->class->toString() === 'Illuminate\Support\Facades\Redirect');
 
         return $redirect && ! $toast;
+    }
+
+    /** @var array<string, list<Node\Expr>> variable => every value the action assigns it */
+    private array $assignments = [];
+
+    /**
+     * Whether the away() target is provably another host. Only these count:
+     *  - an absolute http(s) URL literal whose host is not the app's (APP_URL in .env or .env.example, or config/app.php's literal url);
+     *  - a concatenation or interpolated string that starts with such a literal (the scheme and host are fixed, the rest varies);
+     *  - a variable the action assigns exactly once, to one of those, and never takes as a parameter or by reference.
+     * Anything else (a relative path, the app's own host, url()/route()/config(), a parameter, a property, a method's result) may be internal and still needs the toast.
+     */
+    private function offSite(?Node\Arg $argument, int $depth = 0): bool
+    {
+        if ($argument === null || $argument->unpack || $argument->byRef || ($argument->name !== null && $argument->name->toString() !== 'path')) {
+            return false;
+        }
+
+        return $this->external($argument->value, $depth);
+    }
+
+    private function external(Node\Expr $value, int $depth = 0): bool
+    {
+        if ($value instanceof Node\Scalar\String_) {
+            return $this->externalUrl($value->value, true);
+        }
+        if ($value instanceof Node\Expr\BinaryOp\Concat) {
+            $left = $value;
+            while ($left instanceof Node\Expr\BinaryOp\Concat) {
+                $left = $left->left;
+            }
+
+            return $left instanceof Node\Scalar\String_ && $this->externalUrl($left->value, false);
+        }
+        if ($value instanceof Node\Scalar\InterpolatedString) {
+            $head = $value->parts[0] ?? null;
+
+            return $head instanceof Node\InterpolatedStringPart && $this->externalUrl($head->value, false);
+        }
+        if ($value instanceof Node\Expr\Variable && is_string($value->name) && ! isset($this->assignments['*']) && $depth < 5) {
+            $assigned = $this->assignments[$value->name] ?? [];
+
+            return count($assigned) === 1 && $this->external($assigned[0], $depth + 1);
+        }
+
+        return false;
+    }
+
+    /** An absolute http(s) URL on a host other than the app's. A prefix must reach the end of the host (a `/`, `?` or `#` follows it). */
+    private function externalUrl(string $url, bool $whole): bool
+    {
+        if (preg_match('~^https?://([^/?#@\s:]+)(?::\d+)?([/?#]|$)~i', $url, $match) !== 1 || (! $whole && $match[2] === '')) {
+            return false;
+        }
+
+        return ! in_array(strtolower($match[1]), $this->appHosts(), true);
+    }
+
+    /** @var list<string>|null */
+    private ?array $hosts = null;
+
+    /** @return list<string> the app's own hosts, from APP_URL in .env and .env.example and config/app.php's literal default */
+    private function appHosts(): array
+    {
+        if ($this->hosts !== null) {
+            return $this->hosts;
+        }
+        $hosts = [];
+        foreach (['.env', '.env.example'] as $file) {
+            $text = is_file($this->config->base.'/'.$file) ? (string) file_get_contents($this->config->base.'/'.$file) : '';
+            if (preg_match_all('/^\s*APP_URL\s*=\s*["\']?([^"\'\s#]+)/m', $text, $matches) > 0) {
+                $hosts = [...$hosts, ...$matches[1]];
+            }
+        }
+        $config = $this->config->base.'/config/app.php';
+        if (is_file($config) && preg_match_all('/[\'"]url[\'"]\s*=>\s*(?:env\(\s*[\'"]APP_URL[\'"]\s*,\s*)?[\'"]([^\'"]+)[\'"]/', (string) file_get_contents($config), $matches) > 0) {
+            $hosts = [...$hosts, ...$matches[1]];
+        }
+
+        return $this->hosts = array_values(array_unique(array_filter(array_map(fn (string $url): ?string => is_string($host = parse_url($url, PHP_URL_HOST)) ? strtolower($host) : null, $hosts))));
+    }
+
+    /**
+     * Every value the action assigns each variable, outside closures. A parameter, a by-reference or list assignment, a compound assignment,
+     * a foreach target, a static or global, a catch variable, or passing it to any call but away() (which may take it by reference) adds an unknown entry, so the variable never counts as provably external.
+     *
+     * @param  array<Node>  $nodes
+     * @return array<string, list<Node\Expr>>
+     */
+    private function assignments(array $nodes): array
+    {
+        $assigned = [];
+        $unknown = new Node\Expr\ConstFetch(new Node\Name('null'));
+        $visit = function (array $nodes) use (&$visit, &$assigned, $unknown): void {
+            foreach ($nodes as $node) {
+                if (! $node instanceof Node || $node instanceof Node\Stmt\ClassLike || $node instanceof Node\Stmt\Function_) {
+                    continue;
+                }
+                $mark = function (?Node $target, Node\Expr $value) use (&$assigned, $unknown): void {
+                    if ($target instanceof Node\Expr\Variable) {
+                        // A variable variable ($$name = ...) could be any of them.
+                        $assigned[is_string($target->name) ? $target->name : '*'][] = $value;
+                    } elseif ($target instanceof Node\Expr\List_ || $target instanceof Node\Expr\Array_) {
+                        foreach ($target->items as $item) {
+                            if ($item !== null && $item->value instanceof Node\Expr\Variable && is_string($item->value->name)) {
+                                $assigned[$item->value->name][] = $unknown;
+                            }
+                        }
+                    }
+                };
+                if ($node instanceof Node\Expr\Assign) {
+                    $node->var instanceof Node\Expr\Variable ? $mark($node->var, $node->expr) : $mark($node->var, $unknown);
+                } elseif ($node instanceof Node\Expr\AssignRef || $node instanceof Node\Expr\AssignOp) {
+                    $mark($node->var, $unknown);
+                    $node instanceof Node\Expr\AssignRef && $mark($node->expr, $unknown);
+                } elseif ($node instanceof Node\Expr\CallLike && ! ($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall ? $node->name instanceof Node\Identifier && strtolower($node->name->toString()) === 'away' : false) && ! $node->isFirstClassCallable()) {
+                    // A call may take a variable by reference and change it (preg_match, parse_str, a method's &$out).
+                    foreach ($node->getArgs() as $arg) {
+                        $mark($arg->value, $unknown);
+                    }
+                } elseif ($node instanceof Node\Stmt\Foreach_) {
+                    $mark($node->valueVar, $unknown);
+                    $mark($node->keyVar, $unknown);
+                } elseif ($node instanceof Node\Stmt\Static_ || $node instanceof Node\Stmt\Global_) {
+                    foreach ($node instanceof Node\Stmt\Static_ ? array_map(fn ($var) => $var->var, $node->vars) : $node->vars as $var) {
+                        $mark($var, $unknown);
+                    }
+                } elseif ($node instanceof Node\Stmt\Catch_) {
+                    $mark($node->var, $unknown);
+                } elseif ($node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction) {
+                    foreach ($node instanceof Node\Expr\Closure ? $node->uses : [] as $use) {
+                        if ($use->byRef) {
+                            $mark($use->var, $unknown);
+                        }
+                    }
+
+                    continue;
+                }
+                foreach ($node->getSubNodeNames() as $key) {
+                    $child = $node->$key;
+                    $visit($child instanceof Node ? [$child] : (is_array($child) ? $child : []));
+                }
+            }
+        };
+        $visit($nodes);
+
+        return $assigned;
     }
 
     private function groupController(Node $node): ?string

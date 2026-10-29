@@ -62,6 +62,32 @@ test('toast checks each literal redirect branch and accepts all toast macro form
     ['response()->json([])', false],
 ]);
 
+test('toast skips off-site redirects only when the target is provably another host', function (string $body, bool $fails) {
+    file_put_contents($this->backendBase.'/.env.example', "APP_URL=https://app.example.test\n");
+    $source = 'namespace App; use Illuminate\Support\Facades\Redirect as Go; use Inertia\Inertia; class PostsController { public function store($param) { '.$body.' } }';
+    expect(($this->backend)('toast', $source))->toHaveCount($fails ? 1 : 0);
+})->with([
+    'Inertia::location' => ['return Inertia::location($param);', false],
+    'away to an external literal' => ['return redirect()->away("https://billing.stripe.test/session");', false],
+    'facade away' => ['return Go::away("https://billing.stripe.test");', false],
+    'external prefix concatenation' => ['return redirect()->away("https://billing.stripe.test/s/".$param);', false],
+    'external interpolation' => ['return redirect()->away("https://billing.stripe.test/s/{$param}");', false],
+    'variable assigned once to an external literal' => ['$url = "https://billing.stripe.test/x"; return redirect()->away($url);', false],
+    'away to a relative path' => ['return redirect()->away("/posts");', true],
+    'away to the app host' => ['return redirect()->away("https://app.example.test/posts");', true],
+    'away to url()' => ['return redirect()->away(url("/posts"));', true],
+    'away to route()' => ['return redirect()->away(route("posts.index"));', true],
+    'away to config app.url' => ['return Go::away(config("app.url"));', true],
+    'away to a parameter' => ['return redirect()->away($param);', true],
+    'away to a property' => ['return redirect()->away($this->url);', true],
+    'away to a method result' => ['return redirect()->away($session->url());', true],
+    'variable assigned twice' => ['$url = "https://billing.stripe.test"; if ($param) { $url = "/posts"; } return redirect()->away($url);', true],
+    'variable passed to a call' => ['$url = "https://billing.stripe.test"; tweak($url); return redirect()->away($url);', true],
+    'host not ended by the prefix' => ['return redirect()->away("https://billing".$param);', true],
+    'internal route still needs it' => ['return redirect()->route("posts.index");', true],
+    'internal to() still needs it' => ['return redirect()->to("https://billing.stripe.test");', true],
+]);
+
 test('toast accepts kit headless toasts flashed before the redirect, but not inside a closure or from another class', function (string $body, bool $fails) {
     $source = 'namespace App; use Tey\\Kit\\Features\\Core\\Toast; class PostsController { public function update() { '.$body.' } }';
     expect(($this->backend)('toast', $source))->toHaveCount($fails ? 1 : 0);

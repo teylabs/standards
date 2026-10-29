@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use Illuminate\Filesystem\Filesystem;
 use Tey\Standards\Checks\ControllerBodies;
+use Tey\Standards\CruddyGuard;
 use Tey\Standards\Configuration;
 use Tey\Standards\Ratchet;
 use Tey\Standards\Source;
@@ -150,4 +152,43 @@ test('rule 21 response helper shape rejects work hidden behind response construc
 
 test('rule 21 body checks also scan controllers outside the mapped controller roots', function () {
     expect(array_column(bodyViolations('Cases', ['controllerRoots' => []]), 'check'))->toContain('inline validation | UnmappedController::store');
+});
+
+test('rule 21 allows a public method overriding a same-named method of a vendor parent, resolved through composer\'s maps', function () {
+    $base = sys_get_temp_dir().'/standards-vendor-override-'.bin2hex(random_bytes(6));
+    $write = function (string $path, string $source) use ($base): void {
+        is_dir(dirname($base.'/'.$path)) || mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $source);
+    };
+    $write('vendor/composer/autoload_classmap.php', "<?php\n\$vendorDir = dirname(__DIR__);\n\$baseDir = dirname(\$vendorDir);\n\nreturn [\n"
+        ."    'Laravel\\\\Passport\\\\Http\\\\Controllers\\\\AuthorizationController' => \$vendorDir.'/laravel/passport/src/Http/Controllers/AuthorizationController.php',\n"
+        ."    'Acme\\\\Plain\\\\PlainController' => \$vendorDir.'/acme/plain/src/PlainController.php',\n"
+        ."    'App\\\\Http\\\\Controllers\\\\BaseController' => \$baseDir.'/app/Http/Controllers/BaseController.php',\n];\n");
+    $write('vendor/composer/autoload_psr4.php', "<?php\n\$vendorDir = dirname(__DIR__);\n\nreturn ['Acme\\\\Kit\\\\' => [\$vendorDir.'/acme/kit/src']];\n");
+    $write('vendor/laravel/passport/src/Http/Controllers/AuthorizationController.php', "<?php\nnamespace Laravel\\Passport\\Http\\Controllers;\nclass AuthorizationController { public function authorize() {} }\n");
+    $write('vendor/acme/plain/src/PlainController.php', "<?php\nnamespace Acme\\Plain;\nclass PlainController { public function other() {} }\n");
+    $write('vendor/acme/kit/src/Base.php', "<?php\nnamespace Acme\\Kit;\nabstract class Base { abstract public function handshake(); }\n");
+    $write('vendor/acme/kit/src/Middle.php', "<?php\nnamespace Acme\\Kit;\nclass Middle extends Base {}\n");
+    $controller = fn (string $name, string $parent, string $methods): string => "<?php\nnamespace App\\Http\\Controllers;\nuse {$parent};\nclass {$name} extends ".substr(strrchr('\\'.$parent, '\\'), 1)." { {$methods} }\n";
+    $write('app/Http/Controllers/BaseController.php', "<?php\nnamespace App\\Http\\Controllers;\nclass BaseController { public function authorize() {} }\n");
+    $write('app/Http/Controllers/ApproveController.php', $controller('ApproveController', 'Laravel\\Passport\\Http\\Controllers\\AuthorizationController', 'public function authorize() {} public function approve() {} public function Authorize2() {}'));
+    $write('app/Http/Controllers/HandshakeController.php', $controller('HandshakeController', 'Acme\\Kit\\Middle', 'public function handshake() {}'));
+    $write('app/Http/Controllers/OwnedController.php', $controller('OwnedController', 'App\\Http\\Controllers\\BaseController', 'public function authorize() {}'));
+    $write('app/Http/Controllers/PlainChildController.php', $controller('PlainChildController', 'Acme\\Plain\\PlainController', 'public function authorize() {}'));
+    $write('app/Http/Controllers/UnknownController.php', $controller('UnknownController', 'Acme\\Missing\\Gone', 'public function authorize() {}'));
+
+    try {
+        $methods = fn (): array => array_column(array_filter((new CruddyGuard($base, ['app/Http/Controllers'], ['routes']))->run()['violations'], fn (array $v): bool => $v['kind'] === 'method'), 'subject');
+
+        expect($methods())->toEqualCanonicalizing([
+            'ApproveController::approve', 'ApproveController::Authorize2', 'BaseController::authorize', 'OwnedController::authorize',
+            'PlainChildController::authorize', 'UnknownController::authorize',
+        ]);
+
+        // Without composer's maps nothing resolves, so the override fails closed.
+        (new Filesystem)->deleteDirectory($base.'/vendor/composer');
+        expect($methods())->toContain('ApproveController::authorize', 'HandshakeController::handshake');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
 });
