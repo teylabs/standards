@@ -10,6 +10,7 @@ use Tey\Standards\Checks\KitShell;
 use Tey\Standards\Configuration;
 use Tey\Standards\Conformance;
 use Tey\Standards\Ratchet;
+use Tey\Standards\RuleUnavailable;
 use Throwable;
 
 /**
@@ -49,6 +50,12 @@ final class Scanner
     /** @var array<string, list<array<string, mixed>>> rule => findings */
     private array $ruleFindings = [];
 
+    /** @var array<string, string> rule => why it could not run (RuleUnavailable) */
+    private array $unavailable = [];
+
+    /** @var \Closure(string): list<array<string, mixed>> */
+    private readonly \Closure $runRule;
+
     /** @var array<string, string> */
     private array $versions;
 
@@ -57,6 +64,7 @@ final class Scanner
      * @param  list<string>  $adoptedTables  tables recorded in tey/kit's `kit_adoptions` (adopted in place, not hand-rolled)
      * @param  ?string  $configurationFile  project-relative file the allowlist lives in, for file:line citations
      * @param  bool  $adoptionRecordsUnreadable  `kit_adoptions` exists but could not be read: a created table reads hand-rolled, with that cause
+     * @param  ?\Closure(string): list<array<string, mixed>>  $runRule  runs a standards rule (default: Conformance); throws RuleUnavailable when it can't run
      */
     public function __construct(
         private readonly App $app,
@@ -66,7 +74,15 @@ final class Scanner
         private readonly array $adoptedTables = [],
         private readonly ?string $configurationFile = null,
         private readonly bool $adoptionRecordsUnreadable = false,
+        ?\Closure $runRule = null,
     ) {
+        $this->runRule = $runRule ?? function (string $rule): array {
+            if (($missing = Conformance::missingDependencies()) !== null) {
+                throw new RuleUnavailable($missing);
+            }
+
+            return (new Conformance($this->config))->violations($rule);
+        };
         $this->facts = new Facts($app, fn (array $signal): array => $this->signal($signal)[0]);
         $this->versions = self::installedVersions($app->base);
     }
@@ -130,6 +146,13 @@ final class Scanner
         foreach ($this->inventories as $inventory) {
             foreach ($inventory->surfaces as $index => $surface) {
                 $rows[] = $this->row($inventory, $surface, $index, $candidates['mapped'], $exemptions);
+            }
+        }
+        if ($mode !== 'report') {
+            foreach ($rows as $row) {
+                foreach ($row['skipped'] as $skip) {
+                    throw new AdoptionError("--{$mode} fails closed: {$row['package']} {$row['id']} signal {$skip['signal']} (rule [{$skip['rule']}]) could not run: {$skip['reason']}");
+                }
             }
         }
         usort($rows, fn (array $a, array $b): int => [$a['package'], array_search($a['group'], Inventory::GROUPS, true), $a['order']] <=> [$b['package'], array_search($b['group'], Inventory::GROUPS, true), $b['order']]);
@@ -252,10 +275,14 @@ final class Scanner
         $uses = [];
         $note = null;
         $migrationFired = false;
+        $skipped = [];
 
         if ($applies) {
-            foreach ($surface['handRolled'] as $signal) {
+            foreach ($surface['handRolled'] as $signalIndex => $signal) {
                 [$fired, $adoptedBy] = $this->signal($signal);
+                if ($signal['kind'] === 'rule' && isset($this->unavailable[$signal['rule']])) {
+                    $skipped[] = ['signal' => $signalIndex, 'kind' => 'rule', 'rule' => $signal['rule'], 'reason' => $this->unavailable[$signal['rule']]];
+                }
                 array_push($signals, ...$fired);
                 array_push($uses, ...$adoptedBy);
                 $migrationFired = $migrationFired || ($signal['kind'] === 'migration' && $fired !== []);
@@ -315,6 +342,8 @@ final class Scanner
             'uses' => $surface['uses'],
             'docs' => $surface['docs'],
             'exemption' => $exemption,
+            // `{kind: rule}` signals that could not run (RuleUnavailable); the row's status comes from its other signals.
+            'skipped' => $skipped,
             'order' => $index,
         ];
     }
@@ -332,7 +361,7 @@ final class Scanner
 
         switch ($signal['kind']) {
             case 'rule':
-                foreach ($this->rule($signal['rule']) as $finding) {
+                foreach ($this->rule($signal['rule']) ?? [] as $finding) {
                     $file = (string) preg_replace('~[ :].*$~s', '', (string) $finding['target']);
                     if ($inScope($file)) {
                         $fired[] = self::evidence($file, isset($finding['line']) ? (int) $finding['line'] : null, "[{$signal['rule']}] {$finding['check']}");
@@ -691,15 +720,23 @@ final class Scanner
         return ['all' => $all, 'entries' => $byRule, 'used' => []];
     }
 
-    /** @return list<array<string, mixed>> */
-    private function rule(string $rule): array
+    /** @return ?list<array<string, mixed>> null when the rule can't run (RuleUnavailable) */
+    private function rule(string $rule): ?array
     {
+        if (isset($this->unavailable[$rule])) {
+            return null;
+        }
         if (! isset($this->ruleFindings[$rule])) {
             if ($this->config === null) {
                 throw new AdoptionError("A handRolled signal reuses rule [{$rule}], which needs the app's standards configuration (tests/Arch/configuration.php).");
             }
             try {
-                $findings = (new Conformance($this->config))->violations($rule);
+                $findings = ($this->runRule)($rule);
+            } catch (RuleUnavailable $error) {
+                // Can't run here (a dependency is not loadable): the signal is skipped, not evidence. --ci and --compliance fail closed on it.
+                $this->unavailable[$rule] = $error->getMessage();
+
+                return null;
             } catch (Throwable $error) {
                 throw new AdoptionError("Rule [{$rule}] could not run for a handRolled signal: {$error->getMessage()}");
             }

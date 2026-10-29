@@ -3,12 +3,15 @@
 declare(strict_types=1);
 
 use Tey\Standards\Adoption\AdoptionError;
+use Tey\Standards\Adoption\Cli;
 use Tey\Standards\Adoption\App;
 use Tey\Standards\Adoption\Facts;
 use Tey\Standards\Adoption\Inventory;
 use Tey\Standards\Adoption\Lists;
 use Tey\Standards\Adoption\Scanner;
 use Tey\Standards\Configuration;
+use Tey\Standards\Conformance;
+use Tey\Standards\RuleUnavailable;
 use Tey\Standards\Enforcement\CheckReport;
 
 function adoptionFixture(string $path = ''): string
@@ -396,7 +399,7 @@ test('--json is a stable format-1 document with rows, evidence, gaps, facts, inv
 
     expect(array_keys($report))->toBe(['format', 'app', 'generated_at', 'mode', 'lists', 'overridden', 'inventories', 'facts', 'adopted_tables', 'rows', 'gaps', 'exemptions', 'warnings', 'summary', 'blocking', 'exit_code'])
         ->and($report)->toMatchArray(['format' => 1, 'app' => 'fixture/mixed', 'generated_at' => '2026-10-29', 'mode' => 'ci', 'lists' => 3])
-        ->and(array_keys($report['rows'][0]))->toBe(['package', 'id', 'layer', 'group', 'label', 'feature', 'installed', 'applies', 'status', 'underlying', 'new', 'since', 'note', 'cause', 'evidence', 'signals', 'matches', 'replaced', 'uses', 'docs', 'exemption'])
+        ->and(array_keys($report['rows'][0]))->toBe(['package', 'id', 'layer', 'group', 'label', 'feature', 'installed', 'applies', 'status', 'underlying', 'new', 'since', 'note', 'cause', 'evidence', 'signals', 'matches', 'replaced', 'uses', 'docs', 'exemption', 'skipped'])
         ->and(array_keys($report['gaps'][0]))->toBe(['subject', 'kind', 'file', 'line', 'detail', 'files', 'exemption'])
         ->and(array_keys($report['blocking'][0]))->toBe(['kind', 'package', 'subject', 'evidence', 'expects', 'cause'])
         ->and(array_keys($report['inventories'][0]))->toBe(['package', 'npm', 'alias', 'origin', 'source', 'version', 'installed', 'surfaces'])
@@ -632,4 +635,101 @@ test('template-tag never counts <input type="hidden">, in any quoting or case', 
             rmdir($directory.($path === '' ? '' : '/'.$path));
         }
     }
+});
+
+const SKIPPED_REASON = 'Architecture checks require pestphp/pest ^4.7 || ^5.0, pestphp/pest-plugin-arch ^4.0 || ^5.0 and nikic/php-parser ^5.0 in require-dev.';
+
+/**
+ * Kit's surface shape: handRolled [{kind: rule, rule: ui.kit-shell}, {kind: file-name, …}], in a tree with signed-in pages. Returns
+ * [directory, inventory file, cleanup].
+ *
+ * @return array{0: string, 1: string, 2: Closure}
+ */
+function skippedRuleTree(bool $handRolledFile): array
+{
+    $directory = sys_get_temp_dir().'/adoption-skip-'.bin2hex(random_bytes(4));
+    mkdir($directory.'/resources/js/layouts', 0777, true);
+    mkdir($directory.'/resources/js/pages/Dashboard', 0777, true);
+    file_put_contents($directory.'/composer.json', '{"name": "fixture/skip"}');
+    file_put_contents($directory.'/resources/js/pages/Dashboard/Page.vue', "<template>\n    <div>Dashboard</div>\n</template>\n");
+    if ($handRolledFile) {
+        file_put_contents($directory.'/resources/js/layouts/AppHeader.vue', "<template>\n    <header>Northwind Farms</header>\n</template>\n");
+    }
+    $inventory = $directory.'/inventory.json';
+    file_put_contents($inventory, json_encode(adoptionInventory(['*' => ['facts' => [], 'surfaces' => [[
+        'id' => 'layout.page', 'layer' => 'ui', 'group' => 'layout', 'label' => 'Page', 'feature' => 'core', 'applies' => true,
+        'uses' => ['imports' => ['@/components/Kit:Page']],
+        'handRolled' => [['kind' => 'rule', 'rule' => 'ui.kit-shell'], ['kind' => 'file-name', 'globs' => ['resources/js/**/*Header*.vue']]],
+        'docs' => 'x', 'status' => 'stable',
+    ]]]]), JSON_THROW_ON_ERROR));
+
+    return [$directory, $inventory, function () use ($directory): void {
+        (new Illuminate\Filesystem\Filesystem)->deleteDirectory($directory);
+    }];
+}
+
+$unavailable = fn (string $rule): array => throw new RuleUnavailable(SKIPPED_REASON);
+
+test('the skipped reason is Conformance\'s missing-dependency message, and Conformance throws it typed', function () {
+    expect(Conformance::missingDependencies())->toBeNull()
+        ->and((new ReflectionClass(RuleUnavailable::class))->isSubclassOf(LogicException::class))->toBeTrue();
+});
+
+test('plain mode: an unrunnable rule signal is skipped with its reason, the file-name signal decides the row, exit 0', function () use ($unavailable) {
+    [$directory, $inventory, $cleanup] = skippedRuleTree(true);
+    try {
+        $json = Cli::run(['--base', $directory, '--inventory', $inventory, '--json'], $directory, $unavailable);
+        $row = json_decode($json['stdout'], true, flags: JSON_THROW_ON_ERROR)['rows'][0];
+        $text = Cli::run(['--base', $directory, '--inventory', $inventory], $directory, $unavailable);
+
+        expect($json['exit'])->toBe(0)
+            ->and($row['status'])->toBe('hand-rolled')
+            ->and(array_column($row['evidence'], 'file'))->toBe(['resources/js/layouts/AppHeader.vue'])
+            ->and($row['skipped'])->toBe([['signal' => 0, 'kind' => 'rule', 'rule' => 'ui.kit-shell', 'reason' => SKIPPED_REASON]])
+            ->and($text['exit'])->toBe(0)
+            ->and($text['stdout'])->toMatch('~layout\.page .*hand-rolled .*skipped \[1\]~')
+            ->and($text['stdout'])->toContain('[1] tey/kit layout.page: rule ui.kit-shell skipped (could not run): '.SKIPPED_REASON);
+
+        // Without the file the other signal does not fire: the row reads from uses/installed, not from the skipped rule.
+        unlink($directory.'/resources/js/layouts/AppHeader.vue');
+        $row = json_decode(Cli::run(['--base', $directory, '--inventory', $inventory, '--json'], $directory, $unavailable)['stdout'], true, flags: JSON_THROW_ON_ERROR)['rows'][0];
+        expect($row['status'])->toBe('missing')->and($row['skipped'])->toHaveCount(1);
+    } finally {
+        $cleanup();
+    }
+});
+
+test('--ci and --compliance fail closed with exit 2 naming the surface, rule and reason', function (string $flag) use ($unavailable) {
+    [$directory, $inventory, $cleanup] = skippedRuleTree(true);
+    try {
+        $text = Cli::run(['--base', $directory, '--inventory', $inventory, $flag], $directory, $unavailable);
+        $json = Cli::run(['--base', $directory, '--inventory', $inventory, $flag, '--json'], $directory, $unavailable);
+
+        expect($text['exit'])->toBe(2)
+            ->and($text['stderr'])->toContain('tey/kit layout.page', 'rule [ui.kit-shell]', SKIPPED_REASON)
+            ->and($json['exit'])->toBe(2)
+            ->and(json_decode($json['stdout'], true)['error'])->toContain('layout.page', 'ui.kit-shell', SKIPPED_REASON);
+    } finally {
+        $cleanup();
+    }
+})->with(['--ci', '--compliance']);
+
+test('any other runner failure is not a skip: it fails closed in plain mode too', function () {
+    [$directory, $inventory, $cleanup] = skippedRuleTree(true);
+    try {
+        $result = Cli::run(['--base', $directory, '--inventory', $inventory], $directory, fn (string $rule): array => throw new LogicException('boom'));
+        expect($result['exit'])->toBe(2)->and($result['stderr'])->toContain('Rule [ui.kit-shell] could not run for a handRolled signal: boom');
+    } finally {
+        $cleanup();
+    }
+});
+
+test('a rule that runs is evidence as before, with no skipped entries', function () {
+    $report = adoptionReport('hand-rolled');
+    $row = array_column($report['rows'], null, 'id')['layout.page'];
+
+    expect($row['status'])->toBe('hand-rolled')
+        ->and(array_column($row['evidence'], 'detail'))->toBe(["[ui.kit-shell] signed-in <header> outside kit's shell"])
+        ->and(array_merge(...array_column($report['rows'], 'skipped')))->toBe([])
+        ->and(implode("\n", Tey\Standards\Enforcement\AdoptionCommand::text($report)))->not->toContain('skipped');
 });
