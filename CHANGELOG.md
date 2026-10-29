@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- **Rule 21 allows a public controller method that overrides a vendor parent's method of the same name** (for example `authorize()` on a controller extending Passport's `AuthorizationController`). The parent must resolve through `vendor/composer/autoload_classmap.php` or `autoload_psr4.php` to a file under `vendor/`, and it (or a vendor ancestor) must declare that exact method; an unresolved parent, an app-owned parent, a vendor parent without the method or a differing name still fails.
 - **Rule 51 accepts a job calling the standards reusable workflow.** GitHub rejects `timeout-minutes` on a `uses:` job, so for `teylabs/standards/.github/workflows/standards.yml@<any ref>` the rule now reads `with.timeout-minutes` and `with.runs-on` instead. A missing `with.timeout-minutes` passes on the bounded 15-minute default; zero, negative, fractional or non-numeric values fail. Other `uses:` jobs and normal jobs are judged as before.
 
 ## 0.11.44 - 2026-10-29

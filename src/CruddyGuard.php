@@ -6,6 +6,12 @@ namespace Tey\Standards;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use PhpParser\Error as ParserError;
+use PhpParser\Node;
+use PhpParser\NodeFinder;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\ParserFactory;
 use PhpToken;
 use Symfony\Component\Finder\Finder;
 
@@ -235,7 +241,7 @@ final class CruddyGuard
             $names = array_column($surface, 'name');
 
             foreach ($names as $name) {
-                if (! $nativelyChecked && $name !== '__invoke' && ! in_array($name, self::ACTIONS, true)) {
+                if (! $nativelyChecked && $name !== '__invoke' && ! in_array($name, self::ACTIONS, true) && ! $this->overridesVendor($path, $class, $name)) {
                     $violations[] = ['kind' => 'method', 'file' => $file, 'subject' => "{$class}::{$name}"];
                 }
             }
@@ -486,6 +492,111 @@ final class CruddyGuard
         }
 
         return $violations;
+    }
+
+    /**
+     * Whether the public method overrides a method a VENDOR parent declares by that exact name (a controller extending
+     * Passport's AuthorizationController and overriding authorize(), say). The framework calls it, so it is not the app's surface.
+     * Everything is read statically: the parent is resolved through the app's composer autoload files (vendor/composer
+     * autoload_classmap.php, then autoload_psr4.php), never loaded. Only a parent whose file lies under vendor/ counts, and the
+     * walk follows vendor ancestors only. Anything unresolvable or unreadable (no vendor dir, no map entry, an app-owned parent,
+     * a parse error) keeps the method a violation. Methods a vendor parent gets only from a trait or an interface do not count.
+     */
+    private function overridesVendor(string $path, string $class, string $method): bool
+    {
+        $declaration = $this->declaration($path, $class);
+        $vendor = realpath($this->base.'/vendor');
+
+        if ($declaration === null || $vendor === false) {
+            return false;
+        }
+
+        $parent = $declaration->extends?->toString();
+
+        for ($depth = 0; $parent !== null && $depth < 20; $depth++) {
+            $file = $this->autoloaded(ltrim($parent, '\\'), $vendor);
+
+            if ($file === null || ! str_starts_with($file, $vendor.DIRECTORY_SEPARATOR)) {
+                return false;
+            }
+
+            $parentClass = $this->declaration($file, substr(strrchr('\\'.ltrim($parent, '\\'), '\\') ?: '', 1), ltrim($parent, '\\'));
+
+            if ($parentClass === null) {
+                return false;
+            }
+
+            foreach ($parentClass->getMethods() as $declared) {
+                if ($declared->name->toString() === $method) {
+                    return true;
+                }
+            }
+
+            $parent = $parentClass->extends?->toString();
+        }
+
+        return false;
+    }
+
+    /** The class node named $short (and, when given, with exactly that fully qualified name) declared in the file; null if absent or unparsable. */
+    private function declaration(string $file, string $short, ?string $qualified = null): ?Node\Stmt\Class_
+    {
+        try {
+            $nodes = (new ParserFactory)->createForNewestSupportedVersion()->parse((string) file_get_contents($file)) ?? [];
+        } catch (ParserError) {
+            return null;
+        }
+
+        $nodes = (new NodeTraverser(new NameResolver))->traverse($nodes);
+        $matches = (new NodeFinder)->find($nodes, fn (Node $node): bool => $node instanceof Node\Stmt\Class_ && $node->name?->toString() === $short
+            && ($qualified === null || (isset($node->namespacedName) && $node->namespacedName->toString() === $qualified)));
+
+        return count($matches) === 1 && $matches[0] instanceof Node\Stmt\Class_ ? $matches[0] : null;
+    }
+
+    /** @var array{classmap: array<string, string>, psr4: array<string, list<string>>}|null|false */
+    private array|null|false $autoload = null;
+
+    /** The real path composer's static maps give the class (classmap first, then PSR-4), or null. The maps are data files; no class is loaded. */
+    private function autoloaded(string $class, string $vendor): ?string
+    {
+        if ($this->autoload === null) {
+            $this->autoload = false;
+            $classmap = $vendor.'/composer/autoload_classmap.php';
+            $psr4 = $vendor.'/composer/autoload_psr4.php';
+
+            if (is_file($classmap) || is_file($psr4)) {
+                $read = static fn (string $file): array => is_file($file) && is_array($map = (static fn () => require $file)()) ? $map : [];
+                $this->autoload = ['classmap' => $read($classmap), 'psr4' => $read($psr4)];
+            }
+        }
+
+        if ($this->autoload === false) {
+            return null;
+        }
+
+        if (isset($this->autoload['classmap'][$class]) && is_string($this->autoload['classmap'][$class])) {
+            return realpath($this->autoload['classmap'][$class]) ?: null;
+        }
+
+        $prefixes = array_keys($this->autoload['psr4']);
+        usort($prefixes, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+
+        foreach ($prefixes as $prefix) {
+            if (! str_starts_with($class, $prefix)) {
+                continue;
+            }
+
+            foreach ((array) $this->autoload['psr4'][$prefix] as $directory) {
+                $file = realpath(rtrim((string) $directory, '/\\').'/'.str_replace('\\', '/', substr($class, strlen($prefix))).'.php');
+
+                if ($file !== false) {
+                    return $file;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function relative(string $absolute): string
