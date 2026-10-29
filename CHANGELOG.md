@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Preflight `queue.failed-store`** (advisory). On a Laravel Cloud managed queue (driver or connection `cloud`, or a committed Cloud config naming a managed queue), failed jobs never reach `failed_jobs`. The check names both stores and their commands (`php artisan queue:failed` and `cloud managed-queue:failed-jobs <env> --json -n`). It exits 1 only under `--strict`, until `PREFLIGHT_QUEUE_FAILED_STORE_CHECKED=true` declares a post-deploy check that reads both. Other queues pass. "Verify after deploy" now says "0 failed jobs" means every store.
+
+### Upgrading
+
+- **`standards:preflight --strict` on a Cloud managed queue now fails `queue.failed-store`** until the post-deploy check covers both failed-job stores and `PREFLIGHT_QUEUE_FAILED_STORE_CHECKED=true` is set.
+
 ## 0.11.27 - 2026-10-28
 
 ### Fixed

@@ -170,7 +170,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -629,7 +629,7 @@ test('every selected check and the final summary are logged on the standards or 
 test('[regression] a non-interactive deploy run prints only the checks that need attention and never the word warning', function () {
     $quiet = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false);
     expect($quiet->getStatusCode())->toBe(0)
-        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 23 checks, 22 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
+        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 24 checks, 23 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
 
     $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => null]);
     $attention = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false)->getDisplay();
@@ -736,6 +736,8 @@ test('usage errors log an exit-two summary without changing JSON stdout', functi
 });
 
 test('queue checks agree with sync until needed for every worker policy', function (string $connection, ?bool $expectedWorker, string $connectionStatus, string $workerStatus) {
+    // Worker policy only: queue.failed-store has its own test, so declare its post-deploy check here.
+    $this->preflight['config']->set('preflight.queue.failed_store_checked', true);
     if ($connection === 'async') {
         preflightDatabase($this->preflight);
     } elseif ($connection === 'managed') {
@@ -754,7 +756,7 @@ test('queue checks agree with sync until needed for every worker policy', functi
     $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
     $results = preflightResults($tester);
     expect($tester->getStatusCode())->toBe(0);
-    expect(array_keys($results))->toBe(['queue.connection', 'queue.worker']);
+    expect(array_keys($results))->toBe(['queue.connection', 'queue.worker', 'queue.failed-store']);
     expect($results['queue.connection'])->toMatchArray(['level' => 'advisory', 'status' => $connectionStatus]);
     expect($results['queue.worker'])->toMatchArray(['level' => 'advisory', 'status' => $workerStatus]);
     if ($connectionStatus === 'warn') {
@@ -1660,3 +1662,34 @@ test('deploy.migrate skips packages', function () {
 
     expect(preflightResults(preflightCommand($this->preflight, ['--only' => 'deploy', '--json' => true, '--stderr' => true]))['deploy.migrate']['status'])->toBe('skipped');
 });
+
+test('queue.failed-store: a Laravel Cloud managed queue gets an advisory naming both failed-job stores, a declared check passes, other queues have nothing to say', function (string $setup, string $status, array $contains) {
+    match ($setup) {
+        'cloud driver' => $this->preflight['config']->set(['queue.default' => 'managed', 'queue.connections.managed.driver' => 'cloud']),
+        'cloud connection name' => $this->preflight['config']->set(['queue.default' => 'cloud']),
+        'committed cloud config' => (function () {
+            mkdir($this->preflight->root.'/.cloud');
+            file_put_contents($this->preflight->root.'/.cloud/environment.yml', "queues:\n  - type: managed-queue\n");
+            $this->preflight['config']->set(['queue.default' => 'database', 'queue.connections.database.driver' => 'database']);
+        })(),
+        'declared post-deploy check' => $this->preflight['config']->set(['queue.default' => 'managed', 'queue.connections.managed.driver' => 'cloud', 'preflight.queue.failed_store_checked' => true]),
+        'database' => $this->preflight['config']->set(['queue.default' => 'database', 'queue.connections.database.driver' => 'database']),
+        'redis' => $this->preflight['config']->set(['queue.default' => 'redis', 'queue.connections.redis.driver' => 'redis']),
+    };
+
+    $plain = preflightCommand($this->preflight, ['--only' => 'queue', '--json' => true]);
+    $results = preflightResults($plain);
+    expect($plain->getStatusCode())->toBe(0, 'advisory: never fails a deploy run')
+        ->and($results['queue.failed-store'])->toMatchArray(['level' => 'advisory', 'status' => $status])
+        ->and($results['queue.failed-store']['message'])->toContain(...$contains);
+
+    $strict = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
+    expect($strict->getStatusCode())->toBe($status === 'fail' ? 1 : 0);
+})->with([
+    'cloud driver' => ['cloud driver', 'fail', ['two stores', '`php artisan queue:failed` (the failed_jobs table)', '`cloud managed-queue:failed-jobs <env> --json -n`', 'PREFLIGHT_QUEUE_FAILED_STORE_CHECKED=true']],
+    'cloud connection name' => ['cloud connection name', 'fail', ['two stores']],
+    'committed cloud config' => ['committed cloud config', 'fail', ['two stores']],
+    'declared post-deploy check' => ['declared post-deploy check', 'pass', ['covers both failed-job stores']],
+    'database' => ['database', 'pass', ['one store']],
+    'redis' => ['redis', 'pass', ['one store']],
+]);
