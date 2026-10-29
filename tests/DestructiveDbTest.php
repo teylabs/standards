@@ -71,6 +71,11 @@ test('a production-only guard fails', function (string $boot) {
     'environment production' => ["DB::prohibitDestructiveCommands(app()->environment('production'));"],
 ]);
 
+test('a guard that also exempts another environment fails', function () {
+    expect(destructiveChecks(destructiveApp("DB::prohibitDestructiveCommands(! app()->environment('local', 'testing'));")))
+        ->toBe(['prohibitDestructiveCommands() guard is not recognised as true outside testing']);
+});
+
 test('a bare call fails, since it prohibits RefreshDatabase in tests too', function (string $boot) {
     expect(destructiveChecks(destructiveApp($boot)))->toBe(['prohibitDestructiveCommands() without a guard also prohibits in tests, where RefreshDatabase runs migrate:fresh']);
 })->with([['DB::prohibitDestructiveCommands();'], ['DB::prohibitDestructiveCommands(true);']]);

@@ -153,7 +153,9 @@ final class DestructiveDb
 
     private function namesTesting(Node $call): bool
     {
-        return $call instanceof Node\Expr\CallLike
-            && array_filter($call->getArgs(), fn (Node\Arg $arg): bool => $arg->value instanceof Node\Scalar\String_ && $arg->value->value === 'testing') !== [];
+        // Only `environment('testing')`: naming more environments (`'local', 'testing'`) leaves those unprotected too.
+        $args = $call instanceof Node\Expr\CallLike ? $call->getArgs() : [];
+
+        return count($args) === 1 && $args[0]->value instanceof Node\Scalar\String_ && $args[0]->value->value === 'testing';
     }
 }
