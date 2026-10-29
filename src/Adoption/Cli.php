@@ -22,9 +22,10 @@ final class Cli
 
     /**
      * @param  list<string>  $arguments  after `adoption`
+     * @param  ?\Closure(string): list<array<string, mixed>>  $runRule  the Scanner's rule runner (tests); default Conformance
      * @return array{exit: int, stdout: string, stderr: string}
      */
-    public static function run(array $arguments, string $cwd): array
+    public static function run(array $arguments, string $cwd, ?\Closure $runRule = null): array
     {
         $base = $cwd;
         $inventories = [];
@@ -72,7 +73,7 @@ final class Cli
             $loaded = Scanner::inventories($resolved, $inventories);
             // A `{kind: rule}` signal runs its rule through Conformance, which needs a Configuration: on a bare tree it gets the same default
             // the scan falls back to (App::bare(), based at --base; frontend under resources/js), not an exit 2.
-            $report = (new Scanner(new App($resolved, $configuration), $loaded, $configuration ?? App::bare($resolved), new DateTimeImmutable('today'), [], $configuration === null ? null : self::CONFIGURATION))->report($mode);
+            $report = (new Scanner(new App($resolved, $configuration), $loaded, $configuration ?? App::bare($resolved), new DateTimeImmutable('today'), [], $configuration === null ? null : self::CONFIGURATION, false, $runRule))->report($mode);
         } catch (AdoptionError $error) {
             return $json
                 ? ['exit' => 2, 'stdout' => json_encode(['format' => Scanner::FORMAT, 'mode' => $mode, 'error' => $error->getMessage(), 'exit_code' => 2], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).PHP_EOL, 'stderr' => '']
