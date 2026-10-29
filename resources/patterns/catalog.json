@@ -1992,7 +1992,7 @@
         "data-actions.document": {
             "id": "data-actions.document",
             "recipe": "pdf-reports",
-            "summary": "A frozen document rendered to PDF through one renderer contract.",
+            "summary": "A frozen document rendered to PDF through one renderer contract. Scaffold it with the Bakery's pdf-reports recipe; sending or attaching the PDF is not covered yet.",
             "kit": [],
             "make": null,
             "checks": [],
@@ -2003,7 +2003,7 @@
                 "render",
                 "invoice"
             ],
-            "status": "gap",
+            "status": "draft",
             "recipe_make": "mod:butter/pdf-reports {Name}",
             "evidence": {
                 "apps": 3,
@@ -2011,7 +2011,15 @@
                 "prs": 11,
                 "past_apps": 16,
                 "past_count": 46
-            }
+            },
+            "rules": [
+                "Render through the Renderer contract; the mPDF implementation stays behind it.",
+                "Authorize through a generated policy.",
+                "Stream with X-Content-Type-Options: nosniff and a Content-Disposition header.",
+                "No PII in logs.",
+                "The app requires mpdf/mpdf.",
+                "Not covered yet: sending or attaching the PDF (mail). Build that part to the mail conventions and stamp it."
+            ]
         },
         "data-actions.api-op": {
             "id": "data-actions.api-op",
