@@ -340,7 +340,10 @@ test('toast accepts a guest form whose back() returns to a page rendering kit Fo
         'missing page file' => [$guest, $status, 'return Inertia::render("Public/Missing");', 'return back();', true],
         'no GET route for the URI' => ['Route::get("/contact-us", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]);', $status, $render, 'return back();', true],
         'no route at all' => ['', $status, $render, 'return back();', true],
-        'array-form group' => ['Route::group(["middleware" => "web"], function () { Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]); });', $status, $render, 'return back();', true],
+        'array-form group with guest middleware and a prefix' => ['Route::group(["middleware" => ["web", "guest"], "prefix" => "site"], function () { Route::get("contact", [ContactController::class, "show"]); Route::post("contact", [ContactController::class, "store"]); });', $status, $render, 'return back();', false],
+        'array-form group with auth middleware' => ['Route::group(["middleware" => "auth"], function () { Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]); });', $status, $render, 'return back();', true],
+        'array-form group with an unread key' => ['Route::group(["domain" => "{account}.example.test"], function () { Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]); });', $status, $render, 'return back();', true],
+        'array-form group with a non-literal prefix' => ['Route::group(["prefix" => $p], function () { Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]); });', $status, $render, 'return back();', true],
         'also registered by a resource' => [$guest.' Route::resource("contacts", ContactController::class);', $status, $render, 'return back();', true],
         'route file included inside a group' => [$guest.' Route::middleware("auth")->group(function () { require __DIR__."/account.php"; });', $status, $render, 'return back();', true],
         'redirect to a route instead of back' => [$guest, $status, $render, 'return to_route("home");', true],
@@ -496,6 +499,67 @@ test('the FormStatus exemption resolves the GET route\'s controller to its fully
         'a fully qualified class declared twice' => ['use App\Site\ContactPageController; Route::get("/contact", [ContactPageController::class, "show"]);'.$post, ['src/Controllers/Copy/ContactPageController.php' => '<?php namespace App\Site; class ContactPageController { public function show() { return \Inertia\Inertia::render("Admin/Contact"); } }'], true],
         'a class found through composer\'s PSR-4 map' => ['use App\Web\ContactPageController; Route::get("/contact", [ContactPageController::class, "show"]);'.$post, $psr4, false],
         'a mutating route whose controller cannot be read' => ['use App\Site\ContactPageController; Route::get("/contact", [ContactPageController::class, "show"]);'.$post.' Route::post("/other", $handler);', [], true],
+    ];
+});
+
+test('named-route redirects read resource, match, any, array-group and controller-group names, and unreadable names still block', function (string $store, string $routes, array $checks) {
+    file_put_contents($this->backendBase.'/bootstrap/app.php', guestBootstrap(''));
+    $render = 'return Inertia::render("Welcome/Page");';
+    $files = [
+        'routes/web.php' => '<?php use Illuminate\Support\Facades\Route; use App\JoinController; use App\PhotoController; use App\PageController; Route::post("/join", JoinController::class)->name("join.store"); '.$routes,
+        'src/Controllers/PhotoController.php' => '<?php namespace App; use Inertia\Inertia; class PhotoController { public function index() { '.$render.' } public function create() { '.$render.' } public function show($photo) { '.$render.' } }',
+        'src/Controllers/PageController.php' => '<?php namespace App; use Inertia\Inertia; class PageController { public function show() { '.$render.' } public function __invoke() { '.$render.' } }',
+        'resources/js/pages/Welcome/Page.vue' => "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit';\n</script>\n<template>\n    <FormStatus :message=\"\$page.flash.joined\" />\n</template>\n",
+    ];
+    foreach ($files as $path => $source) {
+        is_dir(dirname($this->backendBase.'/'.$path)) || mkdir(dirname($this->backendBase.'/'.$path), 0777, true);
+        file_put_contents($this->backendBase.'/'.$path, $source);
+    }
+    $controller = 'namespace App; use Inertia\Inertia; class JoinController { public function __invoke() { Inertia::flash("joined", "Thanks"); return to_route("'.$store.'"); } }';
+    $found = array_column(($this->backend)('toast', $controller, ['pageRoots' => ['resources/js/pages']], 'src/Controllers/JoinController.php'), 'check');
+    expect($found)->toBe($checks);
+})->with(function () {
+    $redirect = 'JoinController::__invoke redirect must chain ->toast*()';
+    $photos = 'Route::resource("photos", PhotoController::class)';
+
+    return [
+        'a resource index' => ['photos.index', $photos.';', []],
+        'a resource create' => ['photos.create', $photos.';', []],
+        'a resource show takes a parameter' => ['photos.show', $photos.';', [$redirect]],
+        'a resource store is not a GET' => ['photos.store', $photos.';', [$redirect]],
+        'a resource with guest middleware' => ['photos.index', 'Route::middleware("web")->resource("photos", PhotoController::class);', []],
+        'a resource behind auth' => ['photos.index', 'Route::middleware("auth")->resource("photos", PhotoController::class);', [$redirect]],
+        'an apiResource index' => ['photos.index', 'Route::apiResource("photos", PhotoController::class);', []],
+        'an apiResource registers no create' => ['photos.create', 'Route::apiResource("photos", PhotoController::class);', [$redirect]],
+        'only() leaves index out' => ['photos.index', $photos.'->only(["show", "store"]);', [$redirect]],
+        'only() as arguments keeps index' => ['photos.index', $photos.'->only("index", "show");', []],
+        'except() leaves index out' => ['photos.index', $photos.'->except(["index"]);', [$redirect]],
+        'names() renames index' => ['gallery', $photos.'->names(["index" => "gallery"]);', []],
+        'names() renamed index is gone under the default' => ['photos.index', $photos.'->names(["index" => "gallery"]);', [$redirect]],
+        'names() as a base name' => ['pics.index', $photos.'->names("pics");', []],
+        'name() for one action' => ['gallery', $photos.'->name("index", "gallery");', []],
+        'parameters() renames the wildcard, show still takes one' => ['photos.show', $photos.'->parameters(["photos" => "picture"]);', [$redirect]],
+        'a prefixed resource name' => ['photos.index', 'Route::resource("admin/photos", PhotoController::class);', []],
+        'a nested resource index takes the parent parameter' => ['photos.comments.index', 'Route::resource("photos.comments", PhotoController::class);', [$redirect]],
+        'a resource in a name group' => ['site.photos.index', 'Route::name("site.")->group(function () { Route::resource("photos", PhotoController::class); });', []],
+        'a resource with a non-literal name' => ['photos.index', $photos.'; Route::resource($name, PhotoController::class);', [$redirect]],
+        'a resource with shallow()' => ['photos.index', $photos.'->shallow();', [$redirect]],
+        'a resource with an options array' => ['photos.index', 'Route::resource("photos", PhotoController::class, ["only" => ["index"]]);', [$redirect]],
+        'resources() elsewhere' => ['photos.index', $photos.'; Route::resources(["videos" => PageController::class]);', [$redirect]],
+        'resource verbs changed' => ['photos.index', 'Route::resourceVerbs(["create" => "new"]); '.$photos.';', [$redirect]],
+        'a match GET target' => ['home', 'Route::match(["get", "head"], "/", PageController::class)->name("home");', []],
+        'a match GET and POST target' => ['home', 'Route::match(["get", "post"], "/", PageController::class)->name("home");', [$redirect]],
+        'match and any elsewhere no longer block' => ['home', 'Route::get("/", PageController::class)->name("home"); Route::match(["get", "post"], "/search", PageController::class)->name("search"); Route::any("/hook", PageController::class)->name("hook");', []],
+        'a match with non-literal verbs elsewhere' => ['home', 'Route::get("/", PageController::class)->name("home"); Route::match($verbs, "/search", PageController::class)->name("search");', [$redirect]],
+        'an any target' => ['home', 'Route::any("/", PageController::class)->name("home");', [$redirect]],
+        'an array group as prefix' => ['site.home', 'Route::group(["as" => "site.", "prefix" => "s", "middleware" => "web"], function () { Route::get("/", PageController::class)->name("home"); });', []],
+        'an array group behind auth' => ['site.home', 'Route::group(["as" => "site.", "middleware" => ["web", "auth"]], function () { Route::get("/", PageController::class)->name("home"); });', [$redirect]],
+        'an array group with a non-literal as' => ['home', 'Route::get("/", PageController::class)->name("home"); Route::group(["as" => $as], function () { Route::get("/x", PageController::class)->name("x"); });', [$redirect]],
+        'a controller group name' => ['home', 'Route::controller(PageController::class)->group(function () { Route::get("/", "show")->name("home"); });', []],
+        'an array group controller' => ['home', 'Route::group(["controller" => PageController::class], function () { Route::get("/", "show")->name("home"); });', []],
+        'a view route takes the name too' => ['home', 'Route::get("/", PageController::class)->name("home"); Route::view("/welcome", "welcome")->name("home");', [$redirect]],
+        'a macro elsewhere' => ['home', 'Route::get("/", PageController::class)->name("home"); Route::passkeys();', [$redirect]],
+        'a non-literal name elsewhere' => ['home', 'Route::get("/", PageController::class)->name("home"); Route::get("/x", PageController::class)->name($name);', [$redirect]],
     ];
 });
 
