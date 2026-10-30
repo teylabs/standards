@@ -418,6 +418,93 @@ function guestBootstrap(string $middleware): string
     return '<?php use Illuminate\Foundation\Application; use Illuminate\Foundation\Configuration\Middleware; return Application::configure(basePath: dirname(__DIR__))->withRouting(web: __DIR__."/../routes/web.php")->withMiddleware(function (Middleware $middleware): void { '.$middleware.' })->create();';
 }
 
+test('a guest form may redirect to a literal named guest GET route whose page reads every flashed key through FormStatus', function (string $store, string $moduleRoutes, string $webRoutes, string $partial, array $checks) {
+    file_put_contents($this->backendBase.'/bootstrap/app.php', guestBootstrap('$middleware->web(append: [\App\Http\Middleware\HandleInertiaRequests::class]);'));
+    $files = [
+        'src/Modules/Signup/routes/web.php' => '<?php use Illuminate\Support\Facades\Route; use App\Modules\Signup\JoinController; '.$moduleRoutes,
+        'routes/web.php' => '<?php use Illuminate\Support\Facades\Route; use App\HomeController; '.$webRoutes,
+        'src/Controllers/HomeController.php' => '<?php namespace App; use Inertia\Inertia; class HomeController { public function __invoke() { return Inertia::render("Welcome/Page"); } }',
+        'resources/js/pages/Welcome/Page.vue' => "<script setup lang=\"ts\">\nimport JoinForm from './Partials/JoinForm.vue';\n</script>\n<template>\n    <JoinForm />\n</template>\n",
+        'resources/js/pages/Welcome/Partials/JoinForm.vue' => $partial,
+    ];
+    mkdir($this->backendBase.'/src/Modules/Signup/Controllers', 0777, true);
+    foreach ($files as $path => $source) {
+        is_dir(dirname($this->backendBase.'/'.$path)) || mkdir(dirname($this->backendBase.'/'.$path), 0777, true);
+        file_put_contents($this->backendBase.'/'.$path, $source);
+    }
+    $controller = 'namespace App\Modules\Signup; use Inertia\Inertia; class JoinController { public function __invoke($key) { '.$store.' } }';
+    $found = array_column(($this->backend)('toast', $controller, ['pageRoots' => ['resources/js/pages'], 'routeRoots' => ['routes', 'src/Modules/*/routes'], 'controllerRoots' => ['src/Controllers', 'src/Modules/*/Controllers']], 'src/Modules/Signup/Controllers/JoinController.php'), 'check');
+    expect($found)->toBe($checks);
+})->with(function () {
+    $post = 'Route::post("/join", JoinController::class)->middleware(["web", "throttle:join"])->name("join.store");';
+    $home = 'Route::get("/", HomeController::class)->name("home");';
+    $partial = fn (string $message): string => "<script setup lang=\"ts\">\nimport { usePage } from '@inertiajs/vue3';\nimport { FormStatus } from '@/components/Kit';\nconst page = usePage();\n</script>\n<template>\n    <FormStatus v-if=\"page.flash?.joined\" :message=\"{$message}\" />\n</template>\n";
+    $reads = $partial('page.flash?.joined as string');
+    $flash = 'Inertia::flash("joined", "Thanks"); ';
+    $redirect = 'JoinController::__invoke redirect must chain ->toast*()';
+
+    return [
+        'to_route to a guest GET whose partial reads the key' => [$flash.'return to_route("home");', $post, $home, $reads, []],
+        'redirect()->route() with a group name prefix' => [$flash.'return redirect()->route("site.home");', $post, 'Route::name("site.")->middleware("web")->group(function () { Route::get("/", HomeController::class)->name("home"); });', $reads, []],
+        'Redirect::route() with a with() key' => ['return \Illuminate\Support\Facades\Redirect::route("home")->with("joined", "Thanks");', $post, $home, $reads, []],
+        'an unknown name' => [$flash.'return to_route("welcome");', $post, $home, $reads, [$redirect]],
+        'two routes with the name' => [$flash.'return to_route("home");', $post, $home.' Route::get("/start", HomeController::class)->name("home");', $reads, [$redirect]],
+        'a non-literal route name elsewhere' => [$flash.'return to_route("home");', $post, $home.' Route::get("/start", HomeController::class)->name($key);', $reads, [$redirect]],
+        'a signed-in target' => [$flash.'return to_route("home");', $post, 'Route::middleware("auth")->group(function () { Route::get("/", HomeController::class)->name("home"); });', $reads, [$redirect]],
+        'a non-literal name' => [$flash.'return to_route($key);', $post, $home, $reads, [$redirect]],
+        'with parameters' => [$flash.'return to_route("home", ["ref" => 1]);', $post, $home, $reads, [$redirect]],
+        'a target with a URI parameter' => [$flash.'return to_route("home");', $post, 'Route::get("/{locale}", HomeController::class)->name("home");', $reads, [$redirect]],
+        'a POST target' => [$flash.'return to_route("join.store");', $post, $home, $reads, [$redirect]],
+        'the key unread' => [$flash.'return to_route("home");', $post, $home, $partial('page.flash?.other as string'), [$redirect]],
+        'no FormStatus' => [$flash.'return to_route("home");', $post, $home, "<template>\n    <form />\n</template>\n", [$redirect]],
+        'a signed-in POST route' => [$flash.'return to_route("home");', 'Route::post("/join", JoinController::class)->middleware(["web", "auth"]);', $home, $reads, [$redirect]],
+    ];
+});
+
+test('declared guest-safe middleware keeps a FormStatus route guest, and auth middleware can never be declared', function (array $declared, string $middleware, array $checks) {
+    $classes = [
+        'src/Middleware/EnterWorkspace.php' => '<?php namespace App\Http\Middleware; class EnterWorkspace { public function handle($request, $next) { return $next($request); } }',
+        'src/Middleware/RequireFeature.php' => '<?php namespace App\Http\Middleware; class RequireFeature { public function handle($request, $next, string $feature) { return $next($request); } }',
+        'src/Middleware/Members.php' => '<?php namespace App\Http\Middleware; use Illuminate\Auth\Middleware\Authenticate; class Members extends Authenticate {}',
+        'src/Middleware/Wraps.php' => '<?php namespace App\Http\Middleware; class Wraps { public function handle($request, $next) { return app(\Illuminate\Auth\Middleware\Authenticate::class)->handle($request, $next); } }',
+        'src/Middleware/HandleInertiaRequests.php' => '<?php namespace App\Http\Middleware; class HandleInertiaRequests {}',
+    ];
+    mkdir($this->backendBase.'/src/Middleware', 0777, true);
+    foreach ($classes as $path => $source) {
+        file_put_contents($this->backendBase.'/'.$path, $source);
+    }
+    file_put_contents($this->backendBase.'/bootstrap/app.php', guestBootstrap('$middleware->alias(["feature" => \App\Http\Middleware\RequireFeature::class, "members" => \App\Http\Middleware\Members::class]); $middleware->web(append: [\App\Http\Middleware\HandleInertiaRequests::class, \App\Http\Middleware\EnterWorkspace::class]);'));
+    file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\ContactController; Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"])->middleware(["web", '.$middleware.']);');
+    mkdir($this->backendBase.'/resources/js/pages/Public', 0777, true);
+    file_put_contents($this->backendBase.'/resources/js/pages/Public/Contact.vue', "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit';\n</script>\n<template>\n    <FormStatus :message=\"\$page.flash.joined\" />\n</template>\n");
+    $controller = 'namespace App; use Inertia\Inertia; class ContactController { public function show() { return Inertia::render("Public/Contact"); } public function store() { Inertia::flash("joined", "Thanks"); return back(); } }';
+    $found = array_column(($this->backend)('toast', $controller, ['pageRoots' => ['resources/js/pages'], 'guestSafeMiddleware' => $declared], 'src/Controllers/ContactController.php'), 'check');
+    expect($found)->toBe($checks);
+})->with(function () {
+    $workspace = ['middleware' => 'App\Http\Middleware\EnterWorkspace', 'reason' => 'resolves the route\'s workspace; signs no one in'];
+    $feature = ['middleware' => 'feature:*', 'reason' => 'a feature flag gate; 404s when off, signs no one in'];
+    $redirect = 'ContactController::store redirect must chain ->toast*()';
+
+    return [
+        'a declared app class in the web group and a declared feature: gate' => [[$workspace, $feature], '"feature:signup"', []],
+        'an exact alias with parameters' => [[$workspace, ['middleware' => 'feature:signup', 'reason' => 'a feature flag gate']], '"feature:signup"', []],
+        'an exact alias does not match other parameters' => [[$workspace, ['middleware' => 'feature:signup', 'reason' => 'a feature flag gate']], '"feature:other"', [$redirect]],
+        'a declared class on the route' => [[$workspace], '\App\Http\Middleware\EnterWorkspace::class', []],
+        'undeclared app middleware in the web group still fails' => [[$feature], '"feature:signup"', [$redirect]],
+        'an undeclared feature: gate still fails' => [[$workspace], '"feature:signup"', [$redirect]],
+        'a missing reason' => [[$workspace, ['middleware' => 'feature:*']], '"feature:signup"', ['guestSafeMiddleware entry 1 (feature:*) needs a non-empty reason', $redirect]],
+        'a blank reason' => [[$workspace, ['middleware' => 'feature:*', 'reason' => '  ']], '"feature:signup"', ['guestSafeMiddleware entry 1 (feature:*) needs a non-empty reason', $redirect]],
+        'a non-string middleware' => [[$workspace, ['middleware' => ['feature'], 'reason' => 'x']], '"feature:signup"', ['guestSafeMiddleware entry 1 needs a non-empty string middleware', $redirect]],
+        'a declared subclass of Authenticate' => [[$workspace, ['middleware' => 'App\Http\Middleware\Members', 'reason' => 'x']], '\App\Http\Middleware\Members::class', ['guestSafeMiddleware entry 1 (App\Http\Middleware\Members) extends Illuminate\Auth\Middleware\Authenticate', $redirect]],
+        'a declared class naming Authenticate' => [[$workspace, ['middleware' => 'App\Http\Middleware\Wraps', 'reason' => 'x']], '\App\Http\Middleware\Wraps::class', ['guestSafeMiddleware entry 1 (App\Http\Middleware\Wraps) names Illuminate\Auth\Middleware\Authenticate in App\Http\Middleware\Wraps', $redirect]],
+        'a declared class that cannot be read' => [[$workspace, ['middleware' => 'App\Http\Middleware\Missing', 'reason' => 'x']], '\App\Http\Middleware\Missing::class', ['guestSafeMiddleware entry 1 (App\Http\Middleware\Missing) cannot be read (App\Http\Middleware\Missing is not found in the source roots or composer\'s autoload maps)', $redirect]],
+        'a declared auth:web' => [[$workspace, ['middleware' => 'auth:web', 'reason' => 'x']], '"auth:web"', ['guestSafeMiddleware entry 1 (auth:web) names an auth middleware', $redirect]],
+        'a declared can:*' => [[$workspace, ['middleware' => 'can:*', 'reason' => 'x']], '"can:view,post"', ['guestSafeMiddleware entry 1 (can:*) names an auth middleware', $redirect]],
+        'a declared alias bootstrap maps to an Authenticate subclass' => [[$workspace, ['middleware' => 'members', 'reason' => 'x']], '"members"', ['guestSafeMiddleware entry 1 (members) is an alias of App\Http\Middleware\Members, which extends Illuminate\Auth\Middleware\Authenticate', $redirect]],
+        'a declared Authenticate itself' => [[$workspace, ['middleware' => 'Illuminate\Auth\Middleware\Authenticate', 'reason' => 'x']], '"web"', ['guestSafeMiddleware entry 1 (Illuminate\Auth\Middleware\Authenticate) is auth middleware']],
+    ];
+});
+
 test('the FormStatus exemption fails closed unless bootstrap/app.php and the app providers provably keep the route guest', function (?string $bootstrap, ?string $provider, bool $fails) {
     file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\ContactController; Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]);');
     if ($bootstrap !== null) {

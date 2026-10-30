@@ -49,6 +49,7 @@ final readonly class Configuration
      * @param  list<string>  $tenantKeys  the column a single-database app scopes tenants by, for rule `tenant-aware`'s default detection (a model with it in $fillable or in its table's migration is tenant-scoped)
      * @param  list<string>  $tenantModels  what makes a model tenant-scoped for rule `tenant-aware`: traits it uses or classes it is (or extends). Default: spatie/laravel-multitenancy's UsesTenantConnection; add the app's own tenant-scope trait or base model
      * @param  array<string, string>  $landlordCommands  for rule `tenant-aware`: command class => why it runs outside any tenant (it provisions the first owner, sends an invite before a tenant exists). A listed command is not required to be TenantAware; an empty reason, or a class that is not a command in the source roots, is itself a finding
+     * @param  list<array{middleware: string, reason: string}>  $guestSafeMiddleware  for rule `toast`'s FormStatus proof: middleware the app declares, with its reason, as signing no one in, so a route or web group carrying it can still be a guest route. `middleware` is a class (FQCN) or a route alias string: `feature:early-access-intake` matches exactly that string, `feature:*` matches the alias with any parameters, and `feature` matches it bare. A declared fact, checked: an empty reason, a non-string middleware, an auth alias (`auth`, `auth.basic`, `auth.session`, `verified`, `password.confirm`, `can`, any parameters, or an alias bootstrap/app.php maps to an auth class), or a class that is or extends Illuminate\Auth\Middleware\Authenticate, names it in its body, or cannot be read, is a finding and the entry declares nothing
      * @param  list<string>  $presetIgnores  namespaces the stock Laravel preset does not apply to: a modular app's module roots (App\\Modules), whose own placement rule 20 and the tey/mod layout enforce
      * @param  array<string, list<string>>  $boostSkills  Composer or npm package => required skills
      * @param  list<string>  $boostSkillRoots
@@ -132,5 +133,6 @@ final readonly class Configuration
         /** @var list<string> Str::is patterns, matched against a mutating route's name and its "/uri", that rule 55 does not require a capability for */
         public array $mcpRouteExclusions = Checks\McpParity::ROUTE_EXCLUSIONS,
         public array $landlordCommands = [],
+        public array $guestSafeMiddleware = [],
     ) {}
 }

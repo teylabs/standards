@@ -21,6 +21,10 @@ use Tey\Standards\Source;
  *     group anywhere in the route roots makes it unprovable. A controller that declares `middleware()` or calls `$this->middleware()` is never guest.
  *  2. For each such route, exactly one GET route with the same full literal URI exists: a controller action (the same controller, or one
  *     class declared exactly once under the controller roots), or `Route::inertia('<uri>', '<literal page>')`.
+ *     A literal named-route redirect (`to_route('<name>')`, `redirect()->route('<name>')`, `Redirect::route('<name>')`, one argument only;
+ *     redirectFlash()) lands instead on the one route registered under that full name (group `name()`/`as()` prefixes plus the route's own,
+ *     routeName()): it must be a guest GET with a literal URI and no parameters, and no route in the route roots may carry an unreadable name
+ *     (a non-literal name, a `Route::group([...])`, a resource, match or any registration).
  *  3. Every return of that GET action is `Inertia::render('<literal>')` or `inertia('<literal>')`, all the same page (Route::inertia names it).
  *  4. That page is exactly one `<page>.vue` under the page roots, and it, or a `.vue` file it imports (app- or kit-owned, up to three import levels,
  *     `@/` and relative specifiers only, cycles cut), has a script that imports FormStatus from `@/components/Kit` or `@/components/Kit/Form`
@@ -53,13 +57,16 @@ final class GuestFormStatus
 
     private ?bool $environment = null;
 
-    /** @var ?list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool}> */
+    /** @var ?list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool, name: ?string}> */
     private ?array $routes = null;
 
     public function __construct(private readonly Configuration $config, private readonly Source $source) {}
 
-    /** @param list<string> $keys session keys the back() flashes; each must be shown by a FormStatus in the page's tree (keyReferenced()) */
-    public function proves(Node\Stmt\Class_ $class, string $action, array $keys = []): bool
+    /**
+     * @param  list<string>  $keys  session keys the redirect flashes; each must be shown by a FormStatus in the page's tree (keyReferenced())
+     * @param  ?string  $route  the literal route name a `to_route()` / `redirect()->route()` / `Redirect::route()` names; null for `back()`
+     */
+    public function proves(Node\Stmt\Class_ $class, string $action, array $keys = [], ?string $route = null): bool
     {
         if (! isset($class->namespacedName) || self::declaresMiddleware($class)) {
             return false;
@@ -77,9 +84,18 @@ final class GuestFormStatus
             if (! $mutation['guest'] || $mutation['uri'] === null) {
                 return false;
             }
-            $pages = array_values(array_filter($routes, fn (array $route): bool => in_array('get', $route['verbs'], true) && ($route['uri'] === null || $route['uri'] === $mutation['uri'])));
-            if (count($pages) !== 1 || $pages[0]['uri'] === null) {
-                return false;
+            if ($route !== null) {
+                // The named target: exactly one registration carries the name, none carries a name this reader cannot read, and it is a guest
+                // GET with a literal, parameterless URI.
+                $pages = array_values(array_filter($routes, fn (array $candidate): bool => $candidate['name'] === $route));
+                if (in_array(null, array_column($routes, 'name'), true) || count($pages) !== 1 || $pages[0]['verbs'] !== ['get'] || ! $pages[0]['guest'] || $pages[0]['uri'] === null || str_contains($pages[0]['uri'], '{')) {
+                    return false;
+                }
+            } else {
+                $pages = array_values(array_filter($routes, fn (array $candidate): bool => in_array('get', $candidate['verbs'], true) && ($candidate['uri'] === null || $candidate['uri'] === $mutation['uri'])));
+                if (count($pages) !== 1 || $pages[0]['uri'] === null) {
+                    return false;
+                }
             }
             if ($pages[0]['page'] !== null) {
                 $page = $pages[0]['page'];
@@ -110,6 +126,20 @@ final class GuestFormStatus
      */
     public static function backFlashKeys(Node\Expr $expression): ?array
     {
+        $target = self::redirectFlash($expression);
+
+        return $target !== null && $target[1] === null ? $target[0] : null;
+    }
+
+    /**
+     * backFlashKeys() widened to a named-route redirect: `to_route('<name>')`, `redirect()->route('<name>')` or `Redirect::route('<name>')`
+     * with exactly one argument, a literal name. Returns [keys, route name], the name null for a back(); null for anything else (a non-literal
+     * name, route parameters or any other argument).
+     *
+     * @return ?array{list<string>, ?string}
+     */
+    public static function redirectFlash(Node\Expr $expression): ?array
+    {
         $keys = [];
         while ($expression instanceof Node\Expr\MethodCall && $expression->name instanceof Node\Identifier && in_array(strtolower($expression->name->toString()), ['withinput', 'witherrors', 'with'], true)) {
             if (strtolower($expression->name->toString()) === 'with') {
@@ -121,11 +151,26 @@ final class GuestFormStatus
             }
             $expression = $expression->var;
         }
+        $redirector = $expression instanceof Node\Expr\MethodCall && $expression->name instanceof Node\Identifier
+            && $expression->var instanceof Node\Expr\FuncCall && $expression->var->name instanceof Node\Name && $expression->var->name->toString() === 'redirect' && $expression->var->getArgs() === [];
         $back = ($expression instanceof Node\Expr\FuncCall && $expression->name instanceof Node\Name && $expression->name->toString() === 'back')
-            || ($expression instanceof Node\Expr\MethodCall && $expression->name instanceof Node\Identifier && strtolower($expression->name->toString()) === 'back'
-                && $expression->var instanceof Node\Expr\FuncCall && $expression->var->name instanceof Node\Name && $expression->var->name->toString() === 'redirect' && $expression->var->getArgs() === []);
+            || ($redirector && strtolower($expression->name->toString()) === 'back');
+        if ($back) {
+            return [array_values(array_unique($keys)), null];
+        }
+        $named = ($expression instanceof Node\Expr\FuncCall && $expression->name instanceof Node\Name && $expression->name->toString() === 'to_route')
+            || ($redirector && strtolower($expression->name->toString()) === 'route')
+            || ($expression instanceof Node\Expr\StaticCall && $expression->class instanceof Node\Name && $expression->class->toString() === 'Illuminate\Support\Facades\Redirect'
+                && $expression->name instanceof Node\Identifier && strtolower($expression->name->toString()) === 'route');
+        if (! $named || $expression->isFirstClassCallable()) {
+            return null;
+        }
+        $arguments = $expression->getArgs();
+        if (count($arguments) !== 1 || $arguments[0]->unpack || $arguments[0]->name !== null || ! $arguments[0]->value instanceof Node\Scalar\String_ || $arguments[0]->value->value === '') {
+            return null;
+        }
 
-        return $back ? array_values(array_unique($keys)) : null;
+        return [array_values(array_unique($keys)), $arguments[0]->value->value];
     }
 
     /** @return ?list<string> the literal keys one `->with(...)` or `Inertia::flash(...)` flashes, or null */
@@ -240,7 +285,7 @@ final class GuestFormStatus
             if (($index === 0 && $label === null && in_array($name, ['appendtogroup', 'prependtogroup', 'group'], true) && $argument->value instanceof Node\Scalar\String_) || $label === 'remove' || $label === 'group') {
                 continue;
             }
-            if (! self::safeMiddleware($argument->value)) {
+            if (! $this->safeMiddleware($argument->value)) {
                 return false;
             }
         }
@@ -248,12 +293,12 @@ final class GuestFormStatus
         return true;
     }
 
-    /** A literal Class::class (or a list of them) on SAFE_MIDDLEWARE. */
-    public static function safeMiddleware(?Node\Expr $value): bool
+    /** A literal Class::class (or a list of them) on SAFE_MIDDLEWARE or declared in Configuration::$guestSafeMiddleware. */
+    public function safeMiddleware(?Node\Expr $value): bool
     {
         if ($value instanceof Node\Expr\Array_) {
             foreach ($value->items as $item) {
-                if ($item === null || $item->key !== null && ! $item->key instanceof Node\Scalar\String_ || ! self::safeMiddleware($item->value)) {
+                if ($item === null || $item->key !== null && ! $item->key instanceof Node\Scalar\String_ || ! $this->safeMiddleware($item->value)) {
                     return false;
                 }
             }
@@ -265,6 +310,9 @@ final class GuestFormStatus
             : ($value instanceof Node\Scalar\String_ ? ltrim($value->value, '\\') : null);
         if ($class === null) {
             return false;
+        }
+        if ($this->declaredSafe($class)) {
+            return true;
         }
         foreach (self::SAFE_MIDDLEWARE as $safe) {
             if ($class === $safe || (str_starts_with($safe, '*\\') && str_ends_with('\\'.$class, substr($safe, 1)))) {
@@ -309,10 +357,10 @@ final class GuestFormStatus
                 if (in_array($name, ['loadroutesfrom', 'group', 'routes'], true) || ($route && $name === null)) {
                     return false;
                 }
-                if (($route && $name === 'middleware') && ! self::safeMiddleware($node->getArgs()[0]->value ?? null)) {
+                if (($route && $name === 'middleware') && ! $this->safeMiddleware($node->getArgs()[0]->value ?? null)) {
                     return false;
                 }
-                if (in_array($name, ['pushmiddlewaretogroup', 'prependmiddlewaretogroup', 'appendmiddlewaretogroup', 'middlewaregroup'], true) && ! self::safeMiddleware($node->getArgs()[1]->value ?? null)) {
+                if (in_array($name, ['pushmiddlewaretogroup', 'prependmiddlewaretogroup', 'appendmiddlewaretogroup', 'middlewaregroup'], true) && ! $this->safeMiddleware($node->getArgs()[1]->value ?? null)) {
                     return false;
                 }
                 if ($name === 'aliasmiddleware') {
@@ -325,6 +373,212 @@ final class GuestFormStatus
         }
 
         return true;
+    }
+
+    /** Route aliases that sign someone in or authorize a signed-in user: never declarable, with or without parameters. */
+    public const AUTH_ALIASES = ['auth', 'auth.basic', 'auth.session', 'verified', 'password.confirm', 'can'];
+
+    /** Laravel's own auth middleware: never declarable, nor an alias bootstrap/app.php maps to one. */
+    public const AUTH_CLASSES = [
+        'Illuminate\\Auth\\Middleware\\Authenticate',
+        'Illuminate\\Auth\\Middleware\\AuthenticateWithBasicAuth',
+        'Illuminate\\Session\\Middleware\\AuthenticateSession',
+        'Illuminate\\Auth\\Middleware\\EnsureEmailIsVerified',
+        'Illuminate\\Auth\\Middleware\\RequirePassword',
+        'Illuminate\\Auth\\Middleware\\Authorize',
+    ];
+
+    /** @var ?array{safe: list<string>, errors: list<array{target: string, check: string, hint: string}>} */
+    private ?array $declared = null;
+
+    /** Whether a middleware class or alias string is one a valid Configuration::$guestSafeMiddleware entry declares. */
+    private function declaredSafe(string $middleware): bool
+    {
+        $middleware = ltrim($middleware, '\\');
+        foreach ($this->declarations()['safe'] as $entry) {
+            if ($middleware === $entry || (str_ends_with($entry, ':*') && str_starts_with($middleware, substr($entry, 0, -1)) && strlen($middleware) > strlen($entry) - 1)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The invalid Configuration::$guestSafeMiddleware entries, as `toast` findings. Each declares nothing.
+     *
+     * @return list<array{target: string, check: string, hint: string}>
+     */
+    public function configurationErrors(): array
+    {
+        return $this->declarations()['errors'];
+    }
+
+    /** @return array{safe: list<string>, errors: list<array{target: string, check: string, hint: string}>} */
+    private function declarations(): array
+    {
+        if ($this->declared !== null) {
+            return $this->declared;
+        }
+        $safe = [];
+        $errors = [];
+        $hint = 'Configuration::$guestSafeMiddleware declares middleware that signs no one in: [\'middleware\' => Class::class or \'alias:params\', \'reason\' => \'why it signs no one in\']. Auth middleware can never be declared.';
+        $aliases = null;
+        foreach (array_values($this->config->guestSafeMiddleware) as $index => $entry) {
+            $fail = function (string $why) use (&$errors, $index, $hint): void {
+                $errors[] = ['target' => 'tests/Arch/configuration.php', 'check' => "guestSafeMiddleware entry {$index} {$why}", 'hint' => $hint];
+            };
+            $middleware = is_array($entry) ? ($entry['middleware'] ?? null) : null;
+            $reason = is_array($entry) ? ($entry['reason'] ?? null) : null;
+            if (! is_array($entry) || array_diff(array_keys($entry), ['middleware', 'reason']) !== []) {
+                $fail('must be an array with only middleware and reason');
+            } elseif (! is_string($middleware) || trim($middleware) === '' || trim($middleware) !== $middleware) {
+                $fail('needs a non-empty string middleware');
+            } elseif (! is_string($reason) || trim($reason) === '') {
+                $fail("({$middleware}) needs a non-empty reason");
+            } elseif (str_contains($middleware, '\\')) {
+                $class = ltrim($middleware, '\\');
+                $why = $this->authClass($class);
+                $why === null ? $safe[] = $class : $fail("({$middleware}) {$why}");
+            } elseif (preg_match('~\A[A-Za-z][\w.-]*(?::.+)?\z~', $middleware) !== 1 || str_contains(explode(':', $middleware)[0], '*')) {
+                $fail("({$middleware}) is neither a class nor an alias[:parameters] string");
+            } elseif (in_array(explode(':', $middleware)[0], self::AUTH_ALIASES, true)) {
+                $fail("({$middleware}) names an auth middleware");
+            } else {
+                $aliases ??= $this->bootstrapAliases();
+                $target = $aliases[explode(':', $middleware)[0]] ?? null;
+                $why = $target === null ? null : $this->authClass($target);
+                $why === null ? $safe[] = $middleware : $fail("({$middleware}) is an alias of {$target}, which {$why}");
+            }
+        }
+
+        return $this->declared = ['safe' => $safe, 'errors' => $errors];
+    }
+
+    /** @return array<string, string> alias => the literal class bootstrap/app.php's alias() calls (or an app provider's aliasMiddleware()) map it to; '(non-literal)' when it is not a literal class, which then cannot be read */
+    private function bootstrapAliases(): array
+    {
+        $aliases = [];
+        try {
+            $nodes = is_file($this->config->base.'/bootstrap/app.php') ? $this->source->nodes('bootstrap/app.php') : [];
+        } catch (\PhpParser\Error) {
+            return [];
+        }
+        foreach ((new NodeFinder)->find($nodes, fn (Node $node): bool => $node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier && strtolower($node->name->toString()) === 'alias') as $call) {
+            /** @var Node\Expr\MethodCall $call */
+            $map = $call->getArgs()[0]->value ?? null;
+            foreach ($map instanceof Node\Expr\Array_ ? $map->items : [] as $item) {
+                if ($item?->key instanceof Node\Scalar\String_) {
+                    $value = $item->value;
+                    $aliases[$item->key->value] = $value instanceof Node\Expr\ClassConstFetch && $value->class instanceof Node\Name ? $value->class->toString() : ($value instanceof Node\Scalar\String_ ? ltrim($value->value, '\\') : '(non-literal)');
+                }
+            }
+        }
+
+        // A provider's $router->aliasMiddleware('<alias>', X::class) maps it as well; an unreadable one maps it to an unknown class.
+        foreach (array_keys($this->source->files(['app/Providers'])) as $path) {
+            try {
+                $provider = $this->source->nodes($path);
+            } catch (\PhpParser\Error) {
+                continue;
+            }
+            foreach ((new NodeFinder)->find($provider, fn (Node $node): bool => ($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall) && $node->name instanceof Node\Identifier && strtolower($node->name->toString()) === 'aliasmiddleware') as $call) {
+                /** @var Node\Expr\MethodCall|Node\Expr\StaticCall $call */
+                $alias = $call->getArgs()[0]->value ?? null;
+                $value = $call->getArgs()[1]->value ?? null;
+                if ($alias instanceof Node\Scalar\String_) {
+                    $aliases[$alias->value] = $value instanceof Node\Expr\ClassConstFetch && $value->class instanceof Node\Name ? $value->class->toString() : ($value instanceof Node\Scalar\String_ ? ltrim($value->value, '\\') : '(non-literal)');
+                }
+            }
+        }
+
+        return $aliases;
+    }
+
+    /**
+     * Why a middleware class can't be declared guest-safe, or null when it can: it is one of AUTH_CLASSES or extends one (app or vendor
+     * parents, read statically from the source roots or composer's classmap and PSR-4 maps), it names Illuminate\Auth\Middleware\Authenticate
+     * anywhere in its body, or it or a parent cannot be found or parsed.
+     */
+    private function authClass(?string $class): ?string
+    {
+        for ($depth = 0; $class !== null; $depth++) {
+            if (in_array($class, self::AUTH_CLASSES, true)) {
+                return $depth === 0 ? 'is auth middleware' : "extends {$class}";
+            }
+            if ($depth >= 20) {
+                return 'has an ancestry too deep to read';
+            }
+            $declaration = $this->classDeclaration($class);
+            if ($declaration === null) {
+                return "cannot be read ({$class} is not found in the source roots or composer's autoload maps)";
+            }
+            $named = (new NodeFinder)->find($declaration->stmts, fn (Node $node): bool => $node instanceof Node\Name && in_array($node->toString(), self::AUTH_CLASSES, true));
+            if ($named !== []) {
+                return "names {$named[0]->toString()} in {$class}";
+            }
+            $class = $declaration->extends?->toString();
+        }
+
+        return null;
+    }
+
+    private function classDeclaration(string $class): ?Node\Stmt\Class_
+    {
+        $declared = $this->source->declared();
+        try {
+            if (isset($declared[$class])) {
+                $nodes = $this->source->nodes($declared[$class]);
+            } else {
+                $file = $this->autoloaded($class);
+                if ($file === null) {
+                    return null;
+                }
+                $nodes = (new \PhpParser\NodeTraverser(new \PhpParser\NodeVisitor\NameResolver))->traverse((new \PhpParser\ParserFactory)->createForNewestSupportedVersion()->parse((string) file_get_contents($file)) ?? []);
+            }
+        } catch (\PhpParser\Error) {
+            return null;
+        }
+        $matches = (new NodeFinder)->find($nodes, fn (Node $node): bool => $node instanceof Node\Stmt\Class_ && isset($node->namespacedName) && $node->namespacedName->toString() === $class);
+
+        return count($matches) === 1 && $matches[0] instanceof Node\Stmt\Class_ ? $matches[0] : null;
+    }
+
+    /** @var array{classmap: array<string, string>, psr4: array<string, list<string>>}|null|false */
+    private array|null|false $autoload = null;
+
+    /** The file composer's static maps (vendor/composer autoload_classmap.php, then autoload_psr4.php) give the class, as CruddyGuard reads them; nothing is loaded. */
+    private function autoloaded(string $class): ?string
+    {
+        if ($this->autoload === null) {
+            $this->autoload = false;
+            $vendor = $this->config->base.'/vendor/composer';
+            if (is_file($vendor.'/autoload_classmap.php') || is_file($vendor.'/autoload_psr4.php')) {
+                $read = static fn (string $file): array => is_file($file) && is_array($map = (static fn () => require $file)()) ? $map : [];
+                $this->autoload = ['classmap' => $read($vendor.'/autoload_classmap.php'), 'psr4' => $read($vendor.'/autoload_psr4.php')];
+            }
+        }
+        if ($this->autoload === false) {
+            return null;
+        }
+        if (isset($this->autoload['classmap'][$class]) && is_string($this->autoload['classmap'][$class])) {
+            return realpath($this->autoload['classmap'][$class]) ?: null;
+        }
+        $prefixes = array_keys($this->autoload['psr4']);
+        usort($prefixes, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        foreach ($prefixes as $prefix) {
+            if (! str_starts_with($class, $prefix)) {
+                continue;
+            }
+            foreach ((array) $this->autoload['psr4'][$prefix] as $directory) {
+                $file = realpath(rtrim((string) $directory, '/\\').'/'.str_replace('\\', '/', substr($class, strlen($prefix))).'.php');
+                if ($file !== false) {
+                    return $file;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static function declaresMiddleware(Node\Stmt\Class_ $class): bool
@@ -518,7 +772,7 @@ final class GuestFormStatus
         return $path !== null && str_ends_with($path, '.vue') && is_file($base.'/'.$path) && ! is_link($base.'/'.$path) ? $path : null;
     }
 
-    /** @return list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool}> */
+    /** @return list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool, name: ?string}> */
     private function routes(): array
     {
         if ($this->routes !== null) {
@@ -555,9 +809,12 @@ final class GuestFormStatus
                     // match, any and resource registrations are not read: whatever controller they name gets an unprovable mutation entry.
                     foreach ((new NodeFinder)->findInstanceOf($arguments, Node\Expr\ClassConstFetch::class) as $named) {
                         if ($named->class instanceof Node\Name) {
-                            $routes[] = ['verbs' => self::MUTATING, 'page' => null, 'uri' => null, 'class' => $named->class->toString(), 'method' => '*', 'guest' => false];
+                            $routes[] = ['verbs' => self::MUTATING, 'page' => null, 'uri' => null, 'class' => $named->class->toString(), 'method' => '*', 'guest' => false, 'name' => null];
                         }
                     }
+
+                    // Their generated names are not read either: one unreadable name means no route name provably resolves.
+                    $routes[] = ['verbs' => [], 'page' => null, 'uri' => null, 'class' => null, 'method' => null, 'guest' => false, 'name' => null];
 
                     continue;
                 }
@@ -584,11 +841,47 @@ final class GuestFormStatus
                 if ($prefix === null) {
                     $uri = null;
                 }
-                $routes[] = ['verbs' => [$verb === 'inertia' ? 'get' : $verb], 'page' => $rendered, 'uri' => $uri === null ? null : trim(($prefix ?? '').'/'.trim($uri, '/'), '/'), 'class' => $class, 'method' => $method, 'guest' => $guest];
+                $routes[] = ['verbs' => [$verb === 'inertia' ? 'get' : $verb], 'page' => $rendered, 'uri' => $uri === null ? null : trim(($prefix ?? '').'/'.trim($uri, '/'), '/'), 'class' => $class, 'method' => $method, 'guest' => $guest, 'name' => $this->routeName($call, $chain, $after)];
             }
         }
 
         return $this->routes = $routes;
+    }
+
+    /**
+     * The full name a route registers: every enclosing group's `name('<prefix>')` / `as('<prefix>')`, outermost first, then the route's own
+     * builder calls in order (Laravel appends each). '' for an unnamed route; null when any part is not a literal string, or a group is
+     * `Route::group([...])`, whose `as` key this reader does not read.
+     *
+     * @param  list<Node\Expr>  $chain  the builder calls before the verb, innermost first
+     * @param  list<Node\Expr>  $after  the calls chained after the verb, in order
+     */
+    private function routeName(Node $call, array $chain, array $after): ?string
+    {
+        $links = [];
+        foreach (array_reverse($this->groups($call)) as $group) {
+            if ($group === null) {
+                return null;
+            }
+            $builder = [];
+            for (; $group instanceof Node\Expr\MethodCall || $group instanceof Node\Expr\StaticCall; $group = $group instanceof Node\Expr\MethodCall ? $group->var : null) {
+                $builder[] = $group;
+            }
+            $links = [...$links, ...array_reverse($builder)];
+        }
+        $name = '';
+        foreach ([...$links, ...array_reverse($chain), ...$after] as $link) {
+            if (! ($link instanceof Node\Expr\MethodCall || $link instanceof Node\Expr\StaticCall) || ! $link->name instanceof Node\Identifier || ! in_array(strtolower($link->name->toString()), ['name', 'as'], true)) {
+                continue;
+            }
+            $argument = $link->getArgs()[0] ?? null;
+            if ($link->isFirstClassCallable() || count($link->getArgs()) !== 1 || ! $argument->value instanceof Node\Scalar\String_) {
+                return null;
+            }
+            $name .= $argument->value->value;
+        }
+
+        return $name;
     }
 
     /** @return array{?string, ?string} the controller class and method of a route action */
@@ -678,7 +971,11 @@ final class GuestFormStatus
         }
         $items = $argument instanceof Node\Expr\Array_ ? array_map(fn ($item): ?Node\Expr => $item?->value, $argument->items) : [$argument];
         foreach ($items as $item) {
-            if (! $item instanceof Node\Scalar\String_ || ! in_array(explode(':', $item->value)[0], self::GUEST_MIDDLEWARE, true)) {
+            $class = $item instanceof Node\Expr\ClassConstFetch && $item->class instanceof Node\Name && $item->name instanceof Node\Identifier && strtolower($item->name->toString()) === 'class' ? $item->class->toString() : null;
+            if ($class !== null && $this->declaredSafe($class)) {
+                continue;
+            }
+            if (! $item instanceof Node\Scalar\String_ || ! (in_array(explode(':', $item->value)[0], self::GUEST_MIDDLEWARE, true) || $this->declaredSafe($item->value))) {
                 return false;
             }
         }
