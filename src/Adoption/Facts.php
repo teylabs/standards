@@ -41,6 +41,9 @@ final class Facts
     /** @var ?array<string, list<string>> */
     private ?array $viewScopes = null;
 
+    /** @var ?array{major: ?int, namespace: ?string, views: ?string} */
+    private ?array $livewire = null;
+
     /** @param  ?\Closure(array<string, mixed>): list<array{file: string, line: ?int, detail: string}>  $signals  fires one signal (the Scanner's evaluator) */
     public function __construct(private readonly App $app, private readonly ?\Closure $signals = null) {}
 
@@ -230,7 +233,7 @@ final class Facts
                     continue;
                 }
                 // The whole file inherits an auth group it is included from: any page it renders is signed in.
-                if (preg_match(self::AUTH, $context['middleware']) === 1 && (preg_match(self::RENDERS, $code) === 1 || $this->rendersThroughController($code))) {
+                if (preg_match(self::AUTH, $context['middleware']) === 1 && (preg_match(self::RENDERS, $code) === 1 || $this->rendersThroughController($code) || $this->livewirePage($code))) {
                     return $context['via'].' includes '.$path;
                 }
                 preg_match_all(self::AUTH, $code, $matches, PREG_OFFSET_CAPTURE);
@@ -239,7 +242,7 @@ final class Facts
                     if (preg_match(self::API, $statement) === 1) {
                         continue;
                     }
-                    if (preg_match(self::RENDERS, $statement) === 1 || $this->rendersThroughController($statement)) {
+                    if (preg_match(self::RENDERS, $statement) === 1 || $this->rendersThroughController($statement) || $this->livewirePage($statement)) {
                         return $path.':'.App::line($source, $offset);
                     }
                 }
@@ -255,7 +258,8 @@ final class Facts
      * route) renders it, and `public` when a route that passes the public-pages reading does (top-level, no middleware, not an auth
      * screen's URI, in a file no middleware group includes). A route renders a view through `Route::view('<uri>', '<view>')`, a
      * literal `view('<view>')` or `View::make('<view>')` in its closure, its controller action (`[Name::class, 'method']`, or
-     * `__invoke` for `Name::class`), or a Livewire full-page component (`Name::class`) whose `render()` names one. A class is found
+     * `__invoke` for `Name::class`), a Livewire full-page component (`Name::class`: its literal `render()` view, or with no `render()`
+     * Livewire's conventional view, see livewireView), or a literal `Volt::route('<uri>', '<name>')` (see voltView). A class is found
      * by its short name and only when exactly one app file has it. Only the routed view itself is scoped: a layout, partial or
      * component it pulls in is not followed, so it reads `unknown` (absent here).
      *
@@ -273,10 +277,10 @@ final class Facts
             }
             $code = Code::withoutComments($this->app->source($path));
             $contexts = $this->contexts($path);
-            preg_match_all('~(?:\bRoute::|->)\s*(get|post|put|patch|delete|options|any|match|view)\s*\(~i', $code, $matches, PREG_OFFSET_CAPTURE);
+            preg_match_all('~(?:\bRoute::|->)\s*(get|post|put|patch|delete|options|any|match|view)\s*\(|\bVolt::\s*route\s*\(~i', $code, $matches, PREG_OFFSET_CAPTURE);
             foreach ($matches[0] as $index => [$call, $offset]) {
                 $statement = self::statement($code, $offset);
-                $views = $this->renderedViews($statement, strtolower($matches[1][$index][0]) === 'view');
+                $views = $this->renderedViews($statement, strtolower($matches[1][$index][0] ?? '') === 'view');
                 if ($views === []) {
                     continue;
                 }
@@ -345,6 +349,13 @@ final class Facts
         $literal = '~(?:\bview|\bView::make)\s*\(\s*([\'"])([\w.-]+)\1~';
         preg_match_all($literal, $statement, $inline);
         array_push($names, ...$inline[2]);
+        $paths = [];
+        preg_match_all('~\bVolt::\s*route\s*\(\s*([\'"])[^\'"]*\1\s*,\s*([\'"])([\w.-]+)\2\s*\)~', $statement, $volts);
+        foreach ($volts[3] as $volt) {
+            if (($path = $this->voltView($volt)) !== null) {
+                $paths[] = $path;
+            }
+        }
         preg_match_all('~\b([A-Z]\w*)::class\b(\s*,\s*([\'"])(\w+)\3)?~', $statement, $classes, PREG_SET_ORDER);
         foreach ($classes as $class) {
             if (in_array($class[1], ['Route', 'Authenticate'], true)) {
@@ -355,13 +366,210 @@ final class Facts
                 continue;
             }
             $code = Code::withoutComments($this->app->source($files[0]));
+            // A Livewire component without render() renders Livewire's conventional view; with one, render() names it (non-literal: none).
+            if ((! isset($class[4]) || $class[4] === '') && self::livewireClass($code) && preg_match('~\bfunction\s+render\s*\(~i', $code) !== 1) {
+                if (($path = $this->livewireView($files[0], $code)) !== null) {
+                    $paths[] = $path;
+                }
+
+                continue;
+            }
             foreach (isset($class[4]) && $class[4] !== '' ? [$class[4]] : ['__invoke', 'render'] as $method) {
                 preg_match_all($literal, self::method($code, $method), $rendered);
                 array_push($names, ...$rendered[2]);
             }
         }
 
-        return array_values(array_unique(array_map(fn (string $name): string => 'resources/views/'.str_replace('.', '/', $name).'.blade.php', $names)));
+        return array_values(array_unique([...array_map(fn (string $name): string => 'resources/views/'.str_replace('.', '/', $name).'.blade.php', $names), ...$paths]));
+    }
+
+    /** Whether the code names a Livewire full-page route: a `Volt::route`, or a `Name::class` that is exactly one app file, a Livewire component. */
+    private function livewirePage(string $code): bool
+    {
+        if (preg_match('~\bVolt::\s*route\s*\(~', $code) === 1) {
+            return true;
+        }
+        preg_match_all('~\b([A-Z]\w*)::class\b~', $code, $classes);
+        foreach (array_diff(array_unique($classes[1]), ['Route', 'Authenticate']) as $name) {
+            $files = array_values(array_filter($this->phpApp(), fn (string $path): bool => basename($path, '.php') === $name));
+            if (count($files) === 1 && self::livewireClass(Code::withoutComments($this->app->source($files[0])))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** A Livewire component class: it extends `Livewire\Component` (imported or fully qualified) or Volt's `Livewire\Volt\Component`. */
+    private static function livewireClass(string $code): bool
+    {
+        return preg_match('~\buse\s+\\\\?Livewire\\\\(?:Volt\\\\)?Component\s*;~', $code) === 1 && preg_match('~\bclass\s+\w+\s+extends\s+Component\b~', $code) === 1
+            || preg_match('~\bclass\s+\w+\s+extends\s+\\\\?Livewire\\\\(?:Volt\\\\)?Component\b~', $code) === 1;
+    }
+
+    /**
+     * The view a Livewire component without `render()` renders, by Livewire's own convention: the class name relative to
+     * `livewire.class_namespace`, each segment kebab-cased (Str::kebab) and joined with `/`, under `livewire.view_path` (Livewire 3
+     * and 4, which also drop a trailing `index` segment) or `resources/views/livewire` (Livewire 2, which renders `view('livewire.<name>')`).
+     * Null (unknown) when the Livewire major is not one exact 2, 3 or 4 in composer.json, a config value is not literal, the class is
+     * outside the namespace, it is a top-level `Index`, or `Livewire::component()` registers an alias naming it.
+     */
+    private function livewireView(string $file, string $code): ?string
+    {
+        $config = $this->livewire();
+        if ($config['major'] === null || $config['namespace'] === null || $config['views'] === null) {
+            return null;
+        }
+        $class = basename($file, '.php');
+        if (preg_match('~\bnamespace\s+([\w\\\\]+)\s*;~', $code, $namespace) !== 1) {
+            return null;
+        }
+        $full = trim($namespace[1], '\\').'\\'.$class;
+        $root = trim($config['namespace'], '\\').'\\';
+        if (! str_starts_with($full, $root)) {
+            return null;
+        }
+        foreach ($this->phpApp() as $path) {
+            if (preg_match('~\bLivewire::\s*component\s*\([^;]*\b'.preg_quote($class, '~').'\b~', Code::withoutComments($this->app->source($path))) === 1) {
+                return null;
+            }
+        }
+        $segments = array_map(fn (string $segment): string => ctype_lower($segment) ? $segment : strtolower((string) preg_replace('/(.)(?=[A-Z])/u', '$1-', $segment)), explode('\\', substr($full, strlen($root))));
+        if ($config['major'] >= 3 && end($segments) === 'index') {
+            array_pop($segments);
+        }
+        if ($segments === []) {
+            return null;
+        }
+
+        return $config['views'].'/'.implode('/', $segments).'.blade.php';
+    }
+
+    /**
+     * The Livewire setup the conventional view needs: the major from composer.json's `livewire/livewire` constraint (one exact 2, 3 or
+     * 4, else null), and `class_namespace` and the view folder from config/livewire.php when it sets them, else the version's
+     * defaults (`App\Livewire`, or `App\Http\Livewire` on 2; `resources/views/livewire`). A value that is not literal is null.
+     *
+     * @return array{major: ?int, namespace: ?string, views: ?string}
+     */
+    private function livewire(): array
+    {
+        if ($this->livewire !== null) {
+            return $this->livewire;
+        }
+        $constraint = $this->app->composerPackages()['livewire/livewire'] ?? null;
+        $majors = [];
+        if (is_string($constraint)) {
+            preg_match_all('~(?<![\w.])v?(\d+)(?=[.*\s,|]|$)~', $constraint, $found);
+            $majors = array_values(array_unique(array_map('intval', $found[1])));
+        }
+        $major = count($majors) === 1 && in_array($majors[0], [2, 3, 4], true) ? $majors[0] : null;
+        $code = $this->app->exists('config/livewire.php') ? Code::withoutComments($this->app->source('config/livewire.php')) : '';
+        $namespace = self::configValue($code, 'class_namespace');
+        $views = self::configValue($code, 'view_path');
+        $literal = '([\'"])([^\'"$]*)\1';
+
+        return $this->livewire = [
+            'major' => $major,
+            'namespace' => match (true) {
+                $namespace === null => $major === 2 ? 'App\\Http\\Livewire' : 'App\\Livewire',
+                preg_match('~^'.$literal.'$~', $namespace, $m) === 1 => str_replace('\\\\', '\\', $m[2]),
+                default => null,
+            },
+            // Livewire 2's default render is view('livewire.<name>'): view_path does not move it.
+            'views' => match (true) {
+                $views === null || $major === 2 => 'resources/views/livewire',
+                default => self::literalPath($views),
+            },
+        ];
+    }
+
+    /** The expression a config array sets `$key` to (up to its `,` or the array's end), or null when the key is not set. */
+    private static function configValue(string $code, string $key): ?string
+    {
+        if (preg_match('~([\'"])'.preg_quote($key, '~').'\1\s*=>\s*~', $code, $match, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+        $from = $match[0][1] + strlen($match[0][0]);
+        $depth = 0;
+        for ($i = $from, $length = strlen($code); $i < $length; $i++) {
+            $char = $code[$i];
+            if ($char === '(' || $char === '[') {
+                $depth++;
+            } elseif (($char === ')' || $char === ']') && $depth-- === 0 || $char === ',' && $depth === 0) {
+                break;
+            }
+        }
+
+        return trim(substr($code, $from, $i - $from));
+    }
+
+    /** A project-relative folder for a literal `resource_path('...')` or `base_path('...')`, else null. */
+    private static function literalPath(string $expression): ?string
+    {
+        $literal = '\s*([\'"])([\w./-]*)\1\s*';
+
+        return match (true) {
+            preg_match('~^\\\\?resource_path\s*\('.$literal.'\)$~', $expression, $m) === 1 => trim('resources/'.trim($m[2], '/'), '/'),
+            preg_match('~^\\\\?base_path\s*\('.$literal.'\)$~', $expression, $m) === 1 && trim($m[2], '/') !== '' => trim($m[2], '/'),
+            default => null,
+        };
+    }
+
+    /**
+     * The Blade file a literal `Volt::route('<uri>', '<name>')` renders: the first existing `<folder>/<name with / for .>.blade.php`
+     * over the folders `Volt::mount()` names in app/Providers/VoltServiceProvider.php, in order (Volt's view namespace). An empty
+     * mount reads Volt's defaults (`resources/views/livewire`, `resources/views/pages`); `config('livewire.view_path', ...)` reads
+     * Livewire's view folder. Null (unknown) without that provider, with a mount argument that is not literal, or when no file exists.
+     */
+    private function voltView(string $name): ?string
+    {
+        $provider = 'app/Providers/VoltServiceProvider.php';
+        if (! $this->app->exists($provider)) {
+            return null;
+        }
+        $code = Code::withoutComments($this->app->source($provider));
+        if (preg_match_all('~\bVolt::\s*mount\s*\(~', $code, $mounts, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+        $argument = trim(self::argument($code, $mounts[0][0][1] + strlen($mounts[0][0][0])));
+        $folders = [];
+        if ($argument === '') {
+            $folders = ['resources/views/livewire', 'resources/views/pages'];
+        } else {
+            $list = preg_match('~^\[(.*)\]$~s', $argument, $inner) === 1 ? $inner[1] : $argument;
+            $items = [];
+            $depth = 0;
+            $start = 0;
+            for ($i = 0, $length = strlen($list); $i <= $length; $i++) {
+                $char = $list[$i] ?? ',';
+                if ($char === '(' || $char === '[') {
+                    $depth++;
+                } elseif ($char === ')' || $char === ']') {
+                    $depth--;
+                } elseif ($char === ',' && $depth === 0) {
+                    $items[] = trim(substr($list, $start, $i - $start));
+                    $start = $i + 1;
+                }
+            }
+            foreach (array_filter($items, fn (string $item): bool => $item !== '') as $item) {
+                $folder = preg_match('~^\\\\?config\s*\(\s*([\'"])livewire\.view_path\1\s*,\s*(.+)\)$~s', $item, $m) === 1
+                    ? ($this->app->exists('config/livewire.php') && ($set = self::configValue(Code::withoutComments($this->app->source('config/livewire.php')), 'view_path')) !== null ? self::literalPath($set) : self::literalPath(trim($m[2])))
+                    : self::literalPath($item);
+                if ($folder === null) {
+                    return null;
+                }
+                $folders[] = $folder;
+            }
+        }
+        foreach ($folders as $folder) {
+            $path = $folder.'/'.str_replace('.', '/', $name).'.blade.php';
+            if ($this->app->exists($path)) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 
     /** The body of a class method (from `function <name>(` to its closing brace), or '' when there is none. */
@@ -619,7 +827,7 @@ final class Facts
             }
             $source = $this->app->source($path);
             $code = Code::withoutComments($source);
-            preg_match_all('~\bRoute::(?:get|view|inertia)\s*\(\s*([\'"])([^\'"]*)\1~', $code, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+            preg_match_all('~\b(?:Route::(?:get|view|inertia)|Volt::route)\s*\(\s*([\'"])([^\'"]*)\1~', $code, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
             foreach ($matches as $match) {
                 $offset = $match[0][1];
                 $before = substr($code, 0, $offset);
