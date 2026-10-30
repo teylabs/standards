@@ -411,7 +411,7 @@ final class Facts
      * The view a Livewire component without `render()` renders, by Livewire's own convention: the class name relative to
      * `livewire.class_namespace`, each segment kebab-cased (Str::kebab) and joined with `/`, under `livewire.view_path` (Livewire 3
      * and 4, which also drop a trailing `index` segment) or `resources/views/livewire` (Livewire 2, which renders `view('livewire.<name>')`).
-     * Null (unknown) when the Livewire major is not one exact 2, 3 or 4 in composer.json, a config value is not literal, the class is
+     * Null (unknown) when the Livewire major is not one exact 2, 3 or 4 (composer.json, else composer.lock; see livewire), a config value is not literal, the class is
      * outside the namespace, it is a top-level `Index`, or `Livewire::component()` registers an alias naming it.
      */
     private function livewireView(string $file, string $code): ?string
@@ -446,8 +446,8 @@ final class Facts
     }
 
     /**
-     * The Livewire setup the conventional view needs: the major from composer.json's `livewire/livewire` constraint (one exact 2, 3 or
-     * 4, else null), and `class_namespace` and the view folder from config/livewire.php when it sets them, else the version's
+     * The Livewire setup the conventional view needs: the major from composer.json's `livewire/livewire` constraint when it names
+     * exactly one, else composer.lock's locked `livewire/livewire` version (see lockedLivewireMajor); a 2, 3 or 4, else null, and `class_namespace` and the view folder from config/livewire.php when it sets them, else the version's
      * defaults (`App\Livewire`, or `App\Http\Livewire` on 2; `resources/views/livewire`). A value that is not literal is null.
      *
      * @return array{major: ?int, namespace: ?string, views: ?string}
@@ -463,7 +463,10 @@ final class Facts
             preg_match_all('~(?<![\w.])v?(\d+)(?=[.*\s,|]|$)~', $constraint, $found);
             $majors = array_values(array_unique(array_map('intval', $found[1])));
         }
-        $major = count($majors) === 1 && in_array($majors[0], [2, 3, 4], true) ? $majors[0] : null;
+        // A direct constraint naming exactly one major wins; otherwise (none, or several) the locked major, so an app that gets
+        // Livewire transitively (livewire/flux, livewire/volt, the Livewire starter kit) still proves it.
+        $major = count($majors) === 1 ? $majors[0] : $this->lockedLivewireMajor();
+        $major = in_array($major, [2, 3, 4], true) ? $major : null;
         $code = $this->app->exists('config/livewire.php') ? Code::withoutComments($this->app->source('config/livewire.php')) : '';
         $namespace = self::configValue($code, 'class_namespace');
         $views = self::configValue($code, 'view_path');
@@ -482,6 +485,24 @@ final class Facts
                 default => self::literalPath($views),
             },
         ];
+    }
+
+    /**
+     * The major of the `livewire/livewire` version composer.lock locks (`packages` or `packages-dev`; "v3.6.4" reads 3), or null
+     * without a lock, without that entry, or with a version that does not start with a numeric major (a dev branch, say).
+     */
+    private function lockedLivewireMajor(): ?int
+    {
+        $lock = $this->app->json('composer.lock') ?? [];
+        foreach (['packages', 'packages-dev'] as $section) {
+            foreach (is_array($lock[$section] ?? null) ? $lock[$section] : [] as $package) {
+                if (is_array($package) && ($package['name'] ?? null) === 'livewire/livewire') {
+                    return is_string($package['version'] ?? null) && preg_match('~^v?(\d+)\.\d+~', $package['version'], $m) === 1 ? (int) $m[1] : null;
+                }
+            }
+        }
+
+        return null;
     }
 
     /** The expression a config array sets `$key` to (up to its `,` or the array's end), or null when the key is not set. */

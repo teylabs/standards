@@ -166,3 +166,62 @@ test('Volt::route maps to the first mounted folder that has the file; no provide
     'non-literal mount' => ['$this->paths()', []],
     'no provider' => [null, []],
 ]);
+
+/** @return array<string, string> livewireAuthOnly() with Livewire only through flux and volt in composer.json, and `$lock` as composer.lock */
+function livewireTransitive(?string $lock): array
+{
+    $files = livewireAuthOnly();
+    $files['composer.json'] = json_encode(['name' => 'fixture/lw', 'require' => ['livewire/flux' => '^2.1', 'livewire/volt' => '^1.7']]);
+    if ($lock !== null) {
+        $files['composer.lock'] = $lock;
+    }
+
+    return $files;
+}
+
+function livewireLock(string $version, string $section = 'packages'): string
+{
+    return json_encode([$section => [['name' => 'livewire/flux', 'version' => 'v2.1.1'], ['name' => 'livewire/livewire', 'version' => $version]], ($section === 'packages' ? 'packages-dev' : 'packages') => []]);
+}
+
+test('Livewire only through flux and volt: the locked major proves the convention, and the auth route scopes the view signed-in', function (string $section) {
+    $base = livewireApp(livewireTransitive(livewireLock('v3.6.4', $section)));
+    try {
+        $facts = new Facts(new App($base));
+        expect($facts->analysis('signed-in-pages'))->toBe(['value' => true, 'evidence' => 'routes/web.php:6'])
+            ->and($facts->viewScopes())->toBe(['resources/views/livewire/orders/board-view.blade.php' => ['signed-in']]);
+    } finally {
+        livewireCleanup($base);
+    }
+})->with(['packages', 'packages-dev']);
+
+test('Livewire only through flux and volt: no lock, no lock entry or an unparsable locked version is unprovable', function (?string $lock) {
+    $base = livewireApp(livewireTransitive($lock));
+    try {
+        expect((new Facts(new App($base)))->viewScopes())->toBe([]);
+    } finally {
+        livewireCleanup($base);
+    }
+})->with([
+    'no composer.lock' => [null],
+    'no livewire entry' => [json_encode(['packages' => [['name' => 'livewire/flux', 'version' => 'v2.1.1']], 'packages-dev' => []])],
+    'malformed version' => [livewireLock('dev-main')],
+    'version with no major' => [livewireLock('v.x')],
+]);
+
+test('composer.json wins when it names exactly one major; an ambiguous constraint falls back to the lock', function (string $constraint, string $locked, array $scopes) {
+    $files = livewireAuthOnly($constraint);
+    $files['composer.lock'] = livewireLock($locked);
+    $base = livewireApp($files);
+    try {
+        expect((new Facts(new App($base)))->viewScopes())->toBe($scopes);
+    } finally {
+        livewireCleanup($base);
+    }
+})->with([
+    // Livewire 2 renders resources/views/livewire too, but defaults the namespace to App\Http\Livewire: App\Livewire\... is outside it.
+    'one major in composer.json beats the lock' => ['^2.12', 'v3.6.4', []],
+    'agreeing constraint and lock' => ['^3.5', 'v3.6.4', ['resources/views/livewire/orders/board-view.blade.php' => ['signed-in']]],
+    'ambiguous constraint, lock decides' => ['^2.12|^3.0', 'v3.6.4', ['resources/views/livewire/orders/board-view.blade.php' => ['signed-in']]],
+    'ambiguous constraint, lock on 2' => ['^2.12|^3.0', 'v2.12.6', []],
+]);

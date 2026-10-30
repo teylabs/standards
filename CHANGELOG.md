@@ -5,6 +5,7 @@
 ### Fixed
 
 - **Adoption: Blade views behind Livewire full-page routes and `Volt::route` get their route's scope.** A Livewire component without `render()` renders Livewire's conventional view (class name relative to `class_namespace`, each segment kebab-cased, under `view_path`; Livewire 3/4 default `App\Livewire` and drop a trailing `index`, Livewire 2 defaults `App\Http\Livewire`), read from composer.json's major and literal `config/livewire.php` values; a literal `render()` still wins. A literal `Volt::route('<uri>', '<name>')` maps to the first matching file in the folders `Volt::mount()` names. Both now count as rendering a page for `signed-in-pages` and `public-pages`, so a Livewire app with auth-gated screens reads signed-in pages. Unprovable cases read `unknown`: a non-literal `render()`, config value or mount, an ambiguous Livewire major, a class outside the namespace, a `Livewire::component()` alias, or two classes with the same short name.
+- **Adoption: the Livewire major falls back to composer.lock.** An app that gets Livewire transitively (`livewire/flux`, `livewire/volt`, the Livewire starter kit) has no `livewire/livewire` constraint in composer.json, so its conventional views read `unknown`. When composer.json names no single major, the major now comes from the `livewire/livewire` version composer.lock locks (`packages` or `packages-dev`; `v3.6.4` reads 3). A composer.json constraint naming exactly one major still wins. No lock, no entry or an unparsable version still reads `unknown`.
 
 ## 0.11.50 - 2026-10-29
 
