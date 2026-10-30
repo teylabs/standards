@@ -306,3 +306,13 @@ test('a panel provider listed in bootstrap/providers.php outside app/Providers/F
         expect($facts->analysis('signed-in-pages'))->toBe(['value' => $listed, 'evidence' => $listed ? 'app/Panels/StaffPanelProvider.php' : null]);
     });
 })->with(['listed' => [true], 'unlisted' => [false]]);
+
+test('Filament scope and signed-in-pages share panel discovery: a login panel listed only in bootstrap/providers.php signs in both', function () {
+    bladePanelApp([
+        'app/Panels/StaffPanelProvider.php' => bladePanelProvider('App\\Panels', 'StaffPanelProvider', '->login()'),
+        'bootstrap/providers.php' => "<?php\n\nreturn [\n    App\\Panels\\StaffPanelProvider::class,\n];\n",
+    ], function (Facts $facts) {
+        expect($facts->filamentScopes('app/Filament/Resources/OrderResource.php'))->toBe(['signed-in'])
+            ->and($facts->analysis('signed-in-pages'))->toBe(['value' => true, 'evidence' => 'app/Panels/StaffPanelProvider.php']);
+    });
+});

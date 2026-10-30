@@ -309,7 +309,7 @@ final class Facts
     }
 
     /**
-     * The scope a hit in an `app/Filament/**` file reads: `signed-in` when every panel provider (`app/Providers/Filament/*PanelProvider.php`)
+     * The scope a hit in an `app/Filament/**` file reads: `signed-in` when every panel provider (see panelProviders)
      * that discovers the file's folder (`discoverResources`/`Pages`/`Widgets`/`Clusters` with a literal `app_path('...')`) calls
      * `->login()` or passes a non-empty literal array to `->authMiddleware([...])`; else, or when no provider claims the folder, `unknown`
      * (an empty list). A lone provider that discovers nothing claims every app/Filament file.
@@ -318,9 +318,8 @@ final class Facts
      */
     public function filamentScopes(string $path): array
     {
-        $providers = array_values(array_filter($this->app->php(), fn (string $file): bool => preg_match('~^app/Providers/Filament/[^/]*PanelProvider\.php$~', $file) === 1));
         $panels = [];
-        foreach ($providers as $provider) {
+        foreach ($this->panelProviders() as $provider) {
             $code = Code::withoutComments($this->app->source($provider));
             preg_match_all('~->\s*discover(?:Resources|Pages|Widgets|Clusters)\s*\(\s*(?:in\s*:\s*)?\\\\?app_path\s*\(\s*([\'"])([^\'"$]+)\1\s*\)~', $code, $found);
             $panels[] = [
@@ -346,11 +345,12 @@ final class Facts
     }
 
     /**
-     * The first Filament panel provider whose panel is signed in (see panelSignedIn), as its path: a provider in
-     * `app/Providers/Filament/*PanelProvider.php`, or an `App\...\*PanelProvider::class` that `bootstrap/providers.php` lists.
-     * A panel with neither call never counts, and an open panel is not counted for public-pages either.
+     * The Filament panel providers: every `app/Providers/Filament/*PanelProvider.php`, then each `App\...\*PanelProvider::class`
+     * that `bootstrap/providers.php` lists and that exists as its PSR-4 `app/...` file. Filament scope and signed-in-pages share it.
+     *
+     * @return list<string>
      */
-    private function signedInPanel(): ?string
+    private function panelProviders(): array
     {
         $providers = array_values(array_filter($this->app->php(), fn (string $file): bool => preg_match('~^app/Providers/Filament/[^/]*PanelProvider\.php$~', $file) === 1));
         if ($this->app->exists('bootstrap/providers.php')) {
@@ -362,7 +362,17 @@ final class Facts
                 }
             }
         }
-        foreach ($providers as $provider) {
+
+        return $providers;
+    }
+
+    /**
+     * The first Filament panel provider whose panel is signed in (see panelSignedIn), as its path, among panelProviders.
+     * A panel with neither call never counts, and an open panel is not counted for public-pages either.
+     */
+    private function signedInPanel(): ?string
+    {
+        foreach ($this->panelProviders() as $provider) {
             if (self::panelSignedIn(Code::withoutComments($this->app->source($provider)))) {
                 return $provider;
             }
