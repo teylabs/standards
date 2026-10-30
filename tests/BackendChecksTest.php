@@ -658,6 +658,16 @@ test('a Fortify guest flow\'s bound response flashes without a toast only when i
 
     return [
         'a bound response whose page reads the key' => [$sent, [], [], []],
+        // Fortify's own wantsJson() shape: the JSON branch is ignored, the redirect branch read as usual.
+        'the wantsJson() ternary' => ['return $request->wantsJson() ? new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200) : back()->with("status", "Sent");', [], [], []],
+        'the negated, reversed wantsJson() ternary' => ['return ! $request->wantsJson() ? back()->with("status", "Sent") : new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200);', [], [], []],
+        'the wantsJson() ternary, key not read' => ['return $request->wantsJson() ? new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200) : back()->with("status", "Sent");', ['resources/js/pages/Auth/ForgotPassword.vue' => $reads('$page.flash.notice')], [], [$toastable]],
+        'a ternary on another condition' => ['return $request->ajax() ? new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200) : back()->with("status", "Sent");', [], [], [$toastable]],
+        'expectsJson(), which Fortify does not use here' => ['return $request->expectsJson() ? new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200) : back()->with("status", "Sent");', [], [], [$toastable]],
+        'a wantsJson() ternary on another variable' => ['return request()->wantsJson() ? new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200) : back()->with("status", "Sent");', [], [], [$toastable]],
+        'a response()->json() branch' => ['return $request->wantsJson() ? response()->json(["message" => "Sent"]) : back()->with("status", "Sent");', [], [], [$toastable]],
+        'the redirect in the JSON position' => ['return $request->wantsJson() ? back()->with("status", "Sent") : new \Illuminate\Http\JsonResponse([], 200);', [], [], [$toastable]],
+        'an if-form, which Fortify does not use here' => ['if ($request->wantsJson()) { return new \Illuminate\Http\JsonResponse([], 200); } return back()->with("status", "Sent");', [], [], [$toastable]],
         'a closure registration returning only the render' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider($bind('SuccessfulPasswordResetLinkRequestResponse'), 'Fortify::requestPasswordResetLinkView(function () { return Inertia::render("Auth/ForgotPassword"); });')], [], []],
         'a top-level Inertia::flash key read with the status' => ['Inertia::flash("ref", "A-1"); return back()->with("status", "Sent");', ['resources/js/pages/Auth/ForgotPassword.vue' => $reads('$page.flash.status ?? $page.flash.ref')], [], []],
         'a top-level Inertia::flash key the page does not read' => ['Inertia::flash("ref", "A-1"); return back()->with("status", "Sent");', [], [], [$toastable]],
