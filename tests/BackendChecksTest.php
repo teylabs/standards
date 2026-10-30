@@ -461,6 +461,44 @@ test('a guest form may redirect to a literal named guest GET route whose page re
     ];
 });
 
+test('the FormStatus exemption resolves the GET route\'s controller to its fully qualified class, and fails closed on a short name', function (string $routes, array $extra, bool $fails) {
+    file_put_contents($this->backendBase.'/bootstrap/app.php', guestBootstrap(''));
+    $page = fn (string $namespace, string $page): string => '<?php namespace '.$namespace.'; use Inertia\Inertia; class ContactPageController { public function show() { return Inertia::render("'.$page.'"); } }';
+    $files = [
+        'src/Controllers/Site/ContactPageController.php' => $page('App\Site', 'Public/Contact'),
+        'src/Controllers/Admin/ContactPageController.php' => $page('App\Admin', 'Admin/Contact'),
+        'resources/js/pages/Public/Contact.vue' => "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit';\n</script>\n<template>\n    <FormStatus />\n</template>\n",
+        'resources/js/pages/Admin/Contact.vue' => "<template>\n    <form />\n</template>\n",
+        'routes/web.php' => '<?php use Illuminate\Support\Facades\Route; use App\ContactController; '.$routes,
+        ...$extra,
+    ];
+    foreach ($files as $path => $source) {
+        is_dir(dirname($this->backendBase.'/'.$path)) || mkdir(dirname($this->backendBase.'/'.$path), 0777, true);
+        file_put_contents($this->backendBase.'/'.$path, str_replace('{base}', $this->backendBase, $source));
+    }
+    $controller = 'namespace App; class ContactController { public function store() { return back(); } }';
+    expect(($this->backend)('toast', $controller, ['pageRoots' => ['resources/js/pages']], 'src/Controllers/ContactController.php'))->toHaveCount($fails ? 1 : 0);
+})->with(function () {
+    $post = ' Route::post("/contact", [ContactController::class, "store"]);';
+    $psr4 = ['vendor/composer/autoload_psr4.php' => '<?php return ["App\\\\Web\\\\" => ["{base}/lib/Web"]];', 'lib/Web/ContactPageController.php' => '<?php namespace App\Web; use Inertia\Inertia; class ContactPageController { public function show() { return Inertia::render("Public/Contact"); } }'];
+
+    return [
+        'the imported one of two same-named controllers' => ['use App\Site\ContactPageController; Route::get("/contact", [ContactPageController::class, "show"]);'.$post, [], false],
+        'the other one imported' => ['use App\Admin\ContactPageController; Route::get("/contact", [ContactPageController::class, "show"]);'.$post, [], true],
+        'an import alias' => ['use App\Site\ContactPageController as Page; Route::get("/contact", [Page::class, "show"]);'.$post, [], false],
+        'a short name nothing imports' => ['Route::get("/contact", [ContactPageController::class, "show"]);'.$post, [], true],
+        'a fully qualified @ string' => ['Route::get("/contact", "App\\\\Site\\\\ContactPageController@show");'.$post, [], false],
+        'a short @ string, even when imported' => ['use App\Site\ContactPageController; Route::get("/contact", "ContactPageController@show");'.$post, [], true],
+        'a literal group namespace' => ['Route::namespace("App\\\\Site")->group(function () { Route::get("/contact", "ContactPageController@show"); });'.$post, [], false],
+        'nested group namespaces' => ['Route::namespace("App")->group(function () { Route::namespace("Site")->group(function () { Route::get("/contact", "ContactPageController@show"); }); });'.$post, [], false],
+        'nested group namespaces to the other one' => ['Route::namespace("App")->group(function () { Route::namespace("Admin")->group(function () { Route::get("/contact", "ContactPageController@show"); }); });'.$post, [], true],
+        'a non-literal group namespace' => ['Route::namespace($ns)->group(function () { Route::get("/contact", "ContactPageController@show"); });'.$post, [], true],
+        'a fully qualified class declared twice' => ['use App\Site\ContactPageController; Route::get("/contact", [ContactPageController::class, "show"]);'.$post, ['src/Controllers/Copy/ContactPageController.php' => '<?php namespace App\Site; class ContactPageController { public function show() { return \Inertia\Inertia::render("Admin/Contact"); } }'], true],
+        'a class found through composer\'s PSR-4 map' => ['use App\Web\ContactPageController; Route::get("/contact", [ContactPageController::class, "show"]);'.$post, $psr4, false],
+        'a mutating route whose controller cannot be read' => ['use App\Site\ContactPageController; Route::get("/contact", [ContactPageController::class, "show"]);'.$post.' Route::post("/other", $handler);', [], true],
+    ];
+});
+
 test('declared guest-safe middleware keeps a FormStatus route guest, and auth middleware can never be declared', function (array $declared, string $middleware, array $checks) {
     $classes = [
         'src/Middleware/EnterWorkspace.php' => '<?php namespace App\Http\Middleware; class EnterWorkspace { public function handle($request, $next) { return $next($request); } }',

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`toast`: the FormStatus exemption resolves a route's controller to its fully qualified class.** `[X::class, 'm']` and `X::class` were already qualified by the route file's `use` imports, aliases and namespace; string actions were not read. Now `'X@m'`, an invokable string and a `Route::controller(C::class)->group()` method get the enclosing groups' literal `namespace` (nested ones joined, a leading `\` or an already-prefixed class left alone), as Laravel's `Router::prependGroupNamespace()` does, and never the file's `use` imports. The class must be declared exactly once under `controllerRoots`, or, when it isn't declared there, exactly once in the file composer's classmap or PSR-4 map gives it. Two controllers with the same short name in different namespaces resolve to the one the route names. A short name nothing imports, a non-literal group namespace, a `namespace()` on the route's own chain, an FQCN declared twice, or any mutating route whose controller can't be qualified keeps the finding.
+
 ## 0.11.50 - 2026-10-29
 
 ### Added
