@@ -9,6 +9,7 @@ use Tey\Standards\Adoption\Facts;
 use Tey\Standards\Adoption\Inventory;
 use Tey\Standards\Adoption\Lists;
 use Tey\Standards\Adoption\Scanner;
+use Tey\Standards\Checks\JsImports;
 use Tey\Standards\Configuration;
 use Tey\Standards\Conformance;
 use Tey\Standards\RuleUnavailable;
@@ -870,4 +871,41 @@ test('uses.imports through a declared alias: @kit/ui counts for @/components/Kit
 
     expect(array_map(fn (array $e): string => adoptionWhere($e).' '.$e['detail'], $rows['form.inputs']['matches']))->toBe(["{$module}:2 imports TimezoneSelect from @kit/ui"])
         ->and(array_map(fn (array $e): string => adoptionWhere($e).' '.$e['detail'], $rows['widget.panel']['matches']))->toBe(["{$module}:3 imports Widget from @acme/widgets-alias"]);
+});
+
+test('module, Vite and tsconfig path aliases are the app\'s own code, not third-party gaps; a real third-party import still is', function () {
+    $directory = sys_get_temp_dir().'/adoption-'.bin2hex(random_bytes(4));
+    $files = [
+        'composer.json' => '{"name": "fixture/aliases"}',
+        'package.json' => '{"name": "fixture-aliases", "dependencies": {"vue": "^3"}}',
+        'vite.config.ts' => "export default defineConfig({\n    resolve: {\n        alias: [{ find: '@shared', replacement: path.resolve('resources/shared') }],\n    },\n});\n",
+        'tsconfig.json' => "{\n    // comments are tolerated\n    \"compilerOptions\": {\n        \"paths\": {\n            \"@/*\": [\"./resources/js/*\"],\n            \"@domain/*\": [\"./resources/domain/*\"],\n        },\n    },\n}\n",
+        'resources/js/components/ReplayPlayer.vue' => "<script setup lang=\"ts\">\nimport Timeline from '@modules/Talk/resources/js/Timeline.vue';\n</script>\n",
+        'resources/js/components/LedgerPanel.vue' => "<script setup lang=\"ts\">\nimport { total } from '@domain/ledger';\n</script>\n",
+        'resources/js/components/SharedBadge.vue' => "<script setup lang=\"ts\">\nimport Badge from '@shared/Badge.vue';\n</script>\n",
+        'resources/js/components/ScopedChart.vue' => "<script setup lang=\"ts\">\nimport Chart from '@acme/charts';\n</script>\n",
+        'resources/js/components/MapView.vue' => "<script setup lang=\"ts\">\nimport L from 'leaflet';\n</script>\n",
+    ];
+    foreach ($files as $path => $content) {
+        is_dir(dirname($directory.'/'.$path)) || mkdir(dirname($directory.'/'.$path), 0777, true);
+        file_put_contents($directory.'/'.$path, $content);
+    }
+
+    try {
+        $config = adoptionConfiguration($directory);
+        $gaps = (new Scanner(new App($directory, $config), [Inventory::load(adoptionFixture('inventories/kit.json'), 'option')], $config, new DateTimeImmutable('2026-10-29')))->report()['gaps'];
+
+        expect(array_map(fn (array $gap): array => [$gap['subject'], $gap['detail']], array_values(array_filter($gaps, fn (array $gap): bool => $gap['kind'] === 'component'))))->toBe([
+            ['resources/js/components/MapView.vue', 'app component: imports leaflet'],
+            ['resources/js/components/ScopedChart.vue', 'app component: imports @acme/charts'],
+        ])
+            ->and(JsImports::tsconfigPaths($directory))->toBe(['@', '@domain'])
+            ->and(JsImports::viteAliases($directory))->toBe(['@shared']);
+    } finally {
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($iterator as $file) {
+            $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+        }
+        rmdir($directory);
+    }
 });

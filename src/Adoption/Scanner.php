@@ -6,6 +6,7 @@ namespace Tey\Standards\Adoption;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use Tey\Standards\Checks\JsImports;
 use Tey\Standards\Checks\KitShell;
 use Tey\Standards\Configuration;
 use Tey\Standards\Conformance;
@@ -38,6 +39,9 @@ final class Scanner
 
     /** The import aliases that name tey/kit's UI barrel: an import from one is an import from the others. */
     public const KIT_ALIASES = ['@kit/ui', '@/components/Kit'];
+
+    /** tey/mod's module alias: `@modules` resolves to the module root (vendor/tey/mod resources/js/rename aliases). */
+    public const MOD_MODULE_ALIAS = '@modules/';
 
     public const GAP_RULE = 'adoption.gap';
 
@@ -767,7 +771,7 @@ final class Scanner
     private function candidates(): array
     {
         $own = array_values(array_filter([$this->app->npmName(), ...array_map(fn (Inventory $inventory): ?string => $inventory->package['npm'] ?? null, $this->inventories)]));
-        $local = ['.', '/', '#', '@/', '~/', ...($this->config?->frontendAliases ?? []), ...self::KIT_ALIASES, ...array_values(array_filter(array_map(fn (Inventory $inventory): ?string => $inventory->package['alias'] ?? null, $this->inventories)))];
+        $local = $this->localPrefixes();
         $declared = $this->declaredLibraries()['valid'];
         $thirdParty = function (string $module) use ($own, $local, $declared): ?string {
             foreach ($local as $prefix) {
@@ -868,6 +872,21 @@ final class Scanner
 
     /** @var array{valid: array<string, string>, refused: list<array{library: mixed, reason: mixed, problem: string}>}|null */
     private ?array $declared = null;
+
+    /**
+     * Import prefixes that are the app's own code, never a third-party library: relative and root paths, `#` subpaths, `@/` and `~/`,
+     * the configured frontend aliases, kit's aliases, each inventory's alias, tey/mod's module alias `@modules/`, and every alias the app
+     * defines in its Vite `resolve.alias` or its tsconfig/jsconfig `compilerOptions.paths` (read statically, best effort). Each alias is
+     * matched as itself or followed by `/`, so `@` never swallows a scoped package.
+     *
+     * @return list<string>
+     */
+    private function localPrefixes(): array
+    {
+        $aliases = array_map(fn (string $alias): string => rtrim($alias, '/').'/', [...JsImports::viteAliases($this->app->base), ...JsImports::tsconfigPaths($this->app->base)]);
+
+        return array_values(array_unique(['.', '/', '#', '@/', '~/', self::MOD_MODULE_ALIAS, ...($this->config?->frontendAliases ?? []), ...self::KIT_ALIASES, ...array_values(array_filter(array_map(fn (Inventory $inventory): ?string => $inventory->package['alias'] ?? null, $this->inventories))), ...$aliases]));
+    }
 
     /**
      * The configuration's `declaredLibraries`: valid entries (library => reason) and refused ones with the reason they declare nothing. A library

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Adoption: module and app path aliases are the app's own code, not third-party libraries.** Only `.`, `/`, `#`, `@/`, `~/`, the configured `frontendAliases`, kit's aliases and inventory aliases counted as local, so an import through tey/mod's module alias (`@modules/Talk/...`) read as a third-party library and made the importing component a gap. tey/mod's `@modules/` alias, every static key of the app's Vite `resolve.alias` (object or array form, in `vite.config.{ts,js,mts,mjs}`) and every `compilerOptions.paths` key of `tsconfig.json` / `jsconfig.json` (trailing `/*` stripped) now count as local wherever adoption classifies an import as third-party (component gap candidates and the package.json library check). Each alias matches as itself or followed by `/`, so an `@` alias never hides a scoped package. A real third-party import is still a gap.
+
 ## 0.11.52 - 2026-10-30
 
 ### Fixed

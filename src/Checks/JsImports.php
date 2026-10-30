@@ -28,7 +28,7 @@ final class JsImports
         }
 
         $declared = array_keys(array_merge($package['dependencies'] ?? [], $package['devDependencies'] ?? [], $package['peerDependencies'] ?? []));
-        $viteAliases = $this->viteAliases($config);
+        $viteAliases = self::viteAliases($config->base, ['vite.config.ts', 'vite.config.js']);
         $violations = [];
         foreach ($files as $path => $source) {
             foreach (FrontendSource::imports(FrontendSource::script($path, $source)) as $specifier) {
@@ -76,15 +76,18 @@ final class JsImports
      * strings of an array literal. Computed keys, spreads, regular expressions
      * and aliases held in variables are ignored.
      *
+     * The first of `$files` that exists is read.
+     *
+     * @param  list<string>  $files
      * @return list<string>
      */
-    private function viteAliases(Configuration $config): array
+    public static function viteAliases(string $base, array $files = ['vite.config.ts', 'vite.config.js', 'vite.config.mts', 'vite.config.mjs']): array
     {
-        foreach (['vite.config.ts', 'vite.config.js'] as $file) {
-            if (! is_file($config->base.'/'.$file)) {
+        foreach ($files as $file) {
+            if (! is_file($base.'/'.$file)) {
                 continue;
             }
-            $tokens = FrontendSource::tokens((string) file_get_contents($config->base.'/'.$file));
+            $tokens = FrontendSource::tokens((string) file_get_contents($base.'/'.$file));
             $aliases = [];
             foreach ($tokens as $index => $token) {
                 if ($token !== 'alias' || ($tokens[$index + 1] ?? '') !== ':' || ! in_array($tokens[$index + 2] ?? '', ['{', '['], true)) {
@@ -116,5 +119,32 @@ final class JsImports
         }
 
         return [];
+    }
+
+    /**
+     * Keys of `compilerOptions.paths` in tsconfig.json and jsconfig.json, with a trailing `/*` or `*` stripped (`@modules/*` reads
+     * `@modules`). Best effort: comments and trailing commas are tolerated; a file that still does not parse adds nothing.
+     *
+     * @return list<string>
+     */
+    public static function tsconfigPaths(string $base): array
+    {
+        $aliases = [];
+        foreach (['tsconfig.json', 'jsconfig.json'] as $file) {
+            if (! is_file($base.'/'.$file)) {
+                continue;
+            }
+            $json = (string) preg_replace(['~("(?:[^"\\\\]|\\\\.)*")|/\*.*?\*/|//[^\n]*~s', '~,(\s*[}\]])~'], ['$1', '$1'], (string) file_get_contents($base.'/'.$file));
+            $data = json_decode($json, true);
+            $paths = is_array($data) && is_array($data['compilerOptions']['paths'] ?? null) ? $data['compilerOptions']['paths'] : [];
+            foreach (array_keys($paths) as $key) {
+                $alias = rtrim(preg_replace('~/?\*$~', '', (string) $key) ?? '', '/');
+                if ($alias !== '') {
+                    $aliases[] = $alias;
+                }
+            }
+        }
+
+        return array_values(array_unique($aliases));
     }
 }
