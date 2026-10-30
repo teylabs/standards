@@ -1,0 +1,7 @@
+{
+    "name": "fixture/livewire",
+    "require": {
+        "livewire/livewire": "^3.5",
+        "livewire/volt": "^1.6"
+    }
+}
