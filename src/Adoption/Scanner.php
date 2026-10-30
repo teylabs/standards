@@ -660,13 +660,19 @@ final class Scanner
     private function uses(Inventory $inventory, array $uses): array
     {
         $evidence = [];
+        // The inventory's declared alias and npm module name are one module: `uses.imports` through either counts (and, for a package that
+        // declares a kit alias, both kit aliases too).
+        $equivalents = array_values(array_filter([$inventory->package['alias'] ?? null, $inventory->package['npm'] ?? null]));
+        if (array_intersect($equivalents, self::KIT_ALIASES) !== []) {
+            $equivalents = [...$equivalents, ...self::KIT_ALIASES];
+        }
         foreach ($uses['imports'] ?? [] as $wanted) {
             $colon = (int) strrpos($wanted, ':');
             [$alias, $name] = [substr($wanted, 0, $colon), substr($wanted, $colon + 1)];
             foreach ($this->owned($this->app->frontend()) as $path) {
                 $source = $this->app->source($path);
                 foreach (Code::imports($source) as $import) {
-                    if (self::importsExport($alias, $name, $import)) {
+                    if (self::importsExport($alias, $name, $import, $equivalents)) {
                         $evidence[] = self::evidence($path, App::line($source, $import['offset']), 'imports '.$name.' from '.$import['module']);
                         break;
                     }
@@ -1101,9 +1107,12 @@ final class Scanner
     }
 
     /** @param array{module: string, named: list<string>, default: ?string} $import */
-    private static function importsExport(string $alias, string $name, array $import): bool
+    private static function importsExport(string $alias, string $name, array $import, array $equivalents = []): bool
     {
         $aliases = in_array($alias, self::KIT_ALIASES, true) ? self::KIT_ALIASES : [$alias];
+        if (in_array($alias, [...$aliases, ...$equivalents], true)) {
+            $aliases = array_values(array_unique([...$aliases, ...$equivalents]));
+        }
         foreach ($aliases as $candidate) {
             if (in_array($import['module'], [$candidate, $candidate.'/index', $candidate.'/index.ts', $candidate.'/index.js'], true)) {
                 if (in_array($name, $import['named'], true)) {

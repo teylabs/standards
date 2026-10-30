@@ -768,3 +768,21 @@ test('module frontend roots: a configured glob expands, and module-relative path
         ->and($app->page('app/Modules/Billing/resources/js/pages/Invoices/Page.vue'))->toBeTrue()
         ->and($app->page('app/Modules/Billing/resources/js/components/InvoiceSearch.vue'))->toBeFalse();
 });
+
+test('uses.imports through a declared alias: @kit/ui counts for @/components/Kit, and an inventory alias counts for its npm module', function () {
+    $base = adoptionFixture('module-frontend');
+    $config = adoptionConfiguration($base);
+    $kit = Inventory::fromArray(adoptionInventory(['form.inputs' => ['uses' => ['imports' => ['@/components/Kit:TimezoneSelect']], 'handRolled' => [], 'replaces' => ['components' => ['NoSuch']]]]), 'kit.json');
+    $widgets = Inventory::fromArray([
+        'format' => 1,
+        'package' => ['composer' => 'acme/widgets', 'npm' => '@acme/widgets', 'alias' => '@acme/widgets-alias'],
+        'facts' => [],
+        'surfaces' => [['id' => 'widget.panel', 'layer' => 'ui', 'group' => 'content', 'label' => 'Widget', 'feature' => 'core', 'applies' => true, 'uses' => ['imports' => ['@acme/widgets:Widget']], 'handRolled' => [], 'docs' => 'docs/widget.md', 'status' => 'stable']],
+        'nonSurfaces' => [],
+    ], 'widgets.json');
+    $rows = array_column((new Scanner(new App($base, $config), [$widgets, $kit], $config, new DateTimeImmutable('2026-10-29')))->report()['rows'], null, 'id');
+    $module = 'app/Modules/Billing/resources/js/components/TimezoneField.vue';
+
+    expect(array_map(fn (array $e): string => adoptionWhere($e).' '.$e['detail'], $rows['form.inputs']['matches']))->toBe(["{$module}:2 imports TimezoneSelect from @kit/ui"])
+        ->and(array_map(fn (array $e): string => adoptionWhere($e).' '.$e['detail'], $rows['widget.panel']['matches']))->toBe(["{$module}:3 imports Widget from @acme/widgets-alias"]);
+});
