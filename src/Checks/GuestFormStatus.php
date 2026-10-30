@@ -15,16 +15,18 @@ use Tey\Standards\Source;
  * The narrowest resolution, all of which must hold or the toast is still required:
  *  0. bootstrap/app.php exists, parses, and its withMiddleware configurator adds only SAFE_MIDDLEWARE (globally or to any group); app providers
  *     neither wrap nor register routes nor push unknown middleware to a group (environmentKeepsGuest()).
- *  1. Every route that registers Controller@action is found in the route roots, is a literal `Route::post|put|patch|delete(<literal uri>, ...)`
- *     (array, invokable class or group-controller string action), and every middleware on it and its enclosing groups is a literal from
- *     GUEST_MIDDLEWARE. Any other middleware, a non-literal one, a non-literal prefix, a `Route::group([...])` array, or an include/require inside a
+ *  1. Every route that registers Controller@action is found in the route roots, is a literal mutating route (`Route::post|put|patch|delete`,
+ *     `match`, `any`, or a readable `resource`/`apiResource`, see routes()) with a literal URI, and every middleware on it and its enclosing
+ *     groups (builder or `Route::group([...])` array, groupAttributes()) is a literal from GUEST_MIDDLEWARE. Any other middleware, a non-literal
+ *     one, a non-literal prefix, an unreadable group, a mutating route whose controller can't be qualified, or an include/require inside a
  *     group anywhere in the route roots makes it unprovable. A controller that declares `middleware()` or calls `$this->middleware()` is never guest.
- *  2. For each such route, exactly one GET route with the same full literal URI exists: a controller action (the same controller, or one
- *     class declared exactly once under the controller roots), or `Route::inertia('<uri>', '<literal page>')`.
+ *  2. For each such route, exactly one GET route with the same full literal URI exists: a controller action (the same controller, or the
+ *     one class whose fully qualified name, resolved as Laravel's Router does (action()), is declared exactly once under the controller roots
+ *     or, failing that, in the file composer's maps give it), or `Route::inertia('<uri>', '<literal page>')`.
  *     A literal named-route redirect (`to_route('<name>')`, `redirect()->route('<name>')`, `Redirect::route('<name>')`, one argument only;
  *     redirectFlash()) lands instead on the one route registered under that full name (group `name()`/`as()` prefixes plus the route's own,
- *     routeName()): it must be a guest GET with a literal URI and no parameters, and no route in the route roots may carry an unreadable name
- *     (a non-literal name, a `Route::group([...])`, a resource, match or any registration).
+ *     routeName()): it must be a guest GET (or GET and HEAD) with a literal URI and no parameters, and no registration in the route roots may
+ *     carry an unreadable name (routes(): a non-literal name, an unreadable group or resource, a macro or other unknown Route call).
  *  3. Every return of that GET action is `Inertia::render('<literal>')` or `inertia('<literal>')`, all the same page (Route::inertia names it).
  *  4. That page is exactly one `<page>.vue` under the page roots, and it, or a `.vue` file it imports (app- or kit-owned, up to three import levels,
  *     `@/` and relative specifiers only, cycles cut), has a script that imports FormStatus from `@/components/Kit` or `@/components/Kit/Form`
@@ -57,7 +59,7 @@ final class GuestFormStatus
 
     private ?bool $environment = null;
 
-    /** @var ?list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool, name: ?string}> */
+    /** @var ?list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool, name: ?string, unresolved?: bool}> */
     private ?array $routes = null;
 
     public function __construct(private readonly Configuration $config, private readonly Source $source) {}
@@ -77,7 +79,8 @@ final class GuestFormStatus
         $controller = $class->namespacedName->toString();
         $routes = $this->routes();
         $mutations = array_filter($routes, fn (array $route): bool => $route['class'] === $controller && in_array($route['method'], [$action, '*'], true) && array_intersect($route['verbs'], self::MUTATING) !== []);
-        if ($mutations === []) {
+        // A mutating route whose controller this reader could not qualify might be this action's: nothing is provable then.
+        if ($mutations === [] || array_filter($routes, fn (array $route): bool => ($route['unresolved'] ?? false) && array_intersect($route['verbs'], self::MUTATING) !== []) !== []) {
             return false;
         }
         foreach ($mutations as $mutation) {
@@ -86,9 +89,9 @@ final class GuestFormStatus
             }
             if ($route !== null) {
                 // The named target: exactly one registration carries the name, none carries a name this reader cannot read, and it is a guest
-                // GET with a literal, parameterless URI.
+                // GET (or GET and HEAD) with a literal, parameterless URI.
                 $pages = array_values(array_filter($routes, fn (array $candidate): bool => $candidate['name'] === $route));
-                if (in_array(null, array_column($routes, 'name'), true) || count($pages) !== 1 || $pages[0]['verbs'] !== ['get'] || ! $pages[0]['guest'] || $pages[0]['uri'] === null || str_contains($pages[0]['uri'], '{')) {
+                if (in_array(null, array_column($routes, 'name'), true) || count($pages) !== 1 || ! in_array('get', $pages[0]['verbs'], true) || array_diff($pages[0]['verbs'], ['get', 'head']) !== [] || ! $pages[0]['guest'] || $pages[0]['uri'] === null || str_contains($pages[0]['uri'], '{')) {
                     return false;
                 }
             } else {
@@ -605,22 +608,38 @@ final class GuestFormStatus
     /** @var array<string, ?Node\Stmt\Class_> */
     private array $classes = [];
 
-    /** The one class declaration named `$name` under the controller roots, or null when there is none or more than one. */
+    /**
+     * The one class declaration whose fully qualified name is `$name`: declared exactly once under the controller roots, or, when none
+     * declares it there, exactly once in the file composer's classmap or PSR-4 map gives it. Null when it is declared more than once, nowhere,
+     * or only in a file that does not parse. A short name that no route file's imports or namespace qualified never matches.
+     */
     private function controllerClass(string $name): ?Node\Stmt\Class_
     {
         if (array_key_exists($name, $this->classes)) {
             return $this->classes[$name];
         }
+        $declares = fn (array $nodes): array => (new NodeFinder)->find($nodes, fn (Node $node): bool => $node instanceof Node\Stmt\Class_ && isset($node->namespacedName) && $node->namespacedName->toString() === $name);
         $found = [];
         foreach ($this->source->files($this->config->controllerRoots) as $path => $text) {
-            foreach ((new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Stmt\Class_::class) as $candidate) {
-                if (isset($candidate->namespacedName) && $candidate->namespacedName->toString() === $name) {
-                    $found[] = $candidate;
-                }
+            try {
+                $found = [...$found, ...$declares($this->source->nodes($path))];
+            } catch (\PhpParser\Error) {
+                continue;
+            }
+        }
+        if ($found === [] && ($file = $this->autoloaded($name)) !== null) {
+            $base = rtrim((string) realpath($this->config->base), '/').'/';
+            try {
+                $nodes = str_starts_with($file, $base)
+                    ? $this->source->nodes(substr($file, strlen($base)))
+                    : (new \PhpParser\NodeTraverser(new \PhpParser\NodeVisitor\NameResolver, new \PhpParser\NodeVisitor\ParentConnectingVisitor))->traverse((new \PhpParser\ParserFactory)->createForNewestSupportedVersion()->parse((string) file_get_contents($file)) ?? []);
+                $found = $declares($nodes);
+            } catch (\PhpParser\Error) {
+                $found = [];
             }
         }
 
-        return $this->classes[$name] = count($found) === 1 ? $found[0] : null;
+        return $this->classes[$name] = count($found) === 1 && $found[0] instanceof Node\Stmt\Class_ ? $found[0] : null;
     }
 
     /** The one literal page every return of the action renders, or null. */
@@ -803,7 +822,44 @@ final class GuestFormStatus
         return $path !== null && str_ends_with($path, '.vue') && is_file($base.'/'.$path) && ! is_link($base.'/'.$path) ? $path : null;
     }
 
-    /** @return list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool, name: ?string}> */
+    /** Route facade calls that register routes. */
+    private const REGISTERS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'any', 'match', 'inertia', 'view', 'redirect', 'permanentredirect', 'resource', 'apiresource', 'resources', 'apiresources', 'singleton', 'singletons', 'apisingleton', 'apisingletons', 'fallback'];
+
+    /** Builder calls a route, a group or a resource registration may chain; they register nothing. */
+    private const BUILDERS = ['as', 'can', 'controller', 'domain', 'metadata', 'middleware', 'missing', 'name', 'namespace', 'prefix', 'scopebindings', 'where', 'withoutmiddleware', 'withoutscopedbindings', 'group', 'wherenumber', 'wherealpha', 'wherealphanumeric', 'whereuuid', 'whereulid', 'wherein', 'only', 'except', 'names', 'parameters', 'parameter', 'shallow', 'scoped', 'middlewarefor', 'withoutmiddlewarefor', 'withtrashed', 'defaults', 'block', 'withoutblocking', 'creatable', 'destroyable'];
+
+    /** Route facade calls that register no route. Any other call on the facade (a macro, say) may register a name this reader cannot read. */
+    private const HELPERS = ['pattern', 'patterns', 'bind', 'model', 'macro', 'mixin', 'hasmacro', 'current', 'currentroutename', 'currentrouteaction', 'currentrouteuses', 'currentrouteis', 'currentroutenamed', 'has', 'is', 'getroutes', 'getcurrentroute', 'getcurrentrequest', 'substitutebindings', 'substituteimplicitbindings'];
+
+    /** Calls that change how resource names, verbs or parameters are generated; seen anywhere in the route roots or app providers, no resource is read. */
+    private const RESOURCE_TWEAKS = ['resourceverbs', 'resourceparameters', 'singularresourceparameters', 'singularparameters', 'setparameters', 'verbs'];
+
+    /** Laravel's resource actions in ResourceRegistrar::$resourceDefaults order: [verbs, URI suffix after the resource URI, whether it takes the {wildcard}]. */
+    private const RESOURCE_ACTIONS = [
+        'index' => [['get'], '', false],
+        'create' => [['get'], '/create', false],
+        'store' => [['post'], '', false],
+        'show' => [['get'], '', true],
+        'edit' => [['get'], '/edit', true],
+        'update' => [['put', 'patch'], '', true],
+        'destroy' => [['delete'], '', true],
+    ];
+
+    /** Router::$verbs, lowercased: what `Route::any()` and `Route::redirect()` register. */
+    private const ALL_VERBS = ['get', 'head', 'post', 'put', 'patch', 'delete', 'options', 'query'];
+
+    /** @var ?bool */
+    private ?bool $resourcesTweaked = null;
+
+    /**
+     * Every route registration in the route roots that this reader can see: `Route::get|post|put|patch|delete|options|any|match|inertia|view|
+     * redirect|permanentRedirect(...)` and `Route::resource|apiResource(...)`, with their verbs, full literal URIs, fully qualified controllers,
+     * guest status and full names. Anything it cannot read (a `resources`/`singleton`/`fallback` registration, a non-literal resource argument,
+     * a macro or other unknown facade call) adds an entry with a null name, which blocks every named-route redirect, and an unprovable
+     * mutation entry for each class it names.
+     *
+     * @return list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool, name: ?string, unresolved?: bool}>
+     */
     public function routes(): array
     {
         if ($this->routes !== null) {
@@ -819,11 +875,24 @@ final class GuestFormStatus
                 $includedInGroup = $includedInGroup || $this->groups($include) !== [];
             }
         }
+        $unreadable = ['verbs' => [], 'page' => null, 'uri' => null, 'class' => null, 'method' => null, 'guest' => false, 'name' => null];
         foreach ($files as $path => $text) {
+            foreach ($finder->find($this->source->nodes($path), fn (Node $node): bool => $node instanceof Node\Expr\StaticCall && self::routeFacade($node)) as $root) {
+                $previous = null;
+                // A macro or any other facade call this reader does not know may register a route under any name.
+                for ($link = $root; $link instanceof Node\Expr\StaticCall || ($link instanceof Node\Expr\MethodCall && $link->var === $previous); $previous = $link, $link = $link->getAttribute('parent')) {
+                    $name = $link->name instanceof Node\Identifier ? strtolower($link->name->toString()) : null;
+                    if ($name === null || ! in_array($name, [...self::REGISTERS, ...self::BUILDERS, ...self::HELPERS], true)) {
+                        $routes[] = $unreadable;
+
+                        break;
+                    }
+                }
+            }
             foreach ($finder->find($this->source->nodes($path), fn (Node $node): bool => ($node instanceof Node\Expr\StaticCall || $node instanceof Node\Expr\MethodCall) && $node->name instanceof Node\Identifier) as $call) {
                 /** @var Node\Expr\StaticCall|Node\Expr\MethodCall $call */
                 $verb = strtolower($call->name->toString());
-                if (! in_array($verb, ['get', 'inertia', 'match', 'any', 'resource', 'apiresource', 'resources', 'apiresources', ...self::MUTATING], true) || $call->isFirstClassCallable()) {
+                if (! in_array($verb, self::REGISTERS, true) || $call->isFirstClassCallable()) {
                     continue;
                 }
                 $chain = [];
@@ -832,57 +901,252 @@ final class GuestFormStatus
                     $root = $root->var;
                     $chain[] = $root;
                 }
-                if (! $root instanceof Node\Expr\StaticCall || ! $root->class instanceof Node\Name || $root->class->toString() !== 'Illuminate\Support\Facades\Route') {
+                if (! $root instanceof Node\Expr\StaticCall || ! self::routeFacade($root)) {
                     continue;
                 }
-                $arguments = $call->getArgs();
-                if (! in_array($verb, ['get', 'inertia', ...self::MUTATING], true)) {
-                    // match, any and resource registrations are not read: whatever controller they name gets an unprovable mutation entry.
-                    foreach ((new NodeFinder)->findInstanceOf($arguments, Node\Expr\ClassConstFetch::class) as $named) {
-                        if ($named->class instanceof Node\Name) {
-                            $routes[] = ['verbs' => self::MUTATING, 'page' => null, 'uri' => null, 'class' => $named->class->toString(), 'method' => '*', 'guest' => false, 'name' => null];
-                        }
-                    }
-
-                    // Their generated names are not read either: one unreadable name means no route name provably resolves.
-                    $routes[] = ['verbs' => [], 'page' => null, 'uri' => null, 'class' => null, 'method' => null, 'guest' => false, 'name' => null];
-
-                    continue;
-                }
-                $uri = ($arguments[0]->value ?? null) instanceof Node\Scalar\String_ ? $arguments[0]->value->value : null;
-                // Route::inertia('<uri>', '<literal page>') renders that page directly; a non-literal page name proves nothing.
-                $rendered = $verb === 'inertia' && ($arguments[1]->value ?? null) instanceof Node\Scalar\String_ && $arguments[1]->name === null ? $arguments[1]->value->value : null;
-                [$class, $method] = $verb === 'inertia' ? [null, null] : $this->action($arguments[1]->value ?? null, $call);
-                $guest = ! $includedInGroup;
-                // Builder calls before the verb (Route::middleware(...)->post) and after it (->post(...)->middleware(...)).
+                // Builder calls after the verb (->post(...)->middleware(...)).
                 $after = [];
                 for ($child = $call, $parent = $call->getAttribute('parent'); $parent instanceof Node\Expr\MethodCall && $parent->var === $child; $child = $parent, $parent = $parent->getAttribute('parent')) {
                     $after[] = $parent;
                 }
+                $guest = ! $includedInGroup;
                 $prefix = '';
                 foreach ([...$chain, ...$after] as $link) {
-                    $guest = $guest && $this->guestLink($link, $prefix);
+                    $guest = $this->guestLink($link, $prefix) && $guest;
                 }
                 foreach ($this->groups($call) as $group) {
-                    $guest = $guest && $group !== null && $this->guestBuilder($group, $prefix);
+                    $guest = $group !== null && $this->guestBuilder($group, $prefix) && $guest;
                     if ($group === null) {
-                        $uri = null;
+                        $prefix = null;
                     }
                 }
-                if ($prefix === null) {
-                    $uri = null;
+                $read = in_array($verb, ['resource', 'apiresource'], true)
+                    ? $this->resourceRoutes($call, $verb === 'apiresource', $chain, $after, $guest, $prefix)
+                    : $this->route($call, $verb, $chain, $after, $guest, $prefix);
+                if ($read === null) {
+                    // An unreadable registration: whatever controller it names gets an unprovable mutation entry, and its name blocks every
+                    // named-route redirect.
+                    foreach ((new NodeFinder)->findInstanceOf($call->getArgs(), Node\Expr\ClassConstFetch::class) as $named) {
+                        if ($named->class instanceof Node\Name) {
+                            $routes[] = ['verbs' => self::MUTATING, 'page' => null, 'uri' => null, 'class' => $named->class->toString(), 'method' => '*', 'guest' => false, 'name' => null];
+                        }
+                    }
+                    $routes[] = $unreadable;
+
+                    continue;
                 }
-                $routes[] = ['verbs' => [$verb === 'inertia' ? 'get' : $verb], 'page' => $rendered, 'uri' => $uri === null ? null : trim(($prefix ?? '').'/'.trim($uri, '/'), '/'), 'class' => $class, 'method' => $method, 'guest' => $guest, 'name' => $this->routeName($call, $chain, $after)];
+                $routes = [...$routes, ...$read];
             }
         }
 
         return $this->routes = $routes;
     }
 
+    private static function routeFacade(Node\Expr\StaticCall $call): bool
+    {
+        return $call->class instanceof Node\Name && $call->class->toString() === 'Illuminate\Support\Facades\Route';
+    }
+
     /**
-     * The full name a route registers: every enclosing group's `name('<prefix>')` / `as('<prefix>')`, outermost first, then the route's own
-     * builder calls in order (Laravel appends each). '' for an unnamed route; null when any part is not a literal string, or a group is
-     * `Route::group([...])`, whose `as` key this reader does not read.
+     * One route from a single-route registration, or null when it cannot be read: `match` with non-literal verbs, or a `resources`,
+     * `singleton`, `fallback` or similar registration, whose routes this reader does not generate.
+     *
+     * @param  list<Node\Expr>  $chain
+     * @param  list<Node\Expr>  $after
+     * @return ?list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool, name: ?string, unresolved?: bool}>
+     */
+    private function route(Node\Expr\StaticCall|Node\Expr\MethodCall $call, string $verb, array $chain, array $after, bool $guest, ?string $prefix): ?array
+    {
+        $arguments = $call->getArgs();
+        if ($verb === 'match') {
+            $methods = $arguments[0]->value ?? null;
+            $methods = $methods instanceof Node\Expr\Array_ ? array_map(fn (?Node\ArrayItem $item): ?Node\Expr => $item?->unpack === false && $item->key === null ? $item->value : null, $methods->items) : [$methods];
+            $verbs = [];
+            foreach ($methods as $method) {
+                if (! $method instanceof Node\Scalar\String_ || ! in_array(strtolower($method->value), self::ALL_VERBS, true)) {
+                    return null;
+                }
+                $verbs[] = strtolower($method->value);
+            }
+            $verbs = array_values(array_unique($verbs));
+            if ($verbs === []) {
+                return null;
+            }
+            $arguments = array_slice($arguments, 1);
+        } elseif (in_array($verb, ['any', 'redirect', 'permanentredirect'], true)) {
+            $verbs = self::ALL_VERBS;
+        } elseif ($verb === 'view') {
+            $verbs = ['get', 'head'];
+        } elseif (in_array($verb, ['get', 'inertia', 'options', ...self::MUTATING], true)) {
+            $verbs = [$verb === 'inertia' ? 'get' : $verb];
+        } else {
+            return null;
+        }
+        $uri = ($arguments[0]->value ?? null) instanceof Node\Scalar\String_ ? $arguments[0]->value->value : null;
+        // Route::inertia('<uri>', '<literal page>') renders that page directly; a non-literal page name proves nothing.
+        $rendered = $verb === 'inertia' && ($arguments[1]->value ?? null) instanceof Node\Scalar\String_ && $arguments[1]->name === null ? $arguments[1]->value->value : null;
+        [$class, $method, $unresolved] = in_array($verb, ['inertia', 'view', 'redirect', 'permanentredirect'], true) ? [null, null, false] : $this->action($arguments[1]->value ?? null, $call, [...$chain, ...$after]);
+
+        return [['verbs' => $verbs, 'page' => $rendered, 'uri' => $uri === null || $prefix === null ? null : trim($prefix.'/'.trim($uri, '/'), '/'), 'class' => $class, 'method' => $method, 'guest' => $guest, 'name' => $this->routeName($call, $chain, $after), 'unresolved' => $unresolved]];
+    }
+
+    /**
+     * The routes `Route::resource('<name>', C::class)` or `Route::apiResource(...)` registers, as Laravel 13's ResourceRegistrar generates
+     * them: index, create, store, show, edit, update and destroy (apiResource without create and edit), honouring literal `->only()`,
+     * `->except()`, `->names()`, `->name()`, `->parameters()` and `->parameter()`, a nested `photos.comments` name and a prefixed
+     * `admin/photos` name. Null when anything is not literal: a third options argument, `->shallow()`, `->scoped()`, `->middlewareFor()`
+     * or another unknown chained call, a builder before the call other than `middleware()`, or an app that changes resource generation
+     * (RESOURCE_TWEAKS, or any reference to ResourceRegistrar) anywhere in the route roots or providers.
+     *
+     * @param  list<Node\Expr>  $chain
+     * @param  list<Node\Expr>  $after
+     * @return ?list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool, name: ?string, unresolved?: bool}>
+     */
+    private function resourceRoutes(Node\Expr\StaticCall|Node\Expr\MethodCall $call, bool $api, array $chain, array $after, bool $guest, ?string $prefix): ?array
+    {
+        $arguments = $call->getArgs();
+        $resource = $arguments[0]->value ?? null;
+        $controller = $arguments[1]->value ?? null;
+        if (count($arguments) !== 2 || $arguments[0]->unpack || $arguments[1]->unpack || $arguments[0]->name !== null || $arguments[1]->name !== null
+            || ! $resource instanceof Node\Scalar\String_ || trim($resource->value, '/.') === '' || $this->resourcesTweaked()) {
+            return null;
+        }
+        foreach ($chain as $link) {
+            if (! ($link instanceof Node\Expr\MethodCall || $link instanceof Node\Expr\StaticCall) || ! $link->name instanceof Node\Identifier || strtolower($link->name->toString()) !== 'middleware') {
+                return null;
+            }
+        }
+        $only = $api ? ['index', 'show', 'store', 'update', 'destroy'] : null;
+        $except = [];
+        $names = [];
+        $parameters = [];
+        foreach ($after as $link) {
+            $method = $link instanceof Node\Expr\MethodCall && $link->name instanceof Node\Identifier ? strtolower($link->name->toString()) : null;
+            $values = $link instanceof Node\Expr\MethodCall && ! $link->isFirstClassCallable() ? $link->getArgs() : [];
+            if (in_array($method, ['middleware', 'where', 'missing', 'withtrashed'], true)) {
+                continue;
+            }
+            if (in_array($method, ['only', 'except'], true)) {
+                $list = count($values) === 1 && $values[0]->value instanceof Node\Expr\Array_ ? self::literalList($values[0]->value) : self::literalArguments($values);
+                if ($list === null) {
+                    return null;
+                }
+                $method === 'only' ? $only = $list : $except = $list;
+            } elseif ($method === 'names' && count($values) === 1 && $values[0]->value instanceof Node\Scalar\String_) {
+                $names = $values[0]->value->value;
+            } elseif ($method === 'names' && count($values) === 1 && $values[0]->value instanceof Node\Expr\Array_ && ($map = self::literalMap($values[0]->value)) !== null) {
+                $names = $map;
+            } elseif ($method === 'name' && is_array($names) && ($pair = self::literalArguments($values)) !== null && count($pair) === 2) {
+                $names[$pair[0]] = $pair[1];
+            } elseif ($method === 'parameters' && count($values) === 1 && $values[0]->value instanceof Node\Expr\Array_ && ($map = self::literalMap($values[0]->value)) !== null) {
+                $parameters = $map;
+            } elseif ($method === 'parameters' && count($values) === 1 && $values[0]->value instanceof Node\Scalar\String_ && $values[0]->value->value === 'singular') {
+                $parameters = [];
+            } elseif ($method === 'parameter' && ($pair = self::literalArguments($values)) !== null && count($pair) === 2) {
+                $parameters[$pair[0]] = $pair[1];
+            } else {
+                return null;
+            }
+        }
+        // The controller is a string `uses` (C@method): a group namespace applies, a group controller does not.
+        $class = $controller instanceof Node\Expr\ClassConstFetch && $controller->class instanceof Node\Name && $controller->name instanceof Node\Identifier && strtolower($controller->name->toString()) === 'class'
+            ? $controller->class->toString()
+            : ($controller instanceof Node\Scalar\String_ ? $controller->value : null);
+        $class = $class === null ? null : $this->qualify($class, $call, [...$chain, ...$after]);
+        $group = $this->routeName($call, [], []);
+
+        // A name with a slash registers under a prefix group of its leading segments (ResourceRegistrar::prefixedResource()).
+        $segments = explode('/', $resource->value);
+        $name = (string) array_pop($segments);
+        $prefix = $prefix === null ? null : trim($prefix.'/'.implode('/', $segments), '/');
+        $wildcard = fn (string $value): string => str_replace('-', '_', $parameters[$value] ?? \Illuminate\Support\Str::singular($value));
+        $parts = explode('.', $name);
+        $last = (string) array_pop($parts);
+        $base = implode('/', array_map(fn (string $part): string => $part.'/{'.$wildcard($part).'}', $parts));
+        $uri = trim($base.'/'.$last, '/');
+
+        $routes = [];
+        foreach (self::RESOURCE_ACTIONS as $action => [$verbs, $suffix, $parameter]) {
+            if (($only !== null && ! in_array($action, $only, true)) || in_array($action, $except, true)) {
+                continue;
+            }
+            $full = $uri.($parameter ? '/{'.$wildcard($last).'}' : '').$suffix;
+            $routeName = is_array($names) && isset($names[$action]) ? $names[$action] : trim((is_string($names) ? $names : $name).'.'.$action, '.');
+            $routes[] = ['verbs' => $verbs, 'page' => null, 'uri' => $prefix === null ? null : trim($prefix.'/'.$full, '/'), 'class' => $class, 'method' => $action, 'guest' => $guest, 'name' => $group === null ? null : $group.$routeName, 'unresolved' => $class === null];
+        }
+
+        return $routes;
+    }
+
+    /** Whether the route roots or app providers change how resources are generated, or reference ResourceRegistrar at all. */
+    private function resourcesTweaked(): bool
+    {
+        if ($this->resourcesTweaked !== null) {
+            return $this->resourcesTweaked;
+        }
+        $paths = [...array_keys($this->source->files($this->config->routeRoots)), ...($this->providerPaths() ?? [])];
+        foreach (array_unique($paths) as $path) {
+            try {
+                $nodes = $this->source->nodes($path);
+            } catch (\PhpParser\Error) {
+                return $this->resourcesTweaked = true;
+            }
+            $found = (new NodeFinder)->findFirst($nodes, fn (Node $node): bool => ($node instanceof Node\Name && $node->toString() === 'Illuminate\Routing\ResourceRegistrar')
+                || (($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall) && $node->name instanceof Node\Identifier && in_array(strtolower($node->name->toString()), self::RESOURCE_TWEAKS, true)));
+            if ($found !== null) {
+                return $this->resourcesTweaked = true;
+            }
+        }
+
+        return $this->resourcesTweaked = false;
+    }
+
+    /** @return ?list<string> a list of literal strings, or null */
+    private static function literalList(Node\Expr\Array_ $array): ?array
+    {
+        $values = [];
+        foreach ($array->items as $item) {
+            if ($item === null || $item->unpack || $item->key !== null || ! $item->value instanceof Node\Scalar\String_) {
+                return null;
+            }
+            $values[] = $item->value->value;
+        }
+
+        return $values;
+    }
+
+    /** @param list<Node\Arg> $arguments @return ?list<string> the arguments when every one is a positional literal string */
+    private static function literalArguments(array $arguments): ?array
+    {
+        $values = [];
+        foreach ($arguments as $argument) {
+            if ($argument->unpack || $argument->name !== null || ! $argument->value instanceof Node\Scalar\String_) {
+                return null;
+            }
+            $values[] = $argument->value->value;
+        }
+
+        return $values === [] ? null : $values;
+    }
+
+    /** @return ?array<string, string> a literal string => literal string map, or null */
+    private static function literalMap(Node\Expr\Array_ $array): ?array
+    {
+        $map = [];
+        foreach ($array->items as $item) {
+            if ($item === null || $item->unpack || ! $item->key instanceof Node\Scalar\String_ || ! $item->value instanceof Node\Scalar\String_) {
+                return null;
+            }
+            $map[$item->key->value] = $item->value->value;
+        }
+
+        return $map;
+    }
+
+    /**
+     * The full name a route registers: every enclosing group's `name('<prefix>')` / `as('<prefix>')` or `Route::group(['as' => '<prefix>'])`,
+     * outermost first, then the route's own builder calls in order (Laravel appends each). '' for an unnamed route; null when any part is not
+     * a literal string or a group cannot be read.
      *
      * @param  list<Node\Expr>  $chain  the builder calls before the verb, innermost first
      * @param  list<Node\Expr>  $after  the calls chained after the verb, in order
@@ -894,6 +1158,17 @@ final class GuestFormStatus
             if ($group === null) {
                 return null;
             }
+            if (self::arrayGroup($group)) {
+                $attributes = self::groupAttributes($group);
+                if ($attributes === null || (isset($attributes['as']) && ! $attributes['as'] instanceof Node\Scalar\String_)) {
+                    return null;
+                }
+                if (isset($attributes['as'])) {
+                    $links[] = $attributes['as'];
+                }
+
+                continue;
+            }
             $builder = [];
             for (; $group instanceof Node\Expr\MethodCall || $group instanceof Node\Expr\StaticCall; $group = $group instanceof Node\Expr\MethodCall ? $group->var : null) {
                 $builder[] = $group;
@@ -902,6 +1177,11 @@ final class GuestFormStatus
         }
         $name = '';
         foreach ([...$links, ...array_reverse($chain), ...$after] as $link) {
+            if ($link instanceof Node\Scalar\String_) {
+                $name .= $link->value;
+
+                continue;
+            }
             if (! ($link instanceof Node\Expr\MethodCall || $link instanceof Node\Expr\StaticCall) || ! $link->name instanceof Node\Identifier || ! in_array(strtolower($link->name->toString()), ['name', 'as'], true)) {
                 continue;
             }
@@ -915,31 +1195,114 @@ final class GuestFormStatus
         return $name;
     }
 
-    /** @return array{?string, ?string} the controller class and method of a route action */
-    private function action(?Node\Expr $action, Node $call): array
+    /**
+     * The fully qualified controller class and method of a route action, as Laravel's Router resolves it.
+     *
+     * `[X::class, 'm']` and `X::class` are already fully qualified by the route file's `use` imports, aliases and namespace (NameResolver);
+     * Laravel never prefixes an array action with a group namespace. A string action, `X::class` (invokable), `'X@m'` or a method name in a
+     * `Route::controller(C::class)->group()`, gets the innermost literal group `namespace` prepended unless it starts with `\\` or that
+     * namespace, as Router::prependGroupNamespace() does; a non-literal group namespace, or one on the route's own builder chain, leaves the
+     * class unknown. A `'X@m'` string is never resolved through `use` imports, because Laravel does not.
+     *
+     * @param  list<Node\Expr>  $links  the route's own builder calls, before and after the verb
+     * @return array{?string, ?string, bool} the class, the method, and whether the action names a controller this reader could not qualify
+     */
+    private function action(?Node\Expr $action, Node $call, array $links = []): array
     {
         if ($action instanceof Node\Expr\Array_ && count($action->items) === 2) {
             $class = $action->items[0]->value ?? null;
             $method = $action->items[1]->value ?? null;
-            if ($class instanceof Node\Expr\ClassConstFetch && $class->class instanceof Node\Name && $method instanceof Node\Scalar\String_) {
-                return [$class->class->toString(), $method->value];
+            if ($class instanceof Node\Expr\ClassConstFetch && $class->class instanceof Node\Name && $class->name instanceof Node\Identifier && strtolower($class->name->toString()) === 'class' && $method instanceof Node\Scalar\String_) {
+                return [$class->class->toString(), $method->value, false];
             }
+
+            return [null, null, true];
         }
         if ($action instanceof Node\Expr\ClassConstFetch && $action->class instanceof Node\Name && $action->name instanceof Node\Identifier && strtolower($action->name->toString()) === 'class') {
-            return [$action->class->toString(), '__invoke'];
-        }
-        if ($action instanceof Node\Scalar\String_ && ! str_contains($action->value, '@')) {
+            [$class, $method] = [$action->class->toString(), '__invoke'];
+        } elseif ($action instanceof Node\Scalar\String_ && str_contains($action->value, '@')) {
+            [$class, $method] = explode('@', $action->value, 2);
+        } elseif ($action instanceof Node\Scalar\String_ && $action->value !== '') {
             $controller = $this->groupController($call);
-            if ($controller !== null) {
-                return [$controller, $action->value];
+            if ($controller === false) {
+                return [null, null, true];
             }
+            [$class, $method] = $controller === null ? [$action->value, '__invoke'] : [$controller, $action->value];
+        } else {
+            return [null, null, $action !== null && ! $action instanceof Node\Expr\Closure && ! $action instanceof Node\Expr\ArrowFunction];
         }
+        $class = $this->qualify($class, $call, $links);
 
-        return [null, null];
+        return $class === null || $method === '' ? [null, null, true] : [$class, $method, false];
     }
 
     /**
-     * The builder of every `->group(...)` enclosing the node, innermost first; null for a group this reader cannot read (`Route::group([...])`).
+     * A string action's class with the enclosing groups' namespace prepended, as Router::prependGroupNamespace() does; null when that
+     * namespace cannot be read, the route's own chain sets one, or the result is not a class name.
+     *
+     * @param  list<Node\Expr>  $links  the route's own builder calls
+     */
+    private function qualify(string $class, Node $call, array $links): ?string
+    {
+        foreach ($links as $link) {
+            if (($link instanceof Node\Expr\MethodCall || $link instanceof Node\Expr\StaticCall) && $link->name instanceof Node\Identifier && strtolower($link->name->toString()) === 'namespace') {
+                return null;
+            }
+        }
+        $namespace = $this->groupNamespace($call);
+        if ($namespace === false) {
+            return null;
+        }
+        if ($namespace !== null && ! str_starts_with($class, '\\') && ! str_starts_with($class, $namespace)) {
+            $class = $namespace.'\\'.$class;
+        }
+        $class = ltrim($class, '\\');
+
+        return preg_match('~\A[A-Za-z_][\w]*(?:\\\\[A-Za-z_][\w]*)*\z~', $class) === 1 ? $class : null;
+    }
+
+    /**
+     * The namespace the enclosing groups give a string action, merged outermost first as RouteGroup::formatNamespace() does: null for none,
+     * false when any group's namespace is not a literal string or a group cannot be read.
+     */
+    private function groupNamespace(Node $node): string|null|false
+    {
+        $namespace = null;
+        foreach (array_reverse($this->groups($node)) as $builder) {
+            if ($builder === null) {
+                return false;
+            }
+            $declared = null;
+            if (self::arrayGroup($builder)) {
+                $attributes = self::groupAttributes($builder);
+                if ($attributes === null || (isset($attributes['namespace']) && ! $attributes['namespace'] instanceof Node\Scalar\String_)) {
+                    return false;
+                }
+                $declared = isset($attributes['namespace']) ? $attributes['namespace']->value : null;
+                $builder = null;
+            }
+            for (; $builder instanceof Node\Expr\MethodCall || $builder instanceof Node\Expr\StaticCall; $builder = $builder instanceof Node\Expr\MethodCall ? $builder->var : null) {
+                if (! $builder->name instanceof Node\Identifier || strtolower($builder->name->toString()) !== 'namespace') {
+                    continue;
+                }
+                $value = $builder->getArgs()[0]->value ?? null;
+                if (! $value instanceof Node\Scalar\String_ || count($builder->getArgs()) !== 1) {
+                    return false;
+                }
+                // The registrar keeps the last namespace() call; the chain is walked innermost (last) first.
+                $declared ??= $value->value;
+            }
+            if ($declared !== null) {
+                $namespace = $namespace !== null && ! str_starts_with($declared, '\\') ? trim($namespace, '\\').'\\'.trim($declared, '\\') : trim($declared, '\\');
+            }
+        }
+
+        return $namespace === '' ? null : $namespace;
+    }
+
+    /**
+     * The builder of every `->group(...)` enclosing the node, innermost first: the builder chain of `Route::...->group(fn)`, or the
+     * `Route::group([...], fn)` call itself (arrayGroup(), read through groupAttributes()); null for any other group.
      *
      * @return list<?Node\Expr>
      */
@@ -948,22 +1311,71 @@ final class GuestFormStatus
         $groups = [];
         for ($parent = $node->getAttribute('parent'); $parent instanceof Node; $parent = $parent->getAttribute('parent')) {
             if (($parent instanceof Node\Expr\MethodCall || $parent instanceof Node\Expr\StaticCall) && $parent->name instanceof Node\Identifier && strtolower($parent->name->toString()) === 'group') {
-                $groups[] = $parent instanceof Node\Expr\MethodCall ? $parent->var : null;
+                if ($parent instanceof Node\Expr\MethodCall) {
+                    $groups[] = count($parent->getArgs()) === 1 ? $parent->var : null;
+                } else {
+                    $arguments = $parent->getArgs();
+                    $groups[] = self::routeFacade($parent) && count($arguments) === 2 && ! $arguments[0]->unpack && $arguments[0]->name === null && $arguments[0]->value instanceof Node\Expr\Array_ ? $parent : null;
+                }
             }
         }
 
         return $groups;
     }
 
-    private function groupController(Node $node): ?string
+    /** Whether a groups() entry is a `Route::group([...], fn)` call. */
+    private static function arrayGroup(Node\Expr $group): bool
+    {
+        return $group instanceof Node\Expr\StaticCall && $group->name instanceof Node\Identifier && strtolower($group->name->toString()) === 'group';
+    }
+
+    /**
+     * The attributes of a `Route::group([...], fn)` array, by key: only `as`, `prefix`, `middleware`, `namespace`, `controller` and `where`,
+     * each once, with literal string keys. Null for any other key (`domain`, a spread, ...), which makes the group unreadable. The values are
+     * checked where they are used.
+     *
+     * @return ?array<string, Node\Expr>
+     */
+    private static function groupAttributes(Node\Expr\StaticCall $group): ?array
+    {
+        $array = $group->getArgs()[0]->value ?? null;
+        if (! $array instanceof Node\Expr\Array_) {
+            return null;
+        }
+        $attributes = [];
+        foreach ($array->items as $item) {
+            if ($item === null || $item->unpack || ! $item->key instanceof Node\Scalar\String_ || ! in_array($item->key->value, ['as', 'prefix', 'middleware', 'namespace', 'controller', 'where'], true) || isset($attributes[$item->key->value])) {
+                return null;
+            }
+            $attributes[$item->key->value] = $item->value;
+        }
+
+        return $attributes;
+    }
+
+    /** The innermost enclosing group's controller: a literal C::class, null when there is none, false when it cannot be read. */
+    private function groupController(Node $node): string|null|false
     {
         foreach ($this->groups($node) as $builder) {
+            if ($builder === null) {
+                return false;
+            }
+            if (self::arrayGroup($builder)) {
+                $attributes = self::groupAttributes($builder);
+                if ($attributes === null) {
+                    return false;
+                }
+                if (! isset($attributes['controller'])) {
+                    continue;
+                }
+                $controller = $attributes['controller'];
+
+                return $controller instanceof Node\Expr\ClassConstFetch && $controller->class instanceof Node\Name ? $controller->class->toString() : false;
+            }
             while ($builder instanceof Node\Expr\MethodCall || $builder instanceof Node\Expr\StaticCall) {
                 if ($builder->name instanceof Node\Identifier && strtolower($builder->name->toString()) === 'controller') {
                     $controller = $builder->getArgs()[0]->value ?? null;
-                    if ($controller instanceof Node\Expr\ClassConstFetch && $controller->class instanceof Node\Name) {
-                        return $controller->class->toString();
-                    }
+                    return $controller instanceof Node\Expr\ClassConstFetch && $controller->class instanceof Node\Name ? $controller->class->toString() : false;
                 }
                 $builder = $builder instanceof Node\Expr\MethodCall ? $builder->var : null;
             }
@@ -974,9 +1386,29 @@ final class GuestFormStatus
 
     private function guestBuilder(Node\Expr $builder, ?string &$prefix): bool
     {
+        if (self::arrayGroup($builder)) {
+            /** @var Node\Expr\StaticCall $builder */
+            $attributes = self::groupAttributes($builder);
+            if ($attributes === null) {
+                $prefix = null;
+
+                return false;
+            }
+            if (isset($attributes['prefix'])) {
+                $prefix = $attributes['prefix'] instanceof Node\Scalar\String_ && $prefix !== null ? trim(trim($attributes['prefix']->value, '/').'/'.$prefix, '/') : null;
+            }
+            $middleware = $attributes['middleware'] ?? null;
+            foreach ($middleware instanceof Node\Expr\Array_ ? array_map(fn (?Node\ArrayItem $item): ?Node\Expr => $item === null || $item->unpack || $item->key !== null ? null : $item->value, $middleware->items) : ($middleware === null ? [] : [$middleware]) as $item) {
+                if (! $this->guestMiddleware($item)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
         $guest = true;
         while ($builder instanceof Node\Expr\MethodCall || $builder instanceof Node\Expr\StaticCall) {
-            $guest = $guest && $this->guestLink($builder, $prefix);
+            $guest = $this->guestLink($builder, $prefix) && $guest;
             $builder = $builder instanceof Node\Expr\MethodCall ? $builder->var : null;
         }
 
