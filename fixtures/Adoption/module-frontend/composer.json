@@ -1,0 +1,7 @@
+{
+    "name": "fixture/module-frontend",
+    "require": {
+        "tey/kit": "^0.7",
+        "tey/mod": "^0.4"
+    }
+}

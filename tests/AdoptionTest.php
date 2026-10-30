@@ -819,3 +819,55 @@ test('inventory features: an unknown key or an empty list is a schema error', fu
         ->and(fn () => Inventory::fromArray(adoptionInventory(['*' => ['features' => ['core' => ['npm' => []]]]]), 'kit.json'))->toThrow(AdoptionError::class, 'features.core.npm must be a non-empty list')
         ->and(Lists::tooling('vite-plus'))->toBeTrue();
 });
+
+test('a tey/mod module frontend (app/Modules/<Module>/resources/js) is read for uses, hand-rolled signals, pages and candidates', function () {
+    // Every frontend file in this fixture lives inside app/Modules/Billing/resources/js; the app has no resources/js at all.
+    $report = adoptionReport('module-frontend');
+    $rows = [];
+    foreach ($report['rows'] as $row) {
+        $rows[$row['id']] = [$row['status'], array_map(fn (array $e): string => adoptionWhere($e).' '.$e['detail'], $row['evidence'])];
+    }
+    $module = 'app/Modules/Billing/resources/js';
+
+    expect((new App(adoptionFixture('module-frontend'), adoptionConfiguration(adoptionFixture('module-frontend'))))->frontendRoots)->toContain($module)
+        // uses.imports, uses.components and uses.files (resources/js/pages/Workspace/Layout.vue at the same place in the module).
+        ->and($rows['layout.page'])->toBe(['adopted', ["{$module}/pages/Invoices/Page.vue:2 imports Page from @/components/Kit"]])
+        ->and($rows['feedback.toast'])->toBe(['adopted', ["{$module}/pages/Invoices/Page.vue:2 imports Toaster from @/components/Kit"]])
+        ->and($rows['shell.workspace'])->toBe(['adopted', ["{$module}/pages/Workspace/Layout.vue:7 renders <PrimaryNav>", "{$module}/pages/Workspace/Layout.vue feature file present"]])
+        // Hand-rolled: an import signal, a module-relative file-name glob, and a <table> in a module pages/ folder.
+        ->and($rows['form.inputs'])->toBe(['hand-rolled', ["{$module}/components/CustomerPicker.vue:2 imports vue-multiselect"]])
+        ->and($rows['navigation.search'])->toBe(['hand-rolled', ["{$module}/components/InvoiceSearch.vue file name matches resources/js/**/*Search*.vue"]])
+        ->and($rows['data.table'][0])->toBe('hand-rolled')
+        ->and($rows['data.table'][1][0])->toBe("{$module}/pages/Invoices/Page.vue:11 1 × <table> in a page")
+        // Candidates: a module component importing an unmapped library is a gap.
+        ->and(array_column($report['gaps'], 'subject'))->toContain("{$module}/components/RevenueChart.vue");
+});
+
+test('module frontend roots: a configured glob expands, and module-relative paths read only inside a module root', function () {
+    $base = adoptionFixture('module-frontend');
+    $app = new App($base, new Tey\Standards\Configuration(...array_replace(get_object_vars(adoptionConfiguration($base)), ['frontendRoots' => ['resources/js', 'app/*/Billing/resources/js']])));
+
+    expect($app->frontendRoots)->toBe(['resources/js', 'app/Modules/Billing/resources/js'])
+        ->and($app->moduleRelative('app/Modules/Billing/resources/js/components/X.vue'))->toBe('resources/js/components/X.vue')
+        ->and($app->moduleRelative('resources/js/components/X.vue'))->toBeNull()
+        ->and($app->page('app/Modules/Billing/resources/js/pages/Invoices/Page.vue'))->toBeTrue()
+        ->and($app->page('app/Modules/Billing/resources/js/components/InvoiceSearch.vue'))->toBeFalse();
+});
+
+test('uses.imports through a declared alias: @kit/ui counts for @/components/Kit, and an inventory alias counts for its npm module', function () {
+    $base = adoptionFixture('module-frontend');
+    $config = adoptionConfiguration($base);
+    $kit = Inventory::fromArray(adoptionInventory(['form.inputs' => ['uses' => ['imports' => ['@/components/Kit:TimezoneSelect']], 'handRolled' => [], 'replaces' => ['components' => ['NoSuch']]]]), 'kit.json');
+    $widgets = Inventory::fromArray([
+        'format' => 1,
+        'package' => ['composer' => 'acme/widgets', 'npm' => '@acme/widgets', 'alias' => '@acme/widgets-alias'],
+        'facts' => [],
+        'surfaces' => [['id' => 'widget.panel', 'layer' => 'ui', 'group' => 'content', 'label' => 'Widget', 'feature' => 'core', 'applies' => true, 'uses' => ['imports' => ['@acme/widgets:Widget']], 'handRolled' => [], 'docs' => 'docs/widget.md', 'status' => 'stable']],
+        'nonSurfaces' => [],
+    ], 'widgets.json');
+    $rows = array_column((new Scanner(new App($base, $config), [$widgets, $kit], $config, new DateTimeImmutable('2026-10-29')))->report()['rows'], null, 'id');
+    $module = 'app/Modules/Billing/resources/js/components/TimezoneField.vue';
+
+    expect(array_map(fn (array $e): string => adoptionWhere($e).' '.$e['detail'], $rows['form.inputs']['matches']))->toBe(["{$module}:2 imports TimezoneSelect from @kit/ui"])
+        ->and(array_map(fn (array $e): string => adoptionWhere($e).' '.$e['detail'], $rows['widget.panel']['matches']))->toBe(["{$module}:3 imports Widget from @acme/widgets-alias"]);
+});
