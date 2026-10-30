@@ -10,7 +10,7 @@ namespace Tey\Standards\Adoption;
  */
 final class Lists
 {
-    public const VERSION = 3;
+    public const VERSION = 4;
 
     /**
      * App component file names (without `.vue`) that are generic UI building blocks. A trailing `*` is a prefix match; anything else is
@@ -36,6 +36,8 @@ final class Lists
         '@eslint/*', 'typescript-eslint', '@typescript-eslint/*', 'prettier*', '@prettier/*', 'tailwindcss', '@tailwindcss/*', 'postcss*',
         'autoprefixer', 'sass', 'sass-embedded', 'concurrently', 'vitest', '@vitest/*', '@vue/test-utils', 'jsdom', 'happy-dom',
         '@playwright/test', 'playwright', 'husky', 'lint-staged', '@laravel/vite-plugin-wayfinder',
+        // Version 4.
+        'vite-plus',
     ];
 
     /**

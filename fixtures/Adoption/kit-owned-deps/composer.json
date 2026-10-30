@@ -1,0 +1,6 @@
+{
+    "name": "fixture/kit-owned-deps",
+    "require": {
+        "tey/kit": "^0.7"
+    }
+}

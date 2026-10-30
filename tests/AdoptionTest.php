@@ -220,7 +220,7 @@ test('gaps: a third-party import, a generic name and a package.json library; a d
 });
 
 test('the generic-name, framework-runtime and tooling lists are closed and versioned', function () {
-    expect(Lists::VERSION)->toBe(3)
+    expect(Lists::VERSION)->toBe(4)
         ->and(Lists::generic('Button'))->toBeTrue()
         ->and(Lists::generic('InputText'))->toBeTrue()
         ->and(Lists::generic('MenuBar'))->toBeTrue()
@@ -398,8 +398,8 @@ test('tey/kit\'s real inventory (feat/adoption-surfaces 791fadb) reads with the 
 test('--json is a stable format-1 document with rows, evidence, gaps, facts, inventories and the blocking list', function () {
     $report = adoptionReport('mixed', 'ci', ['kit', 'reports']);
 
-    expect(array_keys($report))->toBe(['format', 'app', 'generated_at', 'mode', 'lists', 'overridden', 'inventories', 'facts', 'adopted_tables', 'rows', 'gaps', 'exemptions', 'warnings', 'summary', 'blocking', 'exit_code'])
-        ->and($report)->toMatchArray(['format' => 1, 'app' => 'fixture/mixed', 'generated_at' => '2026-10-29', 'mode' => 'ci', 'lists' => 3])
+    expect(array_keys($report))->toBe(['format', 'app', 'generated_at', 'mode', 'lists', 'overridden', 'inventories', 'facts', 'adopted_tables', 'rows', 'gaps', 'declared', 'exemptions', 'warnings', 'summary', 'blocking', 'exit_code'])
+        ->and($report)->toMatchArray(['format' => 1, 'app' => 'fixture/mixed', 'generated_at' => '2026-10-29', 'mode' => 'ci', 'lists' => 4])
         ->and(array_keys($report['rows'][0]))->toBe(['package', 'id', 'layer', 'group', 'label', 'feature', 'installed', 'applies', 'status', 'underlying', 'new', 'since', 'note', 'cause', 'evidence', 'signals', 'matches', 'replaced', 'uses', 'docs', 'exemption', 'skipped'])
         ->and(array_keys($report['gaps'][0]))->toBe(['subject', 'kind', 'file', 'line', 'detail', 'files', 'exemption'])
         ->and(array_keys($report['blocking'][0]))->toBe(['kind', 'package', 'subject', 'evidence', 'expects', 'cause'])
@@ -733,4 +733,89 @@ test('a rule that runs is evidence as before, with no skipped entries', function
         ->and(array_column($row['evidence'], 'detail'))->toBe(["[ui.kit-shell] signed-in <header> outside kit's shell"])
         ->and(array_merge(...array_column($report['rows'], 'skipped')))->toBe([])
         ->and(implode("\n", Tey\Standards\Enforcement\AdoptionCommand::text($report)))->not->toContain('skipped');
+});
+
+/** The kit inventory with an action.menu surface and core's `features` (requires.npm and host_ui, as tey/kit's core feature.json carries them). */
+function kitOwnedDepsReport(array $declared = [], bool $features = true, string $mode = 'report'): array
+{
+    $base = adoptionFixture('kit-owned-deps');
+    $data = adoptionInventory();
+    $data['surfaces'][] = [
+        'id' => 'action.menu', 'layer' => 'ui', 'group' => 'action', 'label' => 'Action menu', 'feature' => 'core', 'applies' => true,
+        'uses' => ['imports' => ['@/components/Kit:ActionMenu']], 'handRolled' => [['kind' => 'file-name', 'globs' => ['*Dropdown*.vue']]],
+        'replaces' => ['components' => ['Dropdown*', 'Menu*']], 'docs' => 'docs/menu.md', 'status' => 'stable',
+    ];
+    if ($features) {
+        $data['features'] = ['core' => ['npm' => ['@lucide/vue', '@tiptap/*', 'clsx', 'tailwind-merge', 'reka-ui'], 'hostUi' => ['button', 'dropdown-menu', 'spinner/Spinner.vue']]];
+    }
+    $config = new Configuration(...array_replace(get_object_vars(adoptionConfiguration($base)), ['declaredLibraries' => $declared]));
+
+    return (new Scanner(new App($base, $config), [Inventory::fromArray($data, 'kit.json', 'vendor')], $config, new DateTimeImmutable('2026-10-29'), configurationFile: 'tests/Arch/configuration.php'))->report($mode);
+}
+
+test('npm packages an installed kit feature requires are kit-owned: neither package.json gaps nor third-party imports in app components', function () {
+    $gaps = array_column(kitOwnedDepsReport(features: false)['gaps'], 'subject');
+    $owned = array_column(kitOwnedDepsReport()['gaps'], 'subject');
+
+    // Without the inventory's features the same app reads every kit dependency as a gap.
+    expect($gaps)->toContain('npm:@lucide/vue', 'npm:@tiptap/vue-3', 'npm:clsx', 'npm:reka-ui', 'resources/js/components/RichText.vue')
+        ->and($owned)->not->toContain('npm:@lucide/vue')
+        ->and($owned)->not->toContain('npm:@tiptap/vue-3')
+        ->and($owned)->not->toContain('npm:clsx')
+        ->and($owned)->not->toContain('npm:reka-ui')
+        ->and($owned)->not->toContain('resources/js/components/RichText.vue')
+        // Not required by a kit feature: still a gap.
+        ->and($owned)->toContain('npm:chart.js')
+        // vite-plus is build tooling.
+        ->and($gaps)->not->toContain('npm:vite-plus');
+});
+
+test('kit host_ui files are kit-owned: not app components, gaps, or replaces evidence, so action.menu reads adopted', function () {
+    $without = kitOwnedDepsReport(features: false);
+    $with = kitOwnedDepsReport();
+    $menu = fn (array $report): array => array_column($report['rows'], null, 'id')['action.menu'];
+
+    // Without the inventory's hostUi the ui/dropdown-menu files are app components that `replaces.components` (Dropdown*, Menu*) maps.
+    expect($menu($without)['status'])->toBe('hand-rolled')
+        ->and(array_column($menu($without)['evidence'], 'file'))->toContain('resources/js/components/ui/dropdown-menu/DropdownMenuContent.vue')
+        ->and(array_column($menu($without)['replaced'], 'file'))->toBe(['resources/js/components/ui/dropdown-menu/DropdownMenuContent.vue', 'resources/js/components/ui/dropdown-menu/MenuItem.vue'])
+        ->and($menu($with)['replaced'])->toBe([])
+        ->and($menu($with)['status'])->toBe('adopted')
+        ->and(array_filter(array_column($with['gaps'], 'subject'), fn (string $s): bool => str_contains($s, 'components/ui/')))->toBe([]);
+});
+
+test('an app-declared library with a reason is reported as declared, not a gap or exemption, and does not fail --compliance', function () {
+    $report = kitOwnedDepsReport([['library' => 'qrcode', 'reason' => 'Phone pairing QR codes'], ['library' => 'chart.js', 'reason' => 'Usage charts']], mode: 'compliance');
+
+    expect($report['declared'])->toBe([
+        ['subject' => 'npm:qrcode', 'kind' => 'declared', 'library' => 'qrcode', 'reason' => 'Phone pairing QR codes', 'files' => [
+            ['file' => 'package.json', 'line' => null, 'detail' => 'depends on qrcode'],
+            ['file' => 'resources/js/components/PairingQr.vue', 'line' => 2, 'detail' => 'imports qrcode'],
+        ]],
+        ['subject' => 'npm:chart.js', 'kind' => 'declared', 'library' => 'chart.js', 'reason' => 'Usage charts', 'files' => [
+            ['file' => 'package.json', 'line' => null, 'detail' => 'depends on chart.js'],
+        ]],
+    ])
+        ->and(array_column($report['gaps'], 'subject'))->toBe([])
+        ->and(array_filter($report['blocking'], fn (array $b): bool => in_array($b['kind'], ['gap', 'declared'], true)))->toBe([]);
+});
+
+test('a declared library with an empty reason, or one a surface replaces, is refused and declares nothing', function () {
+    $report = kitOwnedDepsReport([['library' => 'qrcode', 'reason' => ' '], ['library' => 'vue-toastification', 'reason' => 'We like it']], mode: 'compliance');
+    $refused = array_values(array_filter($report['blocking'], fn (array $b): bool => $b['kind'] === 'declared'));
+
+    expect($report['declared'])->toBe([])
+        ->and(array_column($refused, 'problem'))->toBe([
+            'declaredLibraries: qrcode needs a non-empty reason',
+            "declaredLibraries: vue-toastification can't be declared; tey/kit feedback.toast replaces it. Adopt the surface, or exempt it with a dated allowlist entry",
+        ])
+        ->and($refused[0]['evidence'])->toBe([['file' => 'tests/Arch/configuration.php', 'line' => null]])
+        ->and(array_column($report['gaps'], 'subject'))->toContain('npm:qrcode')
+        ->and($report['exit_code'])->toBe(1);
+});
+
+test('inventory features: an unknown key or an empty list is a schema error', function () {
+    expect(fn () => Inventory::fromArray(adoptionInventory(['*' => ['features' => ['core' => ['peer' => ['x']]]]]), 'kit.json'))->toThrow(AdoptionError::class, 'features.core')
+        ->and(fn () => Inventory::fromArray(adoptionInventory(['*' => ['features' => ['core' => ['npm' => []]]]]), 'kit.json'))->toThrow(AdoptionError::class, 'features.core.npm must be a non-empty list')
+        ->and(Lists::tooling('vite-plus'))->toBeTrue();
 });
