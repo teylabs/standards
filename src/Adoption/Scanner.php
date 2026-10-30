@@ -17,7 +17,8 @@ use Throwable;
  * Builds the `standards:adoption` report (format 1) for one app against any number of package inventories (Inventory). Each surface reads:
  *
  * - `n/a` when its `applies` condition is false for the app's facts;
- * - `hand-rolled` when any `handRolled` signal fires in an app-owned file, whether or not the package is installed (even if `uses` also match);
+ * - `hand-rolled` when any `handRolled` signal fires in an app-owned file, whether or not the package is installed (even if `uses` also match),
+ *   except that a `file-name` hit yields, per file, when that same file satisfies `uses` (yieldsToUses): it is adoption evidence instead;
  * - `missing` when the package or the surface's `feature` is not installed;
  * - `hand-rolled` when, with no `uses` match, an app component, library or composer package maps to it through `replaces`;
  * - `adopted` when any `uses` matches in an app-owned file (kit-owned unedited files never count; `files` count by presence);
@@ -285,6 +286,15 @@ final class Scanner
         if ($applies) {
             foreach ($surface['handRolled'] as $signalIndex => $signal) {
                 [$fired, $adoptedBy] = $this->signal($signal);
+                if ($signal['kind'] === 'file-name') {
+                    // A file whose name looks hand-rolled but which itself uses the surface's replacement is adoption evidence, per file.
+                    $kept = [];
+                    foreach ($fired as $hit) {
+                        $yield = $this->yieldsToUses($hit['file'], $surface['uses']);
+                        $yield === null ? $kept[] = $hit : $adoptedBy[] = $yield;
+                    }
+                    $fired = $kept;
+                }
                 if ($signal['kind'] === 'rule' && isset($this->unavailable[$signal['rule']])) {
                     $skipped[] = ['signal' => $signalIndex, 'kind' => 'rule', 'rule' => $signal['rule'], 'reason' => $this->unavailable[$signal['rule']]];
                 }
@@ -306,7 +316,10 @@ final class Scanner
                 array_push($uses, ...$adoptedBy);
                 $migrationFired = $migrationFired || ($signal['kind'] === 'migration' && $fired !== []);
             }
-            array_push($uses, ...$this->uses($inventory, $surface['uses']));
+            $matched = $this->uses($inventory, $surface['uses']);
+            // A yielded file that uses() already cites is evidence once.
+            $cited = array_column($matched, 'file');
+            $uses = [...array_values(array_filter($uses, fn (array $e): bool => ! str_ends_with($e['detail'], '(file name yields to uses)') || ! in_array($e['file'], $cited, true))), ...$matched];
         }
         $replaced = $mapped[$package.' '.$surface['id']] ?? [];
 
@@ -588,6 +601,55 @@ final class Scanner
         }
 
         return [$fired, $adopted];
+    }
+
+    /**
+     * Whether one file a `file-name` signal hit satisfies the surface's `uses` itself: it imports (from kit's aliases) or renders one of
+     * `uses.components`, imports one of `uses.imports`, or (PHP) references one of `uses.classes`. Returns that adoption evidence, or null.
+     *
+     * @param  array<string, list<string>>  $uses
+     * @return ?array{file: string, line: ?int, detail: string}
+     */
+    private function yieldsToUses(string $path, array $uses): ?array
+    {
+        $source = $this->app->source($path);
+        if (str_ends_with($path, '.vue') || preg_match('~\.(?:[cm]?[jt]sx?)$~', $path) === 1) {
+            foreach (Code::imports($source) as $import) {
+                foreach ($uses['components'] ?? [] as $component) {
+                    foreach (self::KIT_ALIASES as $alias) {
+                        if (self::importsExport($alias, $component, $import)) {
+                            return self::evidence($path, App::line($source, $import['offset']), 'imports '.$component.' from '.$import['module'].' (file name yields to uses)');
+                        }
+                    }
+                }
+                foreach ($uses['imports'] ?? [] as $wanted) {
+                    $colon = (int) strrpos($wanted, ':');
+                    if (self::importsExport(substr($wanted, 0, $colon), substr($wanted, $colon + 1), $import)) {
+                        return self::evidence($path, App::line($source, $import['offset']), 'imports '.substr($wanted, $colon + 1).' from '.$import['module'].' (file name yields to uses)');
+                    }
+                }
+            }
+        }
+        if (str_ends_with($path, '.vue')) {
+            foreach (Code::tags($source) as $tag) {
+                foreach ($uses['components'] ?? [] as $component) {
+                    if (Code::tagIs($tag['tag'], $component)) {
+                        return self::evidence($path, App::line($source, $tag['offset']), 'renders <'.$tag['tag'].'> (file name yields to uses)');
+                    }
+                }
+            }
+        }
+        if (str_ends_with($path, '.php') && ! str_ends_with($path, '.blade.php') && ! str_starts_with($path, 'app/Filament/') && ! str_starts_with($path, 'app/Livewire/')) {
+            foreach ($uses['classes'] ?? [] as $class) {
+                $found = Code::classReferences($source, $class);
+                $offsets = [...$found['references'], ...$found['imports']];
+                if ($offsets !== []) {
+                    return self::evidence($path, App::line($source, min($offsets)), 'references '.ltrim($class, '\\').' (file name yields to uses)');
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
