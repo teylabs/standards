@@ -23,6 +23,14 @@ final class App
     /** Module route folders read even without a configuration naming them: tey/mod's `app/Modules`, and the `app-modules`/`modules` layouts. */
     public const MODULE_ROUTES = ['app/Modules/*/routes', 'app-modules/*/routes', 'modules/*/routes'];
 
+    /**
+     * Module frontend roots read even without a configuration naming them. tey/mod's `modules` layout declares each module's frontend at
+     * `@module/resources/js` (`->frontend(pages: '@module/resources/js/pages', components: '@module/resources/js/components')`), with
+     * `@module` defaulting to `app/Modules/{module}`; the `app-modules`/`modules` layouts follow the same shape. A configured
+     * `frontendRoots` entry may also be a glob (`packages/*\/resources/js`), expanded the same way.
+     */
+    public const MODULE_FRONTENDS = ['app/Modules/*/resources/js', 'app-modules/*/resources/js', 'modules/*/resources/js'];
+
     private const SKIP = ['vendor', 'node_modules', '.git', 'storage', 'bootstrap/cache', 'public/build'];
 
     /** A path segment that names a public, guest or focus surface (as ui.kit-shell reads it). Everything else is the signed-in app. */
@@ -62,9 +70,50 @@ final class App
     public function __construct(public readonly string $base, ?Configuration $config = null)
     {
         $this->kit = KitOwnership::of($config ?? self::bare($base));
-        $this->frontendRoots = array_values(array_unique(array_map(fn (string $root): string => trim($root, '/'), $config === null ? ['resources/js'] : ($config->frontendRoots ?? ['resources/js', ...$config->uiRoots]))));
+        $this->frontendRoots = $this->expand([...($config === null ? ['resources/js'] : ($config->frontendRoots ?? ['resources/js', ...$config->uiRoots])), ...self::MODULE_FRONTENDS]);
         $this->phpRoots = array_values(array_unique(array_map(fn (string $root): string => trim($root, '/'), ['app', 'src', 'modules', 'app-modules', 'routes', 'database/migrations', 'config', ...array_keys($config?->classRoots ?? []), ...($config?->sourceRoots ?? [])])));
         $this->routeRoots = array_values(array_unique(array_map(fn (string $root): string => trim($root, '/'), ['routes', ...($config?->routeRoots ?? []), ...self::MODULE_ROUTES])));
+    }
+
+    /**
+     * The path below the module frontend root a file sits in, as the app-level glob would read it: `app/Modules/Talk/resources/js/components/X.vue`
+     * reads as `resources/js/components/X.vue`, so an inventory's `resources/js/**` path glob also matches inside a module. Null outside a module.
+     */
+    public function moduleRelative(string $path): ?string
+    {
+        foreach ($this->frontendRoots as $root) {
+            if (str_starts_with($path, $root.'/') && array_filter(self::MODULE_FRONTENDS, fn (string $glob): bool => self::glob($glob, $root)) !== []) {
+                return 'resources/js/'.substr($path, strlen($root) + 1);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Roots trimmed of slashes, a glob expanded to the directories it names (sorted), duplicates dropped.
+     *
+     * @param  list<string>  $roots
+     * @return list<string>
+     */
+    private function expand(array $roots): array
+    {
+        $expanded = [];
+        foreach ($roots as $root) {
+            $root = trim($root, '/');
+            if (! str_contains($root, '*')) {
+                $expanded[] = $root;
+
+                continue;
+            }
+            $directories = glob($this->base.'/'.$root, GLOB_ONLYDIR) ?: [];
+            sort($directories);
+            foreach ($directories as $directory) {
+                $expanded[] = str_replace('\\', '/', substr($directory, strlen($this->base) + 1));
+            }
+        }
+
+        return array_values(array_unique($expanded));
     }
 
     /** A Configuration that names only the base, for KitOwnership when the app has none (a calibration scan). */

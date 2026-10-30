@@ -439,7 +439,7 @@ final class Scanner
                 }
                 break;
             case 'file-name':
-                $globMatches = self::fileGlob(...);
+                $globMatches = $this->fileMatches(...);
                 foreach ($this->owned([...$this->app->frontend(), ...$this->app->views()]) as $path) {
                     // `except` removes a file that an include glob matched, with the same glob semantics.
                     if (! $inScope($path) || array_filter($signal['except'] ?? [], fn (string $glob): bool => $globMatches($glob, $path)) !== []) {
@@ -686,8 +686,12 @@ final class Scanner
             }
         }
         foreach ($uses['files'] ?? [] as $file) {
-            if ($this->app->exists($file)) {
-                $evidence[] = self::evidence($file, null, 'feature file present');
+            // A `resources/js/...` feature file also counts at the same place inside a tey/mod module frontend root.
+            $candidates = [$file, ...(str_starts_with($file, 'resources/js/') ? array_map(fn (string $root): string => $root.substr($file, strlen('resources/js')), array_values(array_filter($this->app->frontendRoots, fn (string $root): bool => $this->app->moduleRelative($root.'/x') !== null))) : [])];
+            foreach ($candidates as $candidate) {
+                if ($this->app->exists($candidate)) {
+                    $evidence[] = self::evidence($candidate, null, 'feature file present');
+                }
             }
         }
         foreach ($uses['classes'] ?? [] as $class) {
@@ -773,7 +777,7 @@ final class Scanner
                     if (! App::glob($glob, $name)) {
                         continue;
                     }
-                    if (array_filter($replaces['except'] ?? [], fn (string $except): bool => self::fileGlob($except, $path)) === []) {
+                    if (array_filter($replaces['except'] ?? [], fn (string $except): bool => $this->fileMatches($except, $path)) === []) {
                         return true;
                     }
                     $excluded = true;
@@ -829,6 +833,17 @@ final class Scanner
         }
 
         return ['mapped' => $mapped, 'gaps' => array_values($gaps)];
+    }
+
+    /**
+     * fileGlob, and inside a tey/mod module frontend root also on the module-relative path (App::moduleRelative), so an inventory's
+     * `resources/js/**` glob reads a module's `app/Modules/<Module>/resources/js/**` the same way.
+     */
+    private function fileMatches(string $glob, string $path): bool
+    {
+        $relative = $this->app->moduleRelative($path);
+
+        return self::fileGlob($glob, $path) || ($relative !== null && self::fileGlob($glob, $relative));
     }
 
     /** A file-name glob on an app-relative path: a glob with `/` matches the path case-insensitively, a basename glob keeps its case. */
