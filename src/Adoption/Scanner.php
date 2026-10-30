@@ -327,8 +327,9 @@ final class Scanner
                     $skipped[] = ['signal' => $signalIndex, 'kind' => 'rule', 'rule' => $signal['rule'], 'reason' => $this->unavailable[$signal['rule']]];
                 }
                 if ($signal['kind'] === 'composer' && $this->lineage->installed($package, $surface['feature'])) {
-                    // The feature's own dependency is not hand-rolled: a package the installed package itself requires, with its lineage installed.
-                    $own = $this->packageRequires($package);
+                    // The feature's own dependency is not hand-rolled: a package the installed package itself requires, or one an installed
+                    // feature of this inventory declares (`features.<id>.composer`), with its lineage installed.
+                    $own = [...$this->packageRequires($package), ...$this->featureComposer($inventory)];
                     $fired = array_values(array_filter($fired, function (array $hit) use ($own, &$dependencies): bool {
                         $required = substr($hit['detail'], strlen('requires '));
                         if (in_array($required, $own, true)) {
@@ -1083,6 +1084,27 @@ final class Scanner
     private function featureNpm(string $package): bool
     {
         return array_filter($this->featureOwned()['npm'], fn (string $glob): bool => App::glob($glob, $package)) !== [];
+    }
+
+    /**
+     * The composer packages the installed features of this inventory declare (its optional `features.<id>.composer`), read with the same
+     * installed-feature test featureOwned uses for npm. Empty when the package itself is not installed.
+     *
+     * @return list<string>
+     */
+    private function featureComposer(Inventory $inventory): array
+    {
+        if (! self::installedIn($this->app->base, $inventory->composer())) {
+            return [];
+        }
+        $composer = [];
+        foreach ($inventory->features as $id => $feature) {
+            if ($this->featureInstalled($inventory->composer(), $id)) {
+                array_push($composer, ...$feature['composer']);
+            }
+        }
+
+        return array_values(array_unique($composer));
     }
 
     /** Whether the app installs the package: its vendor directory exists, or composer.json requires it. */

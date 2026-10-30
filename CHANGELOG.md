@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Adoption: a composer package an installed kit feature requires is not a hand-rolled signal.** The `composer` signal's exemption (the row's lineage installed and the installed package itself requires the dependency) read only the package's composer.lock `require`, so tey/kit's own tenancy engine, `spatie/laravel-multitenancy` (required by kit's workspaces feature but only `require-dev` in kit's composer.json), made an app's `workspaces.tenancy` row hand-rolled. An inventory feature may now carry `composer` (`{"features": {"workspaces": {"composer": ["spatie/laravel-multitenancy"]}}}`, from tey/kit's `feature.json` `requires.packages`; kit must emit it), and a package an installed feature of that inventory declares is exempt the same way, with the same note. A package declared only by a feature that is not installed, or with the lineage not installed, still fires. An empty or non-string `composer` list is a schema error (exit 2).
+
 ## 0.11.53 - 2026-10-30
 
 ### Fixed
