@@ -70,7 +70,7 @@ final class Toast
             }
         }
 
-        return array_values(array_unique($violations, SORT_REGULAR));
+        return array_values(array_unique([...$this->formStatus()->configurationErrors(), ...$violations], SORT_REGULAR));
     }
 
     private const OUTCOME_KEYS = ['status', 'success', 'message', 'error', 'flash'];

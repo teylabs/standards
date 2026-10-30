@@ -461,6 +461,50 @@ test('a guest form may redirect to a literal named guest GET route whose page re
     ];
 });
 
+test('declared guest-safe middleware keeps a FormStatus route guest, and auth middleware can never be declared', function (array $declared, string $middleware, array $checks) {
+    $classes = [
+        'src/Middleware/EnterWorkspace.php' => '<?php namespace App\Http\Middleware; class EnterWorkspace { public function handle($request, $next) { return $next($request); } }',
+        'src/Middleware/RequireFeature.php' => '<?php namespace App\Http\Middleware; class RequireFeature { public function handle($request, $next, string $feature) { return $next($request); } }',
+        'src/Middleware/Members.php' => '<?php namespace App\Http\Middleware; use Illuminate\Auth\Middleware\Authenticate; class Members extends Authenticate {}',
+        'src/Middleware/Wraps.php' => '<?php namespace App\Http\Middleware; class Wraps { public function handle($request, $next) { return app(\Illuminate\Auth\Middleware\Authenticate::class)->handle($request, $next); } }',
+        'src/Middleware/HandleInertiaRequests.php' => '<?php namespace App\Http\Middleware; class HandleInertiaRequests {}',
+    ];
+    mkdir($this->backendBase.'/src/Middleware', 0777, true);
+    foreach ($classes as $path => $source) {
+        file_put_contents($this->backendBase.'/'.$path, $source);
+    }
+    file_put_contents($this->backendBase.'/bootstrap/app.php', guestBootstrap('$middleware->alias(["feature" => \App\Http\Middleware\RequireFeature::class, "members" => \App\Http\Middleware\Members::class]); $middleware->web(append: [\App\Http\Middleware\HandleInertiaRequests::class, \App\Http\Middleware\EnterWorkspace::class]);'));
+    file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\ContactController; Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"])->middleware(["web", '.$middleware.']);');
+    mkdir($this->backendBase.'/resources/js/pages/Public', 0777, true);
+    file_put_contents($this->backendBase.'/resources/js/pages/Public/Contact.vue', "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit';\n</script>\n<template>\n    <FormStatus :message=\"\$page.flash.joined\" />\n</template>\n");
+    $controller = 'namespace App; use Inertia\Inertia; class ContactController { public function show() { return Inertia::render("Public/Contact"); } public function store() { Inertia::flash("joined", "Thanks"); return back(); } }';
+    $found = array_column(($this->backend)('toast', $controller, ['pageRoots' => ['resources/js/pages'], 'guestSafeMiddleware' => $declared], 'src/Controllers/ContactController.php'), 'check');
+    expect($found)->toBe($checks);
+})->with(function () {
+    $workspace = ['middleware' => 'App\Http\Middleware\EnterWorkspace', 'reason' => 'resolves the route\'s workspace; signs no one in'];
+    $feature = ['middleware' => 'feature:*', 'reason' => 'a feature flag gate; 404s when off, signs no one in'];
+    $redirect = 'ContactController::store redirect must chain ->toast*()';
+
+    return [
+        'a declared app class in the web group and a declared feature: gate' => [[$workspace, $feature], '"feature:signup"', []],
+        'an exact alias with parameters' => [[$workspace, ['middleware' => 'feature:signup', 'reason' => 'a feature flag gate']], '"feature:signup"', []],
+        'an exact alias does not match other parameters' => [[$workspace, ['middleware' => 'feature:signup', 'reason' => 'a feature flag gate']], '"feature:other"', [$redirect]],
+        'a declared class on the route' => [[$workspace], '\App\Http\Middleware\EnterWorkspace::class', []],
+        'undeclared app middleware in the web group still fails' => [[$feature], '"feature:signup"', [$redirect]],
+        'an undeclared feature: gate still fails' => [[$workspace], '"feature:signup"', [$redirect]],
+        'a missing reason' => [[$workspace, ['middleware' => 'feature:*']], '"feature:signup"', ['guestSafeMiddleware entry 1 (feature:*) needs a non-empty reason', $redirect]],
+        'a blank reason' => [[$workspace, ['middleware' => 'feature:*', 'reason' => '  ']], '"feature:signup"', ['guestSafeMiddleware entry 1 (feature:*) needs a non-empty reason', $redirect]],
+        'a non-string middleware' => [[$workspace, ['middleware' => ['feature'], 'reason' => 'x']], '"feature:signup"', ['guestSafeMiddleware entry 1 needs a non-empty string middleware', $redirect]],
+        'a declared subclass of Authenticate' => [[$workspace, ['middleware' => 'App\Http\Middleware\Members', 'reason' => 'x']], '\App\Http\Middleware\Members::class', ['guestSafeMiddleware entry 1 (App\Http\Middleware\Members) extends Illuminate\Auth\Middleware\Authenticate', $redirect]],
+        'a declared class naming Authenticate' => [[$workspace, ['middleware' => 'App\Http\Middleware\Wraps', 'reason' => 'x']], '\App\Http\Middleware\Wraps::class', ['guestSafeMiddleware entry 1 (App\Http\Middleware\Wraps) names Illuminate\Auth\Middleware\Authenticate in App\Http\Middleware\Wraps', $redirect]],
+        'a declared class that cannot be read' => [[$workspace, ['middleware' => 'App\Http\Middleware\Missing', 'reason' => 'x']], '\App\Http\Middleware\Missing::class', ['guestSafeMiddleware entry 1 (App\Http\Middleware\Missing) cannot be read (App\Http\Middleware\Missing is not found in the source roots or composer\'s autoload maps)', $redirect]],
+        'a declared auth:web' => [[$workspace, ['middleware' => 'auth:web', 'reason' => 'x']], '"auth:web"', ['guestSafeMiddleware entry 1 (auth:web) names an auth middleware', $redirect]],
+        'a declared can:*' => [[$workspace, ['middleware' => 'can:*', 'reason' => 'x']], '"can:view,post"', ['guestSafeMiddleware entry 1 (can:*) names an auth middleware', $redirect]],
+        'a declared alias bootstrap maps to an Authenticate subclass' => [[$workspace, ['middleware' => 'members', 'reason' => 'x']], '"members"', ['guestSafeMiddleware entry 1 (members) is an alias of App\Http\Middleware\Members, which extends Illuminate\Auth\Middleware\Authenticate', $redirect]],
+        'a declared Authenticate itself' => [[$workspace, ['middleware' => 'Illuminate\Auth\Middleware\Authenticate', 'reason' => 'x']], '"web"', ['guestSafeMiddleware entry 1 (Illuminate\Auth\Middleware\Authenticate) is auth middleware']],
+    ];
+});
+
 test('the FormStatus exemption fails closed unless bootstrap/app.php and the app providers provably keep the route guest', function (?string $bootstrap, ?string $provider, bool $fails) {
     file_put_contents($this->backendBase.'/routes/web.php', '<?php use Illuminate\Support\Facades\Route; use App\ContactController; Route::get("/contact", [ContactController::class, "show"]); Route::post("/contact", [ContactController::class, "store"]);');
     if ($bootstrap !== null) {
