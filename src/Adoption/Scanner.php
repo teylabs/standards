@@ -47,6 +47,9 @@ final class Scanner
 
     private readonly Facts $facts;
 
+    /** The installed lineage records: the primary adoption evidence for features and kit-adopted or kit-created tables. */
+    private readonly Lineage $lineage;
+
     /** @var array<string, list<array<string, mixed>>> rule => findings */
     private array $ruleFindings = [];
 
@@ -83,6 +86,7 @@ final class Scanner
 
             return (new Conformance($this->config))->violations($rule);
         };
+        $this->lineage = Lineage::read($app->base);
         $this->facts = new Facts($app, fn (array $signal): array => $this->signal($signal)[0]);
         $this->versions = self::installedVersions($app->base);
     }
@@ -276,12 +280,27 @@ final class Scanner
         $note = null;
         $migrationFired = false;
         $skipped = [];
+        $dependencies = [];
 
         if ($applies) {
             foreach ($surface['handRolled'] as $signalIndex => $signal) {
                 [$fired, $adoptedBy] = $this->signal($signal);
                 if ($signal['kind'] === 'rule' && isset($this->unavailable[$signal['rule']])) {
                     $skipped[] = ['signal' => $signalIndex, 'kind' => 'rule', 'rule' => $signal['rule'], 'reason' => $this->unavailable[$signal['rule']]];
+                }
+                if ($signal['kind'] === 'composer' && $this->lineage->installed($package, $surface['feature'])) {
+                    // The feature's own dependency is not hand-rolled: a package the installed package itself requires, with its lineage installed.
+                    $own = $this->packageRequires($package);
+                    $fired = array_values(array_filter($fired, function (array $hit) use ($own, &$dependencies): bool {
+                        $required = substr($hit['detail'], strlen('requires '));
+                        if (in_array($required, $own, true)) {
+                            $dependencies[] = $required;
+
+                            return false;
+                        }
+
+                        return true;
+                    }));
                 }
                 array_push($signals, ...$fired);
                 array_push($uses, ...$adoptedBy);
@@ -303,6 +322,12 @@ final class Scanner
         if ($applies && ! $installed) {
             $note = self::installedIn($this->app->base, $package) ? "feature {$surface['feature']} is not installed" : "{$package} is not installed";
         }
+        $notes = array_filter([
+            $note,
+            $dependencies === [] ? null : implode(', ', $dependencies).' required by '.$package.' itself (lineage '.$package.':'.$surface['feature'].' installed): not a hand-rolled signal',
+            $applies && ($surface['feature'] !== 'core' || $migrationFired) ? $this->lineage->note() : null,
+        ]);
+        $note = $notes === [] ? null : implode('; ', $notes);
         $evidence = match ($status) {
             'hand-rolled' => $signals !== [] ? $signals : $replaced,
             'adopted' => $uses,
@@ -547,7 +572,11 @@ final class Scanner
                             continue;
                         }
                         $evidence = self::evidence($path, App::line($source, $created['offset']), 'creates table '.$created['table']);
-                        if (in_array($created['table'], $this->adoptedTables, true)) {
+                        // The lineage record is the primary evidence; kit_adoptions (when the database is read) only adds to it.
+                        if (isset($this->lineage->tables[$created['table']])) {
+                            $by = $this->lineage->tables[$created['table']];
+                            $adopted[] = self::evidence($evidence['file'], $evidence['line'], 'creates table '.$created['table'].', '.$by['how'].' by lineage '.$by['lineage'].' ('.$by['record'].')');
+                        } elseif (in_array($created['table'], $this->adoptedTables, true)) {
                             $adopted[] = ['detail' => 'creates table '.$created['table'].', recorded in kit_adoptions (adopted in place)'] + $evidence;
                             $adopted[array_key_last($adopted)] = self::evidence($evidence['file'], $evidence['line'], $adopted[array_key_last($adopted)]['detail']);
                         } else {
@@ -863,18 +892,27 @@ final class Scanner
                 return in_array($feature, $ids[2], true);
             }
         }
-        $records = glob($this->app->base.'/.mod-maintenance/installed/*.json') ?: [];
-        if (is_file($this->app->base.'/.mod-maintenance/installed.json')) {
-            $records[] = $this->app->base.'/.mod-maintenance/installed.json';
-        }
-        foreach ($records as $record) {
-            $data = is_link($record) || ! is_readable($record) ? null : json_decode((string) file_get_contents($record), true);
-            if (is_array($data) && ($data['format'] ?? null) === 1 && ($data['owner'] ?? null) === 'tey/mod:installed' && ($data['artifact']['name'] ?? null) === $package.':'.$feature) {
-                return true;
+        return $this->lineage->installed($package, $feature);
+    }
+
+    /**
+     * The composer packages the installed package itself requires: its entry in the app's composer.lock, else vendor/<package>/composer.json.
+     * Empty when neither can be read, so nothing is excused.
+     *
+     * @return list<string>
+     */
+    private function packageRequires(string $package): array
+    {
+        $lock = is_file($this->app->base.'/composer.lock') ? json_decode((string) file_get_contents($this->app->base.'/composer.lock'), true) : null;
+        foreach (is_array($lock) ? [...($lock['packages'] ?? []), ...($lock['packages-dev'] ?? [])] : [] as $entry) {
+            if (is_array($entry) && ($entry['name'] ?? null) === $package && is_array($entry['require'] ?? null)) {
+                return array_keys($entry['require']);
             }
         }
+        $file = $this->app->base.'/vendor/'.$package.'/composer.json';
+        $data = is_file($file) && ! is_link($file) ? json_decode((string) file_get_contents($file), true) : null;
 
-        return false;
+        return is_array($data) && is_array($data['require'] ?? null) ? array_keys($data['require']) : [];
     }
 
     /** A new surface stays a --ci warning while the installed package is the release that added it (or its version is unknown). */
