@@ -210,7 +210,7 @@ final class GuestFormStatus
      * A missing or unparsable bootstrap/app.php, a non-closure or escaping `withMiddleware` configurator, an unknown configurator call, `withRouting`
      * with `then:` or `using:`, an alias over a GUEST_MIDDLEWARE name, or a provider that wraps or registers routes fails closed.
      */
-    private function environmentKeepsGuest(): bool
+    public function environmentKeepsGuest(): bool
     {
         return $this->environment ??= $this->bootstrapKeepsGuest() && $this->providersKeepGuest();
     }
@@ -326,21 +326,11 @@ final class GuestFormStatus
     /** Providers under app/Providers or listed in bootstrap/providers.php that touch route middleware or register route files. */
     private function providersKeepGuest(): bool
     {
-        $paths = array_keys($this->source->files(['app/Providers']));
-        if (is_file($this->config->base.'/bootstrap/providers.php')) {
-            try {
-                $listed = (new NodeFinder)->findInstanceOf($this->source->nodes('bootstrap/providers.php'), Node\Expr\ClassConstFetch::class);
-            } catch (\PhpParser\Error) {
-                return false;
-            }
-            $declared = $this->source->declared();
-            foreach ($listed as $constant) {
-                if ($constant->class instanceof Node\Name && isset($declared[$constant->class->toString()])) {
-                    $paths[] = $declared[$constant->class->toString()];
-                }
-            }
+        $paths = $this->providerPaths();
+        if ($paths === null) {
+            return false;
         }
-        foreach (array_unique($paths) as $path) {
+        foreach ($paths as $path) {
             try {
                 $nodes = $this->source->nodes($path);
             } catch (\PhpParser\Error) {
@@ -373,6 +363,27 @@ final class GuestFormStatus
         }
 
         return true;
+    }
+
+    /** @return ?list<string> the app's provider files: everything under app/Providers plus the declared classes bootstrap/providers.php lists; null when bootstrap/providers.php does not parse */
+    public function providerPaths(): ?array
+    {
+        $paths = array_keys($this->source->files(['app/Providers']));
+        if (is_file($this->config->base.'/bootstrap/providers.php')) {
+            try {
+                $listed = (new NodeFinder)->findInstanceOf($this->source->nodes('bootstrap/providers.php'), Node\Expr\ClassConstFetch::class);
+            } catch (\PhpParser\Error) {
+                return null;
+            }
+            $declared = $this->source->declared();
+            foreach ($listed as $constant) {
+                if ($constant->class instanceof Node\Name && isset($declared[$constant->class->toString()])) {
+                    $paths[] = $declared[$constant->class->toString()];
+                }
+            }
+        }
+
+        return array_values(array_unique($paths));
     }
 
     /** Route aliases that sign someone in or authorize a signed-in user: never declarable, with or without parameters. */
@@ -643,23 +654,12 @@ final class GuestFormStatus
     }
 
     /** @param list<string> $keys */
-    private function rendersFormStatus(string $page, array $keys): bool
+    public function rendersFormStatus(string $page, array $keys): bool
     {
-        if (str_contains($page, '..') || $page === '') {
+        $page = $this->pageFile($page);
+        if ($page === null) {
             return false;
         }
-        $files = [];
-        foreach ($this->config->pageRoots as $root) {
-            foreach (glob($this->config->base.'/'.$root, GLOB_ONLYDIR) ?: [] as $directory) {
-                if (is_file($directory.'/'.$page.'.vue')) {
-                    $files[] = $directory.'/'.$page.'.vue';
-                }
-            }
-        }
-        if (count(array_unique($files)) !== 1) {
-            return false;
-        }
-        $page = substr($files[0], strlen($this->config->base) + 1);
         $follow = fn (array $import, string $from): ?string => self::component($this->config->base, $import, $from);
         if ($keys === []) {
             return VueImports::reaches($this->config->base, $page, self::LEVELS, fn (string $path, string $source): bool => self::rendersKitFormStatus($source), $follow);
@@ -671,6 +671,37 @@ final class GuestFormStatus
         }
 
         return true;
+    }
+
+    /** The base-relative path of the one `<page>.vue` under the page roots, or null when there is none, more than one, or the name climbs out. */
+    public function pageFile(string $page): ?string
+    {
+        if (str_contains($page, '..') || $page === '') {
+            return null;
+        }
+        $files = [];
+        foreach ($this->config->pageRoots as $root) {
+            foreach (glob($this->config->base.'/'.$root, GLOB_ONLYDIR) ?: [] as $directory) {
+                if (is_file($directory.'/'.$page.'.vue')) {
+                    $files[] = $directory.'/'.$page.'.vue';
+                }
+            }
+        }
+        $files = array_values(array_unique($files));
+
+        return count($files) === 1 ? substr($files[0], strlen($this->config->base) + 1) : null;
+    }
+
+    /**
+     * Whether the page, or a `.vue` file it imports (LEVELS, as rendersFormStatus()), satisfies the predicate.
+     *
+     * @param  callable(string, string): bool  $predicate  given each file's path and source
+     */
+    public function pageTreeReaches(string $page, callable $predicate): bool
+    {
+        $follow = fn (array $import, string $from): ?string => self::component($this->config->base, $import, $from);
+
+        return VueImports::reaches($this->config->base, $page, self::LEVELS, $predicate, $follow);
     }
 
     /**
@@ -773,7 +804,7 @@ final class GuestFormStatus
     }
 
     /** @return list<array{verbs: list<string>, page: ?string, uri: ?string, class: ?string, method: ?string, guest: bool, name: ?string}> */
-    private function routes(): array
+    public function routes(): array
     {
         if ($this->routes !== null) {
             return $this->routes;
@@ -971,15 +1002,22 @@ final class GuestFormStatus
         }
         $items = $argument instanceof Node\Expr\Array_ ? array_map(fn ($item): ?Node\Expr => $item?->value, $argument->items) : [$argument];
         foreach ($items as $item) {
-            $class = $item instanceof Node\Expr\ClassConstFetch && $item->class instanceof Node\Name && $item->name instanceof Node\Identifier && strtolower($item->name->toString()) === 'class' ? $item->class->toString() : null;
-            if ($class !== null && $this->declaredSafe($class)) {
-                continue;
-            }
-            if (! $item instanceof Node\Scalar\String_ || ! (in_array(explode(':', $item->value)[0], self::GUEST_MIDDLEWARE, true) || $this->declaredSafe($item->value))) {
+            if (! $this->guestMiddleware($item)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /** Whether one route middleware entry keeps a route guest: a literal GUEST_MIDDLEWARE alias (any parameters), or a class or alias Configuration::$guestSafeMiddleware declares. */
+    public function guestMiddleware(?Node\Expr $item): bool
+    {
+        $class = $item instanceof Node\Expr\ClassConstFetch && $item->class instanceof Node\Name && $item->name instanceof Node\Identifier && strtolower($item->name->toString()) === 'class' ? $item->class->toString() : null;
+        if ($class !== null && $this->declaredSafe($class)) {
+            return true;
+        }
+
+        return $item instanceof Node\Scalar\String_ && (in_array(explode(':', $item->value)[0], self::GUEST_MIDDLEWARE, true) || $this->declaredSafe($item->value));
     }
 }

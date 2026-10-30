@@ -167,6 +167,13 @@ final class Toast
         return $this->formStatus ??= new GuestFormStatus($this->config, $this->source);
     }
 
+    private ?FortifyFormStatus $fortifyFormStatus = null;
+
+    private function fortifyFormStatus(): FortifyFormStatus
+    {
+        return $this->fortifyFormStatus ??= new FortifyFormStatus($this->config, $this->source, $this->formStatus());
+    }
+
     /**
      * Whether a `->with(...)` call is part of `return back()->with(...)` in a public method of a class (not in a closure), and
      * GuestFormStatus proves that method a guest form whose page shows every flashed key through `<FormStatus>`.
@@ -178,6 +185,12 @@ final class Toast
             $top = $parent;
         }
         $return = $top->getAttribute('parent');
+        // Fortify's own shape: `return $request->wantsJson() ? new JsonResponse(...) : <redirect>;` (or negated and reversed); toResponse() only.
+        $ternary = null;
+        if ($return instanceof Node\Expr\Ternary && $return->getAttribute('parent') instanceof Node\Stmt\Return_) {
+            $ternary = $return;
+            $return = $return->getAttribute('parent');
+        }
         $method = null;
         if ($return instanceof Node\Stmt\Return_) {
             // The nearest enclosing function: a closure or arrow function in between means the return is not the action's.
@@ -189,6 +202,20 @@ final class Toast
         $class = $method instanceof Node\Stmt\ClassMethod ? $method->getAttribute('parent') : null;
         if (! $method instanceof Node\Stmt\ClassMethod || ! $method->isPublic() || ! $class instanceof Node\Stmt\Class_) {
             return false;
+        }
+        // A Fortify response bound by the app: toResponse() is read like an action, its top-level Inertia::flash keys included (FortifyFormStatus).
+        if ($ternary !== null && ($method->name->toLowerString() !== 'toresponse' || self::jsonOrRedirect($method, $ternary) !== $top)) {
+            return false;
+        }
+        if ($method->name->toLowerString() === 'toresponse' && $return instanceof Node\Stmt\Return_) {
+            // Its body is top-level Inertia::flash statements, then this one return: no other branch or return (an `if (wantsJson())` form included).
+            $body = $method->stmts ?? [];
+            if (end($body) !== $return || array_filter(array_slice($body, 0, -1), fn (Node\Stmt $statement): bool => ! ($statement instanceof Node\Stmt\Expression && $statement->expr instanceof Node\Expr\StaticCall && self::inertiaFlash($statement->expr))) !== []) {
+                return false;
+            }
+            $target = self::returnFlashKeys($method, $return, $top);
+
+            return $target !== null && $this->fortifyFormStatus()->proves($class, $method->name->toString(), ...$target);
         }
         $target = GuestFormStatus::redirectFlash($top);
 
@@ -203,9 +230,10 @@ final class Toast
      *
      * @return ?array{list<string>, ?string}
      */
-    private static function returnFlashKeys(Node\Stmt\ClassMethod $method, Node\Stmt\Return_ $return): ?array
+    private static function returnFlashKeys(Node\Stmt\ClassMethod $method, Node\Stmt\Return_ $return, ?Node\Expr $expression = null): ?array
     {
-        $target = $return->expr === null ? null : GuestFormStatus::redirectFlash($return->expr);
+        $expression ??= $return->expr;
+        $target = $expression === null ? null : GuestFormStatus::redirectFlash($expression);
         if ($target === null) {
             return null;
         }
@@ -238,6 +266,29 @@ final class Toast
         }
 
         return [array_values(array_unique($keys)), $route];
+    }
+
+    /**
+     * The redirect branch of Fortify's response shape, `$request->wantsJson() ? new JsonResponse(...) : <redirect>` or
+     * `! $request->wantsJson() ? <redirect> : new JsonResponse(...)`, where `$request` is the method's first parameter (laravel/fortify 1.41's
+     * own password-reset responses). Null for any other condition, a short ternary, or a JSON branch other than `new JsonResponse(...)`.
+     */
+    private static function jsonOrRedirect(Node\Stmt\ClassMethod $method, Node\Expr\Ternary $ternary): ?Node\Expr
+    {
+        $parameter = $method->params[0]->var ?? null;
+        if ($ternary->if === null || ! $parameter instanceof Node\Expr\Variable || ! is_string($parameter->name)) {
+            return null;
+        }
+        $condition = $ternary->cond;
+        $negated = $condition instanceof Node\Expr\BooleanNot;
+        $call = $negated ? $condition->expr : $condition;
+        if (! $call instanceof Node\Expr\MethodCall || ! $call->var instanceof Node\Expr\Variable || $call->var->name !== $parameter->name
+            || ! $call->name instanceof Node\Identifier || $call->name->toLowerString() !== 'wantsjson' || $call->getArgs() !== [] || $call->isFirstClassCallable()) {
+            return null;
+        }
+        [$json, $redirect] = $negated ? [$ternary->else, $ternary->if] : [$ternary->if, $ternary->else];
+
+        return $json instanceof Node\Expr\New_ && $json->class instanceof Node\Name && $json->class->toString() === 'Illuminate\Http\JsonResponse' ? $redirect : null;
     }
 
     private static function inertiaFlash(Node\Expr\StaticCall $call): bool

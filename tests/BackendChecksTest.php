@@ -591,3 +591,143 @@ test('a guest form passes through Inertia v3 flash reads, kit FormStatus flash-k
         'v2 back()->with read through page.props.flash' => ['return back()->with("joined", "thanks");', $view(':message="page.props.flash.joined" ', "const page = usePage();\n"), $routes, []],
     ];
 });
+
+/**
+ * A made-up app on Laravel Fortify: Fortify registers the guest routes from vendor/, so the proof reads the app's bound response, config/fortify.php,
+ * its view registration and (for kit's session-ui) kit's provider instead of the route roots.
+ *
+ * @param  array<string, ?string>  $files  base-relative path => contents (null removes a default file)
+ */
+function fortifyApp(string $base, array $files): void
+{
+    $defaults = [
+        'bootstrap/app.php' => guestBootstrap('$middleware->web(append: [\App\Http\Middleware\HandleInertiaRequests::class]);'),
+        'routes/web.php' => '<?php use Illuminate\Support\Facades\Route; use App\HomeController; Route::get("/", HomeController::class)->name("home");',
+        'config/fortify.php' => fortifyConfig(),
+        'app/Providers/FortifyServiceProvider.php' => fortifyProvider(
+            '$this->app->singleton(SuccessfulPasswordResetLinkRequestResponse::class, ResetLinkSent::class);',
+            'Fortify::requestPasswordResetLinkView(fn () => Inertia::render("Auth/ForgotPassword"));',
+        ),
+        'resources/js/pages/Auth/ForgotPassword.vue' => "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit';\n</script>\n<template>\n    <FormStatus :message=\"\$page.flash.status\" />\n</template>\n",
+    ];
+    foreach (array_replace($defaults, $files) as $path => $source) {
+        if ($source === null) {
+            continue;
+        }
+        is_dir(dirname($base.'/'.$path)) || mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $source);
+    }
+}
+
+function fortifyConfig(string $features = 'Features::resetPasswords()', string $middleware = '["web"]', string $extra = ''): string
+{
+    return '<?php use Laravel\Fortify\Features; return ["guard" => "web", "prefix" => "", "middleware" => '.$middleware.', "views" => true, '.$extra.'"features" => ['.$features.']];';
+}
+
+function fortifyProvider(string $register, string $boot): string
+{
+    return '<?php namespace App\Providers; use App\Http\Responses\ResetLinkSent; use Inertia\Inertia; use Laravel\Fortify\Fortify; '
+        .'use Laravel\Fortify\Contracts\SuccessfulPasswordResetLinkRequestResponse; use Laravel\Fortify\Contracts\FailedPasswordResetLinkRequestResponse; '
+        .'use Laravel\Fortify\Contracts\PasswordResetResponse; use Laravel\Fortify\Contracts\EmailVerificationNotificationSentResponse; '
+        .'class FortifyServiceProvider { public function register(): void { '.$register.' } public function boot(): void { '.$boot.' } }';
+}
+
+test('a Fortify guest flow\'s bound response flashes without a toast only when its config, middleware and page are provable', function (string $response, array $files, array $options, array $checks) {
+    fortifyApp($this->backendBase, $files);
+    $class = 'namespace App\Http\Responses; use Inertia\Inertia; class ResetLinkSent { public function toResponse($request) { '.$response.' } }';
+    $found = array_column(($this->backend)('toast', $class, ['pageRoots' => ['resources/js/pages'], ...$options], 'src/Controllers/ResetLinkSent.php'), 'check');
+    expect($found)->toBe($checks);
+})->with(function () {
+    $sent = 'return back()->with("status", "We emailed you a reset link.");';
+    $toastable = 'flash outcomes through Toastable, not session keys';
+    $bind = fn (string $contract): string => '$this->app->singleton('.$contract.'::class, ResetLinkSent::class);';
+    $kitPage = "<script setup lang=\"ts\">\nimport { Form } from '@inertiajs/vue3';\nimport { Button, FormStatus } from '@kit/ui';\n</script>\n<template>\n    <Form action=\"/forgot-password\" method=\"post\">\n        <FormStatus data-reset-link-sent />\n        <Button type=\"submit\">Email me a reset link</Button>\n    </Form>\n</template>\n";
+    $kitProvider = '<?php namespace Tey\Kit\Features\SessionUi; use Inertia\Inertia; use Laravel\Fortify\Fortify; use Tey\Kit\Features\SessionUi\ViewModels\ChallengeViewModel; use Tey\Kit\Features\SessionUi\ViewModels\LoginViewModel; '
+        .'final class SessionUiProvider { public function boot(): void { '
+        .'Fortify::loginView(fn () => Inertia::render("Auth/Login/Page", new LoginViewModel("Sign in", session("status")))); '
+        .'Fortify::requestPasswordResetLinkView(fn () => Inertia::render("Auth/ForgotPassword/Page", new ChallengeViewModel("Reset your password", session("status")))); } }';
+    $kit = [
+        'app/Providers/FortifyServiceProvider.php' => fortifyProvider($bind('SuccessfulPasswordResetLinkRequestResponse'), ''),
+        'config/kit.php' => '<?php return ["features" => ["core", "shell", "session-ui"]];',
+        'vendor/tey/kit/src/Features/SessionUi/SessionUiProvider.php' => $kitProvider,
+        'resources/js/pages/Auth/ForgotPassword/Page.vue' => $kitPage,
+    ];
+    $reads = fn (string $message): string => "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit';\n</script>\n<template>\n    <FormStatus :message=\"{$message}\" />\n</template>\n";
+    $unsafe = guestBootstrap('$middleware->web(append: [\App\Http\Middleware\HandleInertiaRequests::class, \App\Http\Middleware\TrackVisit::class]);');
+    $track = '<?php namespace App\Http\Middleware; class TrackVisit { public function handle($request, $next) { return $next($request); } }';
+
+    return [
+        'a bound response whose page reads the key' => [$sent, [], [], []],
+        // Fortify's own wantsJson() shape: the JSON branch is ignored, the redirect branch read as usual.
+        'the wantsJson() ternary' => ['return $request->wantsJson() ? new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200) : back()->with("status", "Sent");', [], [], []],
+        'the negated, reversed wantsJson() ternary' => ['return ! $request->wantsJson() ? back()->with("status", "Sent") : new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200);', [], [], []],
+        'the wantsJson() ternary, key not read' => ['return $request->wantsJson() ? new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200) : back()->with("status", "Sent");', ['resources/js/pages/Auth/ForgotPassword.vue' => $reads('$page.flash.notice')], [], [$toastable]],
+        'a ternary on another condition' => ['return $request->ajax() ? new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200) : back()->with("status", "Sent");', [], [], [$toastable]],
+        'expectsJson(), which Fortify does not use here' => ['return $request->expectsJson() ? new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200) : back()->with("status", "Sent");', [], [], [$toastable]],
+        'a wantsJson() ternary on another variable' => ['return request()->wantsJson() ? new \Illuminate\Http\JsonResponse(["message" => "Sent"], 200) : back()->with("status", "Sent");', [], [], [$toastable]],
+        'a response()->json() branch' => ['return $request->wantsJson() ? response()->json(["message" => "Sent"]) : back()->with("status", "Sent");', [], [], [$toastable]],
+        'the redirect in the JSON position' => ['return $request->wantsJson() ? back()->with("status", "Sent") : new \Illuminate\Http\JsonResponse([], 200);', [], [], [$toastable]],
+        'an if-form, which Fortify does not use here' => ['if ($request->wantsJson()) { return new \Illuminate\Http\JsonResponse([], 200); } return back()->with("status", "Sent");', [], [], [$toastable]],
+        'a closure registration returning only the render' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider($bind('SuccessfulPasswordResetLinkRequestResponse'), 'Fortify::requestPasswordResetLinkView(function () { return Inertia::render("Auth/ForgotPassword"); });')], [], []],
+        'a top-level Inertia::flash key read with the status' => ['Inertia::flash("ref", "A-1"); return back()->with("status", "Sent");', ['resources/js/pages/Auth/ForgotPassword.vue' => $reads('$page.flash.status ?? $page.flash.ref')], [], []],
+        'a top-level Inertia::flash key the page does not read' => ['Inertia::flash("ref", "A-1"); return back()->with("status", "Sent");', [], [], [$toastable]],
+        'the key not read' => [$sent, ['resources/js/pages/Auth/ForgotPassword.vue' => $reads('$page.flash.notice')], [], [$toastable]],
+        'a bare app FormStatus does not read the flash' => [$sent, ['resources/js/pages/Auth/ForgotPassword.vue' => "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit';\n</script>\n<template>\n    <FormStatus />\n</template>\n"], [], [$toastable]],
+        // kit's session-ui registers the page itself.
+        'a bound response with kit\'s ForgotPassword page' => [$sent, $kit, [], []],
+        'kit\'s page with a key other than status' => ['return back()->with("status", "Sent")->with("notice", "Sent");', $kit, [], [$toastable]],
+        'kit\'s page without session-ui adopted' => [$sent, [...$kit, 'config/kit.php' => '<?php return ["features" => ["core", "shell"]];'], [], [$toastable]],
+        'kit\'s registration not passing session("status")' => [$sent, [...$kit, 'vendor/tey/kit/src/Features/SessionUi/SessionUiProvider.php' => str_replace('session("status")', 'null', $kitProvider)], [], [$toastable]],
+        'kit\'s page with FormStatus given a message' => [$sent, [...$kit, 'resources/js/pages/Auth/ForgotPassword/Page.vue' => str_replace('<FormStatus data-reset-link-sent />', '<FormStatus :message="null" />', $kitPage)], [], [$toastable]],
+        'kit\'s provider missing from vendor' => [$sent, [...$kit, 'vendor/tey/kit/src/Features/SessionUi/SessionUiProvider.php' => null], [], [$toastable]],
+        // The view registration.
+        'a non-literal view' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider($bind('SuccessfulPasswordResetLinkRequestResponse'), 'Fortify::requestPasswordResetLinkView(fn () => Inertia::render($this->page));')], [], [$toastable]],
+        'a string view' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider($bind('SuccessfulPasswordResetLinkRequestResponse'), 'Fortify::requestPasswordResetLinkView("auth.forgot-password");')], [], [$toastable]],
+        'two view registrations' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider($bind('SuccessfulPasswordResetLinkRequestResponse'), 'Fortify::requestPasswordResetLinkView(fn () => Inertia::render("Auth/ForgotPassword")); Fortify::requestPasswordResetLinkView(fn () => Inertia::render("Auth/Other"));')], [], [$toastable]],
+        'Fortify::viewPrefix' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider($bind('SuccessfulPasswordResetLinkRequestResponse'), 'Fortify::viewPrefix("auth."); Fortify::requestPasswordResetLinkView(fn () => Inertia::render("Auth/ForgotPassword"));')], [], [$toastable]],
+        'Fortify::ignoreRoutes' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider('Fortify::ignoreRoutes(); '.$bind('SuccessfulPasswordResetLinkRequestResponse'), 'Fortify::requestPasswordResetLinkView(fn () => Inertia::render("Auth/ForgotPassword"));')], [], [$toastable]],
+        // The binding.
+        'no binding' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider('', 'Fortify::requestPasswordResetLinkView(fn () => Inertia::render("Auth/ForgotPassword"));')], [], [$toastable]],
+        'bound to a failure contract' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider($bind('FailedPasswordResetLinkRequestResponse'), 'Fortify::requestPasswordResetLinkView(fn () => Inertia::render("Auth/ForgotPassword"));')], [], [$toastable]],
+        'a second, closure binding of the contract' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider($bind('SuccessfulPasswordResetLinkRequestResponse').' $this->app->bind(SuccessfulPasswordResetLinkRequestResponse::class, fn () => new ResetLinkSent);', 'Fortify::requestPasswordResetLinkView(fn () => Inertia::render("Auth/ForgotPassword"));')], [], [$toastable]],
+        'bound through app() instead of $this->app' => [$sent, ['app/Providers/FortifyServiceProvider.php' => fortifyProvider('app()->singleton(SuccessfulPasswordResetLinkRequestResponse::class, ResetLinkSent::class);', 'Fortify::requestPasswordResetLinkView(fn () => Inertia::render("Auth/ForgotPassword"));')], [], [$toastable]],
+        // config/fortify.php.
+        'resetPasswords() disabled' => [$sent, ['config/fortify.php' => fortifyConfig('Features::updatePasswords()')], [], [$toastable]],
+        'resetPasswords() commented out' => [$sent, ['config/fortify.php' => fortifyConfig('// Features::resetPasswords(),'."\n")], [], [$toastable]],
+        'a non-literal fortify.middleware' => [$sent, ['config/fortify.php' => fortifyConfig(middleware: 'explode(",", env("FORTIFY_MIDDLEWARE", "web"))')], [], [$toastable]],
+        'auth in fortify.middleware' => [$sent, ['config/fortify.php' => fortifyConfig(middleware: '["web", "auth"]')], [], [$toastable]],
+        'throttle in fortify.middleware' => [$sent, ['config/fortify.php' => fortifyConfig(middleware: '["web", "throttle:6,1"]')], [], []],
+        'a non-literal prefix' => [$sent, ['config/fortify.php' => fortifyConfig(extra: '"prefix" => env("FORTIFY_PREFIX", ""), ')], [], [$toastable]],
+        'a non-literal guard' => [$sent, ['config/fortify.php' => str_replace('"guard" => "web"', '"guard" => env("AUTH_GUARD")', fortifyConfig())], [], [$toastable]],
+        'views off' => [$sent, ['config/fortify.php' => str_replace('"views" => true', '"views" => false', fortifyConfig())], [], [$toastable]],
+        'no config/fortify.php' => [$sent, ['config/fortify.php' => null], [], [$toastable]],
+        'an app route taking the forgot-password URI' => [$sent, ['routes/web.php' => '<?php use Illuminate\Support\Facades\Route; use App\HomeController; Route::get("/forgot-password", HomeController::class);'], [], [$toastable]],
+        'a literal fortify.paths override the app route does not collide with' => [$sent, ['config/fortify.php' => fortifyConfig(extra: '"paths" => ["password.request" => "/account/forgot"], '), 'routes/web.php' => '<?php use Illuminate\Support\Facades\Route; use App\HomeController; Route::get("/forgot-password", HomeController::class);'], [], [$toastable]],
+        // bootstrap/app.php web appends.
+        'an undeclared app middleware appended to web' => [$sent, ['bootstrap/app.php' => $unsafe, 'app/Http/Middleware/TrackVisit.php' => $track], [], [$toastable]],
+        'the same middleware declared guest-safe' => [$sent, ['bootstrap/app.php' => $unsafe, 'src/Middleware/TrackVisit.php' => $track], ['guestSafeMiddleware' => [['middleware' => 'App\Http\Middleware\TrackVisit', 'reason' => 'counts page views; signs no one in']]], []],
+        // The verification notification is sent from behind auth: signed in, never exempt.
+        'the email verification flow' => [$sent, [
+            'config/fortify.php' => fortifyConfig('Features::resetPasswords(), Features::emailVerification()'),
+            'app/Providers/FortifyServiceProvider.php' => fortifyProvider($bind('EmailVerificationNotificationSentResponse'), 'Fortify::verifyEmailView(fn () => Inertia::render("Auth/ForgotPassword"));'),
+        ], [], [$toastable]],
+    ];
+});
+
+test('a bound Fortify password reset response may land on the login page by its literal route name', function (string $response, array $files, array $checks) {
+    $login = "<script setup lang=\"ts\">\nimport { FormStatus } from '@/components/Kit';\n</script>\n<template>\n    <FormStatus :message=\"\$page.flash.status\" />\n</template>\n";
+    fortifyApp($this->backendBase, [
+        'app/Providers/FortifyServiceProvider.php' => fortifyProvider('$this->app->singleton(PasswordResetResponse::class, ResetLinkSent::class);', 'Fortify::loginView(fn () => Inertia::render("Auth/Login")); Fortify::resetPasswordView(fn ($request) => Inertia::render("Auth/Reset", ["token" => $request->route("token")]));'),
+        'resources/js/pages/Auth/Login.vue' => $login,
+        'resources/js/pages/Auth/Reset.vue' => "<template>\n    <form />\n</template>\n",
+        ...$files,
+    ]);
+    $class = 'namespace App\Http\Responses; class ResetLinkSent { public function toResponse($request) { '.$response.' } }';
+    $found = array_column(($this->backend)('toast', $class, ['pageRoots' => ['resources/js/pages']], 'src/Controllers/ResetLinkSent.php'), 'check');
+    expect($found)->toBe($checks);
+})->with([
+    'to_route("login"), the login page reads status' => ['return to_route("login")->with("status", "Your password was reset.");', [], []],
+    'back() to the reset page, which has no FormStatus' => ['return back()->with("status", "Your password was reset.");', [], ['flash outcomes through Toastable, not session keys']],
+    'a name Fortify does not register as a page' => ['return to_route("home")->with("status", "Your password was reset.");', [], ['flash outcomes through Toastable, not session keys']],
+    'an app route also named login' => ['return to_route("login")->with("status", "Your password was reset.");', ['routes/web.php' => '<?php use Illuminate\Support\Facades\Route; use App\HomeController; Route::get("/sign-in", HomeController::class)->name("login");'], ['flash outcomes through Toastable, not session keys']],
+]);

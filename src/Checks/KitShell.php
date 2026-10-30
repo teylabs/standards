@@ -66,8 +66,13 @@ final class KitShell
         return [...$this->resolvers($config->base, $roots, $kit), ...$this->headers($config->base, $roots, $kit)];
     }
 
-    /** Whether the app adopted kit's shell: a literal `kit.features` list decides; else the installed lineage records. */
-    public static function adopted(string $base): bool
+    /**
+     * Whether the app adopted kit's shell (or, given other lists, another kit feature): a literal `kit.features` list decides; else the installed lineage records.
+     *
+     * @param  list<string>  $features  `kit.features` ids, any of which adopts it
+     * @param  list<string>  $lineages  tey/mod lineage names, any of which adopts it
+     */
+    public static function adopted(string $base, array $features = self::FEATURES, array $lineages = self::LINEAGES): bool
     {
         $file = $base.'/config/kit.php';
         if (is_file($file) && ! is_link($file) && is_readable($file)) {
@@ -75,7 +80,7 @@ final class KitShell
             if (preg_match("~(['\"])features\\1\\s*=>\\s*\\[([^\\]]*)\\]~", $source, $list)) {
                 preg_match_all("~(['\"])([a-z0-9-]+)\\1~", $list[2], $ids);
 
-                return array_intersect(self::FEATURES, $ids[2]) !== [];
+                return array_intersect($features, $ids[2]) !== [];
             }
         }
         $records = glob($base.'/'.KitOwnership::RECORDS.'/*.json') ?: [];
@@ -88,7 +93,7 @@ final class KitShell
             }
             $data = json_decode((string) @file_get_contents($record), true);
             if (is_array($data) && ($data['format'] ?? null) === 1 && ($data['owner'] ?? null) === 'tey/mod:installed'
-                && in_array($data['artifact']['name'] ?? null, self::LINEAGES, true)) {
+                && in_array($data['artifact']['name'] ?? null, $lineages, true)) {
                 return true;
             }
         }
