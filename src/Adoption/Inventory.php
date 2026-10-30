@@ -40,6 +40,7 @@ final readonly class Inventory
      * @param  array{composer: string, npm?: string, alias?: string}  $package
      * @param  array<string, array{description: string, computed: array<string, mixed>}>  $facts  id => definition
      * @param  list<array<string, mixed>>  $surfaces
+     * @param  array<string, array{npm: list<string>, hostUi: list<string>, composer: list<string>}>  $features  feature id => what it brings
      */
     private function __construct(public string $source, public string $origin, public array $package, public array $facts, public array $surfaces, public array $features = []) {}
 
@@ -193,7 +194,8 @@ final readonly class Inventory
         }
 
         // Optional: what each feature brings into the app, so the scan treats it as the package's own when that feature is installed.
-        // `npm` names packages (or `@scope/*` globs) the feature requires; `hostUi` names the UI primitives it installs under HOST_UI_ROOT.
+        // `npm` names packages (or `@scope/*` globs) the feature requires; `hostUi` names the UI primitives it installs under HOST_UI_ROOT;
+        // `composer` names the composer packages the feature requires (never a hand-rolled `composer` signal while that feature is installed).
         $features = [];
         if (array_key_exists('features', $data)) {
             $map = self::object($data['features'], $at('features'));
@@ -201,11 +203,11 @@ final readonly class Inventory
                 $where = $at("features.{$id}");
                 self::slug((string) $id, $where);
                 $feature = self::object($feature, $where);
-                self::fields($feature, ['npm', 'hostUi'], [], $where);
+                self::fields($feature, ['npm', 'hostUi', 'composer'], [], $where);
                 foreach ($feature as $key => $values) {
                     self::items($values, "{$where}.{$key}");
                 }
-                $features[(string) $id] = ['npm' => $feature['npm'] ?? [], 'hostUi' => $feature['hostUi'] ?? []];
+                $features[(string) $id] = ['npm' => $feature['npm'] ?? [], 'hostUi' => $feature['hostUi'] ?? [], 'composer' => $feature['composer'] ?? []];
             }
         }
 

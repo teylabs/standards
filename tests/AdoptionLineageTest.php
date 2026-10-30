@@ -56,11 +56,14 @@ function lineageCleanup(string $base): void
     rmdir($base);
 }
 
-/** @param list<string> $adoptedTables kit_adoptions rows (empty: an empty database) */
-function lineageRow(string $base, array $adoptedTables = []): array
+/**
+ * @param  list<string>  $adoptedTables  kit_adoptions rows (empty: an empty database)
+ * @param  array<string, mixed>|null  $features  the inventory's optional `features` block
+ */
+function lineageRow(string $base, array $adoptedTables = [], ?array $features = null): array
 {
     try {
-        $inventory = Inventory::fromArray(['format' => 1, 'package' => ['composer' => 'tey/kit', 'alias' => '@/components/Kit'], 'facts' => [], 'nonSurfaces' => [], 'surfaces' => [[
+        $inventory = Inventory::fromArray(($features === null ? [] : ['features' => $features]) + ['format' => 1, 'package' => ['composer' => 'tey/kit', 'alias' => '@/components/Kit'], 'facts' => [], 'nonSurfaces' => [], 'surfaces' => [[
             'id' => 'workspaces.tenancy', 'layer' => 'backend', 'group' => 'workspace', 'label' => 'Workspaces', 'feature' => 'workspaces', 'applies' => true,
             'uses' => ['classes' => ['Tey\\Kit\\Features\\Workspaces\\Concerns\\IsKitWorkspace']],
             'handRolled' => [['kind' => 'migration', 'tables' => ['teams', 'workspaces']], ['kind' => 'composer', 'packages' => ['stancl/tenancy', 'spatie/laravel-multitenancy']]],
@@ -125,4 +128,25 @@ test('a lineage without adopt metadata still adopts a table its recorded migrati
 
     expect($row['status'])->toBe('adopted')
         ->and($row['matches'][0]['detail'])->toStartWith('creates table workspaces, created by lineage tey/kit:workspaces');
+});
+
+test('kit\'s composer.lock carrying multitenancy only in require-dev: the installed workspaces feature\'s inventory composer list exempts it', function () {
+    $features = ['workspaces' => ['composer' => ['spatie/laravel-multitenancy']]];
+    $row = lineageRow(lineageApp(kitRequiresMultitenancy: false), features: $features);
+
+    expect($row['status'])->toBe('adopted')
+        ->and($row['signals'])->toBe([])
+        ->and($row['note'])->toContain('spatie/laravel-multitenancy required by tey/kit itself (lineage tey/kit:workspaces installed)');
+});
+
+test('a feature composer list does not exempt the dependency when that feature is not installed', function () {
+    $features = ['workspaces' => ['composer' => ['spatie/laravel-multitenancy']]];
+    $uninstalled = lineageRow(lineageApp([lineageRecordPath() => null], kitRequiresMultitenancy: false), features: $features);
+    // Lineage installed, but the package declared only by a different feature that is not installed.
+    $otherFeature = lineageRow(lineageApp(kitRequiresMultitenancy: false), features: ['billing' => ['composer' => ['spatie/laravel-multitenancy']]]);
+
+    expect($uninstalled['status'])->toBe('hand-rolled')
+        ->and(array_column($uninstalled['signals'], 'detail'))->toBe(['creates table workspaces', 'requires spatie/laravel-multitenancy'])
+        ->and($otherFeature['status'])->toBe('hand-rolled')
+        ->and(array_column($otherFeature['signals'], 'detail'))->toBe(['requires spatie/laravel-multitenancy']);
 });

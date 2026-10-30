@@ -818,6 +818,8 @@ test('a declared library with an empty reason, or one a surface replaces, is ref
 test('inventory features: an unknown key or an empty list is a schema error', function () {
     expect(fn () => Inventory::fromArray(adoptionInventory(['*' => ['features' => ['core' => ['peer' => ['x']]]]]), 'kit.json'))->toThrow(AdoptionError::class, 'features.core')
         ->and(fn () => Inventory::fromArray(adoptionInventory(['*' => ['features' => ['core' => ['npm' => []]]]]), 'kit.json'))->toThrow(AdoptionError::class, 'features.core.npm must be a non-empty list')
+        ->and(fn () => Inventory::fromArray(adoptionInventory(['*' => ['features' => ['core' => ['composer' => []]]]]), 'kit.json'))->toThrow(AdoptionError::class, 'features.core.composer must be a non-empty list')
+        ->and(Inventory::fromArray(adoptionInventory(['*' => ['features' => ['workspaces' => ['composer' => ['spatie/laravel-multitenancy']]]]]), 'kit.json')->features['workspaces'])->toBe(['npm' => [], 'hostUi' => [], 'composer' => ['spatie/laravel-multitenancy']])
         ->and(Lists::tooling('vite-plus'))->toBeTrue();
 });
 
