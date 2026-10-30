@@ -41,7 +41,16 @@ final readonly class Inventory
      * @param  array<string, array{description: string, computed: array<string, mixed>}>  $facts  id => definition
      * @param  list<array<string, mixed>>  $surfaces
      */
-    private function __construct(public string $source, public string $origin, public array $package, public array $facts, public array $surfaces) {}
+    private function __construct(public string $source, public string $origin, public array $package, public array $facts, public array $surfaces, public array $features = []) {}
+
+    /** Where a `hostUi` entry lives, as tey/kit's HostRequirements reads a feature's `host_ui`: `button` is `<root>/button/**`, `spinner/Spinner.vue` that one file. */
+    public const HOST_UI_ROOT = 'resources/js/components/ui';
+
+    /** @return list<string> the path globs a feature's `hostUi` entries name, under HOST_UI_ROOT */
+    public static function hostUiGlobs(array $entries): array
+    {
+        return array_map(fn (string $entry): string => self::HOST_UI_ROOT.'/'.(str_contains($entry, '/') ? $entry : $entry.'/**'), $entries);
+    }
 
     public function composer(): string
     {
@@ -75,7 +84,7 @@ final readonly class Inventory
         if (! array_key_exists('format', $data) || $data['format'] !== 1) {
             throw new AdoptionError($at('unknown format '.json_encode($data['format'] ?? null).'; this standards reads format 1 only'));
         }
-        self::fields($data, ['format', 'package', 'facts', 'surfaces', 'nonSurfaces'], ['format', 'package', 'facts', 'surfaces', 'nonSurfaces'], $at('the file'));
+        self::fields($data, ['format', 'package', 'facts', 'surfaces', 'nonSurfaces', 'features'], ['format', 'package', 'facts', 'surfaces', 'nonSurfaces'], $at('the file'));
 
         $package = self::object($data['package'], $at('package'));
         self::fields($package, ['composer', 'npm', 'alias'], ['composer'], $at('package'));
@@ -183,8 +192,25 @@ final readonly class Inventory
             self::string($entry['reason'], $at("nonSurfaces[{$index}].reason"));
         }
 
+        // Optional: what each feature brings into the app, so the scan treats it as the package's own when that feature is installed.
+        // `npm` names packages (or `@scope/*` globs) the feature requires; `hostUi` names the UI primitives it installs under HOST_UI_ROOT.
+        $features = [];
+        if (array_key_exists('features', $data)) {
+            $map = self::object($data['features'], $at('features'));
+            foreach ($map as $id => $feature) {
+                $where = $at("features.{$id}");
+                self::slug((string) $id, $where);
+                $feature = self::object($feature, $where);
+                self::fields($feature, ['npm', 'hostUi'], [], $where);
+                foreach ($feature as $key => $values) {
+                    self::items($values, "{$where}.{$key}");
+                }
+                $features[(string) $id] = ['npm' => $feature['npm'] ?? [], 'hostUi' => $feature['hostUi'] ?? []];
+            }
+        }
+
         /** @var array{composer: string, npm?: string, alias?: string} $package */
-        return new self($source, $origin, $package, $facts, $surfaces);
+        return new self($source, $origin, $package, $facts, $surfaces, $features);
     }
 
     /** @param array<string, mixed> $signal */

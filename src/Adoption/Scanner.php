@@ -206,6 +206,29 @@ final class Scanner
                 $blocking['ci'][] = $item;
             }
         }
+        // Declared libraries (Configuration::$declaredLibraries): reported with their reason and evidence, never a gap; a refused one blocks.
+        $declared = [];
+        foreach ($this->declaredLibraries()['valid'] as $library => $reason) {
+            $files = [];
+            if (array_key_exists($library, $this->app->npmPackages())) {
+                $files[] = self::evidence('package.json', null, 'depends on '.$library);
+            }
+            foreach ($this->owned($this->app->frontend()) as $path) {
+                $source = $this->app->source($path);
+                foreach (Code::imports($source) as $import) {
+                    if ($import['module'] === $library || str_starts_with($import['module'], $library.'/')) {
+                        $files[] = self::evidence($path, App::line($source, $import['offset']), 'imports '.$import['module']);
+                        break;
+                    }
+                }
+            }
+            $declared[] = ['subject' => 'npm:'.$library, 'kind' => 'declared', 'library' => $library, 'reason' => $reason, 'files' => $files];
+        }
+        foreach ($this->declaredLibraries()['refused'] as $entry) {
+            $item = ['kind' => 'declared', 'package' => null, 'subject' => 'npm:'.(is_string($entry['library']) ? $entry['library'] : json_encode($entry['library'])), 'evidence' => [self::where(self::evidence($this->configurationFile ?? 'tests/Arch/configuration.php', null, 'declaredLibraries'))], 'expects' => null, 'cause' => null, 'problem' => $entry['problem']];
+            $blocking['ci'][] = $item;
+            $blocking['compliance'][] = $item;
+        }
         foreach ([...$invalid, ...$unused] as $entry) {
             $item = ['kind' => 'exempt', 'package' => null, 'subject' => $entry['rule'].' '.$entry['target'], 'evidence' => [self::where($entry)], 'expects' => null, 'cause' => null, 'problem' => $entry['problem']];
             $blocking['ci'][] = $item;
@@ -257,6 +280,7 @@ final class Scanner
                 return $row;
             }, $rows),
             'gaps' => $gaps,
+            'declared' => $declared,
             'exemptions' => ['invalid' => $invalid, 'stale' => $unused],
             'warnings' => $warnings,
             'summary' => $summary,
@@ -744,7 +768,8 @@ final class Scanner
     {
         $own = array_values(array_filter([$this->app->npmName(), ...array_map(fn (Inventory $inventory): ?string => $inventory->package['npm'] ?? null, $this->inventories)]));
         $local = ['.', '/', '#', '@/', '~/', ...($this->config?->frontendAliases ?? []), ...self::KIT_ALIASES, ...array_values(array_filter(array_map(fn (Inventory $inventory): ?string => $inventory->package['alias'] ?? null, $this->inventories)))];
-        $thirdParty = function (string $module) use ($own, $local): ?string {
+        $declared = $this->declaredLibraries()['valid'];
+        $thirdParty = function (string $module) use ($own, $local, $declared): ?string {
             foreach ($local as $prefix) {
                 if ($module === rtrim($prefix, '/') || str_starts_with($module, $prefix)) {
                     return null;
@@ -753,7 +778,7 @@ final class Scanner
             $parts = explode('/', $module);
             $package = str_starts_with($module, '@') ? implode('/', array_slice($parts, 0, 2)) : $parts[0];
 
-            return in_array($package, $own, true) || Lists::runtime($package) || Lists::nonUi($package) ? null : $package;
+            return in_array($package, $own, true) || $this->featureNpm($package) || isset($declared[$package]) || Lists::runtime($package) || Lists::nonUi($package) ? null : $package;
         };
 
         $mapped = [];
@@ -819,7 +844,7 @@ final class Scanner
         $npm = array_keys($this->app->npmPackages());
         sort($npm);
         foreach ($npm as $package) {
-            if (in_array($package, $own, true) || Lists::runtime($package) || Lists::tooling($package) || Lists::nonUi($package) || $thirdParty($package) === null) {
+            if (in_array($package, $own, true) || $this->featureNpm($package) || isset($declared[$package]) || Lists::runtime($package) || Lists::tooling($package) || Lists::nonUi($package) || $thirdParty($package) === null) {
                 continue;
             }
             $targets = $this->replacing(fn (array $replaces): bool => in_array($package, array_map(fn (string $entry): string => explode('#', $entry, 2)[0], $replaces['npm'] ?? []), true));
@@ -839,6 +864,43 @@ final class Scanner
         }
 
         return ['mapped' => $mapped, 'gaps' => array_values($gaps)];
+    }
+
+    /** @var array{valid: array<string, string>, refused: list<array{library: mixed, reason: mixed, problem: string}>}|null */
+    private ?array $declared = null;
+
+    /**
+     * The configuration's `declaredLibraries`: valid entries (library => reason) and refused ones with the reason they declare nothing. A library
+     * a surface `replaces` can't be declared away: the package ships its replacement.
+     *
+     * @return array{valid: array<string, string>, refused: list<array{library: mixed, reason: mixed, problem: string}>}
+     */
+    private function declaredLibraries(): array
+    {
+        if ($this->declared !== null) {
+            return $this->declared;
+        }
+        $valid = [];
+        $refused = [];
+        foreach ($this->config?->declaredLibraries ?? [] as $entry) {
+            $library = is_array($entry) ? ($entry['library'] ?? null) : null;
+            $reason = is_array($entry) ? ($entry['reason'] ?? null) : null;
+            $replacing = is_string($library) ? $this->replacing(fn (array $replaces): bool => in_array($library, array_map(fn (string $e): string => explode('#', $e, 2)[0], $replaces['npm'] ?? []), true)) : [];
+            $problem = match (true) {
+                ! is_string($library) || trim($library) === '' => 'declaredLibraries: an entry needs a non-empty string `library`',
+                ! is_string($reason) || trim($reason) === '' => "declaredLibraries: {$library} needs a non-empty reason",
+                isset($valid[$library]) => "declaredLibraries: {$library} is declared twice",
+                $replacing !== [] => "declaredLibraries: {$library} can't be declared; ".implode(', ', $replacing).' replaces it. Adopt the surface, or exempt it with a dated allowlist entry',
+                default => null,
+            };
+            if ($problem === null) {
+                $valid[$library] = $reason;
+            } else {
+                $refused[] = ['library' => $library, 'reason' => $reason, 'problem' => $problem];
+            }
+        }
+
+        return $this->declared = ['valid' => $valid, 'refused' => $refused];
     }
 
     /**
@@ -956,7 +1018,52 @@ final class Scanner
      */
     private function owned(array $paths): array
     {
-        return array_values(array_filter($paths, fn (string $path): bool => ! $this->app->kitOwned($path)));
+        $hostUi = $this->hostUi();
+
+        return array_values(array_filter($paths, fn (string $path): bool => ! $this->app->kitOwned($path) && array_filter($hostUi, fn (string $glob): bool => App::pathGlob($glob, $path)) === []));
+    }
+
+    /** @var array{npm: list<string>, hostUi: list<string>}|null */
+    private ?array $featureOwned = null;
+
+    /**
+     * What the installed features of every inventory bring into the app (an inventory's optional `features`): the npm packages (names or
+     * globs) they require, and the host UI primitive paths they install (Inventory::hostUiGlobs). Both are the package's own, never the app's.
+     *
+     * @return array{npm: list<string>, hostUi: list<string>}
+     */
+    private function featureOwned(): array
+    {
+        if ($this->featureOwned !== null) {
+            return $this->featureOwned;
+        }
+        $npm = [];
+        $hostUi = [];
+        foreach ($this->inventories as $inventory) {
+            if (! self::installedIn($this->app->base, $inventory->composer())) {
+                continue;
+            }
+            foreach ($inventory->features as $id => $feature) {
+                if ($this->featureInstalled($inventory->composer(), $id)) {
+                    array_push($npm, ...$feature['npm']);
+                    array_push($hostUi, ...Inventory::hostUiGlobs($feature['hostUi']));
+                }
+            }
+        }
+
+        return $this->featureOwned = ['npm' => array_values(array_unique($npm)), 'hostUi' => array_values(array_unique($hostUi))];
+    }
+
+    /** @return list<string> */
+    private function hostUi(): array
+    {
+        return $this->featureOwned()['hostUi'];
+    }
+
+    /** An npm package an installed feature requires (exact name or glob such as `@tiptap/*`). */
+    private function featureNpm(string $package): bool
+    {
+        return array_filter($this->featureOwned()['npm'], fn (string $glob): bool => App::glob($glob, $package)) !== [];
     }
 
     /** Whether the app installs the package: its vendor directory exists, or composer.json requires it. */

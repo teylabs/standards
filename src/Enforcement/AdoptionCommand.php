@@ -137,6 +137,10 @@ final class AdoptionCommand extends Command
             $lines[] = '    none';
         }
 
+        foreach ($report['declared'] ?? [] as $declared) {
+            $lines[] = '    <fg=cyan>declared</>  '.$declared['subject'].' — '.$declared['reason'];
+        }
+
         foreach ([...$report['exemptions']['invalid'], ...$report['exemptions']['stale']] as $entry) {
             $lines[] = "<fg=yellow>!</> allowlist {$entry['rule']} {$entry['target']} ({$entry['file']}".($entry['line'] === null ? '' : ':'.$entry['line']).'): '.$entry['problem'];
         }
