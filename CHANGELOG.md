@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Adoption: a surface's `replaces` takes an optional `except` list of path globs.** It uses the `file-name` signal's `except` semantics and matcher: a component whose name matches the surface's `replaces.components` but whose path matches an `except` glob no longer maps to that surface or makes it hand-rolled, and a generic-name candidate excluded that way and mapped nowhere else is not a gap. So an inventory can leave an app's own UI substrate (`resources/js/components/ui/**`) out of the generic-name scan. `npm` and `composer` mapping are unchanged. A non-list, empty or non-string `except` is a schema error (exit 2).
+
 ## 0.11.51 - 2026-10-29
 
 ### Fixed
