@@ -631,9 +631,10 @@ final class Scanner
             }
         }
         if (str_ends_with($path, '.vue')) {
+            $imports = Code::imports($source);
             foreach (Code::tags($source) as $tag) {
                 foreach ($uses['components'] ?? [] as $component) {
-                    if (Code::tagIs($tag['tag'], $component)) {
+                    if (self::rendersComponent($tag['tag'], $component, $imports)) {
                         return self::evidence($path, App::line($source, $tag['offset']), 'renders <'.$tag['tag'].'> (file name yields to uses)');
                     }
                 }
@@ -675,8 +676,9 @@ final class Scanner
         foreach ($uses['components'] ?? [] as $component) {
             foreach ($this->owned($this->app->vue()) as $path) {
                 $source = $this->app->source($path);
+                $imports = Code::imports($source);
                 foreach (Code::tags($source) as $tag) {
-                    if (Code::tagIs($tag['tag'], $component)) {
+                    if (self::rendersComponent($tag['tag'], $component, $imports)) {
                         $evidence[] = self::evidence($path, App::line($source, $tag['offset']), 'renders <'.$tag['tag'].'>');
                         break;
                     }
@@ -1014,6 +1016,73 @@ final class Scanner
         }
 
         return $export === null || in_array($export, $import['named'], true);
+    }
+
+    /**
+     * Whether a template tag renders a `uses.components` entry. Case-sensitive, PascalCase components only: the tag is the name itself
+     * (`<Button>`), `<Kit.Button>` or `<NS.Button>` for a `* as NS` import of kit, a local binding the file's kit import gives that
+     * component (`import { Button as KButton } from '@/components/Kit'` makes `<KButton>` count), or the kebab-case form of such a
+     * kit-imported binding (`<data-table>` with `import { DataTable } from '@kit/ui'`). A lowercase tag without `-` is a native HTML
+     * element and never counts; it is hand-rolled evidence only, through template-tag signals. Anything ambiguous fails closed: a name
+     * the file binds to a non-kit import, a non-PascalCase entry, or a kebab-case tag no kit import resolves.
+     *
+     * @param  list<array{module: string, named: list<string>, default: ?string, locals: array<string, string>, namespace: ?string}>  $imports
+     */
+    private static function rendersComponent(string $tag, string $component, array $imports): bool
+    {
+        if (preg_match('~\A[A-Z][A-Za-z0-9_]*\z~', $component) !== 1) {
+            return false;
+        }
+        $kitLocals = [];
+        $kitNamespaces = ['Kit'];
+        $otherBindings = [];
+        foreach ($imports as $import) {
+            $bindings = [...array_keys($import['locals']), ...($import['default'] === null ? [] : [$import['default']]), ...($import['namespace'] === null ? [] : [$import['namespace']])];
+            if (! self::kitModule($import['module'])) {
+                array_push($otherBindings, ...$bindings);
+
+                continue;
+            }
+            if (self::importsExport(self::KIT_ALIASES[0], $component, $import)) {
+                foreach ($import['locals'] as $local => $imported) {
+                    if ($imported === $component) {
+                        $kitLocals[] = $local;
+                    }
+                }
+                if ($import['default'] !== null && ! in_array($import['module'], self::KIT_ALIASES, true)) {
+                    $kitLocals[] = $import['default'];
+                }
+            }
+            if ($import['namespace'] !== null) {
+                $kitNamespaces[] = $import['namespace'];
+            }
+        }
+        if (in_array($tag, $kitLocals, true)) {
+            return true;
+        }
+        if ($tag === $component) {
+            return ! in_array($component, $otherBindings, true);
+        }
+        if (preg_match('~\A([A-Z][\w$]*)\.([A-Z][\w$]*)\z~', $tag, $parts) === 1) {
+            return $parts[2] === $component && in_array($parts[1], $kitNamespaces, true) && ! in_array($parts[1], $otherBindings, true);
+        }
+        if (str_contains($tag, '-') && $tag === strtolower($tag)) {
+            return in_array(Code::pascal($tag), $kitLocals, true);
+        }
+
+        return false;
+    }
+
+    /** Whether a module specifier is kit: one of KIT_ALIASES or a module under one. */
+    private static function kitModule(string $module): bool
+    {
+        foreach (self::KIT_ALIASES as $alias) {
+            if ($module === $alias || str_starts_with($module, $alias.'/')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param array{module: string, named: list<string>, default: ?string} $import */

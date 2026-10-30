@@ -10,7 +10,10 @@ final class Code
     /**
      * Static `import ... from 'module'` and bare `import 'module'` statements (Vue `<script>` blocks included). Type-only imports count.
      *
-     * @return list<array{module: string, named: list<string>, default: ?string, offset: int}> named holds the exported names
+     * `named` holds the exported names, `locals` maps each local binding to the name it imports (`{ Button as KButton }` gives
+     * `KButton => Button`), and `namespace` is the `* as Name` binding.
+     *
+     * @return list<array{module: string, named: list<string>, default: ?string, offset: int, locals: array<string, string>, namespace: ?string}>
      */
     public static function imports(string $source): array
     {
@@ -18,23 +21,26 @@ final class Code
         preg_match_all('~\bimport\s+(?:type\s+)?([^\'";]*?)\s*\bfrom\s*([\'"])([^\'"]+)\2|\bimport\s*([\'"])([^\'"]+)\4~', self::withoutComments($source), $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
         foreach ($matches as $match) {
             if (isset($match[5]) && $match[5][1] >= 0) {
-                $imports[] = ['module' => $match[5][0], 'named' => [], 'default' => null, 'offset' => $match[0][1]];
+                $imports[] = ['module' => $match[5][0], 'named' => [], 'default' => null, 'offset' => $match[0][1], 'locals' => [], 'namespace' => null];
 
                 continue;
             }
             $clause = trim($match[1][0]);
             $named = [];
+            $locals = [];
             if (preg_match('~\{([^}]*)\}~', $clause, $braces) === 1) {
                 foreach (explode(',', $braces[1]) as $part) {
-                    $name = trim((string) preg_replace('~^type\s+~', '', trim($part)));
-                    $name = trim((string) preg_split('~\s+as\s+~', $name)[0]);
+                    $parts = preg_split('~\s+as\s+~', trim((string) preg_replace('~^type\s+~', '', trim($part))));
+                    $name = trim((string) $parts[0]);
                     if ($name !== '') {
                         $named[] = $name;
+                        $locals[trim((string) ($parts[1] ?? $name))] = $name;
                     }
                 }
             }
             $default = preg_match('~\A([A-Za-z_$][\w$]*)\s*(?:,|\z)~', $clause, $first) === 1 ? $first[1] : null;
-            $imports[] = ['module' => $match[3][0], 'named' => $named, 'default' => $default, 'offset' => $match[0][1]];
+            $namespace = preg_match('~\*\s*as\s+([A-Za-z_$][\w$]*)~', $clause, $star) === 1 ? $star[1] : null;
+            $imports[] = ['module' => $match[3][0], 'named' => $named, 'default' => $default, 'offset' => $match[0][1], 'locals' => $locals, 'namespace' => $namespace];
         }
 
         return $imports;

@@ -5,6 +5,7 @@
 ### Fixed
 
 - **Adoption: a surface's `replaces` takes an optional `except` list of path globs.** It uses the `file-name` signal's `except` semantics and matcher: a component whose name matches the surface's `replaces.components` but whose path matches an `except` glob no longer maps to that surface or makes it hand-rolled, and a generic-name candidate excluded that way and mapped nowhere else is not a gap. So an inventory can leave an app's own UI substrate (`resources/js/components/ui/**`) out of the generic-name scan. `npm` and `composer` mapping are unchanged. A non-list, empty or non-string `except` is a schema error (exit 2).
+- **Adoption: `uses.components` no longer reads a native HTML element as adoption.** A component matched its lowercase form, so a native `<button>` counted as adopted kit `Button` and hid hand-rolled UI. `uses.components` now matches case-sensitively, PascalCase entries only, in `uses` and in the `file-name` yield to `uses`: the tag itself (`<Button>`), `<Kit.Button>` or `<NS.Button>` for an `import * as NS` of kit, a local name the file's kit import binds to it (`import { Button as KButton } from '@/components/Kit'` makes `<KButton>` count), or the kebab-case form of such a kit-imported name (`<data-table>` after `import { DataTable } from '@kit/ui'`). A lowercase tag without `-` never counts, a kebab-case tag no kit import resolves no longer counts, and a name the file imports from a non-kit module is not kit. Native tags remain hand-rolled evidence through `template-tag` signals, unchanged.
 
 ## 0.11.51 - 2026-10-29
 
