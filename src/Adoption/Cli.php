@@ -10,7 +10,7 @@ use Tey\Standards\Enforcement\CheckReport;
 /**
  * `bin/standards adoption`: the standards:adoption scan without booting Laravel, for bare trees (a package's adoption fixtures in its CI).
  * Reads the app's tests/Arch/configuration.php when it has one, else the default (null) configuration: frontend under resources/js, pages
- * under any `pages/` directory there; a `{kind: rule}` signal runs its rule on that default, based at --base. `kit_adoptions` is not read (no database), so a migration signal treats every created table as
+ * under any `pages/` directory there; a `{kind: rule}` signal runs its rule on that default, based at --base. `kit_adoptions` is not read (no database), so a migration signal treats every created table the installed lineage records don't adopt or create as
  * hand-rolled. Each JSON row also carries `surface`, `facts` (the facts its `applies` names, with their values) and `row`, the fields of a
  * package's adoption fixture `expected.json`, so the package can diff against it.
  */
