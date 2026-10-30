@@ -167,6 +167,13 @@ final class Toast
         return $this->formStatus ??= new GuestFormStatus($this->config, $this->source);
     }
 
+    private ?FortifyFormStatus $fortifyFormStatus = null;
+
+    private function fortifyFormStatus(): FortifyFormStatus
+    {
+        return $this->fortifyFormStatus ??= new FortifyFormStatus($this->config, $this->source, $this->formStatus());
+    }
+
     /**
      * Whether a `->with(...)` call is part of `return back()->with(...)` in a public method of a class (not in a closure), and
      * GuestFormStatus proves that method a guest form whose page shows every flashed key through `<FormStatus>`.
@@ -189,6 +196,12 @@ final class Toast
         $class = $method instanceof Node\Stmt\ClassMethod ? $method->getAttribute('parent') : null;
         if (! $method instanceof Node\Stmt\ClassMethod || ! $method->isPublic() || ! $class instanceof Node\Stmt\Class_) {
             return false;
+        }
+        // A Fortify response bound by the app: toResponse() is read like an action, its top-level Inertia::flash keys included (FortifyFormStatus).
+        if ($method->name->toLowerString() === 'toresponse' && $return instanceof Node\Stmt\Return_) {
+            $target = self::returnFlashKeys($method, $return);
+
+            return $target !== null && $this->fortifyFormStatus()->proves($class, $method->name->toString(), ...$target);
         }
         $target = GuestFormStatus::redirectFlash($top);
 
