@@ -1,0 +1,6 @@
+{
+    "name": "fixture/replaces-except",
+    "require": {
+        "tey/kit": "^0.7"
+    }
+}

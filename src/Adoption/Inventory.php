@@ -166,9 +166,10 @@ final readonly class Inventory
 
             if (array_key_exists('replaces', $surface)) {
                 $replaces = self::object($surface['replaces'], "{$where}.replaces");
-                self::fields($replaces, ['npm', 'composer', 'components'], [], "{$where}.replaces");
+                self::fields($replaces, ['npm', 'composer', 'components', 'except'], [], "{$where}.replaces");
                 foreach ($replaces as $key => $values) {
-                    self::strings($values, "{$where}.replaces.{$key}");
+                    // `except` takes file-name's `except` rule: a non-empty list of non-empty glob strings.
+                    $key === 'except' ? self::items($values, "{$where}.replaces.except") : self::strings($values, "{$where}.replaces.{$key}");
                 }
             }
 

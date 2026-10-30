@@ -439,7 +439,7 @@ final class Scanner
                 }
                 break;
             case 'file-name':
-                $globMatches = fn (string $glob, string $path): bool => str_contains($glob, '/') ? App::pathGlob($glob, $path) : App::glob($glob, basename($path));
+                $globMatches = self::fileGlob(...);
                 foreach ($this->owned([...$this->app->frontend(), ...$this->app->views()]) as $path) {
                     // `except` removes a file that an include glob matched, with the same glob semantics.
                     if (! $inScope($path) || array_filter($signal['except'] ?? [], fn (string $glob): bool => $globMatches($glob, $path)) !== []) {
@@ -763,11 +763,18 @@ final class Scanner
             }
             $line = $libraries === [] ? null : App::line($source, $libraries[0][1]['offset']);
             $detail = $libraries === [] ? 'generic component name '.$name : 'imports '.implode(', ', array_unique(array_column($libraries, 0)));
-            $targets = $this->replacing(function (array $replaces) use ($name, $libraries): bool {
+            // A name match whose path a surface's `replaces.except` excludes does not map the file to that surface; a generic-name candidate
+            // excluded that way and mapped nowhere else is not a gap either. A third-party import is still read as before.
+            $excluded = false;
+            $targets = $this->replacing(function (array $replaces) use ($name, $path, $libraries, &$excluded): bool {
                 foreach ($replaces['components'] ?? [] as $glob) {
-                    if (App::glob($glob, $name)) {
+                    if (! App::glob($glob, $name)) {
+                        continue;
+                    }
+                    if (array_filter($replaces['except'] ?? [], fn (string $except): bool => self::fileGlob($except, $path)) === []) {
                         return true;
                     }
+                    $excluded = true;
                 }
                 foreach ($replaces['npm'] ?? [] as $entry) {
                     [$package, $export] = array_pad(explode('#', $entry, 2), 2, null);
@@ -780,6 +787,9 @@ final class Scanner
 
                 return false;
             });
+            if ($targets === [] && $excluded && $libraries === []) {
+                continue;
+            }
             $evidence = self::evidence($path, $line, 'app component: '.$detail);
             foreach ($targets as $key) {
                 $mapped[$key][] = $evidence;
@@ -817,6 +827,12 @@ final class Scanner
         }
 
         return ['mapped' => $mapped, 'gaps' => array_values($gaps)];
+    }
+
+    /** A file-name glob on an app-relative path: a glob with `/` matches the path case-insensitively, a basename glob keeps its case. */
+    private static function fileGlob(string $glob, string $path): bool
+    {
+        return str_contains($glob, '/') ? App::pathGlob($glob, $path) : App::glob($glob, basename($path));
     }
 
     /** @return list<string> "<composer> <surface id>" for every surface whose `replaces` passes the test */

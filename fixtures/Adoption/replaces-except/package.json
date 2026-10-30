@@ -1,0 +1,7 @@
+{
+    "name": "fixture-replaces-except",
+    "private": true,
+    "dependencies": {
+        "vue": "^3.5"
+    }
+}
