@@ -598,8 +598,8 @@ final class Scanner
             }
         }
         foreach ($uses['classes'] ?? [] as $class) {
-            // Filament is server-rendered UI that kit (Vue) does not replace: a reference there is never adoption.
-            foreach ($this->owned(array_values(array_filter($this->app->php(), fn (string $path): bool => ! str_starts_with($path, 'app/Filament/')))) as $path) {
+            // Filament and Livewire are server-rendered UI that kit (Vue) does not replace: a reference there is never adoption.
+            foreach ($this->owned(array_values(array_filter($this->app->php(), fn (string $path): bool => ! str_starts_with($path, 'app/Filament/') && ! str_starts_with($path, 'app/Livewire/')))) as $path) {
                 $source = $this->app->source($path);
                 $found = Code::classReferences($source, $class);
                 // A `use` import alone counts, as the class-reference signal's does; the first reference or import is the evidence line.

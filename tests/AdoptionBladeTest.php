@@ -215,7 +215,7 @@ test('a lone panel provider that discovers nothing claims app/Filament; authMidd
     'neither' => ['->path(\'app\')', []],
 ]);
 
-test('Filament and Blade files never make a surface adopted: uses.classes skips app/Filament', function () {
+test('Filament, Livewire and Blade files never make a surface adopted: uses.classes skips app/Filament and app/Livewire', function () {
     $data = bladeData(['kind' => 'file-name', 'globs' => ['NoSuchFile.vue']]);
     foreach ($data['surfaces'] as $index => $surface) {
         if ($surface['id'] === 'data.table') {
@@ -224,6 +224,33 @@ test('Filament and Blade files never make a surface adopted: uses.classes skips 
     }
     $report = (new Scanner(new App(bladeBase()), [Inventory::fromArray($data, 'kit-cases.json')], null, new DateTimeImmutable('2026-10-29')))->report();
 
-    // Livewire PHP is still app PHP for uses.classes; uses.components reads .vue only, so no Blade tag is a use.
-    expect(array_column(collect($report['rows'])->firstWhere('id', 'data.table')['matches'], 'file'))->toBe(['app/Livewire/OrderBoard.php']);
+    // kit is Vue-only: a Livewire class referencing a kit class is never a use. uses.components reads .vue only, so no Blade tag is a use.
+    $row = collect($report['rows'])->firstWhere('id', 'data.table');
+    expect(array_column($row['matches'], 'file'))->toBe([])
+        ->and($row['status'])->not->toBe('adopted');
 });
+
+test('a Livewire class referencing a kit class is no uses match, so it reads not adopted; the same class outside app/Livewire matches', function (string $path, array $matches) {
+    $base = sys_get_temp_dir().'/standards-livewire-'.bin2hex(random_bytes(6));
+    (new Illuminate\Filesystem\Filesystem)->copyDirectory(bladeBase(), $base);
+    try {
+        is_dir(dirname($base.'/'.$path)) || mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, "<?php\n\nnamespace App\\Board;\n\nuse Tey\\Kit\\Features\\Core\\Toast;\n\nclass KitBoard\n{\n    public function save(): void\n    {\n        Toast::success('Saved');\n    }\n}\n");
+        $data = bladeData(['kind' => 'file-name', 'globs' => ['NoSuchFile.vue']]);
+        foreach ($data['surfaces'] as $index => $surface) {
+            if ($surface['id'] === 'data.table') {
+                $data['surfaces'][$index]['uses'] = ['classes' => ['Tey\Kit\Features\Core\Toast']];
+            }
+        }
+        $row = collect((new Scanner(new App($base), [Inventory::fromArray($data, 'kit-cases.json')], null, new DateTimeImmutable('2026-10-29')))->report()['rows'])->firstWhere('id', 'data.table');
+
+        // The fixture does not install kit, so the row reads `missing` either way: the uses match is what would make it adopted.
+        expect(array_column($row['matches'], 'file'))->toBe($matches)
+            ->and($row['status'])->not->toBe('adopted');
+    } finally {
+        (new Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
+    }
+})->with([
+    'in app/Livewire' => ['app/Livewire/KitBoard.php', []],
+    'in app/Http' => ['app/Http/KitBoard.php', ['app/Http/KitBoard.php']],
+]);

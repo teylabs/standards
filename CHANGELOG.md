@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- **Adoption: `uses.classes` skips `app/Livewire/**` too.** kit is Vue-only, so a Livewire class that references a kit class is never adoption evidence, as `app/Filament/**` already was not. Livewire PHP stays app PHP for `class-reference` hand-rolled signals.
 - **`toast`: the FormStatus exemption follows a literal named-route redirect.** A guest form that returns `to_route('<name>')`, `redirect()->route('<name>')` or `Redirect::route('<name>')` instead of `back()` passes when the name, as the call's only argument, resolves across the route roots (module routes included, with group `name()`/`as()` prefixes) to exactly one guest GET route with a literal, parameterless URI, whose one literal Inertia page reads every flashed key (`->with()` and top-level `Inertia::flash`) through a kit `<FormStatus>`, as for `back()`. The form's own route is guest-checked as before. A non-literal name, route parameters or any second argument, an unknown or duplicated name, a POST or signed-in target, or any unreadable route name in those files (a non-literal `->name()`, a `Route::group([...])` array, a `resource`, `match` or `any` registration) keeps `redirect must chain ->toast*()`.
 
 ## 0.11.49 - 2026-10-29
