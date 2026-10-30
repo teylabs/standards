@@ -254,3 +254,65 @@ test('a Livewire class referencing a kit class is no uses match, so it reads not
     'in app/Livewire' => ['app/Livewire/KitBoard.php', []],
     'in app/Http' => ['app/Http/KitBoard.php', ['app/Http/KitBoard.php']],
 ]);
+
+/** A throwaway app with no routes: each key a project-relative path, each value its contents. Runs `$check` on it, then removes it. */
+function bladePanelApp(array $files, Closure $check): void
+{
+    $base = sys_get_temp_dir().'/adoption-panel-'.bin2hex(random_bytes(4));
+    foreach ($files as $path => $contents) {
+        if (! is_dir(dirname($base.'/'.$path))) {
+            mkdir(dirname($base.'/'.$path), 0777, true);
+        }
+        file_put_contents($base.'/'.$path, $contents);
+    }
+    try {
+        $check(new Facts(new App($base)));
+    } finally {
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($base, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($iterator as $file) {
+            $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+        }
+        rmdir($base);
+    }
+}
+
+function bladePanelProvider(string $namespace, string $class, string $chain): string
+{
+    return "<?php\n\nnamespace {$namespace};\n\nuse Filament\\Panel;\nuse Filament\\PanelProvider;\n\nclass {$class} extends PanelProvider\n{\n    public function panel(Panel \$panel): Panel\n    {\n        return \$panel->default()->id('admin'){$chain};\n    }\n}\n";
+}
+
+test('a Filament panel with ->login() or a non-empty literal authMiddleware makes signed-in-pages true with no routes', function (string $chain, bool $signed) {
+    bladePanelApp([
+        'app/Providers/Filament/AdminPanelProvider.php' => bladePanelProvider('App\\Providers\\Filament', 'AdminPanelProvider', $chain),
+    ], function (Facts $facts) use ($signed) {
+        expect($facts->analysis('signed-in-pages'))->toBe(['value' => $signed, 'evidence' => $signed ? 'app/Providers/Filament/AdminPanelProvider.php' : null])
+            // An open panel is not counted as a public page either.
+            ->and($facts->analysis('public-pages')['value'])->toBeFalse();
+    });
+})->with([
+    'login' => ['->login()', true],
+    'non-empty literal authMiddleware' => ["->authMiddleware([\\Filament\\Http\\Middleware\\Authenticate::class])", true],
+    'neither' => ["->path('admin')", false],
+    'empty authMiddleware' => ['->authMiddleware([])', false],
+    'non-literal authMiddleware' => ['->authMiddleware($this->middleware())', false],
+    'login only in a comment' => ["\n            // ->login()\n            ->path('admin')", false],
+]);
+
+test('a panel provider listed in bootstrap/providers.php outside app/Providers/Filament counts; an unlisted one does not', function (bool $listed) {
+    bladePanelApp([
+        'app/Panels/StaffPanelProvider.php' => bladePanelProvider('App\\Panels', 'StaffPanelProvider', '->login()'),
+        'bootstrap/providers.php' => "<?php\n\nreturn [\n    App\\Providers\\AppServiceProvider::class,\n".($listed ? "    App\\Panels\\StaffPanelProvider::class,\n" : '')."];\n",
+    ], function (Facts $facts) use ($listed) {
+        expect($facts->analysis('signed-in-pages'))->toBe(['value' => $listed, 'evidence' => $listed ? 'app/Panels/StaffPanelProvider.php' : null]);
+    });
+})->with(['listed' => [true], 'unlisted' => [false]]);
+
+test('Filament scope and signed-in-pages share panel discovery: a login panel listed only in bootstrap/providers.php signs in both', function () {
+    bladePanelApp([
+        'app/Panels/StaffPanelProvider.php' => bladePanelProvider('App\\Panels', 'StaffPanelProvider', '->login()'),
+        'bootstrap/providers.php' => "<?php\n\nreturn [\n    App\\Panels\\StaffPanelProvider::class,\n];\n",
+    ], function (Facts $facts) {
+        expect($facts->filamentScopes('app/Filament/Resources/OrderResource.php'))->toBe(['signed-in'])
+            ->and($facts->analysis('signed-in-pages'))->toBe(['value' => true, 'evidence' => 'app/Panels/StaffPanelProvider.php']);
+    });
+});

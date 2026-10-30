@@ -106,7 +106,8 @@ final class Facts
             // A route statement or group behind the auth middleware (`'auth'`, `'auth:<guard>'`, Authenticate::class) that renders a page:
             // Inertia::render, inertia(), view(), Route::inertia/Route::view, or an app controller whose class renders one. API routes
             // (routes/api.php, an `api` middleware group or an `api` prefix) never count.
-            'signed-in-pages' => $this->signedInPage(),
+            // A Filament panel provider whose panel calls ->login() or a non-empty literal ->authMiddleware([...]) also counts.
+            'signed-in-pages' => $this->signedInPage() ?? $this->signedInPanel(),
             // A top-level GET, view or inertia route in a route file outside any group, with no auth middleware in its statement and
             // not an auth screen's URI; or a page whose path names a public surface other than sign-in (Public, Marketing, Landing, Welcome, Legal, Docs).
             'public-pages' => $this->publicRoute() ?? $this->firstPath($this->app->frontend(), fn (string $path): bool => $this->app->page($path) && preg_match('~/(?:[Pp]ublic|[Mm]arketing|[Ll]anding|[Ww]elcome|[Ll]egal|[Dd]ocs)(?![a-z])~', $path) === 1),
@@ -308,7 +309,7 @@ final class Facts
     }
 
     /**
-     * The scope a hit in an `app/Filament/**` file reads: `signed-in` when every panel provider (`app/Providers/Filament/*PanelProvider.php`)
+     * The scope a hit in an `app/Filament/**` file reads: `signed-in` when every panel provider (see panelProviders)
      * that discovers the file's folder (`discoverResources`/`Pages`/`Widgets`/`Clusters` with a literal `app_path('...')`) calls
      * `->login()` or passes a non-empty literal array to `->authMiddleware([...])`; else, or when no provider claims the folder, `unknown`
      * (an empty list). A lone provider that discovers nothing claims every app/Filament file.
@@ -317,14 +318,13 @@ final class Facts
      */
     public function filamentScopes(string $path): array
     {
-        $providers = array_values(array_filter($this->app->php(), fn (string $file): bool => preg_match('~^app/Providers/Filament/[^/]*PanelProvider\.php$~', $file) === 1));
         $panels = [];
-        foreach ($providers as $provider) {
+        foreach ($this->panelProviders() as $provider) {
             $code = Code::withoutComments($this->app->source($provider));
             preg_match_all('~->\s*discover(?:Resources|Pages|Widgets|Clusters)\s*\(\s*(?:in\s*:\s*)?\\\\?app_path\s*\(\s*([\'"])([^\'"$]+)\1\s*\)~', $code, $found);
             $panels[] = [
                 'folders' => array_map(fn (string $folder): string => 'app/'.trim($folder, '/').'/', $found[2]),
-                'signed' => preg_match('~->\s*login\s*\(|->\s*authMiddleware\s*\(\s*\[\s*[^\s\]]~', $code) === 1,
+                'signed' => self::panelSignedIn($code),
             ];
         }
         $claiming = array_values(array_filter($panels, fn (array $panel): bool => array_filter($panel['folders'], fn (string $folder): bool => str_starts_with($path, $folder)) !== []));
@@ -333,6 +333,52 @@ final class Facts
         }
 
         return $claiming !== [] && array_filter($claiming, fn (array $panel): bool => ! $panel['signed']) === [] ? ['signed-in'] : [];
+    }
+
+    /**
+     * Whether a Filament panel provider's panel is signed in: it calls `->login()`, or passes a non-empty literal array to
+     * `->authMiddleware([...])`. An `authMiddleware()` that is not a literal array is unprovable, so it does not count.
+     */
+    private static function panelSignedIn(string $code): bool
+    {
+        return preg_match('~->\s*login\s*\(|->\s*authMiddleware\s*\(\s*\[\s*[^\s\]]~', $code) === 1;
+    }
+
+    /**
+     * The Filament panel providers: every `app/Providers/Filament/*PanelProvider.php`, then each `App\...\*PanelProvider::class`
+     * that `bootstrap/providers.php` lists and that exists as its PSR-4 `app/...` file. Filament scope and signed-in-pages share it.
+     *
+     * @return list<string>
+     */
+    private function panelProviders(): array
+    {
+        $providers = array_values(array_filter($this->app->php(), fn (string $file): bool => preg_match('~^app/Providers/Filament/[^/]*PanelProvider\.php$~', $file) === 1));
+        if ($this->app->exists('bootstrap/providers.php')) {
+            preg_match_all('~\\\\?App\\\\((?:\w+\\\\)*\w*PanelProvider)\s*::\s*class~', Code::withoutComments($this->app->source('bootstrap/providers.php')), $listed);
+            foreach ($listed[1] as $class) {
+                $path = 'app/'.str_replace('\\', '/', $class).'.php';
+                if ($this->app->exists($path) && ! in_array($path, $providers, true)) {
+                    $providers[] = $path;
+                }
+            }
+        }
+
+        return $providers;
+    }
+
+    /**
+     * The first Filament panel provider whose panel is signed in (see panelSignedIn), as its path, among panelProviders.
+     * A panel with neither call never counts, and an open panel is not counted for public-pages either.
+     */
+    private function signedInPanel(): ?string
+    {
+        foreach ($this->panelProviders() as $provider) {
+            if (self::panelSignedIn(Code::withoutComments($this->app->source($provider)))) {
+                return $provider;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -411,7 +457,7 @@ final class Facts
      * The view a Livewire component without `render()` renders, by Livewire's own convention: the class name relative to
      * `livewire.class_namespace`, each segment kebab-cased (Str::kebab) and joined with `/`, under `livewire.view_path` (Livewire 3
      * and 4, which also drop a trailing `index` segment) or `resources/views/livewire` (Livewire 2, which renders `view('livewire.<name>')`).
-     * Null (unknown) when the Livewire major is not one exact 2, 3 or 4 in composer.json, a config value is not literal, the class is
+     * Null (unknown) when the Livewire major is not one exact 2, 3 or 4 (composer.json, else composer.lock; see livewire), a config value is not literal, the class is
      * outside the namespace, it is a top-level `Index`, or `Livewire::component()` registers an alias naming it.
      */
     private function livewireView(string $file, string $code): ?string
@@ -446,8 +492,8 @@ final class Facts
     }
 
     /**
-     * The Livewire setup the conventional view needs: the major from composer.json's `livewire/livewire` constraint (one exact 2, 3 or
-     * 4, else null), and `class_namespace` and the view folder from config/livewire.php when it sets them, else the version's
+     * The Livewire setup the conventional view needs: the major from composer.json's `livewire/livewire` constraint when it names
+     * exactly one, else composer.lock's locked `livewire/livewire` version (see lockedLivewireMajor); a 2, 3 or 4, else null, and `class_namespace` and the view folder from config/livewire.php when it sets them, else the version's
      * defaults (`App\Livewire`, or `App\Http\Livewire` on 2; `resources/views/livewire`). A value that is not literal is null.
      *
      * @return array{major: ?int, namespace: ?string, views: ?string}
@@ -463,7 +509,10 @@ final class Facts
             preg_match_all('~(?<![\w.])v?(\d+)(?=[.*\s,|]|$)~', $constraint, $found);
             $majors = array_values(array_unique(array_map('intval', $found[1])));
         }
-        $major = count($majors) === 1 && in_array($majors[0], [2, 3, 4], true) ? $majors[0] : null;
+        // A direct constraint naming exactly one major wins; otherwise (none, or several) the locked major, so an app that gets
+        // Livewire transitively (livewire/flux, livewire/volt, the Livewire starter kit) still proves it.
+        $major = count($majors) === 1 ? $majors[0] : $this->lockedLivewireMajor();
+        $major = in_array($major, [2, 3, 4], true) ? $major : null;
         $code = $this->app->exists('config/livewire.php') ? Code::withoutComments($this->app->source('config/livewire.php')) : '';
         $namespace = self::configValue($code, 'class_namespace');
         $views = self::configValue($code, 'view_path');
@@ -482,6 +531,24 @@ final class Facts
                 default => self::literalPath($views),
             },
         ];
+    }
+
+    /**
+     * The major of the `livewire/livewire` version composer.lock locks (`packages` or `packages-dev`; "v3.6.4" reads 3), or null
+     * without a lock, without that entry, or with a version that does not start with a numeric major (a dev branch, say).
+     */
+    private function lockedLivewireMajor(): ?int
+    {
+        $lock = $this->app->json('composer.lock') ?? [];
+        foreach (['packages', 'packages-dev'] as $section) {
+            foreach (is_array($lock[$section] ?? null) ? $lock[$section] : [] as $package) {
+                if (is_array($package) && ($package['name'] ?? null) === 'livewire/livewire') {
+                    return is_string($package['version'] ?? null) && preg_match('~^v?(\d+)\.\d+~', $package['version'], $m) === 1 ? (int) $m[1] : null;
+                }
+            }
+        }
+
+        return null;
     }
 
     /** The expression a config array sets `$key` to (up to its `,` or the array's end), or null when the key is not set. */
