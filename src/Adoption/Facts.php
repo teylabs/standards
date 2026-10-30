@@ -106,7 +106,8 @@ final class Facts
             // A route statement or group behind the auth middleware (`'auth'`, `'auth:<guard>'`, Authenticate::class) that renders a page:
             // Inertia::render, inertia(), view(), Route::inertia/Route::view, or an app controller whose class renders one. API routes
             // (routes/api.php, an `api` middleware group or an `api` prefix) never count.
-            'signed-in-pages' => $this->signedInPage(),
+            // A Filament panel provider whose panel calls ->login() or a non-empty literal ->authMiddleware([...]) also counts.
+            'signed-in-pages' => $this->signedInPage() ?? $this->signedInPanel(),
             // A top-level GET, view or inertia route in a route file outside any group, with no auth middleware in its statement and
             // not an auth screen's URI; or a page whose path names a public surface other than sign-in (Public, Marketing, Landing, Welcome, Legal, Docs).
             'public-pages' => $this->publicRoute() ?? $this->firstPath($this->app->frontend(), fn (string $path): bool => $this->app->page($path) && preg_match('~/(?:[Pp]ublic|[Mm]arketing|[Ll]anding|[Ww]elcome|[Ll]egal|[Dd]ocs)(?![a-z])~', $path) === 1),
@@ -324,7 +325,7 @@ final class Facts
             preg_match_all('~->\s*discover(?:Resources|Pages|Widgets|Clusters)\s*\(\s*(?:in\s*:\s*)?\\\\?app_path\s*\(\s*([\'"])([^\'"$]+)\1\s*\)~', $code, $found);
             $panels[] = [
                 'folders' => array_map(fn (string $folder): string => 'app/'.trim($folder, '/').'/', $found[2]),
-                'signed' => preg_match('~->\s*login\s*\(|->\s*authMiddleware\s*\(\s*\[\s*[^\s\]]~', $code) === 1,
+                'signed' => self::panelSignedIn($code),
             ];
         }
         $claiming = array_values(array_filter($panels, fn (array $panel): bool => array_filter($panel['folders'], fn (string $folder): bool => str_starts_with($path, $folder)) !== []));
@@ -333,6 +334,41 @@ final class Facts
         }
 
         return $claiming !== [] && array_filter($claiming, fn (array $panel): bool => ! $panel['signed']) === [] ? ['signed-in'] : [];
+    }
+
+    /**
+     * Whether a Filament panel provider's panel is signed in: it calls `->login()`, or passes a non-empty literal array to
+     * `->authMiddleware([...])`. An `authMiddleware()` that is not a literal array is unprovable, so it does not count.
+     */
+    private static function panelSignedIn(string $code): bool
+    {
+        return preg_match('~->\s*login\s*\(|->\s*authMiddleware\s*\(\s*\[\s*[^\s\]]~', $code) === 1;
+    }
+
+    /**
+     * The first Filament panel provider whose panel is signed in (see panelSignedIn), as its path: a provider in
+     * `app/Providers/Filament/*PanelProvider.php`, or an `App\...\*PanelProvider::class` that `bootstrap/providers.php` lists.
+     * A panel with neither call never counts, and an open panel is not counted for public-pages either.
+     */
+    private function signedInPanel(): ?string
+    {
+        $providers = array_values(array_filter($this->app->php(), fn (string $file): bool => preg_match('~^app/Providers/Filament/[^/]*PanelProvider\.php$~', $file) === 1));
+        if ($this->app->exists('bootstrap/providers.php')) {
+            preg_match_all('~\\\\?App\\\\((?:\w+\\\\)*\w*PanelProvider)\s*::\s*class~', Code::withoutComments($this->app->source('bootstrap/providers.php')), $listed);
+            foreach ($listed[1] as $class) {
+                $path = 'app/'.str_replace('\\', '/', $class).'.php';
+                if ($this->app->exists($path) && ! in_array($path, $providers, true)) {
+                    $providers[] = $path;
+                }
+            }
+        }
+        foreach ($providers as $provider) {
+            if (self::panelSignedIn(Code::withoutComments($this->app->source($provider)))) {
+                return $provider;
+            }
+        }
+
+        return null;
     }
 
     /**
