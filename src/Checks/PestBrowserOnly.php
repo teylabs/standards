@@ -87,7 +87,7 @@ final readonly class PestBrowserOnly
             );
             foreach (new RecursiveIteratorIterator($tree) as $file) {
                 if ($file->isFile() && preg_match('/\.(js|cjs|mjs|ts|cts|mts)$/', $file->getFilename()) === 1) {
-                    $paths[] = substr($file->getPathname(), strlen($this->config->base) + 1);
+                    $paths[] = str_replace('\\', '/', substr($file->getPathname(), strlen($this->config->base) + 1));
                 }
             }
         }
