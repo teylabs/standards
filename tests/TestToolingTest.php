@@ -6,6 +6,7 @@ use Illuminate\Filesystem\Filesystem;
 use PHPUnit\Framework\AssertionFailedError;
 use Symfony\Component\Process\Process;
 use Tey\Standards\Checks\Boost;
+use Tey\Standards\Checks\PestBrowserOnly;
 use Tey\Standards\Checks\PestOnly;
 use Tey\Standards\Checks\PhpTag;
 use Tey\Standards\Checks\Tia;
@@ -233,7 +234,7 @@ test('tooling rules honour exact ratchets and reject stale entries after a fix',
     $entry = ['rule' => $rule, ...$bad->violations($rule)[0], 'reason' => 'Existing fixture adoption debt.', 'date' => '2026-10-24', 'expires' => '2099-12-31'];
     (new Conformance(toolingConfiguration('Bad', [$entry])))->assert($rule);
     expect(fn () => (new Conformance(toolingConfiguration('Good', [$entry])))->assert($rule))->toThrow(AssertionFailedError::class, 'stale exception');
-})->with(['pest-only', 'php-tag', 'tia', 'boost']);
+})->with(['pest-only', 'pest-browser-only', 'php-tag', 'tia', 'boost']);
 
 test('default Boost skills use the names Boost 2.10 ships', function () {
     $skills = (new ReflectionClass(Configuration::class))->getConstructor()->getParameters();
@@ -271,3 +272,57 @@ test('Boost requires the Inertia Vue and Tailwind skills only for majors Boost 2
     'Inertia 2, Tailwind 4' => ['^2.0', '^4.0', ['missing Boost skill inertia-vue-development for @inertiajs/vue3', 'missing Boost skill tailwindcss-development for tailwindcss']],
     'unreadable constraints still require' => ['latest', 'next', ['missing Boost skill inertia-vue-development for @inertiajs/vue3', 'missing Boost skill tailwindcss-development for tailwindcss']],
 ]);
+
+/** Makes the tooling copy a Laravel app, with the given package.json and extra files. */
+function browserApp(string $base, array $npm = [], array $files = []): void
+{
+    $composer = json_decode(file_get_contents($base.'/composer.json'), true);
+    $composer['require']['laravel/framework'] = '^12.0';
+    file_put_contents($base.'/composer.json', json_encode($composer));
+    file_put_contents($base.'/package.json', json_encode($npm));
+    foreach ($files as $path => $code) {
+        @mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $code);
+    }
+}
+
+test('pest-browser-only flags a Node browser suite in an app', function (array $npm, array $files, string $target, string $check) {
+    browserApp($this->toolingBase, $npm, $files);
+    $violations = (new PestBrowserOnly($this->toolingConfig))->violations();
+    expect($violations)->toHaveCount(1)
+        ->and($violations[0]['target'])->toBe($target)
+        ->and($violations[0]['check'])->toBe($check)
+        ->and($violations[0]['hint'])->toContain('pest-plugin-browser');
+})->with([
+    'Playwright test runner' => [['devDependencies' => ['@playwright/test' => '^1.50']], [], 'package.json', '@playwright/test in devDependencies runs a Node browser suite'],
+    'Puppeteer' => [['dependencies' => ['puppeteer' => '^23']], [], 'package.json', 'puppeteer in dependencies runs a Node browser suite'],
+    'Cypress' => [['devDependencies' => ['cypress' => '^14']], [], 'package.json', 'cypress in devDependencies runs a Node browser suite'],
+    'a runner config' => [[], ['playwright.config.ts' => 'export default {}'], 'playwright.config.ts', 'Node browser suite config'],
+    'a script on plain playwright' => [['devDependencies' => ['playwright' => '^1.50']], ['tests/browser/run.mjs' => "import { chromium } from 'playwright';\n"], 'tests/browser/run.mjs', 'Node browser test imports playwright'],
+    'a script requiring puppeteer' => [[], ['e2e/login.cjs' => "const p = require('puppeteer');\n"], 'e2e/login.cjs', 'Node browser test imports puppeteer'],
+]);
+
+test('pest-browser-only allows Pest\'s own playwright dependency, unrelated scripts and node_modules', function () {
+    browserApp($this->toolingBase, ['devDependencies' => ['playwright' => '^1.50', 'vitest' => '^3']], [
+        'tests/js/format.test.mjs' => "import { test } from 'node:test';\n",
+        'tests/node_modules/x/index.js' => "import 'playwright';\n",
+        'tests/Browser/LoginTest.php' => "<?php it('signs in', fn () => visit('/login')->assertSee('Sign in'));\n",
+    ]);
+    expect((new PestBrowserOnly($this->toolingConfig))->violations())->toBe([]);
+});
+
+test('pest-browser-only skips a package with no Laravel app', function () {
+    file_put_contents($this->toolingBase.'/package.json', json_encode(['devDependencies' => ['@playwright/test' => '^1.50']]));
+    expect((new PestBrowserOnly($this->toolingConfig))->violations())->toBe([]);
+});
+
+test('pest-browser-only takes a dated allowlist entry for an existing suite, and the entry goes stale once the suite is gone', function () {
+    browserApp($this->toolingBase, ['devDependencies' => ['@playwright/test' => '^1.50']]);
+    $violation = (new PestBrowserOnly($this->toolingConfig))->violations()[0];
+    unset($violation['hint']);
+    $entry = ['rule' => 'pest-browser-only', ...$violation, 'reason' => 'Node suite moves to Pest with the fast-CI rollout.', 'date' => '2026-11-02', 'expires' => '2099-12-31'];
+    $config = fn (): Configuration => new Configuration(...array_replace(get_object_vars($this->toolingConfig), ['allowlist' => [$entry]]));
+    (new Conformance($config()))->assert('pest-browser-only');
+    file_put_contents($this->toolingBase.'/package.json', json_encode(['devDependencies' => ['playwright' => '^1.50']]));
+    expect(fn () => (new Conformance($config()))->assert('pest-browser-only'))->toThrow(AssertionFailedError::class, 'stale exception');
+});

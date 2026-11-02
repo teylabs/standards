@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`pest-browser-only`: an app's browser tests use Pest's browser plugin, not a Node suite** (Jasper, 2026-10-13; the house rule "Pest only, browser tests included"). In an app (`laravel/framework` required), it flags `@playwright/test`, Puppeteer or Cypress in package.json, their root config files, and test scripts under `tests`, `e2e`, `browser`, `playwright` or `cypress` that import a browser driver. The plain `playwright` package stays allowed, since pestphp/pest-plugin-browser needs it. Packages with no Laravel app are skipped. See the README's Test tooling checks.
+
+### Upgrading
+
+- **An app with a Node browser suite fails `pest-browser-only` until it moves to Pest or allowlists the suite.** Run the conformance suite, then add one dated entry per reported violation (`rule`, `target`, `check`, `reason`, `date`, `expires`), for example `{"rule": "pest-browser-only", "target": "package.json", "check": "@playwright/test in devDependencies runs a Node browser suite", "reason": "Node suite moves to Pest with the fast-CI rollout.", "date": "2026-11-02", "expires": "2027-02-01"}`. Each entry goes stale, and fails, once its file or package is gone. New suites get no entry. Four apps in our own fleet need entries today.
+
 ## 0.11.54 - 2026-10-30
 
 ### Fixed
