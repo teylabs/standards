@@ -8,7 +8,7 @@
 
 ### Upgrading
 
-- **An app with a Node browser suite fails `pest-browser-only` until it moves to Pest or allowlists the suite.** Run the conformance suite, then add one dated entry per reported violation (`rule`, `target`, `check`, `reason`, `date`, `expires`), for example `{"rule": "pest-browser-only", "target": "package.json", "check": "@playwright/test in devDependencies runs a Node browser suite", "reason": "Node suite moves to Pest with the fast-CI rollout.", "date": "2026-11-02", "expires": "2027-02-01"}`. Each entry goes stale, and fails, once its file or package is gone. New suites get no entry. Known today: cloudbutter (12), macrosheets (7), fullstackbutter (1) and its bakery-mcp copy (1).
+- **An app with a Node browser suite fails `pest-browser-only` until it moves to Pest or allowlists the suite.** Run the conformance suite, then add one dated entry per reported violation (`rule`, `target`, `check`, `reason`, `date`, `expires`), for example `{"rule": "pest-browser-only", "target": "package.json", "check": "@playwright/test in devDependencies runs a Node browser suite", "reason": "Node suite moves to Pest with the fast-CI rollout.", "date": "2026-11-02", "expires": "2027-02-01"}`. Each entry goes stale, and fails, once its file or package is gone. New suites get no entry. Four apps in our own fleet need entries today.
 
 ## 0.11.54 - 2026-10-30
 
