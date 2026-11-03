@@ -18,7 +18,7 @@ function frontendConfiguration(string $kind = 'Bad', array $overrides = []): Con
         viewModelRoots: [], viewModelBases: [], typedViewModel: '', viewModelSuffix: 'ViewModel',
         pageRoots: [], pageScaffolds: [], placements: [], retired: [], discoveryRoots: [],
         developmentNamespaces: [], safeAttributes: [], mediaTrait: '', mediaInterface: '',
-        optionalRules: ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast'],
+        optionalRules: ['ui plus', 'ui new-tab', 'ui back-strip', 'ui dropzone', 'ui toast'],
     );
 
     return new Configuration(...array_replace(get_object_vars($config), $overrides));
@@ -61,7 +61,7 @@ test('frontend descriptors inspect script, template expressions and PHP arrays',
 });
 
 test('frontend optional rules skip by default and enforce only selected keys', function () {
-    foreach (['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast'] as $rule) {
+    foreach (['ui plus', 'ui new-tab', 'ui back-strip', 'ui dropzone', 'ui toast'] as $rule) {
         $disabled = new Conformance(frontendConfiguration(overrides: ['optionalRules' => []]));
         expect($disabled->violations($rule))->toBe([]);
         expect(fn () => $disabled->assert($rule))->toThrow(SkippedWithMessageException::class, 'disabled');
@@ -158,6 +158,13 @@ test('frontend static UI checks cover self-closing actions, rel tokens, raw inpu
     'new tab misleading rel' => ['ui new-tab', '<template><a target="_blank" rel="noopener-wrong"><ArrowUpRight />Posts</a></template>', true],
     'new tab missing icon' => ['ui new-tab', '<template><a target="_blank" rel="noopener">Posts</a></template>', true],
     'ordinary link' => ['ui new-tab', '<template><a>Posts</a></template>', false],
+    'hand-written back link' => ['ui back-strip', '<template><Link href="/assignments/1"><ArrowLeft class="size-4" /> Back to A-0001</Link></template>', true],
+    'bare back link with an arrow' => ['ui back-strip', '<template><a :href="parentUrl">← Back</a></template>', true],
+    'back link by label' => ['ui back-strip', '<template><Button label="Back to assignments" :href="route(\'assignments.index\')" /></template>', true],
+    'back link with an interpolated parent' => ['ui back-strip', '<template><Link :href="parent.url">Back to {{ parent.title }}</Link></template>', true],
+    'wizard back button without href' => ['ui back-strip', '<template><button type="button" @click="step--">Back</button></template>', false],
+    'link whose label only starts with back' => ['ui back-strip', '<template><Link href="/backups">Backups</Link><Link href="/x">Background checks</Link></template>', false],
+    'link that mentions back later' => ['ui back-strip', '<template><Link href="/orders">Go back to orders</Link></template>', false],
     'raw file input' => ['ui dropzone', "<template><input type='file'></template>", true],
     'literal bound file input' => ['ui dropzone', '<template><input :type="\'file\'"></template>', true],
     'ordinary input' => ['ui dropzone', '<template><input type="text"></template>', false],

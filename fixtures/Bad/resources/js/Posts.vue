@@ -29,6 +29,7 @@ const allowed = props.can.update;
 <template>
     <Button>Add post</Button>
     <a target="_blank" rel="noreferrer" href="/posts">Posts</a>
+    <Link href="/posts">&larr; Back to posts</Link>
     <input type='file'>
     <p>{{ page.props.flash.success }}</p>
 </template>

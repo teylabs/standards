@@ -66,11 +66,12 @@ nodes:
       - { answer: "In a menu on one record", next: ui-page.action-menu }
       - { answer: "None of these", next: ui-page.action-place.byo }
   - id: ui-page.larger
-    question: Is it a full set of CRUD screens, a workflow page beyond CRUD, or a full-screen display?
+    question: Is it a full set of CRUD screens, a workflow page beyond CRUD, a full-screen display, or a full-screen sub-page?
     options:
       - { answer: "Index, form and show screens for one record type", next: ui-page.crud-resource }
       - { answer: "A workflow page beyond CRUD (a workbench, a live console, a synced source, an activity stream)", next: ui-page.workflow }
       - { answer: "A full-screen output another screen drives (projector, kiosk TV)", next: ui-page.stage-display }
+      - { answer: "A full-screen sub-page that leaves its parent's layout (a bench, an editor), with a way back", next: ui-page.back-strip }
       - { answer: "None of these", next: ui-page.larger.byo }
   - id: ui-page.workflow
     question: Which workflow page?
@@ -288,6 +289,16 @@ nodes:
     checks: ['ui new-tab']
     paths: []
     keywords: [external, new tab, blank, outbound link]
+    status: ready
+  - id: ui-page.back-strip
+    recipe: Breakout page back strip
+    summary: A page that leaves its parent's shared layout declares breaksOut() (or the kit.breakout route default); the kit draws "Back to <parent>" from the trail's parent crumb, in place of the trail. No hand-written back links.
+    kit: ['tey/kit PageViewModel::breaksOut()', "tey/kit route default kit.breakout"]
+    components: []
+    make: standards:make page --flavor=show
+    checks: ['ui back-strip']
+    paths: []
+    keywords: [back, back to, breakout, full screen, parent, up one level]
     status: ready
   - id: ui-page.header-actions
     recipe: Page header actions
