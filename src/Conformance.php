@@ -29,6 +29,7 @@ final class Conformance
         'js-imports' => '[js-imports] frontend imports name declared packages',
         'ui plus' => '[ui plus] add actions carry a plus icon',
         'ui new-tab' => '[ui new-tab] new-tab actions carry noopener and an external icon',
+        'ui back-strip' => '[ui back-strip] a page\'s way back up is the kit\'s breakout strip, not a hand-written back link',
         'ui dropzone' => '[ui dropzone] only the configured dropzone owns file inputs',
         'ui toast' => '[ui toast] notifications use one configured toast path',
         'ui header-actions' => '[ui header-actions] a page header shows at most one primary and three visible actions',
@@ -103,7 +104,7 @@ final class Conformance
 
     public function assert(string $rule): void
     {
-        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui back-strip', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             Assert::markTestSkipped('Optional rule ['.$rule.'] is disabled; enable it in Configuration::optionalRules.');
         }
 
@@ -136,7 +137,7 @@ final class Conformance
     /** @return list<array{target: string, check: string}> */
     public function violations(string $rule): array
     {
-        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui back-strip', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             return [];
         }
 
@@ -145,6 +146,7 @@ final class Conformance
             'js-imports' => (new Checks\JsImports)->violations($this->config),
             'ui plus' => (new Checks\UiPlus)->violations($this->config),
             'ui new-tab' => (new Checks\UiNewTab)->violations($this->config),
+            'ui back-strip' => (new Checks\UiBackStrip)->violations($this->config),
             'ui dropzone' => (new Checks\UiDropzone)->violations($this->config),
             'ui toast' => (new Checks\UiToast)->violations($this->config),
             'ui header-actions' => (new Checks\UiHeaderActions)->violations($this->config, $this->source),

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`ui back-strip` (optional): no hand-written back links.** It flags a navigating action whose whole label is "Back" or "Back to …". A page that leaves its parent's layout declares `breaksOut()` (or the `kit.breakout` route default), and tey/kit 0.7.14+ draws "Back to <parent>" from the trail's parent crumb, in place of the trail.
+  - A "Back" button with no href (a wizard step) is not flagged, and neither are kit-owned files.
+  - The pattern catalog has a `ui-page.back-strip` leaf.
+
+### Upgrading
+
+- **To opt in,** add `'ui back-strip'` to `optionalRules`. Run the conformance suite, then give each existing back link a dated ratchet entry (`rule: ui back-strip`, the file, and the check text) while its page moves to `breaksOut()`.
+
 ## 0.11.55 - 2026-11-02
 
 ### Added
