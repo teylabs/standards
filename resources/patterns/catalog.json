@@ -466,7 +466,7 @@
         "ui-page.shared": {
             "id": "ui-page.shared",
             "question": "Which shared concern?",
-            "why": "Toasts, styling, the signed-in shell and kit adoption each have one app-wide convention and a check.",
+            "why": "Toasts, styling, the signed-in shell, kit adoption and guards over every page each have one app-wide convention and a check.",
             "options": [
                 {
                     "answer": "Feedback after a save or a background result (a toast)",
@@ -481,12 +481,31 @@
                     "next": "ui-page.shell"
                 },
                 {
-                    "answer": "Adopting every kit surface across the app (standards:adoption)",
-                    "next": "ui-page.kit-adoption"
+                    "answer": "Across the whole app: adopting every kit surface, or a test that guards every route or page",
+                    "next": "ui-page.app-wide"
                 },
                 {
                     "answer": "None of these",
                     "next": "ui-page.shared.byo"
+                }
+            ]
+        },
+        "ui-page.app-wide": {
+            "id": "ui-page.app-wide",
+            "question": "Which app-wide task?",
+            "why": "Adopting the kit and guarding every page both work across the whole app, from the kit's surfaces and from what each route or page declares.",
+            "options": [
+                {
+                    "answer": "Adopting every kit surface across the app (standards:adoption)",
+                    "next": "ui-page.kit-adoption"
+                },
+                {
+                    "answer": "A test that guards every route or page (a route snapshot, a list of modal or exempt pages)",
+                    "next": "ui-page.declared-guards"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.app-wide.byo"
                 }
             ]
         },
@@ -1201,6 +1220,28 @@
             ],
             "status": "ready"
         },
+        "ui-page.declared-guards": {
+            "id": "ui-page.declared-guards",
+            "recipe": "Guards read declarations",
+            "summary": "A guard over routes or pages reads what each one declares (a controller attribute, a route option, the page's root element) instead of a stored route table or a written-out page list, so a new correct page needs no test edit.",
+            "kit": [],
+            "make": "standards:make page --flavor=show",
+            "checks": [
+                "guards.declared"
+            ],
+            "paths": [],
+            "keywords": [
+                "routes.json",
+                "route snapshot",
+                "route table",
+                "page list",
+                "modal pages",
+                "exemption list",
+                "guard test",
+                "invariants"
+            ],
+            "status": "ready"
+        },
         "ui-page.header-actions": {
             "id": "ui-page.header-actions",
             "recipe": "Page header actions",
@@ -1779,6 +1820,17 @@
         },
         "ui-page.action-place.byo": {
             "id": "ui-page.action-place.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.app-wide.byo": {
+            "id": "ui-page.app-wide.byo",
             "recipe": "Build your own",
             "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
             "kit": [],

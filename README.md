@@ -527,6 +527,13 @@ The handler runs in the transaction that marks the call processed, so a handler 
 - A job gets `implements ShouldQueue, TenantAware`.
 - With `--landlord`, a command gets neither, and a job implements `NotTenantAware` so it never waits for a tenant. Both carry a comment saying they're landlord-only and must not touch tenant-scoped models. A landlord command that must touch one (to create the first owner of a workspace, say) goes in `landlordCommands` with its reason.
 
+**Rule `guards.declared` (opt-in).** Off by default; enable it by listing `guards.declared` in `Configuration::optionalRules`. A guard test reads what each route or page declares about itself, never a stored copy of the route table or a written-out list of pages, so a new correct page needs no test edit and a wrong one fails with its own name. Under `tests/`, it flags:
+- a file that reads a fixture named for routes or pages (`Fixtures/…route…`, `…page…`, `…breadcrumb…`, `…modal…` or `…nav…`, `.json` or `.php`) and also reads the live route table (`Route::getRoutes()`, `route:list`) or globs the pages directory;
+- a regular expression about page files (`Page.vue` or a `pages/` path) whose alternation names three or more pages;
+- an `in_array()` list of three or more page names (`Settings/People/Invite`) or page paths.
+
+Comments are ignored, so a note that a fixture was retired is fine. **The fix:** declare the property where it lives, for example an attribute on the route's controller, a route option, or the page's root element, and have the guard read it from code. A route-table snapshot becomes rules over the routes (every workspace route has its short twin; an app's workspace write has an ability middleware or names the operation that authorises it; a public route declares why). A list of modal pages becomes a check that each page's controller and its root `<Modal>` agree.
+
 **Rule `destructive-db` (opt-in).** Off by default; enable it by listing `destructive-db` in `Configuration::optionalRules`. It checks that a service provider's `boot()` (a class extending `Illuminate\Support\ServiceProvider` or named `*ServiceProvider`, under `app/Providers` or the source roots) calls `DB::prohibitDestructiveCommands(...)` with a guard that is true everywhere outside the testing environment. Why: `php artisan migrate:fresh --env=testing` with no `.env.testing` silently falls back to `.env`, and wipes the local database. The recommended snippet:
 
 ```php
