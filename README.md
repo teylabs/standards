@@ -534,6 +534,8 @@ The handler runs in the transaction that marks the call processed, so a handler 
 
 Comments are ignored, so a note that a fixture was retired is fine. **The fix:** declare the property where it lives, for example an attribute on the route's controller, a route option, or the page's root element, and have the guard read it from code. A route-table snapshot becomes rules over the routes (every workspace route has its short twin; an app's workspace write has an ability middleware or names the operation that authorises it; a public route declares why). A list of modal pages becomes a check that each page's controller and its root `<Modal>` agree.
 
+`standards:make page` writes the declarations a page can make when it is generated. `--public="why"` adds tey/kit's `#[PublicRoute('why')]` and a `throttle:60,1` middleware. `--breakout` adds the `kit.breakout` route default. A form page's write declares nothing, because its generated Save action does not authorise. Add a `workspace.ability:*` middleware, or name a real authorising operation with `#[AuthorizedBy]`. Until then, tey/kit's `RouteInvariants::guardedWrites()` names it.
+
 **Rule `destructive-db` (opt-in).** Off by default; enable it by listing `destructive-db` in `Configuration::optionalRules`. It checks that a service provider's `boot()` (a class extending `Illuminate\Support\ServiceProvider` or named `*ServiceProvider`, under `app/Providers` or the source roots) calls `DB::prohibitDestructiveCommands(...)` with a guard that is true everywhere outside the testing environment. Why: `php artisan migrate:fresh --env=testing` with no `.env.testing` silently falls back to `.env`, and wipes the local database. The recommended snippet:
 
 ```php

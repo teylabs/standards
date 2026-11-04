@@ -974,3 +974,24 @@ test('`standards:pattern "rule <key>"`, as a finding hint names it, resolves to 
         ->and($lookup->find(['intent' => 'rule styling.pure-tailwind']))->toMatchArray(['type' => 'leaf', 'id' => 'ui-page.styling'])
         ->and($lookup->find(['intent' => 'rule ui.kit-shell']))->toMatchArray(['type' => 'leaf', 'id' => 'ui-page.shell']);
 });
+
+test('make page declares what the page is: --public adds #[PublicRoute] with its reason and a throttle, --breakout the kit.breakout default', function () {
+    $base = fixtureApp();
+
+    try {
+        $maker = fn () => new Maker($base, TreeCatalog::shipped());
+        $files = $maker()->make('page', 'Shares', 'show', null, ['public=A share link: the token is the credential', 'breakout']);
+        $controller = file_get_contents($base.'/'.collect($files)->first(fn (string $file): bool => str_ends_with($file, 'SharesController.php')));
+        $routes = implode("\n", array_map(fn (string $file): string => (string) @file_get_contents($base.'/'.$file), array_filter($files, fn (string $file): bool => str_starts_with($file, 'routes/'))));
+
+        expect($controller)->toContain("use Tey\\Kit\\Features\\Core\\Routing\\PublicRoute;\n", "#[PublicRoute('A share link: the token is the credential')]\nfinal class SharesController")
+            ->and($routes)->toContain("->name('shares.show')->middleware('throttle:60,1')->defaults('kit.breakout', true);");
+
+        $plain = file_get_contents($base.'/'.collect($maker()->make('page', 'Plain', 'form'))->first(fn (string $file): bool => str_ends_with($file, 'PlainController.php')));
+        expect($plain)->not->toContain('PublicRoute', 'AuthorizedBy', '{{')
+            ->and(fn () => $maker()->make('page', 'Blank', 'index', null, ['public=  ']))->toThrow(InvalidArgumentException::class, '--public needs the reason');
+        expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped())['violations'])->toBe([]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
