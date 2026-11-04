@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`guards.declared` (optional): guards read declarations, not stored copies.** It flags a test that compares the route table or the page set with a stored fixture, and a regex alternation or `in_array()` list of three or more pages that picks pages out for a guard. Comments are ignored. See the README for the fix: declare the property on the route or page and check the declarations.
+
+### Changed
+
+- **Pattern catalog:** "Which shared concern?" now offers "Across the whole app", a new branch holding kit adoption (`ui-page.kit-adoption`, unchanged) and the new `ui-page.declared-guards` leaf.
+
+### Upgrading
+
+- **To opt in,** add `'guards.declared'` to `optionalRules`. Run the conformance suite, then replace each finding with a declaration, or give it a dated ratchet entry (`rule: guards.declared`, the file and line, and the check text) while you do.
+
 ## 0.11.56 - 2026-11-03
 
 ### Added
