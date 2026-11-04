@@ -3396,6 +3396,10 @@
                     "next": "background.command"
                 },
                 {
+                    "answer": "When a broadcast refreshes an open page",
+                    "next": "background.live"
+                },
+                {
                     "answer": "None of these",
                     "next": "background.byo"
                 }
@@ -3475,6 +3479,29 @@
                 "past_apps": 18,
                 "past_count": 129
             }
+        },
+        "background.live": {
+            "id": "background.live",
+            "recipe": "Live props",
+            "summary": "Inertia live props refresh an open page when a notice broadcasts: tey/kit's LiveProps::on makes the view-model props live (capability-gated with `when`), echoLiveTransport carries them, useLiveFallbackPoll keeps a slow poll, and a component's own reader stands down with useIsLive. The notice is ShouldBroadcastNow, on a private workspace-scoped channel authorised in routes/channels.php.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "live.broadcast-now"
+            ],
+            "paths": [],
+            "keywords": [
+                "live props",
+                "live",
+                "broadcast",
+                "realtime",
+                "websocket",
+                "reverb",
+                "echo",
+                "refresh on change",
+                "push updates"
+            ],
+            "status": "draft"
         },
         "background.byo": {
             "id": "background.byo",

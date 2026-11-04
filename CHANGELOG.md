@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Rule `live.broadcast-now`:** the notice an Inertia live prop listens for (`Inertia::live`, `new LiveProp`, or tey/kit's `LiveProps::on`) is `ShouldBroadcastNow`, because a queued broadcast needs an always-on worker. A notice the rule can't read or find is reported, never passed. The background pattern branch gets a `background.live` leaf.
+
 ## 0.11.58 - 2026-11-04
 
 ### Added

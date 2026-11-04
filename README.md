@@ -529,6 +529,12 @@ The handler runs in the transaction that marks the call processed, so a handler 
 - A job gets `implements ShouldQueue, TenantAware`.
 - With `--landlord`, a command gets neither, and a job implements `NotTenantAware` so it never waits for a tenant. Both carry a comment saying they're landlord-only and must not touch tenant-scoped models. A landlord command that must touch one (to create the first owner of a workspace, say) goes in `landlordCommands` with its reason.
 
+**Rule `live.broadcast-now`.** The notice a live prop listens for is `ShouldBroadcastNow`. A queued broadcast (`ShouldBroadcast`) needs an always-on worker to reach the socket, so on a scale-to-zero queue it wakes the queue for every event or never arrives. In the source roots it reads `Inertia::live(..., on: ...)`, `new Inertia\LiveProp(..., on: ...)` and tey/kit's `LiveProps::on($props, $keys, $notice)`.
+- **How it reads the notice:** as `new Event(...)`, `Event::class`, a class-name string, or a local variable assigned a single `new Event(...)` in the same function.
+- **Not checked:** a literal broadcast name with no namespace, from a non-Laravel producer.
+- **Reported:** a notice it can't read (a parameter, a reassigned variable) or can't find. The rule never passes on something it didn't check.
+- **Nothing to check:** an app with no live props.
+
 **Rule `guards.declared` (opt-in).** Off by default; enable it by listing `guards.declared` in `Configuration::optionalRules`. A guard test reads what each route or page declares about itself, never a stored copy of the route table or a written-out list of pages, so a new correct page needs no test edit and a wrong one fails with its own name. Under `tests/`, it flags:
 - a file that reads a fixture named for routes or pages (`Fixtures/…route…`, `…page…`, `…breadcrumb…`, `…modal…` or `…nav…`, `.json` or `.php`) and also reads the live route table (`Route::getRoutes()`, `route:list`) or globs the pages directory;
 - a regular expression about page files (`Page.vue` or a `pages/` path) whose alternation names three or more pages;
