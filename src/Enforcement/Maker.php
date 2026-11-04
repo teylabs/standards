@@ -118,6 +118,9 @@ final class Maker
     /** model --flavor=domain flags; `enum=<field>:<Enum>` may repeat. */
     public const MODEL_OPTIONS = ['tenant', 'soft-deletes', 'media', 'sortable'];
 
+    /** page flags: `breakout` (the kit.breakout route default); `public=<why>` may also be given. */
+    public const PAGE_OPTIONS = ['breakout'];
+
     /** crud options: the flags that add to the resource. */
     public const CRUD_OPTIONS = ['bulk', 'mcp', 'soft-deletes'];
 
@@ -232,10 +235,11 @@ final class Maker
         $allowed = match (true) {
             $unit === 'crud' => self::CRUD_OPTIONS,
             $unit === 'command', $unit === 'job' => ['landlord'],
+            $unit === 'page' => self::PAGE_OPTIONS,
             $unit === 'model' && $flavor === 'domain' => self::MODEL_OPTIONS,
             default => [],
         };
-        $unknown = array_values(array_filter($options, fn (string $option): bool => ! in_array($option, $allowed, true) && ! ($unit === 'model' && $flavor === 'domain' && str_starts_with($option, 'enum='))));
+        $unknown = array_values(array_filter($options, fn (string $option): bool => ! in_array($option, $allowed, true) && ! ($unit === 'model' && $flavor === 'domain' && str_starts_with($option, 'enum=')) && ! ($unit === 'page' && str_starts_with($option, 'public='))));
 
         if ($unknown !== []) {
             throw new InvalidArgumentException('Unknown option --'.implode(', --', $unknown).' for '.$unit.($unit === 'model' ? ' --flavor='.$flavor : '').'.');
@@ -300,7 +304,7 @@ final class Maker
         ];
 
         [$files, $route] = match ($unit) {
-            'page' => $this->page($flavor, $name, $slug, $app, $pages, $tests, $values),
+            'page' => $this->page($flavor, $name, $slug, $app, $pages, $tests, $values, $options),
             'action' => [[
                 "{$app}/Actions/{$name}.php" => 'action.stub',
                 "{$tests}/Actions/{$name}Test.php" => 'action.test.stub',
@@ -926,8 +930,24 @@ final class Maker
      * @param  array<string, string>  $values
      * @return array{0: array<string, string|array{0: string, 1: array<string, string>}>, 1: string}
      */
-    private function page(string $flavor, string $name, string $slug, string $app, string $pages, string $tests, array &$values): array
+    private function page(string $flavor, string $name, string $slug, string $app, string $pages, string $tests, array &$values, array $options = []): array
     {
+        // What the page declares about itself, read by tey/kit's RouteInvariants instead of a stored route table: `public=<why>` adds #[PublicRoute]
+        // and a throttle; `breakout` the kit.breakout route default. A form's write declares nothing: its Save action does not authorise, so the
+        // host adds a workspace.ability middleware or a real #[AuthorizedBy] operation, and RouteInvariants::guardedWrites() names it until then.
+        $public = null;
+        foreach ($options as $option) {
+            if (str_starts_with($option, 'public=')) {
+                $public = trim(substr($option, strlen('public=')));
+                if ($public === '') {
+                    throw new InvalidArgumentException('--public needs the reason the page is reached without signing in, e.g. --public="A share link: the token is the credential".');
+                }
+            }
+        }
+        $values['declaration_use'] = $public === null ? '' : "use Tey\\Kit\\Features\\Core\\Routing\\PublicRoute;\n";
+        $values['declaration'] = $public === null ? '' : '#[PublicRoute('.var_export($public, true).")]\n";
+        $suffix = ($public === null ? '' : "->middleware('throttle:60,1')").(in_array('breakout', $options, true) ? "->defaults('kit.breakout', true)" : '');
+        $route = fn (string $line): string => $suffix === '' ? $line : substr($line, 0, -1).$suffix.';';
         $controller = "{$values['namespace']}\\Http\\Controllers\\{$name}Controller";
         $directory = ucfirst($flavor);
         $files = [
@@ -941,16 +961,16 @@ final class Maker
             $files["{$app}/Actions/Save{$name}.php"] = ['action.stub', ['action' => "Save{$name}"]];
             $values['test_suffix'] = '/create';
 
-            return [$files, self::group($controller, ["Route::get('/{$slug}/create', 'create')->name('{$slug}.create');", "Route::post('/{$slug}', 'store')->name('{$slug}.store');"])];
+            return [$files, self::group($controller, [$route("Route::get('/{$slug}/create', 'create')->name('{$slug}.create');"), $route("Route::post('/{$slug}', 'store')->name('{$slug}.store');")])];
         }
 
         if ($flavor === 'show') {
             $values['test_suffix'] = '/1';
 
-            return [$files, self::group($controller, ["Route::get('/{$slug}/{id}', 'show')->name('{$slug}.show');"])];
+            return [$files, self::group($controller, [$route("Route::get('/{$slug}/{id}', 'show')->name('{$slug}.show');")])];
         }
 
-        return [$files, self::group($controller, ["Route::get('/{$slug}', 'index')->name('{$slug}.index');"])];
+        return [$files, self::group($controller, [$route("Route::get('/{$slug}', 'index')->name('{$slug}.index');")])];
     }
 
     /** @param list<string> $routes */
