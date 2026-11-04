@@ -179,6 +179,8 @@ Rule 54 applies only to running (deployed) applications, never packages; CI chec
 
 `deploy.migrate` checks that every deploy runs `php artisan migrate --force`. Packages rely on Laravel's `MigrationsEnded` and `NoPendingMigrations` events firing on each deploy.
 
+`kit.fonts` (advisory) reads tey/kit's own font probe. It warns when `kit.fonts_source` is `self` but the font files aren't published, because pages then fall back to the system fonts. Fix it by deploying `php artisan vendor:publish --tag=kit-fonts --force`, or by committing `public/vendor/kit/fonts`. Without tey/kit 0.7.17 or later the check is not applicable.
+
 - **Where it looks:** only at what the repository commits:
   - the paths in `preflight.deploy.script` (`PREFLIGHT_DEPLOY_SCRIPT`, comma-separated);
   - a Laravel Cloud config (`cloud.yml`, `cloud.yaml`, `.cloud/`);

@@ -18,7 +18,7 @@ use Throwable;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'queue.failed-store', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'queue.failed-store', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate', 'kit.fonts'];
 
     /**
      * SHA-256 of upstream public/favicon.ico, favicon.svg and apple-touch-icon.png.
@@ -129,6 +129,7 @@ final readonly class CoreCheck implements Check
             'ci.triggers' => $this->ciTriggers(),
             'nightwatch.ready' => $this->nightwatchReady(),
             'deploy.migrate' => $this->deployMigrate(),
+            'kit.fonts' => $this->kitFonts(),
             default => throw new InvalidArgumentException('Unknown core check: '.$this->check),
         };
     }
@@ -270,6 +271,24 @@ final readonly class CoreCheck implements Check
         $message = 'Workflow triggers, concurrency, draft guards and timeouts conform. '.$advisories.' Advisory docs-skip: review paths-ignore or a changes job against required checks online.';
 
         return $advisories === '' ? Result::pass($message) : Result::warn($message);
+    }
+
+    /** tey/kit's self-hosted fonts (kit.fonts_source = self) are published, read from the kit's own `kit.fonts-unpublished` probe. Without the files, pages use the system fonts. */
+    private function kitFonts(): Result
+    {
+        $container = Container::getInstance();
+        if (! $container->bound('kit.fonts-unpublished')) {
+            return Result::pass('Not applicable: no tey/kit font probe (tey/kit older than 0.7.17, or not installed).');
+        }
+        try {
+            $unpublished = ($container->make('kit.fonts-unpublished'))() === true;
+        } catch (Throwable) {
+            return Result::warn('Unknown: tey/kit\'s font probe failed. Check kit.fonts_source and public/vendor/kit/fonts.');
+        }
+
+        return $unpublished
+            ? Result::warn('kit.fonts_source is self but the font files are not published: pages use the system fonts. Deploy `php artisan vendor:publish --tag=kit-fonts --force`, or commit public/vendor/kit/fonts.')
+            : Result::pass('tey/kit\'s fonts are served as configured (the CDN, or self-hosted files that are published).');
     }
 
     private function favicon(): Result

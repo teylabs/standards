@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Preflight `kit.fonts` (advisory):** it warns at deploy when tey/kit's self-hosted fonts (`kit.fonts_source = self`) aren't published, read from the kit's own probe, and it passes for CDN fonts or published files. This prepares for kit 0.8 making self-hosted fonts the default.
+
 ## 0.11.57 - 2026-11-03
 
 ### Added
