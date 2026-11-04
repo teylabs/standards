@@ -76,7 +76,7 @@ nodes:
       - { answer: "None of these", next: ui-page.action-place.byo }
   - id: ui-page.modal-run
     recipe: Run in a modal
-    summary: "One request starts the work and opens its progress (Jasper, 2026-11-04). The kit action is a dialog descriptor with method post. Its controller has Docket start the run, or reuse the one running for the same subject, and answers with the modal, passing the run's ticket as a prop. The modal's Docket dialog body streams the run and passes its steps to the kit Checklist. The action shows ModalLink's loading as a spinner and ignores clicks while it loads, so dialogs never stack; a modal opened from code uses useModalVisit. No client POST and no app spinner code. See tey/kit docs/pending-actions.md."
+    summary: "One request starts the work and opens its progress (Jasper, 2026-11-04). The kit action is a dialog descriptor (GET to fetch, POST to start). Its controller starts the run with tey/docket, reusing the active one: `Docket::job($job)->name('report.preview')->about($subject)->uniqueBy(...)->dispatch()` reuses per user by default (tey/docket 0.6.5+); add `->shared()` for subject-level work, with a view policy that admits everyone it is shared with. The controller answers with the modal and `Docket::snapshot($ticket)` as a prop, which refuses a run the user may not view. The modal renders `<DocketRunDialog :run>`, which streams the run, with its `#steps` slot passed to the kit `<Checklist>`. The kit action shows ModalLink's loading as a spinner and ignores repeat clicks (tey/kit 0.7.32+); a modal opened from code uses useModalVisit. No client POST, no app spinner code. See tey/kit docs/pending-actions.md."
     kit: []
     checks: []
     paths: []

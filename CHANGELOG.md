@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Pattern leaf `ui-page.modal-run` names its parts: tey/docket's `uniqueBy()` (per user by default) and `->shared()`, `Docket::snapshot()` and `<DocketRunDialog :run>`, and tey/kit's `Checklist` and `useModalVisit`.
+
 ## 0.11.61 - 2026-11-04
 
 ### Added
