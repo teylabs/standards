@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Rule `no-pixel-pins`: tests assert behaviour and relations, not pinned pixel, colour or font values** (Jasper, 2026-11-04: "my concern is why these tests get written in the first place"). In an app's `tests/` (PHP and JS/TS), a statement is flagged when it compares a `getComputedStyle` value with a literal size, colour, font weight or font family, or compares an element's measured width or height with a number above 2. Relative checks pass: one box below another, equal widths, a difference within a tolerance, one element's style against another's. Pattern leaf `ui-page.layout-tests`.
+
+### Upgrading
+
+- **An app with pinned layout assertions fails `no-pixel-pins` until each is rewritten or allowlisted.** Run the conformance suite, then add one dated entry per reported statement (`rule: no-pixel-pins`, `target: tests/…:line`) with an expiry. Each entry goes stale once its statement is rewritten.
+
 ## 0.11.59 - 2026-11-04
 
 ### Added

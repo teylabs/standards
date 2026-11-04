@@ -504,6 +504,10 @@
                     "next": "ui-page.declared-guards"
                 },
                 {
+                    "answer": "A browser test of a page's layout or look (sizes, spacing, colours, fonts)",
+                    "next": "ui-page.layout-tests"
+                },
+                {
                     "answer": "None of these",
                     "next": "ui-page.app-wide.byo"
                 }
@@ -1241,6 +1245,32 @@
                 "invariants"
             ],
             "status": "ready"
+        },
+        "ui-page.layout-tests": {
+            "id": "ui-page.layout-tests",
+            "recipe": "Layout tests assert relations",
+            "summary": "A browser test asserts what the user gets and how elements relate (visible, in order, not overlapping, one below another, the same width as its neighbour, a class or data state), never a pinned pixel, colour or font value: design tokens change without the behaviour changing.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "no-pixel-pins"
+            ],
+            "paths": [],
+            "keywords": [
+                "browser test",
+                "layout test",
+                "getComputedStyle",
+                "getBoundingClientRect",
+                "pixel",
+                "px",
+                "height",
+                "width",
+                "font",
+                "colour",
+                "brittle test",
+                "visual"
+            ],
+            "status": "draft"
         },
         "ui-page.header-actions": {
             "id": "ui-page.header-actions",

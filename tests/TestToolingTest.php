@@ -6,6 +6,7 @@ use Illuminate\Filesystem\Filesystem;
 use PHPUnit\Framework\AssertionFailedError;
 use Symfony\Component\Process\Process;
 use Tey\Standards\Checks\Boost;
+use Tey\Standards\Checks\NoPixelPins;
 use Tey\Standards\Checks\PestBrowserOnly;
 use Tey\Standards\Checks\PestOnly;
 use Tey\Standards\Checks\PhpTag;
@@ -326,3 +327,54 @@ test('pest-browser-only takes a dated allowlist entry for an existing suite, and
     file_put_contents($this->toolingBase.'/package.json', json_encode(['devDependencies' => ['playwright' => '^1.50']]));
     expect(fn () => (new Conformance($config()))->assert('pest-browser-only'))->toThrow(AssertionFailedError::class, 'stale exception');
 });
+
+function pinTest(string $base, string $code, string $path = 'tests/Browser/ShellTest.php'): array
+{
+    browserApp($base, [], [$path => "<?php\n\n".$code."\n"]);
+
+    return (new NoPixelPins(new Configuration(...array_replace(get_object_vars(toolingConfiguration('Good')), ['base' => $base]))))->violations();
+}
+
+test('no-pixel-pins flags a test that pins a pixel, colour or font value', function (string $code, string $check) {
+    $violations = pinTest($this->toolingBase, $code);
+    expect($violations)->toHaveCount(1)
+        ->and($violations[0]['target'])->toBe('tests/Browser/ShellTest.php:3')
+        ->and($violations[0]['check'])->toContain($check)
+        ->and($violations[0]['hint'])->toContain('instead of a pinned pixel');
+})->with([
+    'a padding in px' => ['expect($page->script(\'() => getComputedStyle(document.querySelector("[data-row]")).paddingTop\'))->toBe(\'8px\');', 'computed style'],
+    'a colour' => ['expect($page->script(\'() => getComputedStyle(el).color === "rgb(15, 23, 42)"\'))->toBeTrue();', 'computed style'],
+    'a font family and weight' => ['expect($page->script(\'() => [getComputedStyle(t).fontFamily, getComputedStyle(t).fontWeight]\'))->toBe([\'Inter, sans-serif\', \'600\']);', 'computed style'],
+    'a height matcher' => ['expect($page->script(\'() => document.querySelector("[data-meta]").getBoundingClientRect().height\'))->toBeLessThanOrEqual(20);', 'width or height'],
+    'a width in the script' => ['expect($page->script(\'() => document.querySelector("[data-avatar]").getBoundingClientRect().width === 32\'))->toBeTrue();', 'width or height'],
+    'an offsetHeight' => ['expect($page->script(\'() => document.querySelector("[data-bar]").offsetHeight < 60\'))->toBeTrue();', 'width or height'],
+    'a chained expect over lines' => ["expect(\$page->script('() => document.querySelector(\"[data-card]\")\n    .getBoundingClientRect().height'))\n    ->toBeGreaterThan(300);", 'width or height'],
+]);
+
+test('no-pixel-pins allows relations, tolerances, style-to-style comparisons and comments', function () {
+    expect(pinTest($this->toolingBase, implode("\n", [
+        '// The old check pinned getComputedStyle(row).paddingTop to "8px" and its getBoundingClientRect().height to 40.',
+        'expect($page->script(\'() => { const a = q("[data-a]").getBoundingClientRect(); const b = q("[data-b]").getBoundingClientRect(); return a.top >= b.bottom; }\'))->toBeTrue();',
+        'expect($page->script(\'() => Math.abs(q("[data-a]").getBoundingClientRect().width - q("[data-b]").getBoundingClientRect().width) < 2\'))->toBeTrue();',
+        'expect($page->script(\'() => getComputedStyle(q("[data-a]")).color === getComputedStyle(q("[data-b]")).color\'))->toBeTrue();',
+        'expect($page->script(\'() => q("[data-list]").getBoundingClientRect().width > 0\'))->toBeTrue();',
+        'expect($page->script(\'() => getComputedStyle(q("[data-sheet]")).display\'))->toBe(\'grid\');',
+    ])))->toBe([]);
+});
+
+test('no-pixel-pins reads JS tests too, and skips a package with no Laravel app', function () {
+    expect(pinTest($this->toolingBase, "expect(document.querySelector('[data-x]').getBoundingClientRect().height).toBe(48);", 'tests/js/layout.test.mjs'))->toHaveCount(1);
+    unlink($this->toolingBase.'/composer.json');
+    expect((new NoPixelPins(new Configuration(...array_replace(get_object_vars(toolingConfiguration('Good')), ['base' => $this->toolingBase]))))->violations())->toBe([]);
+});
+
+test('no-pixel-pins takes a dated allowlist entry for an existing pin, and the entry goes stale once it is rewritten', function () {
+    $violation = pinTest($this->toolingBase, 'expect($page->script(\'() => getComputedStyle(row).paddingTop\'))->toBe(\'8px\');')[0];
+    unset($violation['hint']);
+    $entry = ['rule' => 'no-pixel-pins', ...$violation, 'reason' => 'Rewritten in the test pruning pass.', 'date' => '2026-11-04', 'expires' => '2099-12-31'];
+    $config = fn (): Configuration => new Configuration(...array_replace(get_object_vars($this->toolingConfig), ['allowlist' => [$entry]]));
+    (new Conformance($config()))->assert('no-pixel-pins');
+    file_put_contents($this->toolingBase.'/tests/Browser/ShellTest.php', "<?php\n\nexpect(\$page->script('() => q(\"[data-row]\").dataset.density'))->toBe('compact');\n");
+    expect(fn () => (new Conformance($config()))->assert('no-pixel-pins'))->toThrow(AssertionFailedError::class, 'stale exception');
+});
+
