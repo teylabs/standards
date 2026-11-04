@@ -170,7 +170,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'kit.fonts' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -629,7 +629,7 @@ test('every selected check and the final summary are logged on the standards or 
 test('[regression] a non-interactive deploy run prints only the checks that need attention and never the word warning', function () {
     $quiet = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false);
     expect($quiet->getStatusCode())->toBe(0)
-        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 24 checks, 23 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
+        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 25 checks, 24 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
 
     $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => null]);
     $attention = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false)->getDisplay();
@@ -1693,3 +1693,32 @@ test('queue.failed-store: a Laravel Cloud managed queue gets an advisory naming 
     'database' => ['database', 'pass', ['one store']],
     'redis' => ['redis', 'pass', ['one store']],
 ]);
+
+test('kit.fonts: reads tey/kit\'s own probe; unpublished self-hosted fonts warn, published or CDN fonts pass, no probe is not applicable', function () {
+    $container = Illuminate\Container\Container::getInstance();
+    $had = $container->bound('kit.fonts-unpublished');
+    $saved = $had ? $container->make('kit.fonts-unpublished') : null;
+    $check = fn (): Tey\Standards\Preflight\Result => (new CoreCheck('kit.fonts', new Repository([]), dirname(__DIR__)))->run();
+
+    try {
+        if ($had) {
+            $container->offsetUnset('kit.fonts-unpublished');
+        }
+        expect($check()->status)->toBe(Tey\Standards\Preflight\Status::Pass)->and($check()->message)->toContain('Not applicable')
+            ->and((new CoreCheck('kit.fonts', new Repository([]), dirname(__DIR__)))->level())->toBe(Tey\Standards\Preflight\Level::Advisory);
+
+        $container->instance('kit.fonts-unpublished', fn (): bool => true);
+        expect($check()->status)->toBe(Tey\Standards\Preflight\Status::Warn)->and($check()->message)->toContain('vendor:publish --tag=kit-fonts --force');
+
+        $container->instance('kit.fonts-unpublished', fn (): bool => false);
+        expect($check()->status)->toBe(Tey\Standards\Preflight\Status::Pass);
+
+        $container->instance('kit.fonts-unpublished', fn (): bool => throw new RuntimeException('boom'));
+        expect($check()->status)->toBe(Tey\Standards\Preflight\Status::Warn)->and($check()->message)->toStartWith('Unknown');
+    } finally {
+        $container->offsetUnset('kit.fonts-unpublished');
+        if ($had) {
+            $container->instance('kit.fonts-unpublished', $saved);
+        }
+    }
+});

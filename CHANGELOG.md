@@ -5,6 +5,7 @@
 ### Added
 
 - **`standards:make page --public="why"` and `--breakout`:** the generated page declares what it is, for tey/kit's `RouteInvariants` (kit 0.7.25 or later). `--public` adds `#[PublicRoute('why')]` and a throttle, and `--breakout` adds the `kit.breakout` route default. A form's write declares nothing: its Save action does not authorise, so the host adds an ability middleware or a real `#[AuthorizedBy]`.
+- **Preflight `kit.fonts` (advisory):** it warns at deploy when tey/kit's self-hosted fonts (`kit.fonts_source = self`) aren't published, read from the kit's own probe, and it passes for CDN fonts or published files. This prepares for kit 0.8 making self-hosted fonts the default.
 
 ## 0.11.57 - 2026-11-03
 
