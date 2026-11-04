@@ -7,6 +7,7 @@ nodes:
       - { answer: "After a request, in the background", next: background.job }
       - { answer: "On a schedule", next: background.schedule }
       - { answer: "When an operator runs a command", next: background.command }
+      - { answer: "When a broadcast refreshes an open page", next: background.live }
       - { answer: "None of these", next: background.byo }
   - id: background.job
     recipe: Queued job
@@ -36,6 +37,14 @@ nodes:
     keywords: [command, artisan, operator, backfill, maintenance, report, dry run, apply, idempotent]
     status: ready
     evidence: { apps: 6, count: 11, prs: 11, past_apps: 18, past_count: 129 }
+  - id: background.live
+    recipe: Live props
+    summary: "Inertia live props refresh an open page when a notice broadcasts: tey/kit's LiveProps::on makes the view-model props live (capability-gated with `when`), echoLiveTransport carries them, useLiveFallbackPoll keeps a slow poll, and a component's own reader stands down with useIsLive. The notice is ShouldBroadcastNow, on a private workspace-scoped channel authorised in routes/channels.php."
+    kit: []
+    checks: ['live.broadcast-now']
+    paths: []
+    keywords: [live props, live, broadcast, realtime, websocket, reverb, echo, refresh on change, push updates]
+    status: draft
   - id: background.byo
     recipe: Build your own
     summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
