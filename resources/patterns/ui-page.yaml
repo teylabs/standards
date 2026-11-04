@@ -34,6 +34,7 @@ nodes:
     options:
       - { answer: "Adopting every kit surface across the app (standards:adoption)", next: ui-page.kit-adoption }
       - { answer: "A test that guards every route or page (a route snapshot, a list of modal or exempt pages)", next: ui-page.declared-guards }
+      - { answer: "A browser test of a page's layout or look (sizes, spacing, colours, fonts)", next: ui-page.layout-tests }
       - { answer: "None of these", next: ui-page.app-wide.byo }
   - id: ui-page.kit-owned
     question: Which kit-owned page?
@@ -317,6 +318,15 @@ nodes:
     paths: []
     keywords: [routes.json, route snapshot, route table, page list, modal pages, exemption list, guard test, invariants]
     status: ready
+  - id: ui-page.layout-tests
+    recipe: Layout tests assert relations
+    summary: "A browser test asserts what the user gets and how elements relate (visible, in order, not overlapping, one below another, the same width as its neighbour, a class or data state), never a pinned pixel, colour or font value: design tokens change without the behaviour changing."
+    kit: []
+    components: []
+    checks: ['no-pixel-pins']
+    paths: []
+    keywords: [browser test, layout test, getComputedStyle, getBoundingClientRect, pixel, px, height, width, font, colour, brittle test, visual]
+    status: draft
   - id: ui-page.header-actions
     recipe: Page header actions
     summary: A page header shows one filled primary, up to two secondaries and a More menu, split by the kit from server descriptors with a priority.
