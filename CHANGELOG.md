@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Pattern leaf `ui-page.modal-run` (draft), run in a modal: one POST through a kit dialog action whose controller starts or reuses a Docket run and answers with the modal and the run's ticket, with the kit action's pending spinner and double-click guard.
+
 ## 0.11.60 - 2026-11-04
 
 ### Added
