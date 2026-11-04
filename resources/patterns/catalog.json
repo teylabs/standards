@@ -617,10 +617,39 @@
                     "next": "ui-page.action-menu"
                 },
                 {
+                    "answer": "It starts work and shows its progress in a modal",
+                    "next": "ui-page.modal-run"
+                },
+                {
                     "answer": "None of these",
                     "next": "ui-page.action-place.byo"
                 }
             ]
+        },
+        "ui-page.modal-run": {
+            "id": "ui-page.modal-run",
+            "recipe": "Run in a modal",
+            "summary": "One request starts the work and opens its progress (Jasper, 2026-11-04). The kit action is a dialog descriptor with method post. Its controller has Docket start the run, or reuse the one running for the same subject, and answers with the modal, passing the run's ticket as a prop. The modal's Docket dialog body streams the run and passes its steps to the kit Checklist. The action shows ModalLink's loading as a spinner and ignores clicks while it loads, so dialogs never stack; a modal opened from code uses useModalVisit. No client POST and no app spinner code. See tey/kit docs/pending-actions.md.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "modal",
+                "dialog",
+                "progress",
+                "preview",
+                "report",
+                "export",
+                "docket",
+                "run",
+                "spinner",
+                "loading",
+                "double click",
+                "pending",
+                "checklist"
+            ],
+            "status": "draft"
         },
         "ui-page.larger": {
             "id": "ui-page.larger",
