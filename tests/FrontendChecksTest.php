@@ -477,7 +477,10 @@ test('ui header-actions reads a page ViewModel\'s literal actions and a #actions
         ['more than 3 header actions with no priority; set priority to choose the visible ones']],
     'a non-page class' => [['app/Support/PostActions.php' => str_replace('extends PageViewModel', '', headerActionsViewModel("new Action('A', '/a'), new Action('B', '/b'), new Action('C', '/c'), new Action('D', '/d')"))], []],
     'a slot with four controls' => [['resources/js/pages/Posts.vue' => '<template><Page><template #actions><Button>A</Button><Button>B</Button><a href="/c">C</a><button>D</button></template></Page></template>'],
-        ['header #actions slot holds more than 3 controls; pass descriptors to Page :actions']],
+        ['header #actions slot holds more than 3 controls; keep up to 3 visible and put the rest in a ButtonGroup #menu']],
+    'explicit actions with a ButtonGroup menu' => [['resources/js/pages/Posts.vue' => '<template><Page><template #actions><ButtonGroup><InertiaAction :action="a.edit" /><InertiaAction :action="a.copy" /><template #menu><DropdownAction :action="a.share" /><DropdownAction :action="a.archive" /><DropdownMenuItem>X</DropdownMenuItem></template></ButtonGroup></template></Page></template>'], []],
+    'four InertiaActions' => [['resources/js/pages/Posts.vue' => '<template><Page><template #actions><ButtonGroup><InertiaAction :action="a.a" /><InertiaAction :action="a.b" /><InertiaAction :action="a.c" /><InertiaAction :action="a.d" /></ButtonGroup></template></Page></template>'],
+        ['header #actions slot holds more than 3 controls; keep up to 3 visible and put the rest in a ButtonGroup #menu']],
     'a slot with three controls' => [['resources/js/pages/Posts.vue' => '<template><Page><template #actions><Button>A</Button><Button>B</Button><button>C</button></template></Page></template>'], []],
 ]);
 

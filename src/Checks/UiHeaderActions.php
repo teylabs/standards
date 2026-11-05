@@ -51,7 +51,7 @@ final class UiHeaderActions
         }
         foreach ((new FrontendSource($config))->appFiles() as $path => $text) {
             if (str_ends_with($path, '.vue') && self::slotControls($text, $config) > self::MAX_VISIBLE) {
-                $violations[] = ['target' => $path, 'check' => 'header #actions slot holds more than 3 controls; pass descriptors to Page :actions'];
+                $violations[] = ['target' => $path, 'check' => 'header #actions slot holds more than 3 controls; keep up to 3 visible and put the rest in a ButtonGroup #menu'];
             }
         }
 
@@ -100,11 +100,36 @@ final class UiHeaderActions
 
     private static function slotControls(string $source, Configuration $config): int
     {
-        $template = FrontendSource::template($source);
-        if (! preg_match('~<template\s+(?:#actions|v-slot:actions)\b[^>]*>(.*?)</template>~s', $template, $slot)) {
+        $slot = self::slot(FrontendSource::template($source), '(?:#actions|v-slot:actions)');
+        if ($slot === null) {
             return 0;
         }
+        // A ButtonGroup's #menu holds the overflow: its items are not visible controls.
+        while (($menu = self::slot($slot, '(?:#menu|v-slot:menu)', true)) !== null) {
+            $slot = $menu;
+        }
+        $config = new Configuration(...array_replace(get_object_vars($config), ['uiActionComponents' => [...$config->uiActionComponents, 'InertiaAction']]));
 
-        return count(FrontendSource::actions('<template>'.$slot[1].'</template>', $config));
+        return count(FrontendSource::actions('<template>'.$slot.'</template>', $config));
+    }
+
+    /**
+     * The inside of the first `<template NAME>` (balanced against nested templates), or with $remove the source with that template taken out; null when absent.
+     */
+    private static function slot(string $source, string $name, bool $remove = false): ?string
+    {
+        if (! preg_match('~<template\s+'.$name.'\b[^>]*>~', $source, $open, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+        $start = $open[0][1] + strlen($open[0][0]);
+        $depth = 1;
+        $offset = $start;
+        while ($depth > 0 && preg_match('~<template\b[^>]*>|</template>~', $source, $tag, PREG_OFFSET_CAPTURE, $offset)) {
+            $depth += str_starts_with($tag[0][0], '</') ? -1 : 1;
+            $offset = $tag[0][1] + strlen($tag[0][0]);
+        }
+        $end = $depth === 0 ? $offset - strlen('</template>') : strlen($source);
+
+        return $remove ? substr($source, 0, $open[0][1]).substr($source, $offset) : substr($source, $start, $end - $start);
     }
 }
