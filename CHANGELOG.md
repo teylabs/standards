@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Advisory rule `vm.nested-reach`**: a page hands a structured prop whole to its child (`v-bind`) and reads none of its fields. The prop list comes from the page's generated ViewModel type. It's reported by `standards:check` and never fails until an app opts in. `check-ids.json` maps `VM-24` and `VM-27` to it.
+
 ## 0.11.68 - 2026-11-05
 
 ### Added

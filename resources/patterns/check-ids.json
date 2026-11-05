@@ -2,7 +2,17 @@
     "schema": 1,
     "about": "Which standards check covers each pattern-catalog id. The catalog's text is kept elsewhere; this maps ids to rules only. A rule listed in Gate::ADVISORY reports without failing until an app opts in through Configuration::optionalRules.",
     "map": {
-        "VM-14": ["vm.typed-pages"],
-        "VM-16b": ["vm.shaped-arrays"]
+        "VM-14": [
+            "vm.typed-pages"
+        ],
+        "VM-16b": [
+            "vm.shaped-arrays"
+        ],
+        "VM-24": [
+            "vm.nested-reach"
+        ],
+        "VM-27": [
+            "vm.nested-reach"
+        ]
     }
 }

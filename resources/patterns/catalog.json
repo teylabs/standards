@@ -785,7 +785,8 @@
                 "descriptors",
                 "js-imports",
                 "vm.typed-pages",
-                "vm.shaped-arrays"
+                "vm.shaped-arrays",
+                "vm.nested-reach"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -853,7 +854,8 @@
                 "descriptors",
                 "js-imports",
                 "vm.typed-pages",
-                "vm.shaped-arrays"
+                "vm.shaped-arrays",
+                "vm.nested-reach"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",

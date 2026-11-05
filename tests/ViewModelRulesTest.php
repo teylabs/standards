@@ -80,5 +80,38 @@ test('the id-to-check map names only rules standards has', function () {
             expect(Conformance::TESTS)->toHaveKey($rule);
         }
     }
-    expect(array_intersect(Gate::ADVISORY, ['vm.typed-pages', 'vm.shaped-arrays']))->toHaveCount(2);
+    expect(array_intersect(Gate::ADVISORY, ['vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach']))->toHaveCount(3);
+});
+
+test('a page that reads into a structured prop is a finding; scalars, v-if, v-for and passing it whole are not', function () {
+    mkdir($this->vmBase.'/resources/js/generated', 0777, true);
+    file_put_contents($this->vmBase.'/resources/js/generated/types.ts', <<<'TS'
+        export type OrdersViewModel = {
+            title: string;
+            status: 'open' | 'closed';
+            count: number | null;
+            limits: { accept: string; maxBytes: number };
+            summary: OrderSummary | null;
+            rows: OrderRow[];
+        };
+        TS);
+    $check = function (string $template, string $script = ''): array {
+        file_put_contents($this->vmBase.'/resources/js/pages/Orders/Index/Page.vue', "<script setup lang=\"ts\">\nimport type { OrdersViewModel } from '@/generated/types';\nconst props = defineProps<OrdersViewModel>();\n".$script."\n</script>\n<template>".$template."</template>\n");
+
+        return array_column((new Conformance(($this->configuration)()))->violations('vm.nested-reach'), 'check');
+    };
+
+    expect($check('<h1>{{ title.length }} {{ status }} {{ count }}</h1><Summary v-if="summary" v-bind="summary" /><Row v-for="row in rows" :key="row.id" v-bind="row" /><Limits :limits="limits" />'))->toBe([]);
+    expect($check('<p>{{ limits.accept }} {{ limits?.maxBytes }}</p><Total :value="summary.total" />'))->toBe([
+        'page reads into its prop limits (accept, maxBytes): hand it whole to a child with v-bind',
+        'page reads into its prop summary (total): hand it whole to a child with v-bind',
+    ]);
+    expect($check('<div />', 'const first = computed(() => props.rows.at(0));'))->toBe(['page reads into its prop rows (at): hand it whole to a child with v-bind']);
+    expect($check('<p>{{ order.limits.accept }}</p>'))->toBe([], 'another object\'s field of the same name is not the prop');
+});
+
+test('a page whose generated type is not found is not judged', function () {
+    file_put_contents($this->vmBase.'/resources/js/pages/Orders/Index/Page.vue', "<script setup lang=\"ts\">\ndefineProps<MissingViewModel>();\n</script>\n<template><p>{{ limits.accept }}</p></template>\n");
+
+    expect((new Conformance(($this->configuration)()))->violations('vm.nested-reach'))->toBe([]);
 });
