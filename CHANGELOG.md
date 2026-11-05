@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`standards:allowlist --baseline --rule=<id> --expires=<Y-m-d>`** records a newly added rule's existing findings as allowlist entries. Each entry gets a reason (`--reason`, default a dated baseline note), today's date and the expiry. The rule can then fail on new findings only while the old ones burn down. Only the named rules are touched, entries already listed are kept, the file is read back before writing (or nothing is written), and `--dry-run` and `--json` work as with `--stamp-expiry`. A finding fixed later becomes a stale entry, which `standards:check` already asks you to delete, so a baseline only shrinks.
+
 ## 0.11.66 - 2026-11-05
 
 ### Changed
