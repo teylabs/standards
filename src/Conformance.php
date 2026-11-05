@@ -57,6 +57,7 @@ final class Conformance
         'php-tag' => '[php-tag] PHP files under the test and source roots open with <?php',
         'tia' => '[tia] local test runs require an explicit TIA choice',
         'boost' => '[boost] stack guidance and skills are present',
+        'format-lint' => '[format-lint] the frontend is formatted and linted with the house Prettier and ESLint config, enforced in CI',
         'guards.declared' => '[guards.declared] guards read declarations on routes and pages, not stored copies or written-out lists',
         '55' => '[rule 55] MCP capability declarations map UI, shared operations and parity tests',
         'no-dev' => '[no-dev boot] discovery roots do not depend on development tooling',
@@ -107,7 +108,7 @@ final class Conformance
 
     public function assert(string $rule): void
     {
-        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui back-strip', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db', 'guards.declared'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui back-strip', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db', 'guards.declared', 'format-lint'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             Assert::markTestSkipped('Optional rule ['.$rule.'] is disabled; enable it in Configuration::optionalRules.');
         }
 
@@ -140,7 +141,7 @@ final class Conformance
     /** @return list<array{target: string, check: string}> */
     public function violations(string $rule): array
     {
-        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui back-strip', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db', 'guards.declared'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['ui plus', 'ui new-tab', 'ui back-strip', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db', 'guards.declared', 'format-lint'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             return [];
         }
 
@@ -179,7 +180,7 @@ final class Conformance
             return $check->violations();
         }
 
-        if (in_array($rule, ['pest-only', 'pest-browser-only', 'no-pixel-pins', 'php-tag', 'tia', 'boost'], true)) {
+        if (in_array($rule, ['pest-only', 'pest-browser-only', 'no-pixel-pins', 'php-tag', 'tia', 'boost', 'format-lint'], true)) {
             return match ($rule) {
                 'pest-only' => (new Checks\PestOnly($this->config))->violations(),
                 'pest-browser-only' => (new Checks\PestBrowserOnly($this->config))->violations(),
@@ -187,6 +188,7 @@ final class Conformance
                 'php-tag' => (new Checks\PhpTag($this->config))->violations(),
                 'tia' => (new Checks\Tia($this->config))->violations(),
                 'boost' => (new Checks\Boost($this->config))->violations(),
+                'format-lint' => (new Checks\FormatLint($this->config))->violations(),
             };
         }
 

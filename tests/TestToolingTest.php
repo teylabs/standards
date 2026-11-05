@@ -389,3 +389,26 @@ test('no-pixel-pins takes a dated allowlist entry for an existing pin, and the e
     expect(fn () => (new Conformance($config()))->assert('no-pixel-pins'))->toThrow(AssertionFailedError::class, 'stale exception');
 });
 
+
+test('format-lint wants the scripts, both configs and a CI step, and skips an app without a package.json', function () {
+    $base = sys_get_temp_dir().'/standards-format-lint-'.bin2hex(random_bytes(6));
+    mkdir($base.'/.github/workflows', 0777, true);
+    $config = fn (): Tey\Standards\Configuration => new Tey\Standards\Configuration(...array_replace(get_object_vars(toolingConfiguration('Good')), ['base' => $base]));
+    try {
+        expect((new Tey\Standards\Checks\FormatLint($config()))->violations())->toBe([]);
+
+        file_put_contents($base.'/package.json', '{"scripts":{}}');
+        expect(array_column((new Tey\Standards\Checks\FormatLint($config()))->violations(), 'check'))->toBe([
+            'package.json has no "format:check" script running prettier', 'package.json has no "lint:check" script running eslint',
+            'no Prettier config', 'no ESLint flat config', 'CI does not run npm run format:check', 'CI does not run npm run lint:check',
+        ]);
+
+        file_put_contents($base.'/package.json', '{"scripts":{"format:check":"prettier --check resources/js","lint:check":"eslint resources/js"}}');
+        file_put_contents($base.'/.prettierrc', '{}');
+        file_put_contents($base.'/eslint.config.js', 'export default [];');
+        file_put_contents($base.'/.github/workflows/ci.yml', "steps:\n  - run: npm run format:check\n  - run: npm run lint:check\n");
+        expect((new Tey\Standards\Checks\FormatLint($config()))->violations())->toBe([]);
+    } finally {
+        (new Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
+    }
+});
