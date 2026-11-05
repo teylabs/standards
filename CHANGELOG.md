@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Rule `format-lint` (optional, opt in per app).** An app with a package.json has `format:check` (Prettier) and `lint:check` (ESLint) scripts, a Prettier config, an ESLint flat config, and CI running both. It checks presence, not the config's contents; tey/starter carries the house config. Named by the `ui-page.styling` leaf.
 ## 0.11.64 - 2026-11-05
 
 ### Changed

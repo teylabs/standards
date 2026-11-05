@@ -195,11 +195,12 @@ nodes:
       no style="..." attribute in .vue or Blade templates, no :style binding that sets a real CSS property, and no selector rules in app .css beyond
       Tailwind's directives, @font-face and custom-property tokens on :root and .dark. Kit-owned files, Filament theme CSS and resources/views/vendor/ are not scanned.
     kit: []
-    checks: ['styling.pure-tailwind']
+    checks: ['styling.pure-tailwind', 'format-lint']
     paths: ['resources/css/**']
     keywords: [styling.pure-tailwind, pure tailwind, inline style, style block, custom css, theme token]
     status: draft
     rules:
+      - "Format and lint the frontend with the house Prettier and ESLint config (copy it from tey/starter; build the ignore lists from php artisan kit:list), and run npm run format:check and npm run lint:check in CI (rule format-lint, opt-in per app)."
       - "Static styling: Tailwind utility classes in the template. style=\"color:red\" becomes class=\"text-red-600\"; a <style> block's rules become classes on the elements."
       - "Design tokens: declare them in @theme (--color-brand: oklch(...), then bg-brand) or, for a value that changes with the theme, as --token on :root and .dark. A reusable compound is an @utility; an animation is --animate-* with its @keyframes inside @theme."
       - "Dynamic values: bind a custom property and read it in an arbitrary-value class: :style=\"{ '--x': v }\" with class=\"[color:var(--x)]\" or w-(--x). Only quoted '--name' keys pass; :style=\"{ width: w }\" or :style=\"styles\" fails. In Blade, style=\"--x: {{ $v }}\" (custom properties only)."
