@@ -758,11 +758,11 @@ test('make model emits a domain model with its migration, factory, enums and tes
     }
 });
 
-test('the kit export snapshot is tey/kit v0.7.38\'s @kit/ui barrel: an app on that kit gets no mismatch warning', function () {
-    // The barrel as tey/kit v0.7.38 ships it (fixtures/KitExports), installed in a synthetic app.
+test('the kit export snapshot is tey/kit v0.7.53\'s @kit/ui barrel: an app on that kit gets no mismatch warning', function () {
+    // The barrel as tey/kit v0.7.53 ships it (fixtures/KitExports), installed in a synthetic app.
     $app = sys_get_temp_dir().'/standards-kit-exports-'.bin2hex(random_bytes(6));
     mkdir(dirname($app.'/vendor/tey/kit/'.KitExports::BARREL), 0777, true);
-    copy(dirname(__DIR__).'/fixtures/KitExports/index-v0.7.38.ts.stub', $app.'/vendor/tey/kit/'.KitExports::BARREL);
+    copy(dirname(__DIR__).'/fixtures/KitExports/index-v0.7.53.ts.stub', $app.'/vendor/tey/kit/'.KitExports::BARREL);
 
     try {
         expect(KitExports::snapshot())->toContain('PasskeyOffer')->toContain('PasswordRules')->toContain('StageNotice')->toContain('Surface')->toContain('Collapsible')->toContain('DescriptionList')->toContain('EmptyState')->toContain('Badge')->toContain('EmojiTray')->toContain('RadioCardGroup')->toContain('ActivityStream')->toContain('FormStatus')->toContain('InputRichText')

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The kit exports snapshot is refreshed to tey/kit v0.7.53** (131 components, from v0.7.38). Kit rows and the `kit-exports` mismatch warning now match current kit releases. The snapshot check (`kit-snapshot.yml`) runs daily instead of weekly, so a kit release that changes the barrel opens the refresh issue the next morning.
+
 ## 0.11.65 - 2026-11-05
 
 ### Added

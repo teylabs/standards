@@ -2,10 +2,10 @@ name: Kit snapshot
 
 # Opens (or updates) one issue when the latest tey/kit release's @kit/ui barrel differs from
 # resources/patterns/kit-exports.json, so the snapshot refresh lands in the next standards release
-# instead of apps seeing the lag first. Weekly, and on demand.
+# instead of apps seeing the lag first. Daily, and on demand.
 on:
   schedule:
-    - cron: '17 6 * * 1'
+    - cron: '17 6 * * *'
   workflow_dispatch:
 
 permissions:
