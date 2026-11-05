@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Filesystem\Filesystem;
 use Symfony\Component\Console\Tester\CommandTester;
 use Tey\Standards\Enforcement\AllowlistCommand;
+use Tey\Standards\Enforcement\AllowlistBaseliner;
 use Tey\Standards\Enforcement\AllowlistStamper;
 use Tey\Standards\Ratchet;
 
@@ -198,3 +199,50 @@ test('an entry with no literal date is skipped and reported; the run stamps the 
 
     expect(json_decode($json->getDisplay(), true, flags: JSON_THROW_ON_ERROR)['skipped'])->toBe([['rule' => '21', 'target' => 'b.php', 'check' => 'method | B::c', 'reason' => "no literal 'date' => '…' to stamp after; date it by hand"]]);
 });
+
+test('--baseline appends each finding of the named rules that the allowlist lacks, dated and expiring, and leaves everything else as it was', function () {
+    $base = allowlistApp();
+    $before = require $base.'/tests/Arch/debt.php';
+    $findings = [
+        ['rule' => '19', 'target' => 'App\\Models\\Concerns\\HasPhoto', 'check' => 'media model must implement HasMedia'],
+        ['rule' => 'VM-16b', 'target' => "app/ViewModels/Bench's.php", 'check' => 'array prop without a shape | items'],
+        ['rule' => 'VM-16b', 'target' => "app/ViewModels/Bench's.php", 'check' => 'array prop without a shape | items'],
+        ['rule' => 'VM-27', 'target' => 'resources/js/pages/Show.vue', 'check' => 'reaches into nested prop | bench'],
+    ];
+
+    $plan = AllowlistBaseliner::plan($base, 'tests/Arch/debt.php', $findings, ['VM-16b', '19'], '2027-02-01', 'Baseline: burn down.', new DateTimeImmutable('2026-11-05'));
+
+    expect($plan['added'])->toBe([['rule' => 'VM-16b', 'target' => "app/ViewModels/Bench's.php", 'check' => 'array prop without a shape | items']])
+        ->and($plan['kept'])->toBe(1);
+
+    AllowlistBaseliner::apply($base, $plan);
+    $after = (static fn (string $path): array => require $path)($base.'/tests/Arch/debt.php');
+
+    expect($after)->toBe([...$before, ['rule' => 'VM-16b', 'target' => "app/ViewModels/Bench's.php", 'check' => 'array prop without a shape | items', 'reason' => 'Baseline: burn down.', 'date' => '2026-11-05', 'expires' => '2027-02-01']])
+        ->and(file_get_contents($base.'/tests/Arch/debt.php'))->toContain('// Known debt, paid down by the dates below.');
+    expect((new Ratchet($after))->failures('VM-16b', [['target' => "app/ViewModels/Bench's.php", 'check' => 'array prop without a shape | items']]))->toBe([]);
+    expect((new Ratchet($after))->failures('VM-16b', [['target' => "app/ViewModels/Bench's.php", 'check' => 'array prop without a shape | items'], ['target' => 'app/ViewModels/New.php', 'check' => 'array prop without a shape | rows']]))
+        ->toBe(['violation: app/ViewModels/New.php | array prop without a shape | rows']);
+});
+
+test('--baseline writes nothing when every finding is already listed, and into an empty list too', function () {
+    $base = allowlistApp();
+    file_put_contents($base.'/tests/Arch/empty.php', "<?php\n\nreturn [\n];\n");
+    $none = AllowlistBaseliner::plan($base, 'tests/Arch/debt.php', [['rule' => '19', 'target' => 'App\\Models\\Concerns\\HasPhoto', 'check' => 'media model must implement HasMedia']], ['19'], '2027-02-01', 'Baseline.', new DateTimeImmutable('2026-11-05'));
+    expect($none['added'])->toBe([])->and($none['contents'])->toBe(file_get_contents($base.'/tests/Arch/debt.php'));
+
+    $plan = AllowlistBaseliner::plan($base, 'tests/Arch/empty.php', [['rule' => 'VM-27', 'target' => 'a.vue', 'check' => 'x']], ['VM-27'], '2027-02-01', 'Baseline.', new DateTimeImmutable('2026-11-05'));
+    AllowlistBaseliner::apply($base, $plan);
+    expect(require $base.'/tests/Arch/empty.php')->toBe([['rule' => 'VM-27', 'target' => 'a.vue', 'check' => 'x', 'reason' => 'Baseline.', 'date' => '2026-11-05', 'expires' => '2027-02-01']]);
+});
+
+test('--baseline refuses no rules, an empty reason, and an expiry that is not a real future date', function (array $rules, string $expires, string $reason, string $message) {
+    $base = allowlistApp();
+    expect(fn () => AllowlistBaseliner::plan($base, 'tests/Arch/debt.php', [], $rules, $expires, $reason, new DateTimeImmutable('2026-11-05')))
+        ->toThrow(InvalidArgumentException::class, $message);
+})->with([
+    'no rules' => [[], '2027-02-01', 'Baseline.', 'Name the rules to baseline'],
+    'empty reason' => [['19'], '2027-02-01', ' ', '--reason must not be empty'],
+    'not a date' => [['19'], '2027-02-30', 'Baseline.', 'real Y-m-d date'],
+    'today' => [['19'], '2026-11-05', 'Baseline.', 'not in the future'],
+]);
