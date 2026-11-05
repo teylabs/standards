@@ -7,23 +7,55 @@ export { initializeTheme, useAppearance } from './Appearance/useAppearance';
 export { browserTimezone, syncTimezoneCookie } from './timezone';
 export { default as Placeholder } from './Feedback/Placeholder.vue';
 export { default as Badge } from './Feedback/Badge.vue';
+export { default as FaintBackdrop } from './Surface/FaintBackdrop.vue';
 export { default as EmptyState } from './Feedback/EmptyState.vue';
 export { default as Alert } from './Feedback/Alert.vue';
 export { default as PasskeyOffer } from './Feedback/PasskeyOffer.vue';
-export { passkeyName, passkeySignInSupported, passkeysSupported, registerPasskey, signInWithPasskey } from './Feedback/passkeyOffer';
+export {
+    passkeyName,
+    passkeySignInSupported,
+    passkeysSupported,
+    registerPasskey,
+    signInWithPasskey,
+} from './Feedback/passkeyOffer';
 export { alertVariants } from './Feedback/alertVariants';
 export type { AlertTier, AlertVariant } from './Feedback/alertVariants';
 // An announcement laid over a stage or slide (docs/stage-notice.md).
 export { default as StageNotice } from './Feedback/StageNotice.vue';
 export { default as Checklist } from './Feedback/Checklist.vue';
-export { CHECKLIST_STATES, checklistMessage, checklistProgress, type ChecklistAction, type ChecklistItem, type ChecklistProgress, type ChecklistState } from './Feedback/checklist';
+export {
+    CHECKLIST_STATES,
+    checklistMessage,
+    checklistProgress,
+    type ChecklistAction,
+    type ChecklistItem,
+    type ChecklistProgress,
+    type ChecklistState,
+} from './Feedback/checklist';
 export { useChecklist } from './Feedback/useChecklist';
 export { useModalVisit } from './Overlay/useModalVisit';
-export { createRowSaver, rollupRowSaves, rowSaveFailure, type RowSaveState, type RowSaveResult, type RowVersion } from './Form/rowSave';
+export {
+    createRowSaver,
+    rollupRowSaves,
+    rowSaveFailure,
+    type RowSaveState,
+    type RowSaveResult,
+    type RowVersion,
+} from './Form/rowSave';
 export { useRowAutosave } from './Form/useRowAutosave';
 export { default as RowSaveStatus } from './Form/RowSaveStatus.vue';
-export { default as MediaCollection, type MediaItem, type MediaCollectionData } from './Media/MediaCollection.vue';
-export { stageNoticeClass, type StageNoticePlacement, type StageNoticeTone } from './Feedback/stageNotice';
+export {
+    default as MediaCollection,
+    type MediaItem,
+    type MediaCollectionData,
+} from './Media/MediaCollection.vue';
+export { default as FileList, type FileListItem } from './Media/FileList.vue';
+export { fileExtension, fileSize } from './Media/fileList';
+export {
+    stageNoticeClass,
+    type StageNoticePlacement,
+    type StageNoticeTone,
+} from './Feedback/stageNotice';
 // The app's one toast renderer, mounted by the shell; it renders the server's flashed `toast` (toasts.md). Sticky bottom bars register with useStickyBars.
 export { default as Toaster } from './Feedback/Toaster.vue';
 export { useStickyBars } from './Layout/stickyBars';
@@ -42,7 +74,11 @@ export { confirmationData, typedMatches } from './Overlay/confirmText';
 export { default as Modal } from './Overlay/Modal.vue';
 // A non-modal popover anchored to a trigger (Popover.md); a bottom sheet on phones.
 export { default as Popover } from './Overlay/Popover.vue';
-export type { PopoverDismiss, PopoverMessages, PopoverWidth } from './Overlay/popover';
+export type {
+    PopoverDismiss,
+    PopoverMessages,
+    PopoverWidth,
+} from './Overlay/popover';
 export { default as Field } from './Form/Field.vue';
 export { default as Page } from './Layout/Page.vue';
 // The trail above a page's heading; <Page> draws it in the shell, a page without <Page> renders it itself.
@@ -55,12 +91,27 @@ export { default as FormStatus } from './Form/FormStatus.vue';
 // A download or new-tab submit by a native hidden form on <body>, which outlives a closing modal (docs/form-link.md): the control, the function, and validate-then-open.
 export { default as FormLink } from './Form/FormLink.vue';
 export { hiddenFields, submitHiddenForm } from './Form/hiddenForm';
-export type { HiddenFormMethod, HiddenFormOptions, HiddenFormValue } from './Form/hiddenForm';
+export type {
+    HiddenFormMethod,
+    HiddenFormOptions,
+    HiddenFormValue,
+} from './Form/hiddenForm';
 export { useNewTabForm } from './Form/useNewTabForm';
 export type { NewTabFormOptions } from './Form/useNewTabForm';
 // A form saved by the app's own async handler (fetch, useHttp through httpSubmit, a socket), never an Inertia visit (submitForm.ts): FormCard, FormActions and Workbench take it as :form.
-export { SubmitError, httpSubmit, isSubmitForm, useSubmitForm, SUBMIT_MESSAGE_MAX } from './Form/submitForm';
-export type { HttpSubmitHooks, SubmitForm, SubmitFormErrors, SubmitFormOptions } from './Form/submitForm';
+export {
+    SubmitError,
+    httpSubmit,
+    isSubmitForm,
+    useSubmitForm,
+    SUBMIT_MESSAGE_MAX,
+} from './Form/submitForm';
+export type {
+    HttpSubmitHooks,
+    SubmitForm,
+    SubmitFormErrors,
+    SubmitFormOptions,
+} from './Form/submitForm';
 // Work the form doesn't see yet (an upload, an autosave) that the leave-page guard counts as unsaved (pendingWork.ts); BulkDrop's uploads join it.
 export { createPendingWork, usePendingWork } from './Form/pendingWork';
 export type { PendingWork } from './Form/pendingWork';
@@ -78,20 +129,61 @@ export { default as Section } from './Form/Section.vue';
 /** @deprecated Use InputSelect, the kit's rich select; Select stays until 0.4. */
 export { default as Select } from './Form/Select.vue';
 export { default as InputSelect } from './Form/InputSelect.vue';
-export type { InputSelectGroup, InputSelectMessages, InputSelectOption, InputSelectOptions, InputSelectValue } from './Form/inputSelect';
+export type {
+    InputSelectGroup,
+    InputSelectMessages,
+    InputSelectOption,
+    InputSelectOptions,
+    InputSelectValue,
+} from './Form/inputSelect';
 export { default as InputTags } from './Form/InputTags.vue';
 export { addTags, splitTags } from './Form/tags';
 export type { TagRejection, TagRules, TagsMessages } from './Form/tags';
 export { default as Textarea } from './Form/Textarea.vue';
 export { default as RadioCardGroup } from './Form/RadioCardGroup.vue';
 export { default as InputRichText } from './Form/InputRichText.vue';
-export { emptyDocument, isImageSource, isSafeColor, isSafeFontFamily, isSafeFontSize, isSafeLink, RICH_TEXT_ALLOW, RICH_TEXT_TOOLS, splitImageFiles, type RichImage, type RichTextAlign, type RichTextAllow, type RichTextStyleMark, type ContentError, type FileIntent, type RichBlock, type RichDocument, type RichInline, type RichListItem, type RichMark, type RichTextTool } from './Form/richText';
+export {
+    emptyDocument,
+    isImageSource,
+    isSafeColor,
+    isSafeFontFamily,
+    isSafeFontSize,
+    isSafeLink,
+    RICH_TEXT_ALLOW,
+    RICH_TEXT_TOOLS,
+    splitImageFiles,
+    type RichImage,
+    type RichTextAlign,
+    type RichTextAllow,
+    type RichTextStyleMark,
+    type ContentError,
+    type FileIntent,
+    type RichBlock,
+    type RichDocument,
+    type RichInline,
+    type RichListItem,
+    type RichMark,
+    type RichTextTool,
+} from './Form/richText';
 export type { RadioCardOption } from './Form/RadioCardGroup.vue';
 export { default as SegmentedToggle } from './Form/SegmentedToggle.vue';
 export { default as SwatchPicker } from './Form/SwatchPicker.vue';
-export { contrastRatio, luminance, markColour, normaliseHex } from './Form/swatch';
+export {
+    contrastRatio,
+    luminance,
+    markColour,
+    normaliseHex,
+} from './Form/swatch';
 export { echoLiveTransport, listenerLiveTransport } from './Live/liveTransport';
-export type { EchoChannelLike, EchoLike, EchoLiveOptions, KitLiveChannel, KitLiveTransport, ListenerLiveOptions, LiveListen } from './Live/liveTransport';
+export type {
+    EchoChannelLike,
+    EchoLike,
+    EchoLiveOptions,
+    KitLiveChannel,
+    KitLiveTransport,
+    ListenerLiveOptions,
+    LiveListen,
+} from './Live/liveTransport';
 export { useIsLive, useLiveFallbackPoll } from './Live/useLive';
 export type { LiveFallbackPollOptions } from './Live/useLive';
 export { default as Slider } from './Form/Slider.vue';
@@ -103,22 +195,64 @@ export { default as TimezoneSelect } from './Form/TimezoneSelect.vue';
 export { default as AddressFieldset } from './Form/AddressFieldset.vue';
 export { default as AddressText } from './Form/AddressText.vue';
 export { default as RegionSelect } from './Form/RegionSelect.vue';
-export { addressLines, countryName, normalizePostal, regionName, regionOptions } from './Form/address';
-export type { Address, AddressMessages, AddressPart, Region } from './Form/address';
+export {
+    addressLines,
+    countryName,
+    normalizePostal,
+    regionName,
+    regionOptions,
+} from './Form/address';
+export type {
+    Address,
+    AddressMessages,
+    AddressPart,
+    Region,
+} from './Form/address';
 export { default as RowActions } from './Table/RowActions.vue';
 // The index page's pieces around DataTable: the search-and-filters toolbar, the bulk bar for selected rows and the selection model (DataTable uses all three).
 export { default as IndexToolbar } from './Table/IndexToolbar.vue';
 export { default as BulkBar } from './Table/BulkBar.vue';
-export { emptySelection, isSelected, pageState, toggle as toggleSelection, togglePage, type Selection } from './Table/selection';
-export { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-export { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+export {
+    emptySelection,
+    isSelected,
+    pageState,
+    toggle as toggleSelection,
+    togglePage,
+    type Selection,
+} from './Table/selection';
+export {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+export {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetTitle,
+    SheetTrigger,
+} from '@/components/ui/sheet';
 export { default as InputDate } from './Form/InputDate.vue';
 export { default as InputDateRange } from './Form/InputDateRange.vue';
 export { default as InputMonth } from './Form/InputMonth.vue';
 export { default as InputYear } from './Form/InputYear.vue';
 export { default as InputTime } from './Form/InputTime.vue';
 export { default as InputTimeRange } from './Form/InputTimeRange.vue';
-export { isDate, isMonth, isYear, isTime, toInstant, fromInstant, type DateRange } from './Form/dateInput';
+export {
+    isDate,
+    isMonth,
+    isYear,
+    isTime,
+    toInstant,
+    fromInstant,
+    type DateRange,
+} from './Form/dateInput';
 export { default as InputNumber } from './Form/InputNumber.vue';
 /** @deprecated Use InputNumber; removed in 0.4. */
 export { default as NumberInput } from './Form/InputNumber.vue';
@@ -132,7 +266,19 @@ export { useScrollList } from './List/useScrollList';
 export type { ListAction, ListItem, ScrollPayload } from './List/useScrollList';
 export { default as ActivityStream } from './Feed/ActivityStream.vue';
 export { useCursorFeed, type CursorFeedConfig } from './Feed/useCursorFeed';
-export { ACTIVITY_TONES, activitySections, activityTone, createCursorFeed, trustedHtml, type ActivityDay, type ActivityEntry, type ActivityHeadline, type ActivityMeta, type ActivityTone, type CursorFeedPage } from './Feed/activity';
+export {
+    ACTIVITY_TONES,
+    activitySections,
+    activityTone,
+    createCursorFeed,
+    trustedHtml,
+    type ActivityDay,
+    type ActivityEntry,
+    type ActivityHeadline,
+    type ActivityMeta,
+    type ActivityTone,
+    type CursorFeedPage,
+} from './Feed/activity';
 export type * from './contract';
 // Computed values with their working (ComputedValue.md).
 export { default as ComputedValue } from './Explanation/ComputedValue.vue';
@@ -144,7 +290,12 @@ export type * from './Explanation/explanation.generated';
 export { default as FloatingToolbar } from './Layout/FloatingToolbar.vue';
 export { default as FloatingToolbarDot } from './Layout/FloatingToolbarDot.vue';
 export { runToolbarAction, type ToolbarAction } from './Layout/toolbarAction';
-export { anchorToolbar, unionRect, type AnchorRect, type ToolbarAnchor } from './Layout/toolbarAnchor';
+export {
+    anchorToolbar,
+    unionRect,
+    type AnchorRect,
+    type ToolbarAnchor,
+} from './Layout/toolbarAnchor';
 // A disclosure section (inspector sections): a real button with aria-expanded/aria-controls, `v-model:open`, content hidden while closed.
 export { default as Collapsible } from './Layout/Collapsible.vue';
 export { default as DescriptionList } from './Layout/DescriptionList.vue';
@@ -154,16 +305,30 @@ export { default as StickyBar } from './Layout/StickyBar.vue';
 export { default as PageEnd } from './Layout/PageEnd.vue';
 // Global search's field and its client rules; the shell's GlobalSearch places it in the header (docs/search.md).
 export { default as SearchBox } from './Search/SearchBox.vue';
-export { flatten as flattenSearch, move as moveSearch, opensSearch, type SearchGroup, type SearchResult } from './Search/search';
+export {
+    flatten as flattenSearch,
+    move as moveSearch,
+    opensSearch,
+    type SearchGroup,
+    type SearchResult,
+} from './Search/search';
 export { default as Surface } from './Surface/Surface.vue';
 export { provideSurface, useSurface } from './Surface/surface';
 export type { Surface as SurfaceContext } from './Surface/surface';
 export { default as ActionBar } from './Action/ActionBar.vue';
 export { default as ActionLabel } from './Action/ActionLabel.vue';
 export { default as ButtonGroup } from './Action/ButtonGroup.vue';
-export { isNavigation, layoutActions, placeActions } from './Action/actionPlacement';
+export {
+    isNavigation,
+    layoutActions,
+    placeActions,
+} from './Action/actionPlacement';
 export type { ActionDescriptor, ActionLayout } from './Action/actionPlacement';
-export { fitActions, type ActionFit, type ActionFitMeasure } from './Action/actionFit';
+export {
+    fitActions,
+    type ActionFit,
+    type ActionFitMeasure,
+} from './Action/actionFit';
 export { default as SectionHeader } from './Layout/SectionHeader.vue';
 // The menu family (Dropdown.md and its relatives, ButtonDropdown.md), over the shared MenuPanel (internal, not exported). Items must sit inside one of these menus or ButtonGroup's `menu` slot. Menu/DropdownMenu.vue (auto-wrapping items) is not exported: its name is the shadcn primitive's above.
 export { default as Dropdown } from './Menu/Dropdown.vue';
@@ -172,30 +337,95 @@ export { default as DropdownLink } from './Menu/DropdownLink.vue';
 export { default as DropdownConfirm } from './Menu/DropdownConfirm.vue';
 export { default as DropdownAction } from './Menu/DropdownAction.vue';
 export { default as InertiaAction } from './Action/InertiaAction.vue';
+// Cards (docs/cards.md): a Surface in parts, and the record, summary and action cards built from them.
+export { default as Card } from './Card/Card.vue';
+export { default as CardHeader } from './Card/CardHeader.vue';
+export { default as CardBody } from './Card/CardBody.vue';
+export { default as CardFooter } from './Card/CardFooter.vue';
+export { default as CardBanner } from './Card/CardBanner.vue';
+export { default as RecordCard } from './Card/RecordCard.vue';
+export { default as SummaryCard } from './Card/SummaryCard.vue';
+export { default as ActionCard } from './Card/ActionCard.vue';
+export { CARD_TONES, type CardTone } from './Card/cardTone';
+export {
+    normalAction,
+    type SingleAction,
+    type LegacyAction,
+} from './Action/singleAction';
 export { default as DropdownDelete } from './Menu/DropdownDelete.vue';
 export { default as DropdownModalLink } from './Menu/DropdownModalLink.vue';
+export {
+    useMenuPanel,
+    menuPanelKey,
+    type MenuPanelApi,
+} from './Menu/useMenuPanel';
 export { default as ButtonDropdown } from './Action/ButtonDropdown.vue';
 // Split work and its context (SplitPane.md) and the one dropzone (BulkDrop.md §9).
 export { default as SplitPane } from './Layout/SplitPane.vue';
 export { default as PaneScroll } from './Layout/PaneScroll.vue';
 export { default as PaneTabs } from './Layout/PaneTabs.vue';
+export { default as PageTabs } from './Layout/PageTabs.vue';
 export { default as PaneToggle } from './Layout/PaneToggle.vue';
 export type { SplitPreference } from './Layout/splitState';
 export { default as BulkDrop } from './Form/BulkDrop.vue';
-export { captureDrop, capturePaste, checkSelection, describeProblem, setCaptureFiles } from './Form/captureFiles';
+export {
+    captureDrop,
+    capturePaste,
+    checkSelection,
+    describeProblem,
+    setCaptureFiles,
+} from './Form/captureFiles';
 // A multi-pane editing surface for a sequence of items with a live preview (docs/workbench.md).
 export { default as Workbench } from './Workbench/Workbench.vue';
 export { default as WorkbenchNavigator } from './Workbench/WorkbenchNavigator.vue';
 export { default as WorkbenchInspector } from './Workbench/WorkbenchInspector.vue';
 export { default as WorkbenchZoom } from './Workbench/WorkbenchZoom.vue';
-export { useWorkbench, releaseWorkbench, type WorkbenchStore, type ReorderAction } from './Workbench/useWorkbench';
-export { DOCUMENT, FALLBACK, type WorkbenchItem, type WorkbenchMode, type WorkbenchRegion, type ZoomState, type SaveState, type InspectorContext, type InspectorScope, type WorkbenchElement } from './Workbench/workbench';
-export type { WorkbenchLayout, LayoutPreference, LayoutState } from './Workbench/workbenchLayout';
-export { provideWorkbenchStage, useWorkbenchStage, selectedRects, elementAttributeName, DEFAULT_ELEMENT_ATTRIBUTE, type WorkbenchStageContext } from './Workbench/workbenchStage';
+export {
+    useWorkbench,
+    releaseWorkbench,
+    type WorkbenchStore,
+    type ReorderAction,
+} from './Workbench/useWorkbench';
+export {
+    DOCUMENT,
+    FALLBACK,
+    type WorkbenchItem,
+    type WorkbenchMode,
+    type WorkbenchRegion,
+    type ZoomState,
+    type SaveState,
+    type InspectorContext,
+    type InspectorScope,
+    type WorkbenchElement,
+} from './Workbench/workbench';
+export type {
+    WorkbenchLayout,
+    LayoutPreference,
+    LayoutState,
+} from './Workbench/workbenchLayout';
+export {
+    provideWorkbenchStage,
+    useWorkbenchStage,
+    selectedRects,
+    elementAttributeName,
+    DEFAULT_ELEMENT_ATTRIBUTE,
+    type WorkbenchStageContext,
+} from './Workbench/workbenchStage';
 // Dates and times shown to the viewer (docs/date-time.md): a calendar date never shifts between zones; an instant shows in the viewer's (kitTimezone).
 export { default as DateTime } from './Data/DateTime.vue';
-export { formatDateTime, fullDateTime, isCalendarDate, type DateTimeFormat, type DateTimeOptions } from './Data/dateTime';
+export {
+    formatDateTime,
+    fullDateTime,
+    isCalendarDate,
+    type DateTimeFormat,
+    type DateTimeOptions,
+} from './Data/dateTime';
 export { useTimezone } from './Data/useTimezone';
 export { default as SortableList } from './Data/SortableList.vue';
 export { default as SortableHandle } from './Data/SortableHandle.vue';
-export { useSortable, moveAnnouncement, gripMove, type UseSortableOptions } from './Data/sortable';
+export {
+    useSortable,
+    moveAnnouncement,
+    gripMove,
+    type UseSortableOptions,
+} from './Data/sortable';
