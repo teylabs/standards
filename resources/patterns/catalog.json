@@ -783,7 +783,9 @@
                 "20",
                 "21",
                 "descriptors",
-                "js-imports"
+                "js-imports",
+                "vm.typed-pages",
+                "vm.shaped-arrays"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -849,7 +851,9 @@
                 "20",
                 "21",
                 "descriptors",
-                "js-imports"
+                "js-imports",
+                "vm.typed-pages",
+                "vm.shaped-arrays"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",

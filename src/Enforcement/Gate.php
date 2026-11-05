@@ -25,7 +25,7 @@ final class Gate
     public const OPTIONAL = ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db', 'format-lint'];
 
     /** Rules reported as advisories, never drift, until an app lists them in Configuration::optionalRules. */
-    public const ADVISORY = ['operator', 'integrations'];
+    public const ADVISORY = ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays'];
 
     public function __construct(
         private readonly Configuration $config,
