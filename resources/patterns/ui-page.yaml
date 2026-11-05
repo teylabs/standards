@@ -138,14 +138,15 @@ nodes:
   - id: ui-page.show
     recipe: Inertia show page
     summary: A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand.
-    kit: ['@kit/ui Page', '@kit/ui SectionHeader', '@kit/ui Section', '@kit/ui DescriptionList', '@kit/ui ActionBar']
+    kit: ['@kit/ui Page', '@kit/ui SectionHeader', '@kit/ui Section', '@kit/ui DescriptionList', '@kit/ui ButtonGroup', '@kit/ui InertiaAction', '@kit/ui DropdownAction']
     components:
       - { name: "page shell", kit_component: Page, use: "Wraps the record page", props_hint: "title" }
       - { name: "header", kit_component: SectionHeader, use: "Record title and its actions", props_hint: "title, actions slot" }
       - { name: "details", kit_component: Section, use: "Groups the record fields", props_hint: "title" }
       - { name: "fields", kit_component: DescriptionList, use: "The record's fields as term and description pairs (a real dl), with copy for an id or key", props_hint: "items, layout, copyable" }
-      - { name: "actions", kit_component: ActionBar, use: "Record actions placed by the kit", props_hint: "actions descriptors" }
-      - { name: "button set", kit_component: ButtonGroup, use: "Related buttons side by side", props_hint: "default slot" }
+      - { name: "actions", kit_component: ButtonGroup, use: "The record's actions written out by name: buttons in the default slot, the rest in the #menu (chevron)", props_hint: "default slot, #menu" }
+      - { name: "action button", kit_component: InertiaAction, use: "One named server action as a button; confirms when the action has a confirmationMessage", props_hint: "action (null renders nothing)" }
+      - { name: "menu action", kit_component: DropdownAction, use: "One named server action as a menu item", props_hint: "action" }
     make: standards:make crud --flavor=resource
     checks: ['20', '21', 'descriptors', 'js-imports']
     paths: ['app/**/Http/Controllers/**', 'resources/js/pages/**/Show/Page.vue']
@@ -290,7 +291,7 @@ nodes:
     kit: ['@kit/ui Button']
     components:
       - { name: "add button", kit_component: Button, use: "Add, New or Create with the Plus icon", props_hint: "href or @click, icon" }
-      - { name: "action bar", kit_component: ActionBar, use: "Where page-level actions sit", props_hint: "actions descriptors" }
+      - { name: "action group", kit_component: ButtonGroup, use: "Where page-level actions sit, each one written out by name", props_hint: "default slot, #menu" }
     make: standards:make page --flavor=index
     checks: ['ui plus']
     paths: []
@@ -339,26 +340,28 @@ nodes:
     status: draft
   - id: ui-page.header-actions
     recipe: Page header actions
-    summary: A page header shows one filled primary, up to two secondaries and a More menu, split by the kit from server descriptors with a priority.
-    kit: ['@kit/ui Page', '@kit/ui FloatingToolbar', '@kit/ui ActionBar']
+    summary: A page header shows up to three actions written out by name in a ButtonGroup (one filled primary at most), with the rest in its #menu.
+    kit: ['@kit/ui Page', '@kit/ui ButtonGroup', '@kit/ui InertiaAction', '@kit/ui DropdownAction']
     components:
-      - { name: "page header", kit_component: Page, use: "Pass the page's action descriptors as :actions; the kit splits them", props_hint: "actions, status" }
-      - { name: "floating toolbar", kit_component: FloatingToolbar, use: "The same split on a floating toolbar", props_hint: "actions, status, @page-action" }
+      - { name: "page header", kit_component: Page, use: "The #actions slot holds the header's ButtonGroup", props_hint: "#actions, status" }
+      - { name: "action group", kit_component: ButtonGroup, use: "The visible actions, then the rest in #menu", props_hint: "default slot, #menu" }
+      - { name: "action button", kit_component: InertiaAction, use: "A named server action as a button", props_hint: "action" }
+      - { name: "menu action", kit_component: DropdownAction, use: "A named server action in the #menu", props_hint: "action" }
     make: standards:make page --flavor=show
     checks: ['ui header-actions']
     paths: []
     keywords: [header actions, page actions, primary action, more menu, overflow, toolbar]
     status: ready
     rules:
-      - "Header actions are server descriptors passed to Page :actions (or FloatingToolbar), not hand-placed buttons in the #actions slot; the slot is the escape hatch for a control that is not an action."
-      - "Set `priority` on the Action: at most one `primary`, up to two `secondary`, the rest `overflow`. With more than 3 actions and no priority the kit folds the extras into More by position."
+      - "Write the actions out by name (Jasper, fleet-wide): the server sends a keyed map of Action descriptors (null or absent means not allowed), and the #actions slot places each in a ButtonGroup with InertiaAction, the rest as DropdownAction in its #menu. A catch-all renderer (Page :actions, ActionBar, FloatingToolbar :actions) is not the default."
+      - "At most one filled primary and three visible actions; the rest go in the #menu."
       - "On phone only the primary stays visible; everything else is in More. A status (saving, saved, error) goes in the #status slot or the status prop, which is aria-live polite."
   - id: ui-page.action-menu
     recipe: Record action menu
     summary: Action menus run actions only. Navigation goes in links or tabs, never in an action menu, and nothing hand-rolls a kit primitive.
-    kit: ['@kit/ui RowActions', '@kit/ui DropdownAction', '@kit/ui DropdownConfirm']
+    kit: ['@kit/ui ButtonGroup', '@kit/ui DropdownAction', '@kit/ui DropdownConfirm']
     components:
-      - { name: "row menu", kit_component: RowActions, use: "The action menu on a record", props_hint: "actions descriptors" }
+      - { name: "record menu", kit_component: ButtonGroup, use: "The action menu on a record: its #menu, each item written out by name", props_hint: "#menu" }
       - { name: "action item", kit_component: DropdownAction, use: "Runs an action", props_hint: "action" }
       - { name: "confirm item", kit_component: DropdownConfirm, use: "An action that needs confirmation", props_hint: "action, confirm text" }
       - { name: "delete item", kit_component: DropdownDelete, use: "Deletes with confirmation", props_hint: "href" }
@@ -619,9 +622,9 @@ nodes:
   - id: ui-page.external-sync
     recipe: External source sync
     summary: Connect an outside source, sync it on demand, show the last run and its result, and replace from the source behind a typed confirmation. Build your own from existing patterns; there is no generator yet.
-    kit: ['@kit/ui ActionBar', '@kit/ui DropdownConfirm', '@kit/ui Alert', '@kit/ui StageNotice', '@kit/ui Toaster', '@kit/ui EmptyState']
+    kit: ['@kit/ui ButtonGroup', '@kit/ui InertiaAction', '@kit/ui DropdownAction', '@kit/ui DropdownConfirm', '@kit/ui Alert', '@kit/ui StageNotice', '@kit/ui Toaster', '@kit/ui EmptyState']
     components:
-      - { name: "page actions", kit_component: ActionBar, use: "Server action descriptors: Link, Sync now, and Unlink and Replace from source in the ⌄ menu", props_hint: "actions" }
+      - { name: "page actions", kit_component: ButtonGroup, use: "Named server actions: Link and Sync now as InertiaAction, Unlink and Replace from source as DropdownAction in the #menu (⌄)", props_hint: "default slot, #menu" }
       - { name: "last run", kit_component: Alert, use: "The last run's status and result", props_hint: "variant, title" }
       - { name: "not linked", kit_component: EmptyState, use: "The page while nothing is linked, offering Link", props_hint: "title, body, actions" }
     checks: ['tenant-aware']
@@ -639,7 +642,7 @@ nodes:
   - id: ui-page.live-console
     recipe: Live console
     summary: Run a live session from a stage plus side panels that act on it in real time. Workbench edits records; a console runs a session. Build your own on kit Workbench regions; there is no generator yet.
-    kit: ['@kit/ui Workbench', '@kit/ui Section', '@kit/ui Collapsible', '@kit/ui ActionBar', '@kit/ui EmptyState']
+    kit: ['@kit/ui Workbench', '@kit/ui Section', '@kit/ui Collapsible', '@kit/ui ButtonGroup', '@kit/ui InertiaAction', '@kit/ui EmptyState']
     components:
       - { name: "console", kit_component: Workbench, use: "The stage and its panel regions", props_hint: "workbench-key, label" }
       - { name: "panel", kit_component: Collapsible, use: "One side panel in the stack", props_hint: "title" }
@@ -649,7 +652,7 @@ nodes:
     keywords: [live session, console, presenter, run a session, control room, real time, stage and panels, live show, presenter console, control room]
     status: draft
     rules:
-      - "Built on kit Workbench regions: the stage plus a panel stack of Sections or Collapsibles, with ActionBar descriptors. No hand-rolled layout."
+      - "Built on kit Workbench regions: the stage plus a panel stack of Sections or Collapsibles, with named actions in ButtonGroups. No hand-rolled layout."
       - "One realtime writer per session, held by a lock or lease."
       - "A documented keyboard transport map, with its keys announced in the help."
       - "A ready or empty state (kit EmptyState) while no session is open."

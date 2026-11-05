@@ -5,6 +5,11 @@
 ### Added
 
 - **Rule `format-lint` (optional, opt in per app).** An app with a package.json has `format:check` (Prettier) and `lint:check` (ESLint) scripts, a Prettier config, an ESLint flat config, and CI running both. It checks presence, not the config's contents; tey/starter carries the house config. Named by the `ui-page.styling` leaf.
+## 0.11.64 - 2026-11-05
+
+### Changed
+
+- **Actions are written out by name (fleet-wide rule).** The ui-page patterns (show page, header actions, add button, record menu, external sync, workbench) steer to a keyed map of the kit's `Action`, placed by name with `InertiaAction` in a `ButtonGroup` and `DropdownAction` in its `#menu`; a catch-all renderer (`ActionBar`, `Page :actions`, `RowActions`) is no longer the default. DataTable's own row menu is unchanged. `ui header-actions` points a crowded `#actions` slot at a `ButtonGroup #menu`, counts `InertiaAction` as a visible control, and no longer counts the items in a nested `#menu`. The kit exports snapshot is refreshed to tey/kit v0.7.38.
 
 ## 0.11.63 - 2026-11-05
 
