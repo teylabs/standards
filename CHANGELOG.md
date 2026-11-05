@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Two advisory ViewModel rules.** `vm.typed-pages`: a page declares its props as its generated ViewModel type, with no inline, untyped or non-ViewModel type. `vm.shaped-arrays`: a ViewModel prop that returns an array declares a `@return` shape or generic. Both are reported by `standards:check` and never fail until an app opts in through `Configuration::optionalRules`.
+- **`resources/patterns/check-ids.json`** maps pattern-catalog ids to the standards rules that check them (`VM-14` → `vm.typed-pages`, `VM-16b` → `vm.shaped-arrays`). A test keeps every mapped rule real.
+
 ## 0.11.67 - 2026-11-05
 
 ### Added
