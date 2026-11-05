@@ -338,7 +338,8 @@ function pinTest(string $base, string $code, string $path = 'tests/Browser/Shell
 test('no-pixel-pins flags a test that pins a pixel, colour or font value', function (string $code, string $check) {
     $violations = pinTest($this->toolingBase, $code);
     expect($violations)->toHaveCount(1)
-        ->and($violations[0]['target'])->toBe('tests/Browser/ShellTest.php:3')
+        ->and($violations[0]['target'])->toMatch('~^tests/Browser/ShellTest\.php#[0-9a-f]{12}$~')
+        ->and($violations[0]['hint'])->toStartWith('line 3: ')
         ->and($violations[0]['check'])->toContain($check)
         ->and($violations[0]['hint'])->toContain('instead of a pinned pixel');
 })->with([
@@ -366,6 +367,16 @@ test('no-pixel-pins reads JS tests too, and skips a package with no Laravel app'
     expect(pinTest($this->toolingBase, "expect(document.querySelector('[data-x]').getBoundingClientRect().height).toBe(48);", 'tests/js/layout.test.mjs'))->toHaveCount(1);
     unlink($this->toolingBase.'/composer.json');
     expect((new NoPixelPins(new Configuration(...array_replace(get_object_vars(toolingConfiguration('Good')), ['base' => $this->toolingBase]))))->violations())->toBe([]);
+});
+
+test('no-pixel-pins keeps an allowlist entry when lines above the pin change', function () {
+    $code = 'expect($page->script(\'() => getComputedStyle(row).paddingTop\'))->toBe(\'8px\');';
+    $violation = pinTest($this->toolingBase, $code)[0];
+    unset($violation['hint']);
+    $entry = ['rule' => 'no-pixel-pins', ...$violation, 'reason' => 'Rewritten in the test pruning pass.', 'date' => '2026-11-04', 'expires' => '2099-12-31'];
+    file_put_contents($this->toolingBase.'/tests/Browser/ShellTest.php', "<?php\n\n// A new line above the pin.\n\n".$code."\n");
+    (new Conformance(new Configuration(...array_replace(get_object_vars($this->toolingConfig), ['allowlist' => [$entry]]))))->assert('no-pixel-pins');
+    expect(true)->toBeTrue();
 });
 
 test('no-pixel-pins takes a dated allowlist entry for an existing pin, and the entry goes stale once it is rewritten', function () {

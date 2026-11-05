@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **`no-pixel-pins` names the statement, not its line.** A finding's target is now `path#<12-hex hash of the statement>` (the line moves to the hint), so an allowlist entry survives edits elsewhere in the file. Existing `path:line` entries go stale: re-run `standards:check` and copy the new targets into the allowlist.
+
 ## 0.11.62 - 2026-11-04
 
 ### Changed
