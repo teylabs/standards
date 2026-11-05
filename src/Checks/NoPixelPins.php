@@ -58,7 +58,8 @@ final readonly class NoPixelPins
             foreach ($this->statements((string) file_get_contents($this->config->base.'/'.$path)) as [$line, $statement]) {
                 $check = $this->pinned($statement);
                 if ($check !== null) {
-                    $violations[] = ['target' => $path.':'.$line, 'check' => $check, 'hint' => self::HINT];
+                    // The target names the statement, not its line, so an allowlist entry survives edits elsewhere in the file (the line is in the hint).
+                    $violations[] = ['target' => $path.'#'.substr(hash('sha256', (string) preg_replace('/\s+/', ' ', trim($statement))), 0, 12), 'check' => $check, 'hint' => 'line '.$line.': '.self::HINT];
                 }
             }
         }
