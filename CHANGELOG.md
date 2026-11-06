@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **kit-exports.json follows kit v0.9.0** (was v0.7.53): it adds `FinalizeControl` and `FinalizedBanner`.
+
 ## 0.11.72 - 2026-11-06
 
 ### Added
