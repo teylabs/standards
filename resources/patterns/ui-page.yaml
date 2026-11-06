@@ -131,7 +131,7 @@ nodes:
       - { name: "filters", kit_component: IndexToolbar, use: "Search and the server's filter choices (DataTable renders it)", props_hint: "table.choices" }
       - { name: "row menu", kit_component: RowActions, use: "Per-row actions from the server (DataTable renders it)", props_hint: "row.actions descriptors" }
     make: standards:make crud --flavor=resource
-    checks: ['20', '21', 'descriptors', 'js-imports', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument']
+    checks: ['20', '21', 'descriptors', 'js-imports', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure']
     paths: ['app/**/Http/Controllers/**', 'app/**/ViewModels/**', 'resources/js/pages/**/Index/Page.vue']
     keywords: [list, index, table, browse, overview]
     status: ready
@@ -148,7 +148,7 @@ nodes:
       - { name: "action button", kit_component: InertiaAction, use: "One named server action as a button; confirms when the action has a confirmationMessage", props_hint: "action (null renders nothing)" }
       - { name: "menu action", kit_component: DropdownAction, use: "One named server action as a menu item", props_hint: "action" }
     make: standards:make crud --flavor=resource
-    checks: ['20', '21', 'descriptors', 'js-imports', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument']
+    checks: ['20', '21', 'descriptors', 'js-imports', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure']
     paths: ['app/**/Http/Controllers/**', 'resources/js/pages/**/Show/Page.vue']
     keywords: [show, detail, view, record, relative time, date]
     status: ready

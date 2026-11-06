@@ -787,7 +787,8 @@
                 "vm.typed-pages",
                 "vm.shaped-arrays",
                 "vm.nested-reach",
-                "vue.bare-handler-argument"
+                "vue.bare-handler-argument",
+                "inertia.pure"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -857,7 +858,8 @@
                 "vm.typed-pages",
                 "vm.shaped-arrays",
                 "vm.nested-reach",
-                "vue.bare-handler-argument"
+                "vue.bare-handler-argument",
+                "inertia.pure"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
