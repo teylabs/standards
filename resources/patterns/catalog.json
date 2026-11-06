@@ -1023,9 +1023,9 @@
                 },
                 {
                     "name": "save trigger",
-                    "kit_component": "ActionBar",
-                    "use": "Descriptor buttons carry data-action, which ->from('<action id>') anchors the pulse or bubble to",
-                    "props_hint": "actions descriptors"
+                    "kit_component": "InertiaAction",
+                    "use": "The named Save action in the header #actions slot or FormActions; its data-action is what ->from('<action id>') anchors the pulse or bubble to (ui-page.header-actions: actions written out by name, not a catch-all ActionBar)",
+                    "props_hint": "the save Action descriptor"
                 },
                 {
                     "name": "row trigger",
