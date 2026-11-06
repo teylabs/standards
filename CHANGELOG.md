@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Advisory preflight check `schedule.running`**: when the app schedules tasks, a scheduler must run them. The package schedules a one-line heartbeat that records each tick in the cache. The check passes on a tick within `PREFLIGHT_SCHEDULE_MAX_SILENCE_MINUTES` (3), and warns when tasks are scheduled but the scheduler is silent. Nothing scheduled passes; `PREFLIGHT_SCHEDULE_EXPECT_SCHEDULER=false` declares an environment with no scheduler and leaves the schedule untouched.
+
 ## 0.11.70 - 2026-11-06
 
 ### Added

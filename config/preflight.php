@@ -42,4 +42,10 @@ return [
         // True once the post-deploy "0 failed jobs" check reads both stores on a Laravel Cloud managed queue (queue.failed-store).
         'failed_store_checked' => filter_var(env('PREFLIGHT_QUEUE_FAILED_STORE_CHECKED', false), FILTER_VALIDATE_BOOLEAN),
     ],
+    'schedule' => [
+        // schedule.running: false when this environment is meant to run no scheduler (a review app); the check then passes.
+        'expect_scheduler' => filter_var(env('PREFLIGHT_SCHEDULE_EXPECT_SCHEDULER', true), FILTER_VALIDATE_BOOLEAN),
+        // How recent the scheduler's last tick must be, in minutes.
+        'max_silence_minutes' => (int) env('PREFLIGHT_SCHEDULE_MAX_SILENCE_MINUTES', 3),
+    ],
 ];

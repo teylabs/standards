@@ -170,7 +170,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'kit.fonts' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'schedule.running' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'kit.fonts' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -629,7 +629,7 @@ test('every selected check and the final summary are logged on the standards or 
 test('[regression] a non-interactive deploy run prints only the checks that need attention and never the word warning', function () {
     $quiet = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false);
     expect($quiet->getStatusCode())->toBe(0)
-        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 25 checks, 24 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
+        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 26 checks, 25 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
 
     $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => null]);
     $attention = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false)->getDisplay();
@@ -1721,4 +1721,36 @@ test('kit.fonts: reads tey/kit\'s own probe; unpublished self-hosted fonts warn,
             $container->instance('kit.fonts-unpublished', $saved);
         }
     }
+});
+
+test('schedule.running passes with nothing scheduled, warns when tasks are scheduled but the scheduler is silent, and passes after a recent tick', function () {
+    // A real cache, as the scheduler and the heartbeat need one.
+    $this->preflight['config']->set('cache.default', 'array');
+    $this->preflight['config']->set('cache.stores.array', ['driver' => 'array']);
+    (new Illuminate\Cache\CacheServiceProvider($this->preflight))->register();
+    $this->preflight->alias('cache', Illuminate\Contracts\Cache\Factory::class);
+    $this->preflight->alias('cache.store', Illuminate\Contracts\Cache\Repository::class);
+    // Laravel binds the schedule as a singleton; the test container does the same.
+    $this->preflight->singleton(Illuminate\Console\Scheduling\Schedule::class);
+    $schedule = $this->preflight->make(Illuminate\Console\Scheduling\Schedule::class);
+    $run = fn (): array => preflightResults(preflightCommand($this->preflight, ['--only' => 'schedule', '--json' => true]))['schedule.running'];
+
+    expect($run())->toMatchArray(['level' => 'advisory', 'status' => 'pass', 'message' => 'Nothing is scheduled; no scheduler is needed.']);
+
+    $schedule->command('inspire')->everyMinute();
+    $silent = $run();
+    expect($silent['status'])->toBe('warn')->and($silent['message'])->toContain('No scheduler tick has been recorded although 1 tasks are scheduled', 'schedule:run');
+
+    // The heartbeat is scheduled once, and a tick records the time.
+    Tey\Standards\Preflight\ScheduleHeartbeat::register($schedule);
+    $heartbeats = array_values(array_filter($schedule->events(), fn ($event) => $event->description === Tey\Standards\Preflight\ScheduleHeartbeat::NAME));
+    expect($heartbeats)->toHaveCount(1);
+    $heartbeats[0]->run($this->preflight);
+    expect($run())->toMatchArray(['status' => 'pass'])->and($run()['message'])->toContain('within the last 3 minutes', '1 scheduled tasks');
+
+    $this->preflight->make('cache.store')->forever(Tey\Standards\Preflight\ScheduleHeartbeat::KEY, Illuminate\Support\Carbon::now()->subMinutes(10)->getTimestamp());
+    expect($run()['status'])->toBe('warn')->and($run()['message'])->toContain('has not run for over 3 minutes');
+
+    $this->preflight['config']->set('preflight.schedule.expect_scheduler', false);
+    expect($run()['status'])->toBe('pass');
 });

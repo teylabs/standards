@@ -40,6 +40,11 @@ final class StandardsServiceProvider extends ServiceProvider
         $this->publishes([__DIR__.'/../config/preflight.php' => $this->app->configPath('preflight.php')], 'standards-preflight-config');
         $this->publishes([__DIR__.'/../config/standards.php' => $this->app->configPath('standards.php')], 'standards-config');
 
+        // schedule.running's heartbeat: records each scheduler tick (PREFLIGHT_SCHEDULE_EXPECT_SCHEDULER=false leaves the schedule untouched).
+        if ($this->app['config']->get('preflight.schedule.expect_scheduler') !== false) {
+            $this->callAfterResolving(\Illuminate\Console\Scheduling\Schedule::class, fn (\Illuminate\Console\Scheduling\Schedule $schedule) => \Tey\Standards\Preflight\ScheduleHeartbeat::register($schedule));
+        }
+
         if ($this->app->runningInConsole()) {
             $this->commands([PreflightCommand::class, CheckCommand::class, PatternCommand::class, InstallCommand::class, MakeCommand::class, AllowlistCommand::class, AdoptionCommand::class]);
         }
