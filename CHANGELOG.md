@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Advisory rule `vm.page-size`:** a `Page.vue` over 500 lines should split along its component tree into nested ViewModels.
+- **`vm.shaped-arrays` flags a ViewModel prop with no return type** (generated as `unknown`), as well as a bare `array`.
+
+### Changed
+
+- **kit-exports.json follows kit v0.9.0** (was v0.7.53): it adds `FinalizeControl` and `FinalizedBanner`.
+
 ## 0.11.73 - 2026-11-06
 
 ### Fixed

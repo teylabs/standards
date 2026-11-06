@@ -38,12 +38,14 @@ test('a ViewModel array prop without a @return shape is a finding; a shape, a ge
         /** Rows. */
         public function described(): ?array { return null; }
         public function title(): string { return ''; }
+        public function untyped() { return 1; }
+        public function find($id) { return null; }
         private function helper(): array { return []; }
         public static function make(): array { return []; }
         public function __construct() {}
         PHP);
 
-    expect(array_column($violations, 'check'))->toBe(['array prop without a @return shape: rows()', 'array prop without a @return shape: described()'])
+    expect(array_column($violations, 'check'))->toBe(['prop without a return type: untyped()', 'array prop without a @return shape: rows()', 'array prop without a @return shape: described()'])
         ->and($violations[0]['target'])->toBe('app/ViewModels/OrdersViewModel.php');
 });
 
@@ -114,4 +116,14 @@ test('a page whose generated type is not found is not judged', function () {
     file_put_contents($this->vmBase.'/resources/js/pages/Orders/Index/Page.vue', "<script setup lang=\"ts\">\ndefineProps<MissingViewModel>();\n</script>\n<template><p>{{ limits.accept }}</p></template>\n");
 
     expect((new Conformance(($this->configuration)()))->violations('vm.nested-reach'))->toBe([]);
+});
+
+test('vm.page-size flags a page over the limit, and is advisory', function () {
+    $config = ($this->configuration)();
+    $write = fn (int $lines) => file_put_contents($this->vmBase.'/resources/js/pages/Orders/Index/Page.vue', implode("\n", array_fill(0, $lines, '<div />'))."\n");
+    $write(Tey\Standards\Checks\ViewModelPageSize::LIMIT);
+    expect((new Conformance($config))->violations('vm.page-size'))->toBe([]);
+    $write(Tey\Standards\Checks\ViewModelPageSize::LIMIT + 1);
+    expect(array_column((new Conformance($config))->violations('vm.page-size'), 'check'))->toBe(['page is over 500 lines: split it along its component tree, one nested ViewModel each'])
+        ->and(Gate::ADVISORY)->toContain('vm.page-size');
 });

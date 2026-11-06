@@ -23,14 +23,18 @@ export type { AlertTier, AlertVariant } from './Feedback/alertVariants';
 // An announcement laid over a stage or slide (docs/stage-notice.md).
 export { default as StageNotice } from './Feedback/StageNotice.vue';
 export { default as Checklist } from './Feedback/Checklist.vue';
+export { default as FinalizeControl } from './Feedback/FinalizeControl.vue';
+export { default as FinalizedBanner } from './Feedback/FinalizedBanner.vue';
 export {
     CHECKLIST_STATES,
     checklistMessage,
     checklistProgress,
     type ChecklistAction,
+    type ChecklistError,
     type ChecklistItem,
     type ChecklistProgress,
     type ChecklistState,
+    type ServerChecklistProgress,
 } from './Feedback/checklist';
 export { useChecklist } from './Feedback/useChecklist';
 export { useModalVisit } from './Overlay/useModalVisit';
