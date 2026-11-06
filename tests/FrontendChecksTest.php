@@ -546,3 +546,82 @@ test('a handler not declared in the file is not judged', function () {
     expect(($this->bare)('<script setup lang="ts">import { useThing } from "./thing"; const { run } = useThing();</script><template><button @click="run" /></template>'))->toBe([]);
 });
 });
+
+describe('inertia.pure', function () {
+    beforeEach(function () {
+        $this->pureBase = sys_get_temp_dir().'/standards-pure-'.bin2hex(random_bytes(4));
+        mkdir($this->pureBase.'/resources/js/pages', 0777, true);
+        mkdir($this->pureBase.'/app/Http/Controllers', 0777, true);
+        $this->pure = function (array $files): array {
+            foreach ($files as $path => $text) {
+                file_put_contents($this->pureBase.'/'.$path, $text);
+            }
+
+            return (new Conformance(frontendConfiguration('Good', ['base' => $this->pureBase, 'classRoots' => ['app' => 'App\\']])))->violations('inertia.pure');
+        };
+    });
+
+    afterEach(function () {
+        (new Illuminate\Filesystem\Filesystem)->deleteDirectory($this->pureBase);
+    });
+
+    test('inertia.pure is advisory', function () {
+        expect(Tey\Standards\Enforcement\Gate::ADVISORY)->toContain('inertia.pure');
+    });
+
+    test('JSON endpoints and fetch/axios/useHttp in your own UI are findings', function () {
+        $php = <<<'PHP'
+            <?php
+            namespace App\Http\Controllers;
+            use Illuminate\Http\JsonResponse;
+            final class TicketStateController
+            {
+                public function show(): JsonResponse
+                {
+                    if (request()->expectsJson()) {
+                        return response()->json(['ok' => true]);
+                    }
+                }
+            }
+            PHP;
+        $vue = "<script setup lang=\"ts\">\nimport axios from 'axios';\nimport { useHttp } from '@inertiajs/vue3';\nconst r = await fetch('/tickets/1/state');\n</script>\n";
+        $found = ($this->pure)(['app/Http/Controllers/TicketStateController.php' => $php, 'resources/js/pages/Ticket.vue' => $vue]);
+
+        expect(array_map(fn (array $v): string => $v['target'].' '.strtok($v['check'], ' '), $found))->toBe([
+            'app/Http/Controllers/TicketStateController.php JsonResponse',
+            'app/Http/Controllers/TicketStateController.php expectsJson()',
+            'app/Http/Controllers/TicketStateController.php response()->json(',
+            'resources/js/pages/Ticket.vue axios',
+            'resources/js/pages/Ticket.vue useHttp',
+            'resources/js/pages/Ticket.vue fetch(',
+        ]);
+    });
+
+    test('an allowed surface with a category and a reason is exempt; a webhook controller by name; comments are not hits', function () {
+        $php = <<<'PHP'
+            <?php
+            namespace App\Http\Controllers;
+            final class ReportPdfController
+            {
+                public function show()
+                {
+                    // inertia.pure: binary the PDF download is a file, not a page
+                    return response()->json(['url' => 'signed']);
+                }
+            }
+            PHP;
+        $vue = "<script setup lang=\"ts\">\n// Never call fetch( here: use a partial reload.\nconst hits = await fetch('/search?q=' + q); // inertia.pure: typeahead suggestions while typing\n</script>\n";
+        $hook = "<?php\nfinal class StripeWebhookController { public function __invoke() { return response()->json([]); } }\n";
+
+        expect(($this->pure)(['app/Http/Controllers/ReportPdfController.php' => $php, 'app/Http/Controllers/StripeWebhookController.php' => $hook, 'resources/js/pages/Search.vue' => $vue]))->toBe([]);
+    });
+
+    test('a marker with an unknown category or no reason is itself a finding', function () {
+        $vue = "<script setup lang=\"ts\">\n// inertia.pure: convenience it was quicker\nawait fetch('/a');\n// inertia.pure: typeahead\nawait fetch('/b');\n</script>\n";
+
+        expect(array_column(($this->pure)(['resources/js/pages/X.vue' => $vue]), 'check'))->toBe([
+            'fetch(: `inertia.pure: convenience` is not an allowed category ('.implode(', ', Tey\Standards\Checks\InertiaPure::CATEGORIES).')',
+            'fetch(: `inertia.pure: typeahead` needs a one-line reason',
+        ]);
+    });
+});

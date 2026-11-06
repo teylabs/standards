@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Advisory rule `inertia.pure`**: your own UI gets its data as props and makes its changes as visits. It flags `response()->json(`, `JsonResponse`, `expectsJson()`, `wantsJson()`, `->ajax()` and `Negotiated` in the app's PHP, and `fetch(`, `axios`, `XMLHttpRequest`, `useHttp` and `sendJson` in its frontend. An allowed surface is exempt by a one-line marker on the line or the line above, `// inertia.pure: <category> <reason>`, with the category one of `webhook`, `third-party`, `mcp`, `public-api`, `binary`, `signed-link`, `upload-signing`, `stream`, `package` or `typeahead`. An unknown category or a missing reason is itself reported. `*WebhookController` classes and files tey/kit owns are exempt. Baseline existing hits with a date: `php artisan standards:allowlist --baseline --rule=inertia.pure --expires=<Y-m-d>`. Advisory, because a grep can't tell a page route from a public API.
+
 ## 0.11.71 - 2026-11-06
 
 ### Added

@@ -45,6 +45,7 @@ final class Conformance
         'vm.shaped-arrays' => '[vm.shaped-arrays] a ViewModel prop that returns an array declares its shape',
         'vm.nested-reach' => '[vm.nested-reach] a page hands a structured prop whole to its child and reads none of its fields',
         'vue.bare-handler-argument' => '[vue.bare-handler-argument] a native event bound to a bare handler name passes the Event as its first argument',
+        'inertia.pure' => '[inertia.pure] your own UI uses props and visits, not JSON endpoints or fetch/axios/useHttp; allowed surfaces carry a categorised one-line reason',
 
         '14' => '[rule 14] UI does not build host routes',
         '22' => '[rule 22] UI has no host PHP dependencies',
@@ -123,7 +124,7 @@ final class Conformance
         }
 
         // Advisory until an app opts in: static write detection can miss a write or flag a non-write.
-        if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             // An allowlisted advisory that stopped firing is stale, as a findings entry is: fail on it, else skip as advisory.
             $stale = $this->ratchet->staleAdvisories($rule, $violations);
             expect($stale)->toBe([], implode("\n", $stale));
@@ -164,6 +165,7 @@ final class Conformance
             'vm.shaped-arrays' => (new Checks\ViewModelShapedArrays($this->config, $this->source))->violations(),
             'vm.nested-reach' => (new Checks\ViewModelNestedReach)->violations($this->config),
             'vue.bare-handler-argument' => (new Checks\VueBareHandlerArgument)->violations($this->config),
+            'inertia.pure' => (new Checks\InertiaPure)->violations($this->config, $this->source),
             default => null,
         };
         if ($frontend !== null) {
