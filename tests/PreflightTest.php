@@ -1739,14 +1739,14 @@ test('schedule.running passes with nothing scheduled, warns when tasks are sched
 
     $schedule->command('inspire')->everyMinute();
     $silent = $run();
-    expect($silent['status'])->toBe('warn')->and($silent['message'])->toContain('No scheduler tick has been recorded although 1 tasks are scheduled', 'schedule:run');
+    expect($silent['status'])->toBe('warn')->and($silent['message'])->toContain('No scheduler tick has been recorded although 1 task is scheduled', 'schedule:run');
 
     // The heartbeat is scheduled once, and a tick records the time.
     Tey\Standards\Preflight\ScheduleHeartbeat::register($schedule);
     $heartbeats = array_values(array_filter($schedule->events(), fn ($event) => $event->description === Tey\Standards\Preflight\ScheduleHeartbeat::NAME));
     expect($heartbeats)->toHaveCount(1);
     $heartbeats[0]->run($this->preflight);
-    expect($run())->toMatchArray(['status' => 'pass'])->and($run()['message'])->toContain('within the last 3 minutes', '1 scheduled tasks');
+    expect($run())->toMatchArray(['status' => 'pass'])->and($run()['message'])->toContain('within the last 3 minutes', '1 task is scheduled');
 
     $this->preflight->make('cache.store')->forever(Tey\Standards\Preflight\ScheduleHeartbeat::KEY, Illuminate\Support\Carbon::now()->subMinutes(10)->getTimestamp());
     expect($run()['status'])->toBe('warn')->and($run()['message'])->toContain('has not run for over 3 minutes');

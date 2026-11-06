@@ -430,13 +430,14 @@ final readonly class CoreCheck implements Check
         }
 
         $minutes = max(1, (int) $this->config->get('preflight.schedule.max_silence_minutes', 3));
+        $count = $tasks === 1 ? '1 task is' : "{$tasks} tasks are";
         $last = ScheduleHeartbeat::last();
         if ($last !== null && Carbon::now()->getTimestamp() - $last <= $minutes * 60) {
-            return Result::pass("The scheduler ran within the last {$minutes} minutes ({$tasks} scheduled tasks).");
+            return Result::pass("The scheduler ran within the last {$minutes} minutes ({$count} scheduled).");
         }
 
         return Result::warn(($last === null ? 'No scheduler tick has been recorded' : "The scheduler has not run for over {$minutes} minutes")
-            ." although {$tasks} tasks are scheduled. Run `php artisan schedule:run` every minute (a cron entry, Forge's scheduler or Laravel Cloud's scheduler). Just after a first deploy, wait a minute and run preflight again.");
+            ." although {$count} scheduled. Run `php artisan schedule:run` every minute (a cron entry, Forge's scheduler or Laravel Cloud's scheduler). Just after a first deploy, wait a minute and run preflight again.");
     }
 
     private function syncQueue(): bool
