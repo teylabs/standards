@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Advisory rule `vue.bare-handler-argument`**: a native DOM event (`@click`, `@submit`, `@input`…) bound to a bare handler name, `@click="begin"`, on a native element or a kit `Button`/`Link`, where the handler's first parameter isn't an Event. Vue calls it with the Event, so `begin(url = props.start.url)` receives a PointerEvent as its URL. The fix is to call it: `@click="begin()"`. A custom component's own events carry their emitted payload and aren't judged, and neither is a handler not declared in the file. It's reported by `standards:check` and never fails until an app opts in.
+
 ## 0.11.69 - 2026-11-05
 
 ### Added

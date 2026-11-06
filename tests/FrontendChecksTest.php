@@ -498,3 +498,51 @@ test('ui header-actions is optional and skips the kit tree', function () {
         (new Filesystem)->deleteDirectory($base);
     }
 });
+
+describe('vue.bare-handler-argument', function () {
+beforeEach(function () {
+    $this->bareBase = sys_get_temp_dir().'/standards-bare-'.bin2hex(random_bytes(4));
+    mkdir($this->bareBase.'/resources/js/components', 0777, true);
+    $this->bare = function (string $vue): array {
+        file_put_contents($this->bareBase.'/resources/js/components/Thing.vue', $vue);
+
+        return array_column((new Conformance(frontendConfiguration('Good', ['base' => $this->bareBase])))->violations('vue.bare-handler-argument'), 'check');
+    };
+});
+
+afterEach(function () {
+    (new Illuminate\Filesystem\Filesystem)->deleteDirectory($this->bareBase);
+});
+
+test('vue.bare-handler-argument is advisory', function () {
+    expect(Tey\Standards\Enforcement\Gate::ADVISORY)->toContain('vue.bare-handler-argument');
+});
+
+test('a bare handler on a native element or kit Button whose first parameter is not an Event is a finding', function () {
+    $script = <<<'TS'
+        <script setup lang="ts">
+        import Button from '@/components/Kit/Form/Button.vue';
+        import Picker from './Picker.vue';
+        const props = defineProps<{ start: { url: string } }>();
+        async function begin(url: string = props.start.url) {}
+        const remove = (id: number) => {};
+        function toggle(event: MouseEvent) {}
+        const open = (e) => {};
+        function save() {}
+        const pick = (value: string) => {};
+        </script>
+        TS;
+
+    // AB's Issue confirm: a kit Button and a native button, both bare.
+    expect(($this->bare)($script.'<template><Button @click="begin">Issue</Button><button type="button" @click.stop="remove">x</button></template>'))->toBe([
+        '@click="begin" on <Button> passes the event as begin\'s first argument (url: string = props.start.url): call it, @click="begin()"',
+        '@click="remove" on <button> passes the event as remove\'s first argument (id: number): call it, @click="remove()"',
+    ]);
+    // Calls, Event parameters, no parameters and a custom component's own event are fine.
+    expect(($this->bare)($script.'<template><Button @click="begin()">Issue</Button><button @click="toggle" /><a @click="open" /><button @click="save" /><Picker @click="pick" @select="pick" /><input @input="toggle" /></template>'))->toBe([]);
+});
+
+test('a handler not declared in the file is not judged', function () {
+    expect(($this->bare)('<script setup lang="ts">import { useThing } from "./thing"; const { run } = useThing();</script><template><button @click="run" /></template>'))->toBe([]);
+});
+});

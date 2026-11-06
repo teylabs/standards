@@ -786,7 +786,8 @@
                 "js-imports",
                 "vm.typed-pages",
                 "vm.shaped-arrays",
-                "vm.nested-reach"
+                "vm.nested-reach",
+                "vue.bare-handler-argument"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -855,7 +856,8 @@
                 "js-imports",
                 "vm.typed-pages",
                 "vm.shaped-arrays",
-                "vm.nested-reach"
+                "vm.nested-reach",
+                "vue.bare-handler-argument"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
