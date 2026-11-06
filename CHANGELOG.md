@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **The toasts leaf no longer prescribes `ActionBar`.** Its "save trigger" was a catch-all `ActionBar`, which contradicted ui-page.header-actions ("write the actions out by name"). It's now the named Save action (`InertiaAction` in the header `#actions` slot, or `FormActions`), whose `data-action` the toast's `->from()` anchors to.
+
 ## 0.11.72 - 2026-11-06
 
 ### Added
