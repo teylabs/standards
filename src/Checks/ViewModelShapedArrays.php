@@ -11,7 +11,8 @@ use Tey\Standards\Source;
 
 /**
  * [vm.shaped-arrays] A ViewModel prop that returns an array says what is in it: `@return list<array{...}>`, `array<string, X>` or a shape. A bare
- * `array` is generated as `any`/`Record<string, any>`, so the page loses its types. Advisory until an app opts in.
+ * `array` is generated as `any`/`Record<string, any>`, so the page loses its types. A prop method with no return type at all is generated as
+ * `unknown` and is a finding too. Advisory until an app opts in.
  */
 final class ViewModelShapedArrays
 {
@@ -26,7 +27,13 @@ final class ViewModelShapedArrays
                 continue;
             }
             $unshaped = [];
+            $untyped = [];
             foreach ((new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Stmt\ClassMethod::class) as $method) {
+                if ($method->isPublic() && ! $method->isStatic() && ! str_starts_with($method->name->toString(), '__') && $method->returnType === null && $method->getParams() === []) {
+                    $untyped[] = $method->name->toString();
+
+                    continue;
+                }
                 if (! $method->isPublic() || $method->isStatic() || str_starts_with($method->name->toString(), '__') || ! self::returnsArray($method->returnType)) {
                     continue;
                 }
@@ -34,6 +41,9 @@ final class ViewModelShapedArrays
                 if (preg_match('/@(?:phpstan-|psalm-)?return\s+[^\s*]*[<{]/', $doc) !== 1) {
                     $unshaped[] = $method->name->toString();
                 }
+            }
+            foreach ($untyped as $name) {
+                $violations[] = ['target' => $path, 'check' => 'prop without a return type: '.$name.'()'];
             }
             foreach ($unshaped as $name) {
                 $violations[] = ['target' => $path, 'check' => 'array prop without a @return shape: '.$name.'()'];
