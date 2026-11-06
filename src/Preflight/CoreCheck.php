@@ -18,7 +18,7 @@ use Throwable;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'queue.failed-store', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate', 'kit.fonts'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'queue.failed-store', 'schedule.running', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate', 'kit.fonts'];
 
     /**
      * SHA-256 of upstream public/favicon.ico, favicon.svg and apple-touch-icon.png.
@@ -93,7 +93,7 @@ final readonly class CoreCheck implements Check
 
     public function needsSecrets(): bool
     {
-        if (in_array($this->check, ['app.key', 'queue.worker'], true)) {
+        if (in_array($this->check, ['app.key', 'queue.worker', 'schedule.running'], true)) {
             return true;
         }
 
@@ -122,6 +122,7 @@ final readonly class CoreCheck implements Check
             'queue.connection' => $this->queueConnection(),
             'queue.worker' => $this->queueWorker(),
             'queue.failed-store' => $this->queueFailedStore(),
+            'schedule.running' => $this->scheduleRunning(),
             'cache.store' => $this->result(! $this->production() || $this->config->get('cache.default') !== 'array', 'Set CACHE_STORE to a persistent store in production.'),
             'app.url' => $this->result($this->set('app.url') && (! $this->production() || (filter_var($this->config->get('app.url'), FILTER_VALIDATE_URL) !== false && parse_url((string) $this->config->get('app.url'), PHP_URL_SCHEME) === 'https')), 'Set APP_URL to the public HTTPS URL in production.'),
             'logging.channel' => $this->result($this->set('logging.default') && $this->set('logging.channels.'.$this->config->get('logging.default').'.driver'), 'Set LOG_CHANNEL to a configured logging channel.'),
@@ -411,6 +412,32 @@ final readonly class CoreCheck implements Check
             && ($this->set($connection.'.database') || $this->set($connection.'.url'));
 
         return $this->result($configured, 'Set DB_CONNECTION and its database or DB_URL configuration.');
+    }
+
+    /**
+     * Tasks are scheduled, so something must run `schedule:run` every minute. The package schedules a heartbeat (ScheduleHeartbeat) that records each
+     * tick in the cache; a recent one proves the scheduler runs. Nothing scheduled, or an environment declared to run none, passes.
+     */
+    private function scheduleRunning(): Result
+    {
+        if ($this->config->get('preflight.schedule.expect_scheduler') === false) {
+            return Result::pass('This environment declares no scheduler (PREFLIGHT_SCHEDULE_EXPECT_SCHEDULER=false).');
+        }
+
+        $tasks = ScheduleHeartbeat::appTasks();
+        if ($tasks === 0) {
+            return Result::pass('Nothing is scheduled; no scheduler is needed.');
+        }
+
+        $minutes = max(1, (int) $this->config->get('preflight.schedule.max_silence_minutes', 3));
+        $count = $tasks === 1 ? '1 task is' : "{$tasks} tasks are";
+        $last = ScheduleHeartbeat::last();
+        if ($last !== null && Carbon::now()->getTimestamp() - $last <= $minutes * 60) {
+            return Result::pass("The scheduler ran within the last {$minutes} minutes ({$count} scheduled).");
+        }
+
+        return Result::warn(($last === null ? 'No scheduler tick has been recorded' : "The scheduler has not run for over {$minutes} minutes")
+            ." although {$count} scheduled. Run `php artisan schedule:run` every minute (a cron entry, Forge's scheduler or Laravel Cloud's scheduler). Just after a first deploy, wait a minute and run preflight again.");
     }
 
     private function syncQueue(): bool
