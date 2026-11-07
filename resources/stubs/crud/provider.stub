@@ -16,10 +16,10 @@ use Tey\Kit\Features\Core\Registry;
  */
 final class {{ name }}ServiceProvider extends ServiceProvider
 {
-    public function boot(Registry $registry): void
+    /** Contributions go in register(), not boot(): tey/kit 0.15.0 and earlier define each declared capability while the kit boots, before this provider's boot() runs, so a capability declared in boot() is never on. */
+    public function register(): void
     {
-        Gate::policy({{ name }}::class, {{ name }}Policy::class);
-        $registry->capabilities([{{ name }}Policy::CAPABILITY])
+        $this->app->make(Registry::class)->capabilities([{{ name }}Policy::CAPABILITY])
             ->permission('{{ perm }}.view', ['owner', 'admin', 'viewer'], {{ name }}Policy::CAPABILITY, ['{{ perm }}.read'])
             ->permission('{{ perm }}.create', ['owner', 'admin'], {{ name }}Policy::CAPABILITY)
             ->permission('{{ perm }}.update', ['owner', 'admin'], {{ name }}Policy::CAPABILITY, ['{{ perm }}.write'])
@@ -27,5 +27,10 @@ final class {{ name }}ServiceProvider extends ServiceProvider
             ->abilities(['{{ perm }}.read' => {{ name }}Policy::CAPABILITY])
             ->routes(base_path('routes/{{ slug }}.php'))
             ->navigation('{{ perm }}.read', '{{ titles }}', '{{ slug }}', active: '{{ slug }}');
+    }
+
+    public function boot(): void
+    {
+        Gate::policy({{ name }}::class, {{ name }}Policy::class);
     }
 }

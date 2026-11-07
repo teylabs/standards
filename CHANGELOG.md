@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`standards:make crud` and `workbench` providers contribute in `register()`.** They declared their capability in `boot()`, after tey/kit 0.15.0 and earlier had defined its Pennant features, so the capability was never defined and every route behind it was a 404. The policy and gates stay in `boot()`.
+- **`standards:make crud` and `model --tenant` migrations call `Rls::protect('<table>')`** after the create, and `Rls::unprotect()` in `down()`, when tey/kit ships `Rls` (0.15.0). It is a no-op until the kit's row-level security is on, on PostgreSQL.
+
 ## 0.11.74 - 2026-11-06
 
 ### Added

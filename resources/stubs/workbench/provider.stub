@@ -15,16 +15,21 @@ use Tey\Kit\Features\Core\Registry;
  */
 final class {{ name }}WorkbenchServiceProvider extends ServiceProvider
 {
-    public function boot(Registry $registry): void
+    /** Contributions go in register(), not boot(): tey/kit 0.15.0 and earlier define each declared capability while the kit boots, before this provider's boot() runs, so a capability declared in boot() is never on. */
+    public function register(): void
     {
-        Gate::define('{{ perm }}.workbench.view', [{{ name }}WorkbenchPolicy::class, 'view']);
-        Gate::define('{{ perm }}.workbench.reorder', [{{ name }}WorkbenchPolicy::class, 'reorder']);
-        $registry->capabilities([{{ name }}WorkbenchPolicy::CAPABILITY])
+        $this->app->make(Registry::class)->capabilities([{{ name }}WorkbenchPolicy::CAPABILITY])
             ->permission('{{ perm }}.view', ['owner', 'admin', 'viewer'], {{ name }}WorkbenchPolicy::CAPABILITY, ['{{ perm }}.read'])
             ->permission('{{ perm }}.update', ['owner', 'admin'], {{ name }}WorkbenchPolicy::CAPABILITY, ['{{ perm }}.write'])
             ->abilities(['{{ perm }}.read' => {{ name }}WorkbenchPolicy::CAPABILITY])
             ->errors(['stale_write' => 409])
             ->routes(base_path('routes/{{ slug }}-workbench.php'))
             ->navigation('{{ perm }}.read', '{{ titles }}', '{{ slug }}/workbench', active: '{{ slug }}');
+    }
+
+    public function boot(): void
+    {
+        Gate::define('{{ perm }}.workbench.view', [{{ name }}WorkbenchPolicy::class, 'view']);
+        Gate::define('{{ perm }}.workbench.reorder', [{{ name }}WorkbenchPolicy::class, 'reorder']);
     }
 }
