@@ -29,7 +29,14 @@ final class Layout
 
     public const PRIMITIVES = 'ui.primitive-pointers';
 
-    public const RULES = [self::ACTION_GROUP, self::ROW_ACTIONS, self::PAGE_TITLE, self::OUTER_MARGINS, self::PAGE_GRID, self::PRIMITIVES];
+    public const ROW_ACTION_LABEL = 'ui.row-action-label';
+
+    public const RULES = [self::ACTION_GROUP, self::ROW_ACTIONS, self::PAGE_TITLE, self::OUTER_MARGINS, self::PAGE_GRID, self::PRIMITIVES, self::ROW_ACTION_LABEL];
+
+    /** A row action label longer than this (characters or words) is clamped by the kit's RowActions. */
+    public const LABEL_MAX_CHARACTERS = 24;
+
+    public const LABEL_MAX_WORDS = 3;
 
     public const STACKS = ['Stack', 'BlockStack'];
 
@@ -49,6 +56,9 @@ final class Layout
     /** @return list<array{target: string, check: string, line?: int, advisory?: bool}> */
     public function violations(string $rule): array
     {
+        if ($rule === self::ROW_ACTION_LABEL) {
+            return $this->rowActionLabels();
+        }
         $violations = [];
         foreach ($this->files() as $path => $source) {
             $template = VueTemplate::parse($source);
@@ -62,6 +72,7 @@ final class Layout
                 self::OUTER_MARGINS => $this->outerMargins($path, $source, $template),
                 self::PAGE_GRID => $this->pageGrids($path, $template),
                 self::PRIMITIVES => $this->primitives($path, $template),
+                default => [],
             });
         }
 
@@ -169,6 +180,67 @@ final class Layout
         }
 
         return $found;
+    }
+
+    // ui.row-action-label
+
+    /**
+     * Row action labels are verbs ("Remove", "Revoke"): the record goes in the accessible name (`ariaLabel`) and the confirmation. Flags a label that
+     * interpolates a value, in a PHP Action descriptor (`new Action("Revoke {$x->name}", …)`, `Action::make('Remove '.$grant)`, `new Action($model->name, …)`)
+     * or a Vue action object (`label` beside `url` and `method`, as a template literal with `${…}`, a `+` concatenation or a bare expression), and a literal
+     * label over 24 characters or 3 words, which the kit's RowActions clamps.
+     *
+     * @return list<array{target: string, check: string, line: int}>
+     */
+    private function rowActionLabels(): array
+    {
+        $found = [];
+        foreach ((new \Tey\Standards\Source($this->config))->files($this->config->sourceRoots) as $path => $source) {
+            preg_match_all('~(?:\bnew\s+\\\\?(?:[\w\\\\]+\\\\)?Action|\bAction::(?:make|disabled))\s*\(\s*(?:label\s*:\s*)?(?<arg>"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|\$\w+(?:->\w+|\[[^\]]*\])+)(?<tail>\s*\.)?~', $source, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+            foreach ($matches as $match) {
+                $arg = $match['arg'][0];
+                $interpolated = $arg[0] === '$' || ($match['tail'][0] ?? '') !== '' || ($arg[0] === '"' && preg_match('~(?<!\\\\)\$~', $arg) === 1);
+                $found[] = $this->labelFinding($path, $source, $match[0][1], $arg, $interpolated);
+            }
+        }
+        foreach ($this->files() as $path => $source) {
+            $script = FrontendSource::script($path, $source);
+            $offset = strpos($source, $script) ?: 0;
+            preg_match_all('~\blabel\s*:\s*(?<arg>`(?:[^`\\\\]|\\\\.)*`|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^,}\n]+)(?<tail>\s*\+)?~', $script, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+            foreach ($matches as $match) {
+                $at = $match[0][1];
+                // The object literal the label sits in, with `${…}` masked so its braces don't count: a form field's label beside an action array is not an action.
+                $masked = preg_replace_callback('~\\$\\{[^}]*\\}~', fn (array $m): string => str_repeat('_', strlen($m[0])), $script) ?? $script;
+                $open = strrpos(substr($masked, 0, $at), '{');
+                $close = strpos($masked, '}', $at);
+                $window = $open === false || $close === false ? '' : substr($script, $open, $close - $open);
+                if (preg_match('~\burl\s*:~', $window) !== 1 || preg_match('~\bmethod\s*:~', $window) !== 1) {
+                    continue;
+                }
+                $arg = trim($match['arg'][0]);
+                $quoted = in_array($arg[0] ?? '', ['"', "'", '`'], true);
+                $interpolated = ! $quoted || ($match['tail'][0] ?? '') !== '' || ($arg[0] === '`' && str_contains($arg, '${'));
+                $found[] = $this->labelFinding($path, $source, $offset + $at, $arg, $interpolated);
+            }
+        }
+
+        return array_values(array_filter($found));
+    }
+
+    /** @return array{target: string, check: string, line: int}|null */
+    private function labelFinding(string $path, string $source, int $offset, string $arg, bool $interpolated): ?array
+    {
+        $line = substr_count(substr($source, 0, $offset), "\n") + 1;
+        if ($interpolated) {
+            return ['target' => $path, 'check' => "row action label {$arg} interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm", 'line' => $line];
+        }
+        $text = stripcslashes(substr($arg, 1, -1));
+        $words = preg_split('~\s+~', trim($text), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (mb_strlen(trim($text)) > self::LABEL_MAX_CHARACTERS || count($words) > self::LABEL_MAX_WORDS) {
+            return ['target' => $path, 'check' => "row action label {$arg} is over ".self::LABEL_MAX_CHARACTERS.' characters or '.self::LABEL_MAX_WORDS.' words: RowActions clamps it; keep the label a verb and put the record in the confirm', 'line' => $line];
+        }
+
+        return null;
     }
 
     // ui.page-title-dup

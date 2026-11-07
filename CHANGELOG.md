@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`ui.row-action-label`, an advisory rule: row action labels are short verbs.** It flags an action label that interpolates a value: a PHP descriptor such as `Action::make("Revoke {$x->name}")`, `new Action('Remove '.$grant->label, …)` or `new Action($member->name, …)`, and a Vue action object (a `label` beside `url` and `method`) whose label is a `${…}` template literal, a `+` concatenation or a bare expression. It also flags a literal label over 24 characters or 3 words, which tey/kit's RowActions clamps. The record belongs in the action's `ariaLabel` and its confirm (kit 0.15.10). A form field's `label` is not an action and is left alone. It is one of `Layout::RULES`, so it is advisory until listed in `Configuration::$optionalRules`, then fail-on-new against a baseline (`standards:allowlist --baseline`). On the `ui-page.layout-rhythm` leaf.
+
 ## 0.11.80 - 2026-11-07
 
 ### Changed
