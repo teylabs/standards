@@ -470,6 +470,16 @@ The generated test proves the contract against a table it creates if it's missin
 
 **Rule `vue.bare-handler-argument` (advisory).** A native DOM event bound to a bare handler name passes the Event as the handler's first argument. `<Button @click="begin">` with `function begin(url: string = props.start.url)` calls `begin(event)`, and the URL becomes `[object PointerEvent]`. It judges native elements (a lowercase tag) and the kit's `Button` and `Link`, whose click is the native one. A first parameter typed as an Event, or named `e`, `event` or `evt` without a type, is fine; so is a handler with no parameters. A custom component's events carry their own payload and are skipped. Write `@click="begin()"`.
 
+**Layout rules (advisory).** Six rules read each app `.vue` template as an element tree and point hand-built layout at the kit's primitives: the Page gaps its children, components carry no outer margins, and spacing, columns, action groups and row actions come from the kit. Files tey/kit owns are not scanned. `Stack` and `BlockStack` (its name before the kit's rename) are the same primitive. Each finding names the primitive to use.
+- **`ui.action-group`:** two or more adjacent action controls (`Button`, `<button>`, `DropdownConfirm`, a `Link` with `as="button"` or a `variant`) sit in a `ButtonGroup`, `ActionBar`, `HeaderActions`, `Toolbar` (any `*Toolbar`, mixed controls included), `FormActions`, or a `Page` or `SectionHeader` `#actions` slot. Text between them, or a `v-else` branch, breaks the run.
+- **`ui.row-actions`:** a `DataTable` `#cell-*` or `#row-actions` slot holding a `Button`, `<button>`, `Dropdown`, `DropdownMenu`, `ButtonDropdown` or `DropdownConfirm` is a finding: row actions are `ActionDescriptor[]` on the row (`actions`), rendered by the row ActionBar. A hand-rolled `<table>` with such a control in a `<td>` is flagged once, pointing to `DataTable`. Links and inline checkboxes or toggles are not flagged.
+- **`ui.page-title-dup`:** a `SectionHeader` or `PageSection` whose static `title` equals the `<Page title>`, or a `SectionHeader size="page"` in a Page that draws its own heading (not `:heading="false"`). A control in a Page linking to a `*.create` route outside the Page's `#actions` slot goes in `<Page :actions>`. A label starting with New, Create or Add (outside forms, dialogs and tables) is English-only and always reported as an advisory, even when the rule is opted in. Controls in an `EmptyState` are not judged.
+- **`ui.no-outer-margins`:** no `mt-*`, `mb-*`, `my-*` (negative ones too) or `space-y-*` on a Page's direct children (static `class` and the quoted strings of `:class`), nor on the root element of an app component a Page renders directly (imported by a relative or `@/` path). A `<Page flush>` holds one in-flow child: `Teleport`, `Dialog`, `Modal`, `Sheet`, `AlertDialog`, `Drawer`, `absolute`, `fixed` or `hidden` elements and `v-else` branches don't count.
+- **`ui.page-grid`:** a Page child with `grid` and `grid-cols-*`, or a cell of a Page child with `col-span-*`, becomes `PageGrid` (preset `main-aside`, `halves`, `thirds`) and `PageGridItem :span`. Grids deeper down (in a card, form or widget) and a grid of `*Widget` components are not page-level.
+- **`ui.primitive-pointers`:** hand-rolled Stack (a `flex flex-col gap-*` or `space-y-*` div in a Page stacking two blocks), PageSection (a `<section>` with an `h2` directly in Page), Aside (`*AsideContainer.vue`, `SidebarFilterContainer.vue`, or an `lg:` two-column layout with a `Sheet`), Banner (an app `*Banner.vue`), NavGrid (a grid of `Link` cards), CardSection (`md:grid-cols-3` with a `md:col-span-2` card), Pills (an `sm:hidden` select with `hidden sm:block` tabs) and DividerSection (a heading between two rules). A pointer is an advisory until the kit the app runs (installed, else the shipped snapshot) exports the primitive.
+
+Rollout: each rule is advisory (reported by `standards:check`, never failing) until listed in `Configuration::$optionalRules`. To make one fail on new findings only, record the existing ones first with `php artisan standards:allowlist --baseline --rule=<rule> --expires=<Y-m-d> --reason=...`, then opt in. The baseline only shrinks: an entry whose finding is gone is stale and fails. Lexical: dynamic class bindings (`:class="computed"`), components outside the app's sources and titles bound from the server are not seen.
+
 ## Integrations: inbound webhooks and API clients
 
 **Inbound webhooks** (`integrations.webhook`). Run `composer require spatie/laravel-webhook-client` first, then `php artisan standards:make webhook <Provider>` writes a receiver:
@@ -884,6 +894,59 @@ There is no PHAR yet: the CLI still needs PHP 8.4 and the Illuminate 13 componen
 - A component with no third-party import and a domain name (not on the generic-name list) is never a gap candidate, so hand-rolled in-house components that import nothing are under-counted.
 
 The pattern leaf `ui-page.kit-adoption` carries the recipes.
+
+### 6. First-pass metric: `standards:first-pass`
+
+Measures whether agents build to the catalog on the first pass, and whether consulting the tree predicts it. It is off by default. Opt in with `standards.telemetry.first_pass` (`STANDARDS_TELEMETRY_FIRST_PASS=true`).
+
+**Run log.** When it is on, every `standards:check` run appends a record to `storage/standards/runs.jsonl`. That includes the hooks' gate runs at commit, Stop and after an edit. `standards:pattern` and `standards:make` append lookup records. The package writes a `.gitignore` beside the log so git ignores it. Each line carries `prev`, the sha256 of the line before it, so an edited line, a line deleted from the middle or a reorder shows up as a chain break. Removing lines from the end leaves no trace; that is a known limit of a local log. CI and `--recompute`, which flags committed files the log never gated, are the authoritative checks. A record holds:
+
+- paths, rule ids, line counts, a 16-character content hash and the mtime of each changed file;
+- the candidate pattern leaves for each file;
+- who ran it, read from the environment only: `SOLO_PROCESS_ID`, `SOLO_PROJECT_ID`, `CLAUDE_CODE_SESSION_ID`, and the model from `ANTHROPIC_MODEL` or `CLAUDE_MODEL` when set;
+- the tey/standards version, and a ruleset hash over the rule ids, the advisory and optional lists and the app's configuration file. The allowlist is not part of the hash.
+
+It never holds source code or a finding's message. Logging fails open: a write error is swallowed and never changes a run's exit code or output. The recipe MCP's find and recipe tools can log lookups through the same log with `app(Tey\Standards\Telemetry\Recorder::class)->lookup('bakery.find', $leafIds, $paths)`.
+
+**Episodes.** A file's episode opens at the first gate run that sees its content differ from its last clean state. It closes at the next run that finds it clean.
+
+- First pass: the findings at the opening run.
+- Corrected: the episode closes clean later, after `runs - 1` corrections.
+- Abandoned: the file drops out of a `--changed` or full run (reverted) or is deleted.
+
+Only findings on changed lines count, against the same base as `--changed`. A finding without a line counts only in a new file, so old debt does not penalise the builder. Advisories don't count. A run where the gate could not run (a missing configuration, say) opens no episode. A file counts as consulted when a lookup naming it, or one of its pattern leaves, came before its first write. The first write is the mtime the opening run saw, which is conservative.
+
+```sh
+php artisan standards:first-pass                         # first-pass rate, corrections per episode, most-tripped rules, consulted vs not
+php artisan standards:first-pass --since=2026-11-01 --by=rule|agent|pattern --source=ci|local --json
+php artisan standards:first-pass --log=artifacts/*.jsonl --source=ci   # read downloaded CI artifacts instead of the local log
+php artisan standards:first-pass --recompute v1.2.0..HEAD              # the milestone cross-check
+```
+
+The report prints the sample size beside every rate. It states that consulted versus not consulted is a correlation. When the log spans more than one ruleset, it lists them, so rates are compared within one ruleset. Chain breaks are listed.
+
+**Recompute.** `--recompute <range>` is the cross-check for apps without CI. Someone other than the builder runs it. It adds a detached worktree, copies `vendor` into it and rebuilds the autoloader there. It then replays `standards:check --file=…` on each commit's changed files, with telemetry off, and rebuilds commit-level episodes from history. Each committed file is compared with the log. A mismatch is any of these:
+
+- a file the log never gated;
+- committed content that differs from the last content the log gated;
+- a file the log last saw clean that the replay finds findings in.
+
+It exits 1 on any mismatch or chain break, and removes the worktree afterwards.
+
+**CI.** On apps with PRs, CI is the authoritative sample, because agents can't shape it. Call the reusable workflow when a PR opens, so it checks out the first pushed commit:
+
+```yaml
+on:
+  pull_request:
+    types: [opened]
+jobs:
+  first-pass:
+    uses: teylabs/standards/.github/workflows/first-pass.yml@v0.11
+    with:
+      base-ref: ${{ github.base_ref }}
+```
+
+It runs `standards:first-pass --ci`, which writes that commit's per-file findings on changed lines to `first-pass.jsonl` (one run record, `source: ci`) and a table to the job's step summary. The record is uploaded as the `first-pass` artifact and kept for 90 days. It always exits 0, so it is not a gate. Download the artifacts and read them with `--log=… --source=ci`.
 
 ## Agent guidance
 

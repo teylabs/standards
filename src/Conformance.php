@@ -34,6 +34,7 @@ final class Conformance
         'ui toast' => '[ui toast] notifications use one configured toast path',
         'ui header-actions' => '[ui header-actions] a page header shows at most one primary and three visible actions',
         'styling.pure-tailwind' => '[styling.pure-tailwind] app UI styles with Tailwind classes and @theme tokens, not its own CSS',
+        'ui.row-action-label' => '[ui.row-action-label] row action labels are short verbs; the record goes in the accessible name and the confirm',
         'ui.kit-shell' => '[ui.kit-shell] signed-in pages use kit\'s Workspace Layout, not an app-owned header, once the shell is adopted',
         'operator' => '[operator] commands that write offer a dry run and a production guard',
         'integrations' => '[integrations] webhooks verify their sender and API calls go through a contract',
@@ -47,6 +48,12 @@ final class Conformance
         'vm.nested-reach' => '[vm.nested-reach] a page hands a structured prop whole to its child and reads none of its fields',
         'vue.bare-handler-argument' => '[vue.bare-handler-argument] a native event bound to a bare handler name passes the Event as its first argument',
         'vm.page-size' => '[vm.page-size] a page stays under '.Checks\ViewModelPageSize::LIMIT.' lines; a larger one splits along its component tree into nested ViewModels',
+        'ui.action-group' => '[ui.action-group] two or more adjacent action controls sit in a ButtonGroup, ActionBar, Toolbar or FormActions',
+        'ui.row-actions' => '[ui.row-actions] table row actions are row descriptors for the DataTable row ActionBar, not controls placed in a cell',
+        'ui.page-title-dup' => '[ui.page-title-dup] a section does not repeat the Page title, and the page create action sits in the Page header actions',
+        'ui.no-outer-margins' => '[ui.no-outer-margins] a Page\'s children carry no outer margins, and a flush Page holds one full-bleed child',
+        'ui.page-grid' => '[ui.page-grid] page-level columns are a PageGrid, not grid-cols and col-span utilities',
+        'ui.primitive-pointers' => '[ui.primitive-pointers] hand-rolled versions of kit layout primitives point to the primitive',
         'inertia.pure' => '[inertia.pure] your own UI uses props and visits, not JSON endpoints or fetch/axios/useHttp; allowed surfaces carry a categorised one-line reason',
 
         '14' => '[rule 14] UI does not build host routes',
@@ -126,9 +133,9 @@ final class Conformance
         }
 
         // Advisory until an app opts in: static write detection can miss a write or flag a non-write.
-        if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists', ...Checks\Layout::RULES], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             // An allowlisted advisory that stopped firing is stale, as a findings entry is: fail on it, else skip as advisory.
-            $stale = $this->ratchet->staleAdvisories($rule, $violations);
+            $stale = $this->quietStale($rule, $this->ratchet->staleAdvisories($rule, $violations));
             expect($stale)->toBe([], implode("\n", $stale));
 
             Assert::markTestSkipped('Rule ['.$rule.'] is advisory until listed in Configuration::optionalRules ('.count($violations).' findings).');
@@ -137,12 +144,39 @@ final class Conformance
         // A finding the check marks advisory (a rule that checked nothing) is never a silent pass under Pest either: the test is skipped, saying why.
         $advisory = array_values(array_filter($violations, fn (array $violation): bool => ($violation['advisory'] ?? false) === true));
 
+        // The layout rules mix advisory findings (a heuristic, or a primitive the kit hasn't shipped) with failing ones: only the failing ones ratchet.
+        // An allowlist entry for an advisory finding is not stale, and the advisory finding itself never fails.
+        if (in_array($rule, Checks\Layout::RULES, true)) {
+            $quiet = array_map(fn (array $violation): string => 'violation: '.$violation['target'].' | '.$violation['check'], $advisory);
+            $failures = $this->quietStale($rule, array_values(array_diff($this->ratchet->failures($rule, $violations), $quiet)));
+            expect($failures)->toBe([], implode("\n", $failures));
+
+            return;
+        }
+
         if ($advisory !== []) {
             Assert::markTestSkipped(implode("\n", array_map(fn (array $violation): string => $violation['check'].'. '.($violation['hint'] ?? ''), $advisory)));
         }
 
         $failures = $this->ratchet->failures($rule, $violations);
         expect($failures)->toBe([], implode("\n", $failures));
+    }
+
+    /**
+     * Drops the stale-entry failures of a layout rule's advisory-by-kind checks (Layout::quiet): an allowlisted advisory that disappears is not a failure.
+     *
+     * @param  list<string>  $failures
+     * @return list<string>
+     */
+    private function quietStale(string $rule, array $failures): array
+    {
+        if (! in_array($rule, Checks\Layout::RULES, true)) {
+            return $failures;
+        }
+        $layout = new Checks\Layout($this->config);
+
+        return array_values(array_filter($failures, fn (string $failure): bool => ! (str_starts_with($failure, 'stale exception, delete it: ')
+            && $layout->quiet((string) substr($failure, strrpos($failure, ' | ') + 3)))));
     }
 
     /** @return list<array{target: string, check: string}> */
@@ -169,6 +203,7 @@ final class Conformance
             'vue.bare-handler-argument' => (new Checks\VueBareHandlerArgument)->violations($this->config),
             'inertia.pure' => (new Checks\InertiaPure)->violations($this->config, $this->source),
             'vm.page-size' => (new Checks\ViewModelPageSize)->violations($this->config),
+            'ui.action-group', 'ui.row-actions', 'ui.page-title-dup', 'ui.no-outer-margins', 'ui.page-grid', 'ui.primitive-pointers', 'ui.row-action-label' => (new Checks\Layout($this->config))->violations($rule),
             default => null,
         };
         if ($frontend !== null) {

@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use InvalidArgumentException;
 use Tey\Standards\Patterns\TreeCatalog;
+use Tey\Standards\Telemetry\Recorder;
 
 final class MakeCommand extends Command
 {
@@ -61,6 +62,14 @@ final class MakeCommand extends Command
             $this->error($error->getMessage());
 
             return 2;
+        }
+
+        // The first-pass run log (opt-in, fails open): a make is a lookup that names its leaf and the files it wrote. A dry run writes nothing, so it is not logged.
+        if (! $dryRun) {
+            try {
+                $this->laravel->make(Recorder::class)->lookup('standards:make', array_values(array_filter([$this->option('leaf') ?? $maker->leafId()])), array_values(array_filter($files, 'is_string')));
+            } catch (\Throwable) {
+            }
         }
 
         if ($this->option('json')) {

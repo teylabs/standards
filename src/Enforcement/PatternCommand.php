@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 use Tey\Standards\Patterns\KitExports;
 use Tey\Standards\Patterns\Lookup;
 use Tey\Standards\Patterns\TreeCatalog;
+use Tey\Standards\Telemetry\Recorder;
 
 /** The offline CLI over the pattern library; hosted agents call bakery.find instead. */
 final class PatternCommand extends Command
@@ -42,6 +43,12 @@ final class PatternCommand extends Command
         // Traversals and searches that end on a byo or gap leaf record demand; reading a recipe by id does not.
         if (is_array($result['demand'] ?? null) && $this->option('recipe') === null) {
             GapDemand::append($this->laravel->basePath(), $result['demand']);
+        }
+
+        // The first-pass run log (opt-in, fails open): the leaves this lookup answered with, and the path it asked about.
+        try {
+            $this->laravel->make(Recorder::class)->lookup('standards:pattern', Recorder::patternsOf($result), isset($result['path']) && is_string($result['path']) ? [$result['path']] : []);
+        } catch (\Throwable) {
         }
 
         $this->line($this->option('json') ? json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : self::text($result));

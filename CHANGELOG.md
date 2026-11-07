@@ -48,6 +48,33 @@
 
 - **`standards:make crud --mcp` emits Read, Write and Delete tools over a `List<Plural>` action**, replacing the single `Update<Name>Tool`. Read returns one record by id or up to 50 matching a search, in the show page's shape. Write creates a record (no id) or updates one at its `lock_version`, using the form's rules and the Create/Update Actions. Delete is destructive (the kit confirms it) and goes through the Delete Action.
 
+## 0.11.81 - 2026-11-07
+
+### Added
+
+- **`ui.row-action-label`, an advisory rule: row action labels are short verbs.** It flags an action label that interpolates a value: a PHP descriptor such as `Action::make("Revoke {$x->name}")`, `new Action('Remove '.$grant->label, …)` or `new Action($member->name, …)`, and a Vue action object (a `label` beside `url` and `method`) whose label is a `${…}` template literal, a `+` concatenation or a bare expression. It also flags a literal label over 24 characters or 3 words, which tey/kit's RowActions clamps. The record belongs in the action's `ariaLabel` and its confirm (kit 0.15.10). A form field's `label` is not an action and is left alone. It is one of `Layout::RULES`, so it is advisory until listed in `Configuration::$optionalRules`, then fail-on-new against a baseline (`standards:allowlist --baseline`). On the `ui-page.layout-rhythm` leaf.
+
+## 0.11.80 - 2026-11-07
+
+### Changed
+
+- **Generated tests name PostgreSQL as the test database.** The `standards:make` test stubs (model, tenant model, crud, workbench) now say each test migrates the app's test database, PostgreSQL by default with its own database per parallel worker, instead of SQLite memory. Jasper's ruling, 2026-11-07: new apps test on PostgreSQL in parallel; SQLite only for tiny pure unit tests.
+
+## 0.11.79 - 2026-11-07
+
+### Added
+
+- **First-pass metric (opt-in, `standards.telemetry.first_pass`).** With it on, `standards:check` (and so every hook gate run), `standards:pattern` and `standards:make` append records to `storage/standards/runs.jsonl`. The log is git-ignored and hash-chained, and holds paths, rule ids, counts and content hashes, never code. Each record carries attribution read from the environment (`SOLO_PROCESS_ID`, `SOLO_PROJECT_ID`, `CLAUDE_CODE_SESSION_ID`, and `ANTHROPIC_MODEL` or `CLAUDE_MODEL`), the standards version and a ruleset hash. Logging fails open.
+- **`standards:first-pass`** rebuilds file-change episodes from the log and counts only findings on changed lines. It reports the first-pass rate, corrections per episode, the most-tripped rules, and consulted versus not consulted with sample sizes. Filter with `--since=` and `--source=ci|local`, and group with `--by=rule|agent|pattern`. `--recompute <range>` replays the gate per commit in a clean worktree and flags mismatches with the log and chain breaks. `--ci` writes the first pushed commit's per-file findings as an artifact record and a step summary.
+- **Reusable workflow `first-pass.yml`** for apps with PRs: it runs on PR open, uploads the `first-pass` artifact (kept 90 days) and never gates.
+
+## 0.11.78 - 2026-11-07
+
+### Added
+
+- **Advisory layout rules** for the kit's page rhythm, each naming the primitive to use: `ui.action-group` (adjacent action controls sit in a ButtonGroup, ActionBar, Toolbar or FormActions), `ui.row-actions` (row actions are row descriptors, not controls in a DataTable cell slot or a hand-rolled table), `ui.page-title-dup` (no section repeats the Page title; the create action sits in `<Page :actions>`), `ui.no-outer-margins` (no outer margins on a Page's children or on the root of a component it renders, and a `flush` Page holds one full-bleed child), `ui.page-grid` (page-level columns are PageGrid and PageGridItem) and `ui.primitive-pointers` (hand-rolled Stack, PageSection, Aside, Banner, NavGrid, CardSection, Pills and DividerSection shapes, advisory until the kit exports the primitive). Stack and BlockStack are read as one primitive. Each rule is advisory until listed in `Configuration::$optionalRules`; baseline existing findings first with `standards:allowlist --baseline` so it fails on new ones only. On the new `ui-page.layout-rhythm` leaf.
+- The kit export snapshot names `Stack`. An installed kit that still exports it as `BlockStack` is not reported as missing it.
+
 ## 0.11.77 - 2026-11-07
 
 ### Added

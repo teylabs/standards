@@ -3,7 +3,7 @@
 // standards-pattern: {{ leaf }}
 
 {{ test_imports }}
-// {{ titles }} at the database and the model: each test migrates the app's empty test database (SQLite memory by default) and makes its own two
+// {{ titles }} at the database and the model: each test migrates the app's empty test database (PostgreSQL by default, its own database per parallel worker) and makes its own two
 // workspaces. Never skipped. Rows are only ever read and written inside a workspace (TenantBoundary), as the app does.
 
 beforeEach(function () {
