@@ -38,7 +38,7 @@ function {{ var }}Refusal(callable $run): ?string
     return null;
 }
 
-it('makes valid {{ titles_lower }} from the factory, in the current workspace', function () {
+it('makes valid {{ titles_lower }} from the factory in the current workspace', function () {
     ${{ var }} = {{ var }}In($this->workspace, fn () => {{ name }}::factory()->create());
 
     expect(${{ var }}->workspace_id)->toBe($this->workspace)

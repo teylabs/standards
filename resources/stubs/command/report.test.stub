@@ -25,7 +25,7 @@ afterEach(function () {
     $this->created ? Schema::drop({{ name }}::TABLE) : DB::table({{ name }}::TABLE)->whereIn('id', $this->ids)->delete();
 });
 
-it('reports without writing, in production too', function () {
+it('reports without writing even in production', function () {
     $this->app['env'] = 'production';
     $before = DB::table({{ name }}::TABLE)->whereIn('id', $this->ids)->orderBy('id')->get()->toArray();
 

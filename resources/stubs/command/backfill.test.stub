@@ -34,7 +34,7 @@ it('writes nothing in a dry run', function () use ($pending) {
         ->and($pending())->toBe(2);
 });
 
-it('applies once, and a re-run is already done', function () use ($pending) {
+it('applies once and a re-run is already done', function () use ($pending) {
     expect(Artisan::call('app:{{ slug }}', ['--apply' => true]))->toBe(0)
         ->and($pending())->toBe(0);
 
@@ -43,7 +43,7 @@ it('applies once, and a re-run is already done', function () use ($pending) {
         ->and($pending())->toBe(0);
 });
 
-it('refuses to apply in production unless forced and confirmed, or allow-listed', function () use ($pending) {
+it('refuses to apply in production unless forced and confirmed or allow-listed', function () use ($pending) {
     $this->app['env'] = 'production';
 
     expect(Artisan::call('app:{{ slug }}', ['--apply' => true]))->toBe(2)

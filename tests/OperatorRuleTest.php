@@ -80,7 +80,7 @@ test('standards:make command stamps all three flavors, with a test each, and the
         }
         expect(file_get_contents($base.'/app/Console/Commands/BackfillTotalsCommand.php'))->toContain("app:backfill-totals {--apply")->toContain('Operator::run(')
             ->and(file_get_contents($base.'/app/Console/Commands/CountVisitsCommand.php'))->toContain('Operator::report(')->not->toContain('{--apply')
-            ->and(file_get_contents($base.'/tests/Feature/Console/BackfillTotalsCommandTest.php'))->toContain('writes nothing in a dry run')->toContain('applies once, and a re-run is already done')->toContain('refuses to apply in production');
+            ->and(file_get_contents($base.'/tests/Feature/Console/BackfillTotalsCommandTest.php'))->toContain('writes nothing in a dry run')->toContain('applies once and a re-run is already done')->toContain('refuses to apply in production');
 
         $report = CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped());
         expect($report['violations'])->toBe([])->and($report['advisories'])->toBe([])->and($report['exit_code'])->toBe(0);

@@ -657,7 +657,10 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
             ->and(file_get_contents($base.'/app/Actions/UpdateInvoice.php'))->toContain('->updateIfCurrent(')
             ->and(file_get_contents($base.'/app/Models/Invoice.php'))->toContain('use BelongsToWorkspace, GuardsStaleWrites, HasFactory, SoftDeletes;')->toContain('standards-pattern: data-actions.domain-model')
             ->and(file_get_contents($base.'/routes/invoices.php'))->toContain("use App\\Http\\Controllers\\InvoiceSelectionController;\n")->toContain("prefix('invoices/selection')")
-            ->and(file_get_contents($base.'/app/Mcp/Tools/UpdateInvoiceTool.php'))->toContain("#[Capability('invoices.write', scope: 'invoices.write')]")
+            ->and(file_get_contents($base.'/app/Mcp/Tools/UpdateInvoiceTool.php'))->toContain("#[Capability('invoices', scope: 'invoices.write')]")
+            ->and(file_get_contents($base.'/app/Mcp/Tools/ReadInvoicesTool.php'))->toContain("#[Capability('invoices', scope: 'invoices.read')]")
+            // The tools' capability is the one the generated provider declares (InvoicePolicy::CAPABILITY), not an undeclared `.write`.
+            ->and(file_get_contents($base.'/app/Policies/InvoicePolicy.php'))->toContain("public const CAPABILITY = 'invoices';")
             ->and(file_get_contents($base.'/bootstrap/providers.php'))->toContain("    // standards-pattern: ui-page.crud-resource\n    \\App\\Providers\\InvoiceServiceProvider::class,\n];")
             ->and(file_get_contents($base.'/tests/Feature/Invoices/InvoiceTest.php'))->toContain('deletes a selection only when every row is in the workspace')
             ->not->toContain('markTestSkipped')->not->toContain('->skip(')->not->toContain('fixture.php');
@@ -673,6 +676,12 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
         expect($register[1] ?? '')->toContain('$this->app->make(Registry::class)->capabilities([InvoicePolicy::CAPABILITY])')->toContain("->routes(base_path('routes/invoices.php'))")
             ->and($boot[1] ?? '')->toContain('Gate::policy(Invoice::class, InvoicePolicy::class);')->not->toContain('Registry');
         expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped())['violations'])->toBe([]);
+
+        // Test titles carry no comma, so a docs/mcp-capabilities.json `test_*` symbol can name each one.
+        foreach (array_filter($files, fn (string $file): bool => str_starts_with($file, 'tests/')) as $test) {
+            preg_match_all("/^it\\('([^']*)'/m", file_get_contents($base.'/'.$test), $titles);
+            expect($titles[1])->not->toBeEmpty()->and(array_filter($titles[1], fn (string $title): bool => str_contains($title, ',')))->toBe([], $test);
+        }
 
         $plain = (new Maker($base, TreeCatalog::shipped(), rls: false))->make('crud', 'Ledger', 'resource');
         expect(file_get_contents($base.'/'.collect($plain)->first(fn (string $file): bool => str_starts_with($file, 'database/migrations/'))))->not->toContain('Rls', 'a kit without Rls gets no call to it');
@@ -715,7 +724,7 @@ test('make workbench emits a Workbench page with its wiring, reorder guard, insp
             ->and(file_get_contents($base.'/app/Providers/DeckWorkbenchServiceProvider.php'))->toContain("public function register(): void\n    {\n        \$this->app->make(Registry::class)->capabilities([DeckWorkbenchPolicy::CAPABILITY])")->toContain("->errors(['stale_write' => 409])")->toContain("->routes(base_path('routes/decks-workbench.php'))")
             ->and(file_get_contents($base.'/routes/decks-workbench.php'))->toContain("Route::put('order', 'update');")->toContain("WorkspaceRoutes::page(Route::get('', 'show')")
             ->and(file_get_contents($base.'/bootstrap/providers.php'))->toContain("    // standards-pattern: ui-page.workbench\n    \\App\\Providers\\DeckWorkbenchServiceProvider::class,\n];")
-            ->and(file_get_contents($base.'/tests/Feature/Decks/DeckWorkbenchTest.php'))->toContain('refuses a stale one, which changes nothing')->toContain("assertJsonPath('error', 'stale_write')")
+            ->and(file_get_contents($base.'/tests/Feature/Decks/DeckWorkbenchTest.php'))->toContain('refuses a stale one that changes nothing')->toContain("assertJsonPath('error', 'stale_write')")
                 ->toContain('lets a viewer open the workbench but not rearrange it')->not->toContain('markTestSkipped')->not->toContain('->skip(')->not->toContain('fixture.php');
         expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-28'), TreeCatalog::shipped())['violations'])->toBe([]);
 

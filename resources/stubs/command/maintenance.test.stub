@@ -34,7 +34,7 @@ it('deletes nothing in a dry run', function () use ($rows) {
         ->and($rows())->toBe(3);
 });
 
-it('applies once, and a re-run is already done', function () use ($rows) {
+it('applies once and a re-run is already done', function () use ($rows) {
     expect(Artisan::call('app:{{ slug }}', ['--apply' => true]))->toBe(0)
         ->and($rows())->toBe(1);
 
@@ -43,7 +43,7 @@ it('applies once, and a re-run is already done', function () use ($rows) {
         ->and($rows())->toBe(1);
 });
 
-it('refuses to apply in production unless forced and confirmed, or allow-listed', function () use ($rows) {
+it('refuses to apply in production unless forced and confirmed or allow-listed', function () use ($rows) {
     $this->app['env'] = 'production';
 
     expect(Artisan::call('app:{{ slug }}', ['--apply' => true]))->toBe(2)

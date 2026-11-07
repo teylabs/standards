@@ -75,7 +75,7 @@ function {{ var }}Stored(int $id): ?{{ name }}
     return {{ name }}::withoutGlobalScope('workspace')->find($id);
 }
 
-it('lists, creates, shows and edits {{ titles_lower }} for an owner', function () {
+it('lists and creates and shows and edits {{ titles_lower }} for an owner', function () {
     {{ var }}Make($this->workspace, 'Bravo');
     {{ var }}Make($this->otherWorkspace, 'Elsewhere');
     $this->actingAs($this->owner);
@@ -120,7 +120,7 @@ it('refuses a signed-in person who is not a member of the workspace', function (
     expect({{ name }}::withoutGlobalScope('workspace')->count())->toBe(1)->and({{ var }}Stored(${{ var }}->id)->name)->toBe('Bravo');
 });
 
-it('lets a viewer read but not write, and hides everything while the capability is off', function () {
+it('lets a viewer read but not write and hides everything while the capability is off', function () {
     ${{ var }} = {{ var }}Make($this->workspace, 'Bravo');
     $this->actingAs($this->viewer);
 

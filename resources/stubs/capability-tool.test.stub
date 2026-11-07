@@ -6,11 +6,11 @@ use {{ namespace }}\Mcp\Tools\{{ name }}Tool;
 use Laravel\Mcp\Request;
 use Tey\Kit\Features\Mcp\Capability;
 
-it('declares the {{ capability }} capability with a scope', function () {
+it('declares the {{ capability }} capability with the {{ scope }} scope', function () {
     $capability = Capability::of({{ name }}Tool::class);
 
     expect($capability?->capability)->toBe('{{ capability }}')
-        ->and($capability?->scope)->toBe('{{ capability }}');
+        ->and($capability?->scope)->toBe('{{ scope }}');
 });
 
 it('refuses a call without a principal through the consent gate', function () {
