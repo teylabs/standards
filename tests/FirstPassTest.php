@@ -281,6 +281,7 @@ test('recompute and the log skip files the gate cannot check', function () {
     ($this->write)('docs/patterns.md', "# Patterns\n");
     ($this->write)('CHANGELOG.md', "# Changelog\n");
     ($this->write)('vendor/acme/Lib.php', "<?php\n");
+    ($this->write)('public/build/assets/app.js', "export {}\n");
     ($this->git)('add', '--force', '.');
     ($this->git)('commit', '--quiet', '-m', 'Code and docs');
     $hash = fn (string $contents): string => substr(hash('sha256', $contents), 0, 16);

@@ -46,12 +46,18 @@ final class Source
 
     /**
      * Whether a project-relative path is a file the gate can check: one files() would list under the PHP or the frontend pattern, outside
-     * vendor, node_modules and the generated bootstrap/cache. Docs, changelogs and config data are not, so first pass never counts them.
+     * vendor, node_modules, the generated bootstrap/cache and what Ignored::ALWAYS skips (public/build, public/hot). Docs, changelogs and config data are not, so first pass never counts them.
      */
     public static function gated(string $path): bool
     {
         $path = str_replace('\\', '/', $path);
         $segments = explode('/', $path);
+
+        foreach (Ignored::ALWAYS as $ignored) {
+            if ($path === $ignored || str_starts_with($path, $ignored.'/')) {
+                return false;
+            }
+        }
 
         if (str_starts_with($path, self::GENERATED) || in_array('vendor', $segments, true) || in_array('node_modules', $segments, true)) {
             return false;
