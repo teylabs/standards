@@ -181,6 +181,62 @@ test('the workspace and MCP recipes on the modular host with the kit features ad
     }
 });
 
+test('crud records in a module share one module capability, declared once in one module provider; --capability gives a record its own', function () {
+    $base = hostApp('Modular');
+
+    try {
+        $host = new HostShape(teylabsLayout(), HostShape::kitUiAlias($base), ['core', 'workspaces', 'access', 'mcp'], 'Billing');
+        $make = fn (string $name, array $options = []): array => (new Maker($base, TreeCatalog::shipped(), kit: true, host: $host))->make('crud', $name, 'resource', null, $options);
+        $first = $make('Plan', ['mcp']);
+        $second = $make('BillingEntity');
+        $provider = 'app/Modules/Billing/Providers/BillingServiceProvider.php';
+
+        expect($first)->toContain($provider)->not->toContain('app/Modules/Billing/Providers/PlanServiceProvider.php')
+            ->and($second)->toContain($provider)->not->toContain('app/Modules/Billing/Providers/BillingEntityServiceProvider.php');
+        $contents = file_get_contents($base.'/'.$provider);
+        // One capability, two permissions with their aliases, declared once; each record's policy, routes and navigation added once.
+        expect(substr_count($contents, '->capabilities([self::CAPABILITY])'))->toBe(1)
+            ->and($contents)->toContain("public const CAPABILITY = 'billing';")
+            ->toContain("->permission('billing.view', ['owner', 'admin', 'viewer'], self::CAPABILITY, ['billing.read'])")
+            ->toContain("->permission('billing.manage', ['owner', 'admin'], self::CAPABILITY, ['billing.write'])")
+            ->toContain('Gate::policy(Plan::class, PlanPolicy::class);')->toContain('Gate::policy(BillingEntity::class, BillingEntityPolicy::class);')
+            ->toContain("->navigation('billing.read', 'Plans', 'plans', active: 'plans')")->toContain("->navigation('billing.read', 'Billing entities', 'billing-entities', active: 'billing-entities')")
+            ->toContain('namespace App\\Modules\\Billing\\Providers;')->toContain('use App\\Modules\\Billing\\Models\\Plan;')
+            ->and(substr_count($contents, 'standards-record: plans'))->toBe(2)
+            ->and(substr_count(file_get_contents($base.'/bootstrap/providers.php'), 'BillingServiceProvider::class'))->toBe(1);
+        // The policies gate on the module capability: viewing is billing.view, every change billing.manage. The tools use the module scopes.
+        expect(file_get_contents($base.'/app/Modules/Billing/Policies/BillingEntityPolicy.php'))->toContain("public const CAPABILITY = 'billing';")
+            ->toContain("'billing.view'")->toContain("'billing.manage'")->not->toContain("'billing.create'")->not->toContain('billing-entities.')
+            ->and(file_get_contents($base.'/app/Modules/Billing/Mcp/Tools/WritePlanTool.php'))->toContain("#[Capability('billing', scope: 'billing.write')]")->toContain("public const ABILITY = 'billing.write';")
+            ->and(file_get_contents($base.'/app/Modules/Billing/Actions/CreatePlan.php'))->toContain("'plans.create'");
+
+        // A record with its own capability keeps its own provider and permissions, and the module provider is left alone.
+        $own = $make('Pass', ['capability=passes']);
+        expect($own)->toContain('app/Modules/Billing/Providers/PassServiceProvider.php')->not->toContain($provider)
+            ->and(file_get_contents($base.'/app/Modules/Billing/Policies/PassPolicy.php'))->toContain("public const CAPABILITY = 'passes';")->toContain("'passes.create'")
+            ->and(file_get_contents($base.'/'.$provider))->toBe($contents);
+        expect(fn () => $make('Coupon', ['capability=Coupons_X']))->toThrow(InvalidArgumentException::class, 'must be kebab case');
+        expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-28'), TreeCatalog::shipped())['violations'])->toBe([]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('a module provider the generator did not write is refused, with the lines to add by hand', function () {
+    $base = hostApp('Modular');
+
+    try {
+        $host = new HostShape(teylabsLayout(), HostShape::kitUiAlias($base), ['core', 'workspaces', 'access'], 'Billing');
+        @mkdir($base.'/app/Modules/Billing/Providers', 0777, true);
+        file_put_contents($base.'/app/Modules/Billing/Providers/BillingServiceProvider.php', "<?php\n\nnamespace App\\Modules\\Billing\\Providers;\n\nfinal class BillingServiceProvider {}\n");
+
+        expect(fn () => (new Maker($base, TreeCatalog::shipped(), kit: true, host: $host))->make('crud', 'Plan', 'resource'))
+            ->toThrow(InvalidArgumentException::class, 'was not written by standards:make');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
 test('a laravel host with the full kit gets exactly what it got before, file for file', function () {
     $recipes = [['page', 'Posts', 'index', []], ['page', 'PostEditor', 'form', []], ['action', 'PublishPost', 'plain', []], ['settings-section', 'Billing', 'form', []], ['command', 'BackfillSlugs', 'backfill', []],
         ['webhook', 'Acme', 'signed', []], ['api-client', 'Acme', 'http', []], ['model', 'Slide', 'domain', ['tenant']], ['capability-tool', 'ReadSlides', 'read', []], ['crud', 'Deck', 'resource', ['bulk', 'mcp']], ['workbench', 'Board', 'page', []]];

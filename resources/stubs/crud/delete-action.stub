@@ -30,7 +30,7 @@ final class Delete{{ name }}
         return DB::transaction(function () use ($principal, $workspace, $records): int {
             foreach ($records as ${{ var }}) {
                 ${{ var }}->delete();
-                app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.delete', ['id' => ${{ var }}->getKey()]);
+                app(Audit::class)->write($principal->actorId, $workspace, '{{ event }}.delete', ['id' => ${{ var }}->getKey()]);
             }
 
             return $records->count();

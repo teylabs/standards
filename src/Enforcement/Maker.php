@@ -193,7 +193,7 @@ final class Maker
             return [];
         }
         // The write scope the generated tools declare: kebab case, as every generated capability name is.
-        $mcp = $unit === 'crud' && in_array('mcp', $options, true) ? Str::kebab(Str::plural($name)).'.write' : null;
+        $mcp = $unit === 'crud' && in_array('mcp', $options, true) ? $this->crudCapability($name, $options)[0].'.write' : null;
         $placeholder = 'generated.'.$unit.'.'.Str::kebab($name);
         $target = null;
         foreach ($data->capabilities as $capability) {
@@ -249,7 +249,7 @@ final class Maker
             $unit === 'model' && $flavor === 'domain' => self::MODEL_OPTIONS,
             default => [],
         };
-        $unknown = array_values(array_filter($options, fn (string $option): bool => ! in_array($option, $allowed, true) && ! ($unit === 'model' && $flavor === 'domain' && str_starts_with($option, 'enum=')) && ! ($unit === 'page' && str_starts_with($option, 'public='))));
+        $unknown = array_values(array_filter($options, fn (string $option): bool => ! in_array($option, $allowed, true) && ! ($unit === 'model' && $flavor === 'domain' && str_starts_with($option, 'enum=')) && ! ($unit === 'page' && str_starts_with($option, 'public=')) && ! ($unit === 'crud' && str_starts_with($option, 'capability='))));
 
         if ($unknown !== []) {
             throw new InvalidArgumentException('Unknown option --'.implode(', --', $unknown).' for '.$unit.($unit === 'model' ? ' --flavor='.$flavor : '').'.');
@@ -541,7 +541,7 @@ final class Maker
         // Pint's ordered_traits.
         sort($traits);
         $values = [
-            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'table' => $table, 'perm' => Str::kebab($plural), 'var' => Str::camel($name), 'slug' => Str::kebab($plural),
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'table' => $table, 'perm' => Str::kebab($plural), 'event' => Str::kebab($plural), 'perm_view' => Str::kebab($plural).'.view', 'perm_create' => Str::kebab($plural).'.create', 'perm_update' => Str::kebab($plural).'.update', 'perm_delete' => Str::kebab($plural).'.delete', 'var' => Str::camel($name), 'slug' => Str::kebab($plural),
             'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'titles_lower' => strtolower($titles), 'leaf' => $leaf, 'migration' => $migration,
             'model_imports' => implode('', array_map(fn (string $class): string => "use {$class};\n", array_unique($imports))),
             'model_doc' => $doc, 'model_implements' => $implements, 'model_traits' => implode(', ', $traits), 'model_guarded' => implode(', ', $guarded),
@@ -664,6 +664,7 @@ final class Maker
         $namespace = $this->paths['namespace'] ?? 'App';
         $plural = Str::plural($name);
         $slug = Str::kebab($plural);
+        [$perm, $shared] = $this->crudCapability($name, $options);
         $table = Str::snake($plural);
         $title = ucfirst(str_replace('-', ' ', Str::kebab($name)));
         $titles = ucfirst(str_replace('-', ' ', $slug));
@@ -675,7 +676,9 @@ final class Maker
         $modelFiles = array_map(fn (string|array $stub): array => is_array($stub) ? [$stub[0], ['leaf' => 'data-actions.domain-model', ...$stub[1]]] : [$stub, ['leaf' => 'data-actions.domain-model']], $modelFiles);
         $migration = $modelValues['migration'];
         $values = [...$modelValues,
-            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'table' => $table, 'perm' => $slug,
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'table' => $table, 'perm' => $perm, 'event' => $slug,
+            // A module shares one capability: viewing is `<module>.view`, every change `<module>.manage`. A record of its own gets one permission per operation.
+            'perm_view' => $perm.'.view', 'perm_create' => $perm.($shared ? '.manage' : '.create'), 'perm_update' => $perm.($shared ? '.manage' : '.update'), 'perm_delete' => $perm.($shared ? '.manage' : '.delete'),
             'var' => Str::camel($name), 'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'titles_lower' => strtolower($titles),
             'view_model' => ltrim($viewModel, '\\'), 'view_model_base' => class_basename($viewModel), 'vm_namespace' => $viewModels[1].'\\'.$plural, 'migration' => $migration, 'leaf' => 'ui-page.crud-resource',
             'bulk_table' => $bulk ? "            ->bulk(new Action('Delete', WorkspaceUrl::to(\$this->workspace, '{$slug}/selection'), 'delete', confirm: ['title' => 'Delete the selected ".strtolower($titles)."?', 'description' => 'Every selected ".strtolower($title)." will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true))\n" : '',
@@ -695,7 +698,7 @@ final class Maker
         $form = ['leaf' => 'ui-page.form'];
         $files = [
             ...$modelFiles,
-            "{$app}/Providers/{$name}ServiceProvider.php" => 'crud/provider.stub',
+            ...($shared ? [] : ["{$app}/Providers/{$name}ServiceProvider.php" => 'crud/provider.stub']),
             "routes/{$slug}.php" => 'crud/routes.stub',
             "{$app}/Http/Controllers/{$name}Controller.php" => 'crud/controller.stub',
             "{$app}/Http/Requests/Store{$name}Request.php" => ['crud/store-request.stub', $form],
@@ -725,14 +728,83 @@ final class Maker
             $files["{$app}/Mcp/Tools/Write{$name}Tool.php"] = ['crud/mcp-write-tool.stub', ['leaf' => 'mcp.write']];
             $files["{$app}/Mcp/Tools/Delete{$name}Tool.php"] = ['crud/mcp-delete-tool.stub', ['leaf' => 'mcp.write']];
             foreach (["Read{$plural}" => ['read', 'mcp.read'], "Write{$name}" => ['write', 'mcp.write'], "Delete{$name}" => ['write', 'mcp.write']] as $tool => [$operation, $leaf]) {
-                $files["{$tests}/Mcp/{$tool}ToolTest.php"] = ['capability-tool.test.stub', ['name' => $tool, 'capability' => $slug, 'scope' => "{$slug}.{$operation}", 'leaf' => $leaf]];
+                $files["{$tests}/Mcp/{$tool}ToolTest.php"] = ['capability-tool.test.stub', ['name' => $tool, 'capability' => $perm, 'scope' => "{$perm}.{$operation}", 'leaf' => $leaf]];
             }
         }
         $values['route_uses'] = implode('', array_map(fn (string $class): string => "use {$class};\n", $uses));
         $written = $this->emit($files, $values);
 
-        $written[] = $this->provide("{$namespace}\\Providers\\{$name}ServiceProvider", 'ui-page.crud-resource');
+        $written = [...$written, ...($shared
+            ? $this->moduleProvider($perm, $values)
+            : [$this->provide("{$namespace}\\Providers\\{$name}ServiceProvider", 'ui-page.crud-resource')])];
         $written = [...$written, ...$this->factoryAutoload()];
+
+        return $written;
+    }
+
+    /**
+     * The capability a crud record is gated by, and whether it is shared: `capability=<name>` gives the record its own; otherwise a record made
+     * `--module=<Module>` shares the module's (`<module>`, kebab case), and any other record has its own, named after it (`<records>`).
+     *
+     * @param  list<string>  $options
+     * @return array{0: string, 1: bool}
+     */
+    private function crudCapability(string $name, array $options): array
+    {
+        foreach ($options as $option) {
+            if (str_starts_with($option, 'capability=')) {
+                $capability = substr($option, strlen('capability='));
+                if (preg_match('/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/', $capability) !== 1) {
+                    throw new InvalidArgumentException("--capability={$capability} must be kebab case (a-z, 0-9 and hyphens), as the kit's Registry requires.");
+                }
+
+                return [$capability, false];
+            }
+        }
+        $module = $this->host?->module;
+
+        return $module !== null && $module !== '' ? [Str::kebab($module), true] : [Str::kebab(Str::plural($name)), false];
+    }
+
+    /**
+     * The module's provider, which declares its one capability and its two permissions: created on the module's first record, then each record's
+     * policy, routes and navigation entry are added between its markers. A record already listed is left as it is, so a re-run changes nothing; a
+     * provider of that name the generator did not write (no markers) is refused with the lines to add by hand.
+     *
+     * @param  array<string, string>  $values
+     * @return list<string>
+     */
+    private function moduleProvider(string $capability, array $values): array
+    {
+        $module = (string) $this->host?->module;
+        $namespace = $values['namespace'];
+        $app = $this->paths['app'] ?? 'app';
+        $target = "{$app}/Providers/{$module}ServiceProvider.php";
+        $this->plan([$target]);
+        $path = $this->placed($target);
+        $stamp = "// standards-record: {$values['slug']}";
+        $register = "        {$stamp}\n        \$registry->routes(base_path('routes/{$values['slug']}.php'))->navigation('{$capability}.read', '{$values['titles']}', '{$values['slug']}', active: '{$values['slug']}');\n";
+        $boot = "        Gate::policy({$values['name']}::class, {$values['name']}Policy::class); {$stamp}\n";
+        $classes = ["{$namespace}\\Models\\{$values['name']}", "{$namespace}\\Policies\\{$values['name']}Policy"];
+        $current = $this->exists($path)
+            ? $this->read($path)
+            : rtrim($this->render('crud/module-provider.stub', [...$values, 'leaf' => 'ui-page.crud-resource', 'module' => $module, 'module_title' => strtolower((string) preg_replace('/(?<!^)[A-Z]/', ' $0', $module)), 'capability' => $capability]))."\n";
+        $markers = ['        // standards-module: records (register)', '        // standards-module: records (boot)'];
+        if (! str_contains($current, $markers[0]) || ! str_contains($current, $markers[1])) {
+            throw new InvalidArgumentException("{$path} exists but was not written by standards:make (it has no standards-module markers). Add the {$values['titles']} record to it by hand: in register(), {$register} and in boot(), {$boot}");
+        }
+        if (str_contains($current, $stamp)) {
+            return [];
+        }
+        $updated = str_replace([$markers[0], $markers[1]], [$register.$markers[0], $boot.$markers[1]], $current);
+        $file = $this->write($target, self::imports($updated, $classes));
+        // As emit() does: the names were placed while writing, so the import block is sorted again.
+        if ($this->renames !== []) {
+            $this->overlay[$file] = self::imports($this->overlay[$file]);
+            $this->dryRun || file_put_contents($this->base.'/'.$file, $this->overlay[$file]);
+        }
+        $written = [$file];
+        $written[] = $this->provide("{$namespace}\\Providers\\{$module}ServiceProvider", 'ui-page.crud-resource');
 
         return $written;
     }

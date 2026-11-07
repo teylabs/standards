@@ -27,7 +27,7 @@ final class Update{{ name }}
         try {
             return DB::transaction(function () use ($principal, $workspace, $id, $attributes, ${{ var }}): {{ name }} {
                 $saved = ${{ var }}->updateIfCurrent((int) $attributes['lock_version'], ['name' => $attributes['name']]);
-                app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.update', ['id' => $id, 'lock_version' => $saved->lock_version]);
+                app(Audit::class)->write($principal->actorId, $workspace, '{{ event }}.update', ['id' => $id, 'lock_version' => $saved->lock_version]);
 
                 return $saved;
             });
