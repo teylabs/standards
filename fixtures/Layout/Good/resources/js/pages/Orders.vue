@@ -1,3 +1,7 @@
+<script setup lang="ts">
+const order = { id: 7, number: 'NW-1007' };
+const actions = [{ key: 'remove', label: 'Remove', url: `/orders/${order.id}`, method: 'delete', destructive: true }];
+</script>
 <template>
     <Page title="Orders">
         <SectionHeader title="Recent" />

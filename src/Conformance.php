@@ -34,6 +34,7 @@ final class Conformance
         'ui toast' => '[ui toast] notifications use one configured toast path',
         'ui header-actions' => '[ui header-actions] a page header shows at most one primary and three visible actions',
         'styling.pure-tailwind' => '[styling.pure-tailwind] app UI styles with Tailwind classes and @theme tokens, not its own CSS',
+        'ui.row-action-label' => '[ui.row-action-label] row action labels are short verbs; the record goes in the accessible name and the confirm',
         'ui.kit-shell' => '[ui.kit-shell] signed-in pages use kit\'s Workspace Layout, not an app-owned header, once the shell is adopted',
         'operator' => '[operator] commands that write offer a dry run and a production guard',
         'integrations' => '[integrations] webhooks verify their sender and API calls go through a contract',
@@ -202,7 +203,7 @@ final class Conformance
             'vue.bare-handler-argument' => (new Checks\VueBareHandlerArgument)->violations($this->config),
             'inertia.pure' => (new Checks\InertiaPure)->violations($this->config, $this->source),
             'vm.page-size' => (new Checks\ViewModelPageSize)->violations($this->config),
-            'ui.action-group', 'ui.row-actions', 'ui.page-title-dup', 'ui.no-outer-margins', 'ui.page-grid', 'ui.primitive-pointers' => (new Checks\Layout($this->config))->violations($rule),
+            'ui.action-group', 'ui.row-actions', 'ui.page-title-dup', 'ui.no-outer-margins', 'ui.page-grid', 'ui.primitive-pointers', 'ui.row-action-label' => (new Checks\Layout($this->config))->violations($rule),
             default => null,
         };
         if ($frontend !== null) {
