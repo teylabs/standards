@@ -8,8 +8,10 @@ use Throwable;
 
 /**
  * The first-pass run log: storage/standards/runs.jsonl, one JSON record per gate run or pattern lookup. Each line carries `prev`, the sha256
- * of the raw line before it (null on the first line), so an edit, a deletion or a reorder shows up as a chain break. It holds paths, rule
- * ids, line numbers, counts and content hashes, never source code. Writing fails open: an error is swallowed and never fails a run.
+ * of the raw line before it (null on the first line), so an edited line, a line deleted from the middle or a reorder shows up as a chain
+ * break. Removing lines from the end leaves no trace: that is a known limit of a local log. The authoritative checks are CI and the
+ * recompute, which flags committed files the log never gated. It holds paths, rule ids, line numbers, counts and content hashes, never
+ * source code. Writing fails open: an error is swallowed and never fails a run.
  */
 final class RunLog
 {

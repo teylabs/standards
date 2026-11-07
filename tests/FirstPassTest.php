@@ -296,3 +296,38 @@ test('a run where the gate could not run opens no episode', function () {
     expect(Episodes::build([fpRun('2026-11-01T10:00:00+00:00', [fpFile('app/A.php', 'a1')], 'changed', ['gate_error' => true])]))->toBe([])
         ->and(FirstPassCommand::summary(['gate_error' => true, 'files' => []]))->toContain('could not run');
 });
+
+test('merged logs are read in timestamp order with ties kept in input order', function () {
+    $sorted = FirstPassCommand::chronological([
+        ['n' => 1, 'ts' => '2026-11-01T10:00:00.500000+00:00'],
+        ['n' => 2, 'ts' => '2026-11-01T10:00:00.100000+00:00'],
+        ['n' => 3, 'ts' => '2026-11-01T10:00:00.100000+00:00'],
+        ['n' => 4, 'ts' => '2026-11-01T09:00:00+00:00'],
+    ]);
+
+    expect(array_column($sorted, 'n'))->toBe([4, 2, 3, 1]);
+});
+
+test('lookups mark only episodes from their own source as consulted', function () {
+    $lookup = ['kind' => 'lookup', 'ts' => '2026-11-01T09:00:00+00:00', 'source' => 'local', 'patterns' => ['ui-page.index'], 'paths' => []];
+    $episodes = Episodes::build([$lookup, fpRun('2026-11-01T10:00:00+00:00', [fpFile('app/A.php', 'a', [], ['ui-page.index'], strtotime('2026-11-01T09:30:00+00:00'))], 'file', ['source' => 'ci'])]);
+
+    expect($episodes[0]['consulted'])->toBeNull();
+});
+
+test('gap lookups log their leaves and hash suffixed targets count against their file', function () {
+    expect(Recorder::patternsOf(['type' => 'gaps', 'leaves' => [['id' => 'g.one'], ['id' => 'g.two']]]))->toBe(['g.one', 'g.two']);
+
+    $entries = (new Recorder($this->fpBase, true))->files(['app/A.php'], ['app/A.php' => ['new' => true, 'lines' => []]], [
+        ['rule' => 'no-pixel-pins', 'target' => 'app/A.php#abc123', 'check' => 'c', 'hint' => 'h'],
+    ]);
+
+    expect($entries[0]['findings'])->toBe(['no-pixel-pins' => 1]);
+});
+
+test('content hashes ignore CRLF line endings', function () {
+    ($this->write)('lf.php', "<?php\n// a\n");
+    ($this->write)('crlf.php', "<?php\r\n// a\r\n");
+
+    expect(Recorder::hash($this->fpBase.'/crlf.php'))->toBe(Recorder::hash($this->fpBase.'/lf.php'));
+});

@@ -79,7 +79,7 @@ final class Episodes
                     'first_pass' => array_map('intval', $findings),
                     'runs' => 1,
                     'status' => $findings === [] ? 'first-pass' : 'open',
-                    'consulted' => $source === 'local' || $lookups !== [] ? self::consulted($lookups, $file, $record) : null,
+                    'consulted' => ($sourceLookups = array_values(array_filter($lookups, fn (array $lookup): bool => ($lookup['source'] ?? 'local') === $source))) !== [] || $source === 'local' ? self::consulted($sourceLookups, $file, $record) : null,
                 ];
 
                 if ($findings === []) {

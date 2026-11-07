@@ -899,7 +899,7 @@ The pattern leaf `ui-page.kit-adoption` carries the recipes.
 
 Measures whether agents build to the catalog on the first pass, and whether consulting the tree predicts it. It is off by default. Opt in with `standards.telemetry.first_pass` (`STANDARDS_TELEMETRY_FIRST_PASS=true`).
 
-**Run log.** When it is on, every `standards:check` run appends a record to `storage/standards/runs.jsonl`. That includes the hooks' gate runs at commit, Stop and after an edit. `standards:pattern` and `standards:make` append lookup records. The package writes a `.gitignore` beside the log so git ignores it. Each line carries `prev`, the sha256 of the line before it, so an edited, deleted or reordered line shows up as a chain break. A record holds:
+**Run log.** When it is on, every `standards:check` run appends a record to `storage/standards/runs.jsonl`. That includes the hooks' gate runs at commit, Stop and after an edit. `standards:pattern` and `standards:make` append lookup records. The package writes a `.gitignore` beside the log so git ignores it. Each line carries `prev`, the sha256 of the line before it, so an edited line, a line deleted from the middle or a reorder shows up as a chain break. Removing lines from the end leaves no trace; that is a known limit of a local log. CI and `--recompute`, which flags committed files the log never gated, are the authoritative checks. A record holds:
 
 - paths, rule ids, line counts, a 16-character content hash and the mtime of each changed file;
 - the candidate pattern leaves for each file;

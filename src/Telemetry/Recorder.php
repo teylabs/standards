@@ -96,7 +96,7 @@ final class Recorder
             $path = $this->base.'/'.$file;
             $entries[$file] = [
                 'path' => $file,
-                'hash' => is_file($path) ? substr((string) hash_file('sha256', $path), 0, 16) : null,
+                'hash' => is_file($path) ? self::hash($path) : null,
                 'mtime' => is_file($path) ? (int) filemtime($path) : null,
                 'new' => $diff[$file]['new'] ?? true,
                 'changed_lines' => ($diff[$file]['new'] ?? true) && is_file($path) ? count(file($path) ?: []) : count($diff[$file]['lines'] ?? []),
@@ -165,6 +165,7 @@ final class Recorder
         return array_values(array_unique(array_filter(match ($result['type'] ?? null) {
             'leaf' => [$result['id'] ?? null],
             'plan' => array_map(fn (mixed $unit): mixed => is_array($unit) ? ($unit['leaf'] ?? null) : null, (array) ($result['units'] ?? [])),
+            'gaps' => array_map(fn (mixed $leaf): mixed => is_array($leaf) ? ($leaf['id'] ?? null) : null, (array) ($result['leaves'] ?? [])),
             'question' => array_map(fn (mixed $candidate): mixed => is_array($candidate) ? ($candidate['id'] ?? null) : null, (array) ($result['candidates'] ?? [])),
             default => [],
         }, 'is_string')));
@@ -232,7 +233,13 @@ final class Recorder
             }
         }
 
-        return (string) preg_replace('/[ :].*$/', '', $target);
+        return (string) preg_replace('/[ :#].*$/', '', $target);
+    }
+
+    /** A short content hash with line endings normalised, so a CRLF checkout (git autocrlf on Windows) hashes like the LF commit. */
+    public static function hash(string $path): string
+    {
+        return substr(hash('sha256', str_replace("\r\n", "\n", (string) file_get_contents($path))), 0, 16);
     }
 
     public static function now(): string

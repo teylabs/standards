@@ -64,6 +64,14 @@ final class MakeCommand extends Command
             return 2;
         }
 
+        // The first-pass run log (opt-in, fails open): a make is a lookup that names its leaf and the files it wrote. A dry run writes nothing, so it is not logged.
+        if (! $dryRun) {
+            try {
+                $this->laravel->make(Recorder::class)->lookup('standards:make', array_values(array_filter([$this->option('leaf') ?? $maker->leafId()])), array_values(array_filter($files, 'is_string')));
+            } catch (\Throwable) {
+            }
+        }
+
         if ($this->option('json')) {
             $this->line(json_encode(['dry_run' => $dryRun, 'files' => $maker->planned()], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
@@ -77,12 +85,6 @@ final class MakeCommand extends Command
 
             return 0;
         }
-        // The first-pass run log (opt-in, fails open): a make is a lookup that names its leaf and the files it wrote.
-        try {
-            $this->laravel->make(Recorder::class)->lookup('standards:make', array_values(array_filter([$this->option('leaf') ?? $maker->leafId()])), array_values(array_filter($files, 'is_string')));
-        } catch (\Throwable) {
-        }
-
         foreach ($files as $file) {
             $this->line('✓ '.$file);
         }

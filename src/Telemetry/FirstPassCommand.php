@@ -46,6 +46,11 @@ final class FirstPassCommand extends Command
             $breaks = [...$breaks, ...array_map(fn (array $break): array => [...$break, 'log' => $log], $read['breaks'])];
         }
 
+        // Episodes read records in order: merged logs are sorted by timestamp.
+        if (count($logs) > 1) {
+            $records = self::chronological($records);
+        }
+
         if (is_string($range = $this->option('recompute'))) {
             try {
                 $result = (new Recompute($base, configurationFile: $configurationFile))->run($range, $records, $breaks);
@@ -88,6 +93,27 @@ final class FirstPassCommand extends Command
         }
 
         return 0;
+    }
+
+    /**
+     * Records sorted by timestamp to the microsecond; ties keep their input order (PHP's sort is stable).
+     *
+     * @param  list<array<string, mixed>>  $records
+     * @return list<array<string, mixed>>
+     */
+    public static function chronological(array $records): array
+    {
+        $at = function (array $record): string {
+            try {
+                return (new DateTimeImmutable((string) ($record['ts'] ?? '')))->format('U.u');
+            } catch (\Throwable) {
+                return '0.000000';
+            }
+        };
+
+        usort($records, fn (array $a, array $b): int => (float) $at($a) <=> (float) $at($b));
+
+        return $records;
     }
 
     /** @param array<string, mixed> $record */
