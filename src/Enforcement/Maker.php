@@ -298,9 +298,10 @@ final class Maker
             'flavor' => $flavor,
             'action' => $name,
             'test_suffix' => '',
-            'capability' => str_replace('-', '_', $slug).'.'.($flavor === 'write' ? 'update' : 'read'),
-            'scope' => str_replace('-', '_', $slug).'.'.($flavor === 'write' ? 'update' : 'read'),
-            'capability_group' => str_replace('-', '_', $slug),
+            // Kebab case, as the kit's Registry requires of permission and capability names.
+            'capability' => $slug.'.'.($flavor === 'write' ? 'update' : 'read'),
+            'scope' => $slug.'.'.($flavor === 'write' ? 'update' : 'read'),
+            'capability_group' => $slug,
             'tool_rules' => $flavor === 'write' ? "'id' => ['required', 'integer'], 'intent_key' => ['sometimes', 'string', 'max:120']" : '',
             'rules' => $flavor === 'toggles' ? "'updates' => ['sometimes', 'boolean']" : "'name' => ['required', 'string', 'max:255']",
         ];
@@ -531,7 +532,7 @@ final class Maker
         // Pint's ordered_traits.
         sort($traits);
         $values = [
-            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'table' => $table, 'perm' => $table, 'var' => Str::camel($name), 'slug' => Str::kebab($plural),
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'table' => $table, 'perm' => Str::kebab($plural), 'var' => Str::camel($name), 'slug' => Str::kebab($plural),
             'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'titles_lower' => strtolower($titles), 'leaf' => $leaf, 'migration' => $migration,
             'model_imports' => implode('', array_map(fn (string $class): string => "use {$class};\n", array_unique($imports))),
             'model_doc' => $doc, 'model_implements' => $implements, 'model_traits' => implode(', ', $traits), 'model_guarded' => implode(', ', $guarded),
@@ -614,7 +615,7 @@ final class Maker
         $title = ucfirst(str_replace('-', ' ', Str::kebab($name)));
         $titles = ucfirst(str_replace('-', ' ', $slug));
         $values = [
-            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'perm' => Str::snake($plural), 'var' => Str::camel($name),
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'perm' => $slug, 'var' => Str::camel($name),
             'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'vm_namespace' => $viewModels[1].'\\'.$plural, 'leaf' => 'ui-page.workbench',
         ];
         $files = [
@@ -665,7 +666,7 @@ final class Maker
         $modelFiles = array_map(fn (string|array $stub): array => is_array($stub) ? [$stub[0], ['leaf' => 'data-actions.domain-model', ...$stub[1]]] : [$stub, ['leaf' => 'data-actions.domain-model']], $modelFiles);
         $migration = $modelValues['migration'];
         $values = [...$modelValues,
-            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'table' => $table, 'perm' => $table,
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'table' => $table, 'perm' => $slug,
             'var' => Str::camel($name), 'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'titles_lower' => strtolower($titles),
             'view_model' => ltrim($viewModel, '\\'), 'view_model_base' => class_basename($viewModel), 'vm_namespace' => $viewModels[1].'\\'.$plural, 'migration' => $migration, 'leaf' => 'ui-page.crud-resource',
             'bulk_table' => $bulk ? "            ->bulk(new Action('Delete', WorkspaceUrl::to(\$this->workspace, '{$slug}/selection'), 'delete', confirm: ['title' => 'Delete the selected ".strtolower($titles)."?', 'description' => 'Every selected ".strtolower($title)." will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true))\n" : '',
@@ -709,12 +710,14 @@ final class Maker
             $files["{$app}/Actions/Restore{$name}.php"] = ['crud/restore-action.stub', ['leaf' => 'data-actions.action']];
         }
         if (in_array('mcp', $options, true)) {
-            $tool = ['flavor' => 'read', 'tool_rules' => ''];
-            $files["{$app}/Mcp/Tools/Read{$plural}Tool.php"] = ['capability-tool.stub', [...$tool, 'name' => "Read{$plural}", 'title' => 'Read '.strtolower($titles), 'capability' => $table, 'scope' => "{$table}.read", 'leaf' => 'mcp.read']];
-            $files["{$tests}/Mcp/Read{$plural}ToolTest.php"] = ['capability-tool.test.stub', [...$tool, 'name' => "Read{$plural}", 'capability' => $table, 'scope' => "{$table}.read", 'leaf' => 'mcp.read']];
-            $write = ['flavor' => 'write', 'tool_rules' => "'id' => ['required', 'integer'], 'name' => ['required', 'string', 'max:255'], 'lock_version' => ['required', 'integer', 'min:1'], 'intent_key' => ['sometimes', 'string', 'max:120']"];
-            $files["{$app}/Mcp/Tools/Update{$name}Tool.php"] = ['capability-tool.stub', [...$write, 'name' => "Update{$name}", 'title' => 'Update a '.strtolower($title), 'capability' => $table, 'scope' => "{$table}.write", 'leaf' => 'mcp.write']];
-            $files["{$tests}/Mcp/Update{$name}ToolTest.php"] = ['capability-tool.test.stub', [...$write, 'name' => "Update{$name}", 'capability' => $table, 'scope' => "{$table}.write", 'leaf' => 'mcp.write']];
+            // As the pages do: Read (one or a page), Write (create, or update at its lock_version) and Delete, all through the Actions, with List for the read side.
+            $files["{$app}/Actions/List{$plural}.php"] = ['crud/list-action.stub', ['leaf' => 'data-actions.action']];
+            $files["{$app}/Mcp/Tools/Read{$plural}Tool.php"] = ['crud/mcp-read-tool.stub', ['leaf' => 'mcp.read']];
+            $files["{$app}/Mcp/Tools/Write{$name}Tool.php"] = ['crud/mcp-write-tool.stub', ['leaf' => 'mcp.write']];
+            $files["{$app}/Mcp/Tools/Delete{$name}Tool.php"] = ['crud/mcp-delete-tool.stub', ['leaf' => 'mcp.write']];
+            foreach (["Read{$plural}" => ['read', 'mcp.read'], "Write{$name}" => ['write', 'mcp.write'], "Delete{$name}" => ['write', 'mcp.write']] as $tool => [$operation, $leaf]) {
+                $files["{$tests}/Mcp/{$tool}ToolTest.php"] = ['capability-tool.test.stub', ['name' => $tool, 'capability' => $slug, 'scope' => "{$slug}.{$operation}", 'leaf' => $leaf]];
+            }
         }
         $values['route_uses'] = implode('', array_map(fn (string $class): string => "use {$class};\n", $uses));
         $written = $this->emit($files, $values);
@@ -1000,7 +1003,8 @@ final class Maker
             return $contents;
         }
 
-        preg_match_all('/->in\(([^)]*)\)/', $pest, $calls);
+        // Only a chain that binds a test case covers a folder: `pest()->use(SomeTrait::class)->in(...)` adds a trait and boots nothing.
+        preg_match_all('/(?:extend|uses)\(\s*[\\\\\w]*Case::class[^;]*?->in\(([^)]*)\)/s', $pest, $calls);
 
         foreach ($calls[1] as $arguments) {
             preg_match_all('/[\'"]([^\'"]+)[\'"]/', $arguments, $globs);

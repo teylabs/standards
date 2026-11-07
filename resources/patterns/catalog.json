@@ -773,7 +773,8 @@
             "summary": "A CRUDDY index controller passes a typed ViewModel to resources/js/pages/<Area>/Index/Page.vue; its table is a TableQuery (search, declared filters and sorts from the URL, an unknown one a 400) with each row's actions decided on the server.",
             "kit": [
                 "@kit/ui Page",
-                "@kit/ui SectionHeader",
+                "@kit/ui ButtonGroup",
+                "@kit/ui InertiaAction",
                 "@kit/ui DataTable",
                 "@kit/ui IndexToolbar",
                 "@kit/ui RowActions"
@@ -808,14 +809,14 @@
                 {
                     "name": "page shell",
                     "kit_component": "Page",
-                    "use": "Wraps the whole page with title and breadcrumbs",
-                    "props_hint": "title"
+                    "use": "Wraps the whole page with title and breadcrumbs; its #actions slot holds the header actions (ui-page.header-actions). No SectionHeader repeating the title above the table",
+                    "props_hint": "title, #actions"
                 },
                 {
-                    "name": "header",
-                    "kit_component": "SectionHeader",
-                    "use": "Title plus the primary add action",
-                    "props_hint": "title, actions slot"
+                    "name": "add action",
+                    "kit_component": "InertiaAction",
+                    "use": "The create action by name in the header's ButtonGroup (null renders nothing)",
+                    "props_hint": "action"
                 },
                 {
                     "name": "rows",
@@ -843,7 +844,6 @@
             "summary": "A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand.",
             "kit": [
                 "@kit/ui Page",
-                "@kit/ui SectionHeader",
                 "@kit/ui Section",
                 "@kit/ui DescriptionList",
                 "@kit/ui ButtonGroup",
@@ -880,14 +880,8 @@
                 {
                     "name": "page shell",
                     "kit_component": "Page",
-                    "use": "Wraps the record page",
-                    "props_hint": "title"
-                },
-                {
-                    "name": "header",
-                    "kit_component": "SectionHeader",
-                    "use": "Record title and its actions",
-                    "props_hint": "title, actions slot"
+                    "use": "Wraps the record page; its #actions slot holds the record's actions (ui-page.header-actions), with no SectionHeader repeating the title",
+                    "props_hint": "title, #actions"
                 },
                 {
                     "name": "details",
@@ -1541,12 +1535,13 @@
         "ui-page.crud-resource": {
             "id": "ui-page.crud-resource",
             "recipe": "CRUD resource screens",
-            "summary": "`standards:make crud <Record>` emits a whole workspace-owned resource: model and migration (with lock_version), a policy gated by the record's capability then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first, stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture. `--bulk` adds selection and a bulk delete, `--mcp` read and write capability tools, `--soft-deletes` soft deletes and a restoration.",
+            "summary": "`standards:make crud <Record>` emits a whole workspace-owned resource: model and migration (with lock_version), a policy gated by the record's capability then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first, stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture. `--bulk` adds selection and a bulk delete, `--mcp` Read, Write (create or update) and Delete capability tools over a List action, `--soft-deletes` soft deletes and a restoration.",
             "kit": [
                 "@kit/ui DataTable",
                 "@kit/ui FormCard",
-                "@kit/ui SectionHeader",
-                "@kit/ui Dialog"
+                "@kit/ui ButtonGroup",
+                "@kit/ui InertiaAction",
+                "@kit/ui DropdownAction"
             ],
             "make": "standards:make crud --flavor=resource",
             "checks": [

@@ -1,0 +1,45 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Mcp\Tools;
+
+use {{ namespace }}\Actions\Delete{{ name }};
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Mcp\Capability;
+use Tey\Kit\Features\Mcp\CapabilityTool;
+
+/** Deletes one {{ title_lower }} through the same Action the page uses, after the person confirms in the chat. */
+#[Capability('{{ perm }}', destructive: true, scope: '{{ perm }}.write')]
+final class Delete{{ name }}Tool extends CapabilityTool
+{
+    public const ABILITY = '{{ perm }}.write';
+
+    protected string $description = 'Delete a {{ title_lower }} by id. Asks for confirmation first.';
+
+    public function schema(JsonSchema $schema): array
+    {
+        return ['id' => $schema->integer()->required(), 'intent_key' => $schema->string(), 'confirm_token' => $schema->string()];
+    }
+
+    /** @return array<string, mixed> the accepted arguments' rules; the kit refuses any other argument */
+    protected function rules(): array
+    {
+        return ['id' => ['required', 'integer'], 'intent_key' => ['sometimes', 'string', 'max:120'], 'confirm_token' => ['sometimes', 'string']];
+    }
+
+    protected function summary(array $validated): string
+    {
+        return 'Delete {{ title_lower }} '.$validated['id'].' for everyone in this workspace.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    protected function call(Principal $principal, int $workspace, array $validated): array
+    {
+        return ['deleted' => app(Delete{{ name }}::class)->handle($principal, $workspace, [(int) $validated['id']])];
+    }
+}

@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`standards:make` names capabilities, permissions and scopes in kebab case.** A two-word record (`BillingEntity`) emitted `billing_entities.view`, which the kit's `Registry::permission` refuses, so the app would not boot. The policy, provider, tools, scopes and tests now share one name, `billing-entities`; the database table stays `billing_entities`.
+- **Generated tests bind the app's TestCase wherever they land.** A `pest()->use(Trait::class)->in(...)` chain in `tests/Pest.php` was taken as the TestCase covering that folder, so tests generated there failed with "Target class [config] does not exist". Only `extend()`/`uses()` of a test case counts now.
+
+### Changed
+
+- **Generated index and show pages put their actions in the page header.** The crud, `page --flavor=index` and `page --flavor=show` stubs rendered `<Page :title>` and then a `<SectionHeader>` with the same title right above the table or record. That showed the title twice, and put "New" against the DataTable toolbar with no gap. Actions now go in Page's `#actions` slot, written out by name in a ButtonGroup (ui-page.header-actions), and the repeated SectionHeader is gone. The crud show ViewModel's `actions()` now returns a keyed map, `['edit' => ?Action, 'delete' => ?Action]`, instead of a list.
+
+  **Migrating pages generated before this release** (by hand; nothing rewrites them). On an index page:
+
+  ```vue
+  <!-- before -->
+  import { DataTable, Page, SectionHeader } from '@kit/ui';
+  <Page :title="title">
+      <SectionHeader :title="title" :actions="create ? [create] : []" />
+      <DataTable ... />
+
+  <!-- after -->
+  import { ButtonGroup, DataTable, InertiaAction, Page } from '@kit/ui';
+  <Page :title="title">
+      <template #actions>
+          <ButtonGroup v-if="create">
+              <InertiaAction :action="create as never" />
+          </ButtonGroup>
+      </template>
+      <DataTable ... />
+  ```
+
+  On a show page, change the ViewModel's `actions()` to return `['edit' => ..., 'delete' => ...]`: the same `Action`s, keyed, null when not allowed, and drop `menu: true`. Then replace the SectionHeader, the `perform`/`run` functions and the confirm `Dialog` with:
+
+  ```vue
+  <template #actions>
+      <ButtonGroup v-if="actions.edit || actions.delete">
+          <InertiaAction :action="actions.edit as never" />
+          <template #menu>
+              <DropdownAction :action="actions.delete as never" />
+          </template>
+      </ButtonGroup>
+  </template>
+  ```
+
+  The prop type becomes `actions: { edit: Action | null; delete: Action | null }`. InertiaAction and DropdownAction ask for the delete confirmation themselves. A page with no actions just drops its `<SectionHeader title="..." />`.
+
+- **`standards:make crud --mcp` emits Read, Write and Delete tools over a `List<Plural>` action**, replacing the single `Update<Name>Tool`. Read returns one record by id or up to 50 matching a search, in the show page's shape. Write creates a record (no id) or updates one at its `lock_version`, using the form's rules and the Create/Update Actions. Delete is destructive (the kit confirms it) and goes through the Delete Action.
+
 ## 0.11.77 - 2026-11-07
 
 ### Added
