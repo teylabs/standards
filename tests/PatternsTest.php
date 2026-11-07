@@ -642,7 +642,8 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
     $base = fixtureApp();
 
     try {
-        $files = (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Invoice', 'resource', null, ['bulk', 'mcp', 'soft-deletes']);
+        $files = (new Maker($base, TreeCatalog::shipped(), rls: true))->make('crud', 'Invoice', 'resource', null, ['bulk', 'mcp', 'soft-deletes']);
+        $migration = (string) collect($files)->first(fn (string $file): bool => str_starts_with($file, 'database/migrations/'));
 
         expect($files)->toContain(
             'app/Models/Invoice.php', 'app/Policies/InvoicePolicy.php', 'app/Providers/InvoiceServiceProvider.php', 'routes/invoices.php',
@@ -660,9 +661,21 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
             ->and(file_get_contents($base.'/bootstrap/providers.php'))->toContain("    // standards-pattern: ui-page.crud-resource\n    \\App\\Providers\\InvoiceServiceProvider::class,\n];")
             ->and(file_get_contents($base.'/tests/Feature/Invoices/InvoiceTest.php'))->toContain('deletes a selection only when every row is in the workspace')
             ->not->toContain('markTestSkipped')->not->toContain('->skip(')->not->toContain('fixture.php');
+        // A workspace table is protected by the kit's row-level security (a no-op until it is on), and unprotected before it is dropped.
+        $up = file_get_contents($base.'/'.$migration);
+        expect($up)->toContain("use Tey\\Kit\\Features\\Workspaces\\Rls;\n")
+            ->and(strpos($up, "Rls::protect('invoices');"))->toBeGreaterThan(strpos($up, "Schema::create('invoices'"))
+            ->and(strpos($up, "Rls::unprotect('invoices');"))->toBeLessThan(strpos($up, "Schema::dropIfExists('invoices');"))->toBeGreaterThan(strpos($up, 'function down'));
+        // The capability is contributed in register(): the kit defines capabilities while it boots, before an app provider's boot() runs. The policy stays in boot().
+        $provider = file_get_contents($base.'/app/Providers/InvoiceServiceProvider.php');
+        preg_match('/function register\(\): void\n    \{\n(.*?)\n    \}/s', $provider, $register);
+        preg_match('/function boot\(\): void\n    \{\n(.*?)\n    \}/s', $provider, $boot);
+        expect($register[1] ?? '')->toContain('$this->app->make(Registry::class)->capabilities([InvoicePolicy::CAPABILITY])')->toContain("->routes(base_path('routes/invoices.php'))")
+            ->and($boot[1] ?? '')->toContain('Gate::policy(Invoice::class, InvoicePolicy::class);')->not->toContain('Registry');
         expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped())['violations'])->toBe([]);
 
-        $plain = (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Ledger', 'resource');
+        $plain = (new Maker($base, TreeCatalog::shipped(), rls: false))->make('crud', 'Ledger', 'resource');
+        expect(file_get_contents($base.'/'.collect($plain)->first(fn (string $file): bool => str_starts_with($file, 'database/migrations/'))))->not->toContain('Rls', 'a kit without Rls gets no call to it');
         expect($plain)->not->toContain('app/Http/Controllers/LedgerSelectionController.php')
             ->and(file_get_contents($base.'/app/Models/Ledger.php'))->not->toContain('SoftDeletes')
             ->and(file_get_contents($base.'/app/ViewModels/Ledgers/LedgerIndexViewModel.php'))->not->toContain('->bulk(')
@@ -699,7 +712,7 @@ test('make workbench emits a Workbench page with its wiring, reorder guard, insp
             ->and(file_get_contents($base.'/resources/js/pages/Decks/Workbench/Page.vue'))->toContain("import { Workbench, useWorkbench } from '@kit/ui';")->toContain("wb.defineInspector('item', DeckItemInspector);")
                 ->toContain('<Workbench :workbench-key="workbenchKey"')->toContain(':layout="workbenchLayout"')->toContain('<template #stage>')
             ->and(file_get_contents($base.'/app/Actions/ReorderDeckWorkbench.php'))->toContain('public function handle(Principal $principal, int $workspace, array $order, int $version): int')->toContain("throw new RuntimeException('stale_write');")
-            ->and(file_get_contents($base.'/app/Providers/DeckWorkbenchServiceProvider.php'))->toContain("->errors(['stale_write' => 409])")->toContain("->routes(base_path('routes/decks-workbench.php'))")
+            ->and(file_get_contents($base.'/app/Providers/DeckWorkbenchServiceProvider.php'))->toContain("public function register(): void\n    {\n        \$this->app->make(Registry::class)->capabilities([DeckWorkbenchPolicy::CAPABILITY])")->toContain("->errors(['stale_write' => 409])")->toContain("->routes(base_path('routes/decks-workbench.php'))")
             ->and(file_get_contents($base.'/routes/decks-workbench.php'))->toContain("Route::put('order', 'update');")->toContain("WorkspaceRoutes::page(Route::get('', 'show')")
             ->and(file_get_contents($base.'/bootstrap/providers.php'))->toContain("    // standards-pattern: ui-page.workbench\n    \\App\\Providers\\DeckWorkbenchServiceProvider::class,\n];")
             ->and(file_get_contents($base.'/tests/Feature/Decks/DeckWorkbenchTest.php'))->toContain('refuses a stale one, which changes nothing')->toContain("assertJsonPath('error', 'stale_write')")
@@ -731,7 +744,7 @@ test('make model emits a domain model with its migration, factory, enums and tes
             ->toContain('use BelongsToWorkspace, GuardsStaleWrites, HasFactory, InteractsWithMedia, SoftDeletes;')->not->toContain('use HasFactory, BelongsToWorkspace')
             ->toContain("'status' => InvoiceStatus::class")->toContain('implements HasMedia')->toContain('function scopeOrdered')
             ->toContain("protected \$guarded = ['id', 'lock_version', 'workspace_id', 'position'];");
-        expect(file_get_contents($base.'/'.$migration))->toContain("\$table->foreignId('workspace_id')->constrained()->restrictOnDelete();")
+        expect(file_get_contents($base.'/'.$migration))->not->toContain('Rls', 'without the kit installed there is no Rls to call')->toContain("\$table->foreignId('workspace_id')->constrained()->restrictOnDelete();")
             ->toContain("\$table->enum('status', ['draft', 'active', 'archived'])->default('draft');")->toContain("\$table->unique(['workspace_id', 'id']);")
             ->toContain("\$table->index(['workspace_id', 'status']);")->toContain("\$table->unsignedInteger('lock_version')->default(1);")->toContain('$table->softDeletes();');
         expect(file_get_contents($base.'/tests/Feature/Invoices/InvoiceModelTest.php'))->toContain('keeps invoices inside their workspace')->toContain('refuses a stale write to invoices')

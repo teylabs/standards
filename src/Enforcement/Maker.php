@@ -50,6 +50,7 @@ final class Maker
         private readonly ?bool $media = null,
         private readonly ?HostShape $host = null,
         private readonly bool $dryRun = false,
+        private readonly ?bool $rls = null,
     ) {}
 
     /** What a dry run would write, or what a run wrote: project-relative path => contents. @var array<string, string> */
@@ -513,6 +514,7 @@ final class Maker
             $columns[] = '            $table->softDeletes();';
         }
         $scope = $tenant ? "'workspace_id', " : '';
+        $rls = $tenant && ($this->rls ?? class_exists('Tey\\Kit\\Features\\Workspaces\\Rls'));
         if ($tenant) {
             $columns[] = '            // The target of a composite foreign key from a child table, which keeps a child in its parent\'s workspace.';
             $columns[] = '            $table->unique([\'workspace_id\', \'id\']);';
@@ -534,6 +536,10 @@ final class Maker
             'model_doc' => $doc, 'model_implements' => $implements, 'model_traits' => implode(', ', $traits), 'model_guarded' => implode(', ', $guarded),
             'model_casts' => implode(', ', $casts), 'model_methods' => implode('', $methods),
             'migration_columns' => implode("\n", $columns)."\n",
+            // Row-level security for a workspace table, when the kit has it (0.15.0): protect() is a no-op until RLS is on (PostgreSQL only), so the migration is safe everywhere.
+            'migration_imports' => $rls ? "use Tey\\Kit\\Features\\Workspaces\\Rls;\n" : '',
+            'migration_up' => $rls ? "        // The database's own workspace lock under the app's scoping (tey/kit docs/rls.md); nothing until kit.tenancy.rls.enabled, on PostgreSQL.\n        Rls::protect('{$table}');\n" : '',
+            'migration_down' => $rls ? "        Rls::unprotect('{$table}');\n" : '',
             'factory_imports' => implode("\n", $factoryImports).($factoryImports === [] ? '' : "\n"),
             'factory_doc' => $tenant ? ' Create them inside a workspace (TenantBoundary): the model takes the current one.' : '',
             'factory_fields' => implode("\n", $factory).($factory === [] ? '' : "\n"),
