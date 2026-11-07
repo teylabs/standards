@@ -25,7 +25,7 @@ final class Gate
     public const OPTIONAL = ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db', 'format-lint'];
 
     /** Rules reported as advisories, never drift, until an app lists them in Configuration::optionalRules. */
-    public const ADVISORY = ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists'];
+    public const ADVISORY = ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists', ...\Tey\Standards\Checks\Layout::RULES];
 
     public function __construct(
         private readonly Configuration $config,
@@ -95,8 +95,12 @@ final class Gate
             }
 
             // A check may mark a finding advisory itself (a rule that could check nothing says so): reported, never failing, and outside the ratchet.
+            // Their keys still count as firing, so a baselined one is not stale.
+            $quiet = [];
+
             foreach ($actual as $index => $violation) {
                 if (($violation['advisory'] ?? false) === true) {
+                    $quiet[$violation['target'].' | '.$violation['check']] = true;
                     $advisories[] = $this->finding($rule, 'advisory', $violation['target'], $violation['check'], $violation['hint'] ?? null);
                     unset($actual[$index]);
                 }
@@ -111,7 +115,7 @@ final class Gate
                     }
                 }
 
-                $fired = [];
+                $fired = $quiet;
 
                 foreach ($actual as $violation) {
                     $key = $violation['target'].' | '.$violation['check'];
@@ -125,7 +129,7 @@ final class Gate
 
                 // An entry whose advisory no longer fires is stale, as a findings entry is, so it can't rot unnoticed.
                 foreach ($listed as $key => $entry) {
-                    if (! isset($fired[$key]) && $this->inScope($entry['target'], $paths)) {
+                    if (! isset($fired[$key]) && $this->inScope($entry['target'], $paths) && ! $this->quiet($rule, $entry['check'])) {
                         $violations[] = $this->finding($rule, 'stale', $entry['target'], $entry['check'], 'The advisory no longer fires; delete this allowlist entry.');
                     }
                 }
@@ -141,7 +145,7 @@ final class Gate
                 }
             }
 
-            $seen = [];
+            $seen = $quiet;
 
             foreach ($actual as $violation) {
                 $key = $violation['target'].' | '.$violation['check'];
@@ -154,7 +158,7 @@ final class Gate
             }
 
             foreach ($allowed as $key => $entry) {
-                if (! isset($seen[$key]) && $this->inScope($entry['target'], $paths)) {
+                if (! isset($seen[$key]) && $this->inScope($entry['target'], $paths) && ! $this->quiet($rule, $entry['check'])) {
                     $violations[] = $this->finding($rule, 'stale', $entry['target'], $entry['check'], 'The debt is gone; delete this allowlist entry.');
                 }
             }
@@ -245,6 +249,12 @@ final class Gate
     private function finding(string $rule, string $kind, string $target, string $check, ?string $hint = null, ?int $line = null): array
     {
         return ['rule' => $rule, 'kind' => $kind, 'target' => $target, 'check' => $check, 'hint' => $hint ?? $this->hint($rule), ...($line === null ? [] : ['line' => $line])];
+    }
+
+    /** A layout rule's advisory-by-kind check: its allowlist entry is never stale (Layout::quiet). */
+    private function quiet(string $rule, string $check): bool
+    {
+        return in_array($rule, \Tey\Standards\Checks\Layout::RULES, true) && (new \Tey\Standards\Checks\Layout($this->config))->quiet($check);
     }
 
     private function hint(string $rule): string

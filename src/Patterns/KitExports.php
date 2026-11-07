@@ -17,6 +17,9 @@ final class KitExports
 {
     public const BARREL = 'resources/features/core/components/Kit/index.ts.stub';
 
+    /** Components tey/kit renamed: new name => the name an older kit exports it under. */
+    public const RENAMED = ['Stack' => 'BlockStack'];
+
     public static function snapshotFile(): string
     {
         return dirname(__DIR__, 2).'/resources/patterns/kit-exports.json';
@@ -111,7 +114,12 @@ final class KitExports
 
         $installed = self::parse((string) file_get_contents($barrel));
         $snapshot = self::snapshot();
+        // A kit from before a rename still exports the component under its old name: not missing.
+        $missing = array_filter(array_diff($snapshot, $installed), fn (string $name): bool => ! in_array(self::RENAMED[$name] ?? null, $installed, true));
 
-        return [array_values(array_diff($snapshot, $installed)), array_values(array_diff($installed, $snapshot))];
+        // ...and its old name is not a new component either.
+        $extra = array_filter(array_diff($installed, $snapshot), fn (string $name): bool => ! in_array(array_search($name, self::RENAMED, true), $snapshot, true));
+
+        return [array_values($missing), array_values($extra)];
     }
 }

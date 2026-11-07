@@ -24,10 +24,17 @@ nodes:
     why: Toasts, styling, the signed-in shell, kit adoption and guards over every page each have one app-wide convention and a check.
     options:
       - { answer: "Feedback after a save or a background result (a toast)", next: ui-page.toast }
-      - { answer: "Styling: CSS, inline styles, theme tokens or a dynamic value", next: ui-page.styling }
+      - { answer: "Styling or page layout: CSS, theme tokens, spacing between blocks, columns, action groups", next: ui-page.look }
       - { answer: "The signed-in shell: the header, primary nav, account menu or workspace switcher", next: ui-page.shell }
       - { answer: "Across the whole app: adopting every kit surface, or a test that guards every route or page", next: ui-page.app-wide }
       - { answer: "None of these", next: ui-page.shared.byo }
+  - id: ui-page.look
+    question: Styling, or page layout?
+    why: Styling is how elements look (Tailwind and theme tokens); page layout is how a page spaces and arranges its blocks with the kit's primitives.
+    options:
+      - { answer: "Styling: CSS, inline styles, theme tokens or a dynamic value", next: ui-page.styling }
+      - { answer: "Page layout: spacing between blocks, columns, action groups and row actions", next: ui-page.layout-rhythm }
+      - { answer: "None of these", next: ui-page.look.byo }
   - id: ui-page.app-wide
     question: Which app-wide task?
     why: Adopting the kit and guarding every page both work across the whole app, from the kit's surfaces and from what each route or page declares.
@@ -285,6 +292,25 @@ nodes:
       - "A gap: map the component or library to a surface (its replaces), replace it with kit, or report it as demand for a new surface. Where kit has no matching component (date formatting and pickers, contact links, attachment display rows, a switch), check kit for a newer component, then keep the app's own with a dated exemption and report the gap to kit."
       - "An exemption is an allowlist entry: rule adoption.<composer>.<surface-id> (or adoption.gap with the component path or npm:<package> as target), a check, a reason, a date and an expires Y-m-d date. It passes --ci until it expires and always blocks --compliance."
       - "Not covered: Blade, Livewire and Filament UI count only through a template-tag signal with in [blade] or a class-reference signal with paths, and never as adoption. It also cannot see surfaces whose hand-rolled form leaves no signal (page headers before the shell, guest layouts, dark-mode classes, timezone code without the listed libraries, hand-built key-value lists), in-house components that import no library, behaviour and visual parity, or the kit_adoptions table from the bare CLI. Check signed-in route facts before trusting an n/a."
+  - id: ui-page.layout-rhythm
+    recipe: Page layout rhythm
+    summary: >-
+      Rules ui.action-group, ui.row-actions, ui.page-title-dup, ui.no-outer-margins, ui.page-grid and ui.primitive-pointers. Page gaps its children,
+      components carry no outer margins, and spacing, columns, action groups and row actions come from the kit's primitives. Advisory until listed in
+      Configuration::$optionalRules, then fail-on-new against a baseline (standards:allowlist --baseline) that only shrinks.
+    kit: ['@kit/ui Page', '@kit/ui Stack', '@kit/ui BlockStack', '@kit/ui ButtonGroup', '@kit/ui ActionBar', '@kit/ui Toolbar', '@kit/ui DataTable', '@kit/ui SectionHeader']
+    checks: ['ui.action-group', 'ui.row-actions', 'ui.page-title-dup', 'ui.no-outer-margins', 'ui.page-grid', 'ui.primitive-pointers']
+    paths: []
+    keywords: [ui.action-group, ui.row-actions, ui.page-title-dup, ui.no-outer-margins, ui.page-grid, ui.primitive-pointers, layout rhythm, outer margin, button group, row actions, page grid, flush, stack]
+    status: draft
+    rules:
+      - "Two or more adjacent action controls (Button, button, DropdownConfirm, a Link with as=button or a variant) sit in a ButtonGroup, an ActionBar, a Toolbar (mixed controls such as a search box and buttons count), FormActions, or a Page or SectionHeader actions slot."
+      - "Row actions are descriptors on the row (ActionDescriptor[] as actions), rendered by the DataTable's row ActionBar, not Buttons or menus in a #cell-* or #row-actions slot; a hand-rolled table with actions in its cells becomes a DataTable."
+      - "A SectionHeader or PageSection does not repeat the Page title, and no SectionHeader size=page sits in a Page that draws its own heading. A page-level create action (a link to a *.create route) goes in <Page :actions>; the New, Create or Add label test is English-only and stays advisory."
+      - "No mt-*, mb-*, my-* or space-y-* on a Page's direct children or on the root of a component a Page renders directly: the Page's gap owns the spacing; use Stack (BlockStack on a kit before the rename) with a gap-* class, or PageSection. A flush Page holds one full-bleed child (teleports, dialogs and absolute or fixed elements aside)."
+      - "Page-level grid-cols-* and col-span-* become PageGrid (preset main-aside, halves or thirds) and PageGridItem :span. Grids inside a card, form or widget body and the dashboard widget grid are not page-level."
+      - "Hand-rolled Stack, PageSection, Aside, Banner, NavGrid, CardSection, Pills and DividerSection shapes point to the primitive; a pointer stays advisory until the kit the app runs exports the primitive."
+      - "A real exception goes in the allowlist: the rule, the finding's target and check, a reason and an expires Y-m-d date."
   - id: ui-page.add-button
     recipe: Add action button
     summary: Add, New and Create buttons are kit Buttons carrying the Plus icon.
@@ -577,6 +603,14 @@ nodes:
     keywords: []
     status: byo
   - id: ui-page.shared.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.look.byo
     recipe: Build your own
     summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
     kit: []
