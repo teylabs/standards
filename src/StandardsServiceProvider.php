@@ -14,6 +14,8 @@ use Tey\Standards\Enforcement\PatternCommand;
 use Tey\Standards\Preflight\CoreCheck;
 use Tey\Standards\Preflight\InstallCheck;
 use Tey\Standards\Preflight\PreflightCommand;
+use Tey\Standards\Telemetry\FirstPassCommand;
+use Tey\Standards\Telemetry\Recorder;
 
 final class StandardsServiceProvider extends ServiceProvider
 {
@@ -21,6 +23,13 @@ final class StandardsServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/preflight.php', 'preflight');
         $this->mergeConfigFrom(__DIR__.'/../config/standards.php', 'standards');
+
+        // The first-pass run log. The recipe MCP's find and recipe tools log lookups through it: app(Recorder::class)->lookup('bakery.find', $leafIds, $paths).
+        $this->app->bind(Recorder::class, fn (): Recorder => new Recorder(
+            $this->app->basePath(),
+            (bool) $this->app['config']->get('standards.telemetry.first_pass', false),
+            (string) $this->app['config']->get('standards.configuration', 'tests/Arch/configuration.php'),
+        ));
 
         foreach (CoreCheck::NAMES as $name) {
             $id = 'standards.preflight.'.$name;
@@ -46,7 +55,7 @@ final class StandardsServiceProvider extends ServiceProvider
         }
 
         if ($this->app->runningInConsole()) {
-            $this->commands([PreflightCommand::class, CheckCommand::class, PatternCommand::class, InstallCommand::class, MakeCommand::class, AllowlistCommand::class, AdoptionCommand::class]);
+            $this->commands([PreflightCommand::class, CheckCommand::class, PatternCommand::class, InstallCommand::class, MakeCommand::class, AllowlistCommand::class, AdoptionCommand::class, FirstPassCommand::class]);
         }
     }
 }

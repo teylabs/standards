@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use Tey\Standards\Patterns\KitExports;
 use Tey\Standards\Patterns\TreeCatalog;
+use Tey\Standards\Telemetry\Recorder;
 
 final class CheckCommand extends Command
 {
@@ -34,7 +35,7 @@ final class CheckCommand extends Command
             $paths = array_map(fn (string $file): string => (string) preg_replace('#^(\./)+#', '', str_replace('\\', '/', str_starts_with($file, $base.'/') ? substr($file, strlen($base) + 1) : $file)), $files);
         } elseif ($this->option('changed')) {
             $scope = 'changed';
-            $ref = (string) ($this->option('base') ?? $config->get('standards.base_ref') ?? ChangedFiles::defaultRef($base));
+            $ref = $this->ref($config, $base);
             // On stderr, so --json output stays parseable.
             fwrite(STDERR, "standards:check: --changed against {$ref}\n");
             $paths = ChangedFiles::since($base, $ref);
@@ -56,6 +57,16 @@ final class CheckCommand extends Command
 
         if ($this->option('strict') && $report['advisories'] !== []) {
             $report['exit_code'] = 1;
+        }
+
+        // The first-pass run log (opt-in, fails open): never changes the exit code or the output.
+        try {
+            $recorder = $this->laravel->make(Recorder::class);
+
+            if ($recorder->enabled()) {
+                $recorder->check($report, $ref ?? $this->ref($config, $base));
+            }
+        } catch (\Throwable) {
         }
 
         if ($this->option('json')) {
@@ -83,5 +94,10 @@ final class CheckCommand extends Command
             $report['skipped'] === [] ? '' : '; not run: '.implode(', ', $report['skipped'])));
 
         return $report['exit_code'];
+    }
+
+    private function ref(Repository $config, string $base): string
+    {
+        return (string) ($this->option('base') ?? $config->get('standards.base_ref') ?? ChangedFiles::defaultRef($base));
     }
 }
