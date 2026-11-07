@@ -69,15 +69,7 @@ final class TenantAware
         }
 
         $finder = new NodeFinder;
-        $classes = [];
-
-        foreach ($this->source->files($this->config->sourceRoots) as $path => $text) {
-            foreach ($finder->findInstanceOf($this->source->nodes($path), Node\Stmt\Class_::class) as $class) {
-                if ($class->namespacedName !== null) {
-                    $classes[$class->namespacedName->toString()] = [$path, $class];
-                }
-            }
-        }
+        $classes = $this->sourceClasses();
 
         $landlord = $this->landlordCommands($classes);
         $tenantModels = $this->tenantModels($classes);
@@ -352,6 +344,43 @@ final class TenantAware
     }
 
     /** spatie/laravel-multitenancy, tey/kit or tey/concierge (workspaces) is required, or the app named its own tenant-model traits or classes. */
+    /**
+     * The tenant-scoped models (class => table) and every tenant-keyed table (the models' and the migrations'), detected as this rule detects them;
+     * empty when the app has no tenancy. For rules that ask "is this a workspace record" (tenant.scoped-exists).
+     *
+     * @return array{models: array<string, string>, tables: array<string, true>}
+     */
+    public function scope(): array
+    {
+        if (! $this->active()) {
+            return ['models' => [], 'tables' => []];
+        }
+        $classes = $this->sourceClasses();
+        $models = [];
+        foreach (array_keys($this->tenantModels($classes)) as $name) {
+            $models[$name] = $this->table($classes[$name][1]);
+        }
+
+        return ['models' => $models, 'tables' => [...$this->migratedTables(), ...array_fill_keys(array_values($models), true)]];
+    }
+
+    /** @return array<string, array{0: string, 1: Node\Stmt\Class_}> every named class in the source roots: name => [path, node] */
+    private function sourceClasses(): array
+    {
+        $finder = new NodeFinder;
+        $classes = [];
+
+        foreach ($this->source->files($this->config->sourceRoots) as $path => $text) {
+            foreach ($finder->findInstanceOf($this->source->nodes($path), Node\Stmt\Class_::class) as $class) {
+                if ($class->namespacedName !== null) {
+                    $classes[$class->namespacedName->toString()] = [$path, $class];
+                }
+            }
+        }
+
+        return $classes;
+    }
+
     private function active(): bool
     {
         $file = $this->config->base.'/composer.json';

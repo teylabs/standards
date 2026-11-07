@@ -936,7 +936,8 @@
                 "21",
                 "toast",
                 "actions",
-                "descriptors"
+                "descriptors",
+                "tenant.scoped-exists"
             ],
             "paths": [
                 "app/**/Http/Requests/**",
@@ -2741,7 +2742,8 @@
             "make": "standards:make capability-tool --flavor=write",
             "checks": [
                 "55",
-                "actions"
+                "actions",
+                "tenant.scoped-exists"
             ],
             "paths": [
                 "app/Mcp/Tools/**"

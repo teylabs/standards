@@ -163,7 +163,7 @@ nodes:
       - { name: "input", kit_component: Input, use: "Text input inside a Field", props_hint: "v-model, name" }
       - { name: "submit", kit_component: FormActions, use: "Submit and cancel buttons", props_hint: "processing" }
     make: standards:make crud --flavor=resource
-    checks: ['20', '21', 'toast', 'actions', 'descriptors']
+    checks: ['20', '21', 'toast', 'actions', 'descriptors', 'tenant.scoped-exists']
     paths: ['app/**/Http/Requests/**', 'resources/js/pages/**/Form/Page.vue']
     keywords: [form, create, edit, store, update, save, toast, feedback]
     status: ready
