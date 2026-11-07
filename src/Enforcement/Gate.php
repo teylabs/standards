@@ -25,7 +25,7 @@ final class Gate
     public const OPTIONAL = ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db', 'format-lint'];
 
     /** Rules reported as advisories, never drift, until an app lists them in Configuration::optionalRules. */
-    public const ADVISORY = ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists'];
+    public const ADVISORY = ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists', ...\Tey\Standards\Checks\Layout::RULES];
 
     public function __construct(
         private readonly Configuration $config,
@@ -95,8 +95,12 @@ final class Gate
             }
 
             // A check may mark a finding advisory itself (a rule that could check nothing says so): reported, never failing, and outside the ratchet.
+            // Their keys still count as firing, so a baselined one is not stale.
+            $quiet = [];
+
             foreach ($actual as $index => $violation) {
                 if (($violation['advisory'] ?? false) === true) {
+                    $quiet[$violation['target'].' | '.$violation['check']] = true;
                     $advisories[] = $this->finding($rule, 'advisory', $violation['target'], $violation['check'], $violation['hint'] ?? null);
                     unset($actual[$index]);
                 }
@@ -111,7 +115,7 @@ final class Gate
                     }
                 }
 
-                $fired = [];
+                $fired = $quiet;
 
                 foreach ($actual as $violation) {
                     $key = $violation['target'].' | '.$violation['check'];
@@ -141,7 +145,7 @@ final class Gate
                 }
             }
 
-            $seen = [];
+            $seen = $quiet;
 
             foreach ($actual as $violation) {
                 $key = $violation['target'].' | '.$violation['check'];

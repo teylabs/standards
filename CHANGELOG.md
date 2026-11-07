@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Advisory layout rules** for the kit's page rhythm, each naming the primitive to use: `ui.action-group` (adjacent action controls sit in a ButtonGroup, ActionBar, Toolbar or FormActions), `ui.row-actions` (row actions are row descriptors, not controls in a DataTable cell slot or a hand-rolled table), `ui.page-title-dup` (no section repeats the Page title; the create action sits in `<Page :actions>`), `ui.no-outer-margins` (no outer margins on a Page's children or on the root of a component it renders, and a `flush` Page holds one full-bleed child), `ui.page-grid` (page-level columns are PageGrid and PageGridItem) and `ui.primitive-pointers` (hand-rolled Stack, PageSection, Aside, Banner, NavGrid, CardSection, Pills and DividerSection shapes, advisory until the kit exports the primitive). Stack and BlockStack are read as one primitive. Each rule is advisory until listed in `Configuration::$optionalRules`; baseline existing findings first with `standards:allowlist --baseline` so it fails on new ones only. On the new `ui-page.layout-rhythm` leaf.
+- The kit export snapshot names `Stack`. An installed kit that still exports it as `BlockStack` is not reported as missing it.
+
 ## 0.11.77 - 2026-11-07
 
 ### Added

@@ -121,6 +121,7 @@
         "SortableHandle",
         "SortableList",
         "SplitPane",
+        "Stack",
         "StageNotice",
         "StickyBar",
         "SubmitError",
