@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.11.82 - 2026-11-07
+
 ### Fixed
 
 - **`standards:make` names capabilities, permissions and scopes in kebab case.** A two-word record (`BillingEntity`) emitted `billing_entities.view`, which the kit's `Registry::permission` refuses, so the app would not boot. The policy, provider, tools, scopes and tests now share one name, `billing-entities`; the database table stays `billing_entities`.
