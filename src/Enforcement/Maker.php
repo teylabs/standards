@@ -192,7 +192,8 @@ final class Maker
         if ($keys === []) {
             return [];
         }
-        $mcp = $unit === 'crud' && in_array('mcp', $options, true) ? Str::snake(Str::plural($name)).'.write' : null;
+        // The write scope the generated tools declare: kebab case, as every generated capability name is.
+        $mcp = $unit === 'crud' && in_array('mcp', $options, true) ? Str::kebab(Str::plural($name)).'.write' : null;
         $placeholder = 'generated.'.$unit.'.'.Str::kebab($name);
         $target = null;
         foreach ($data->capabilities as $capability) {
@@ -1011,10 +1012,8 @@ final class Maker
             return $contents;
         }
 
-        // Only a chain that binds a test case covers a folder: `pest()->use(SomeTrait::class)->in(...)` adds a trait and boots nothing.
-        preg_match_all('/(?:extend|uses)\(\s*[\\\\\w]*Case::class[^;]*?->in\(([^)]*)\)/s', $pest, $calls);
-
-        foreach ($calls[1] as $arguments) {
+        // Only a chain that binds a test case covers a folder: a trait (`pest()->use(...)`, or `uses()` of a trait) boots nothing.
+        foreach ($this->caseChains($pest) as [, $arguments]) {
             preg_match_all('/[\'"]([^\'"]+)[\'"]/', $arguments, $globs);
 
             foreach ($globs[1] as $glob) {
@@ -1048,6 +1047,34 @@ final class Maker
     }
 
     /**
+     * The extend()/uses() chains in tests/Pest.php that bind a test case: [the class, resolved through the file's imports; the ->in() arguments].
+     * `pest()->use()` is never one, and neither is `uses()` of a trait (it adds behaviour and boots no application).
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private function caseChains(string $pest): array
+    {
+        $imports = [];
+        preg_match_all('/^use\s+\\\\?([\w\\\\]+)(?:\s+as\s+(\w+))?\s*;/m', $pest, $uses, PREG_SET_ORDER);
+        foreach ($uses as $use) {
+            $alias = ($use[2] ?? '') !== '' ? $use[2] : substr((string) strrchr('\\'.$use[1], '\\'), 1);
+            $imports[$alias] = $use[1];
+        }
+        $chains = [];
+        preg_match_all('/(?:extend|uses)\(\s*([\\\\\w]+)::class[^;]*?->in\(([^)]*)\)/s', $pest, $matches, PREG_SET_ORDER);
+        foreach ($matches as $match) {
+            $name = ltrim($match[1], '\\');
+            $first = explode('\\', $name)[0];
+            $class = isset($imports[$first]) ? $imports[$first].substr($name, strlen($first)) : $name;
+            if (! trait_exists($class)) {
+                $chains[] = [$class, $match[2]];
+            }
+        }
+
+        return $chains;
+    }
+
+    /**
      * The application's test case from tests/Pest.php: the extend()/uses()
      * whose ->in() covers general tests (a glob, Feature or Unit), never one
      * scoped to browser tests; else Tests\TestCase. Names resolve through the
@@ -1055,40 +1082,22 @@ final class Maker
      */
     private function applicationCase(string $pest): string
     {
-        $imports = [];
-
-        preg_match_all('/^use\s+\\\\?([\w\\\\]+)(?:\s+as\s+(\w+))?\s*;/m', $pest, $uses, PREG_SET_ORDER);
-
-        foreach ($uses as $use) {
-            $alias = ($use[2] ?? '') !== '' ? $use[2] : substr((string) strrchr('\\'.$use[1], '\\'), 1);
-            $imports[$alias] = $use[1];
-        }
-
-        $resolve = function (string $name) use ($imports): string {
-            $name = ltrim($name, '\\');
-            $first = explode('\\', $name)[0];
-
-            return isset($imports[$first]) ? $imports[$first].substr($name, strlen($first)) : $name;
-        };
-
         $candidates = [];
 
-        preg_match_all('/(?:extend|uses)\(\s*([\\\\\w]+)::class[^;]*?->in\(([^)]*)\)/s', $pest, $chains, PREG_SET_ORDER);
-
-        foreach ($chains as $chain) {
-            preg_match_all('/[\'"]([^\'"]+)[\'"]/', $chain[2], $folders);
+        foreach ($this->caseChains($pest) as $chain) {
+            preg_match_all('/[\'"]([^\'"]+)[\'"]/', $chain[1], $folders);
             $folders = $folders[1];
 
             if ($folders !== [] && array_filter($folders, fn (string $folder): bool => stripos($folder, 'browser') === false) === []) {
                 continue;
             }
 
-            if (stripos($chain[1], 'browser') !== false) {
+            if (stripos($chain[0], 'browser') !== false) {
                 continue;
             }
 
             $general = array_filter($folders, fn (string $folder): bool => str_contains($folder, '*') || in_array(trim($folder, '/'), ['.', '', 'Feature', 'Unit'], true));
-            $candidates[] = [$general !== [] ? 0 : 1, $resolve($chain[1])];
+            $candidates[] = [$general !== [] ? 0 : 1, $chain[0]];
         }
 
         usort($candidates, fn (array $a, array $b): int => $a[0] <=> $b[0]);

@@ -71,6 +71,9 @@ function fakeModGenerator(string $base, array &$calls): Closure
 }
 
 /** A temporary copy of the fixture app whose classes autoload. */
+/** A trait an app's tests/Pest.php applies with uses() or pest()->use(): it boots nothing, so it never stands in for the TestCase. */
+trait RecordsStories {}
+
 function fixtureApp(): string
 {
     $base = sys_get_temp_dir().'/standards-app-'.bin2hex(random_bytes(6));
@@ -570,6 +573,7 @@ test('generated tests bind the app TestCase themselves when tests/Pest.php does 
     'Feature covered' => ["<?php\n\nuses(Tests\\TestCase::class)->in('Feature');\n", false],
     'a glob over Feature' => ["<?php\n\npest()->extend(Tests\\TestCase::class)->in('Feature/*');\n", false],
     'Feature given only a trait, which boots nothing' => ["<?php\n\npest()->use(RecordsStories::class)->in('Feature');\n", true],
+    'Feature given only a trait through uses()' => ["<?php\n\nuses(RecordsStories::class)->in('Feature');\n", true],
 ]);
 
 test('several leaves sharing a make command are told apart by --leaf', function () {
@@ -977,6 +981,14 @@ test('make declares the routes it writes in the capability manifest: an existing
         $capabilities = collect(json_decode(file_get_contents($path))->capabilities)->keyBy('id');
         expect($capabilities['invoices.write']->routes)->toBe(['records.archive', 'POST /invoices', 'PUT /invoices/{id}', 'DELETE /invoices/{id}'])
             ->and($capabilities->has('generated.crud.invoice'))->toBeFalse();
+        // A two-word record's routes join its kebab-case write scope, the one its tools declare, not a placeholder.
+        $manifest = json_decode(file_get_contents($path));
+        $manifest->capabilities[] = (object) ['id' => 'billing-entities.write', 'routes' => []];
+        file_put_contents($path, json_encode($manifest));
+        (new Maker($base, TreeCatalog::shipped()))->make('crud', 'BillingEntity', 'resource', null, ['mcp']);
+        $capabilities = collect(json_decode(file_get_contents($path))->capabilities)->keyBy('id');
+        expect($capabilities['billing-entities.write']->routes)->toBe(['POST /billing-entities', 'PUT /billing-entities/{id}', 'DELETE /billing-entities/{id}'])
+            ->and($capabilities->has('generated.crud.billing-entity'))->toBeFalse();
 
         // Both sections append to routes/web.php: the second run sees the first's route already declared and adds only its own.
         (new Maker($base, TreeCatalog::shipped()))->make('settings-section', 'Alerts', 'form');
