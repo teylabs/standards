@@ -129,7 +129,7 @@ final class Gate
 
                 // An entry whose advisory no longer fires is stale, as a findings entry is, so it can't rot unnoticed.
                 foreach ($listed as $key => $entry) {
-                    if (! isset($fired[$key]) && $this->inScope($entry['target'], $paths)) {
+                    if (! isset($fired[$key]) && $this->inScope($entry['target'], $paths) && ! $this->quiet($rule, $entry['check'])) {
                         $violations[] = $this->finding($rule, 'stale', $entry['target'], $entry['check'], 'The advisory no longer fires; delete this allowlist entry.');
                     }
                 }
@@ -158,7 +158,7 @@ final class Gate
             }
 
             foreach ($allowed as $key => $entry) {
-                if (! isset($seen[$key]) && $this->inScope($entry['target'], $paths)) {
+                if (! isset($seen[$key]) && $this->inScope($entry['target'], $paths) && ! $this->quiet($rule, $entry['check'])) {
                     $violations[] = $this->finding($rule, 'stale', $entry['target'], $entry['check'], 'The debt is gone; delete this allowlist entry.');
                 }
             }
@@ -249,6 +249,12 @@ final class Gate
     private function finding(string $rule, string $kind, string $target, string $check, ?string $hint = null, ?int $line = null): array
     {
         return ['rule' => $rule, 'kind' => $kind, 'target' => $target, 'check' => $check, 'hint' => $hint ?? $this->hint($rule), ...($line === null ? [] : ['line' => $line])];
+    }
+
+    /** A layout rule's advisory-by-kind check: its allowlist entry is never stale (Layout::quiet). */
+    private function quiet(string $rule, string $check): bool
+    {
+        return in_array($rule, \Tey\Standards\Checks\Layout::RULES, true) && (new \Tey\Standards\Checks\Layout($this->config))->quiet($check);
     }
 
     private function hint(string $rule): string

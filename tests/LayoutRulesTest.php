@@ -254,3 +254,62 @@ test('an opted-in layout rule fails on a new finding and passes a baselined one 
         (new Filesystem)->deleteDirectory($base);
     }
 });
+
+test('opted in each layout rule rejects the seeded Bad fixture page and accepts the Good one', function () {
+    foreach (Layout::RULES as $rule) {
+        $optIn = fn (string $kind): Configuration => new Configuration(...array_replace(get_object_vars(layoutConfiguration(dirname(__DIR__).'/fixtures/Layout/'.$kind)), ['optionalRules' => [$rule]]));
+        (new Conformance($optIn('Good')))->assert($rule);
+        expect(fn () => (new Conformance($optIn('Bad')))->assert($rule))->toThrow(PHPUnit\Framework\AssertionFailedError::class, 'violation:');
+    }
+});
+
+test('an allowlisted advisory layout finding that disappears is not a stale failure', function () {
+    $base = layoutApp(['pages/Posts.vue' => "<Page>\n<p>nothing here</p>\n</Page>"]);
+
+    try {
+        $entries = [
+            ['rule' => Layout::PAGE_TITLE, 'target' => 'resources/js/pages/Posts.vue', 'check' => 'a "Add tag" action sits outside the Page header: if it creates the page\'s record, pass it in <Page :actions>', 'reason' => 'baseline', 'date' => '2026-11-07', 'expires' => '2099-01-01'],
+            ['rule' => Layout::PRIMITIVES, 'target' => 'resources/js/pages/Posts.vue', 'check' => "hand-rolled NavGrid (a grid of Link cards): use the kit's NavGrid", 'reason' => 'baseline', 'date' => '2026-11-07', 'expires' => '2099-01-01'],
+        ];
+        foreach ([[], [Layout::PAGE_TITLE, Layout::PRIMITIVES]] as $optionalRules) {
+            $config = layoutConfiguration($base, ['optionalRules' => $optionalRules, 'allowlist' => $entries]);
+            foreach ([Layout::PAGE_TITLE, Layout::PRIMITIVES] as $rule) {
+                try {
+                    (new Conformance($config))->assert($rule);
+                } catch (PHPUnit\Framework\SkippedWithMessageException) {
+                }
+            }
+            $report = (new Gate($config, new DateTimeImmutable('2026-11-07'), Tey\Standards\Patterns\TreeCatalog::shipped(), 14))->run();
+            expect(array_filter($report['violations'], fn (array $v): bool => in_array($v['rule'], Layout::RULES, true)))->toBe([]);
+        }
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('ui.action-group and ui.page-title-dup read through wrappers in an allowed container and a SectionHeader actions slot', function () {
+    expect(layoutFindings(Layout::ACTION_GROUP, ['pages/Posts.vue' => <<<'VUE'
+        <Toolbar><div><Button>A</Button><Button>B</Button></div></Toolbar>
+        <Page><template #actions><div><Button>A</Button><Button>B</Button></div></template></Page>
+        VUE]))->toBe([])
+        ->and(layoutFindings(Layout::PAGE_TITLE, ['pages/Posts.vue' => "<Page>\n<SectionHeader title=\"Recent\"><template #actions><Button :href=\"route('posts.create')\">New</Button></template></SectionHeader>\n</Page>"]))
+        ->toBe(["resources/js/pages/Posts.vue:3 create action (posts.create) sits outside the Page header: pass it in <Page :actions>"])
+        ->and(layoutFindings(Layout::OUTER_MARGINS, ['pages/Posts.vue' => "<Page>\n<div class=\"-mx-4 lg:-m-2 mx-auto\">a</div>\n</Page>"]))
+        ->toBe(["resources/js/pages/Posts.vue:3 <div> directly in <Page> carries -mx-4 lg:-m-2: the Page's gap owns the spacing; use Stack (gap-*) or PageSection"]);
+});
+
+test('an installed kit from before the Stack rename is neither missing Stack nor ahead with BlockStack', function () {
+    $kit = sys_get_temp_dir().'/standards-kit-rename-'.bin2hex(random_bytes(6));
+    $barrel = $kit.'/vendor/tey/kit/'.Tey\Standards\Patterns\KitExports::BARREL;
+
+    try {
+        mkdir(dirname($barrel), 0777, true);
+        $names = array_map(fn (string $name): string => $name === 'Stack' ? 'BlockStack' : $name, Tey\Standards\Patterns\KitExports::snapshot());
+        file_put_contents($barrel, implode("\n", array_map(fn (string $name): string => "export { default as {$name} } from './{$name}.vue';", array_unique($names))));
+
+        expect(Tey\Standards\Patterns\KitExports::mismatch($kit))->toBeNull()
+            ->and(Tey\Standards\Patterns\KitExports::lag($kit))->toBeNull();
+    } finally {
+        (new Filesystem)->deleteDirectory($kit);
+    }
+});

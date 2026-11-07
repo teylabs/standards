@@ -134,7 +134,7 @@ final class Conformance
         // Advisory until an app opts in: static write detection can miss a write or flag a non-write.
         if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists', ...Checks\Layout::RULES], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             // An allowlisted advisory that stopped firing is stale, as a findings entry is: fail on it, else skip as advisory.
-            $stale = $this->ratchet->staleAdvisories($rule, $violations);
+            $stale = $this->quietStale($rule, $this->ratchet->staleAdvisories($rule, $violations));
             expect($stale)->toBe([], implode("\n", $stale));
 
             Assert::markTestSkipped('Rule ['.$rule.'] is advisory until listed in Configuration::optionalRules ('.count($violations).' findings).');
@@ -147,7 +147,7 @@ final class Conformance
         // An allowlist entry for an advisory finding is not stale, and the advisory finding itself never fails.
         if (in_array($rule, Checks\Layout::RULES, true)) {
             $quiet = array_map(fn (array $violation): string => 'violation: '.$violation['target'].' | '.$violation['check'], $advisory);
-            $failures = array_values(array_diff($this->ratchet->failures($rule, $violations), $quiet));
+            $failures = $this->quietStale($rule, array_values(array_diff($this->ratchet->failures($rule, $violations), $quiet)));
             expect($failures)->toBe([], implode("\n", $failures));
 
             return;
@@ -159,6 +159,23 @@ final class Conformance
 
         $failures = $this->ratchet->failures($rule, $violations);
         expect($failures)->toBe([], implode("\n", $failures));
+    }
+
+    /**
+     * Drops the stale-entry failures of a layout rule's advisory-by-kind checks (Layout::quiet): an allowlisted advisory that disappears is not a failure.
+     *
+     * @param  list<string>  $failures
+     * @return list<string>
+     */
+    private function quietStale(string $rule, array $failures): array
+    {
+        if (! in_array($rule, Checks\Layout::RULES, true)) {
+            return $failures;
+        }
+        $layout = new Checks\Layout($this->config);
+
+        return array_values(array_filter($failures, fn (string $failure): bool => ! (str_starts_with($failure, 'stale exception, delete it: ')
+            && $layout->quiet((string) substr($failure, strrpos($failure, ' | ') + 3)))));
     }
 
     /** @return list<array{target: string, check: string}> */

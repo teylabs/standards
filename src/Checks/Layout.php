@@ -39,7 +39,7 @@ final class Layout
     /** Elements a Page lays out of flow: they take no gap and don't count against `flush`. */
     private const OUT_OF_FLOW = ['Teleport', 'Dialog', 'Modal', 'Sheet', 'AlertDialog', 'Drawer'];
 
-    private const MARGIN = '~^-?m[tby]-|^space-y-~';
+    private const MARGIN = '~^-?m[tby]-|^-m[lrxse]?-|^space-y-~';
 
     /** @var array<string, string>|null */
     private ?array $files = null;
@@ -93,6 +93,22 @@ final class Layout
             || ($node->tag === 'Link' && ($node->attribute('as') === 'button' || $node->has('variant') || $node->has(':variant')));
     }
 
+    /** In (or under) an action container, a *Toolbar, or a Page or SectionHeader #actions slot. */
+    private static function grouped(VueTemplate $node): bool
+    {
+        for (; $node !== null; $node = $node->parent) {
+            $slot = $node->slot();
+            if ($slot === 'actions' && in_array($node->parent?->tag, ['Page', 'SectionHeader'], true)) {
+                return true;
+            }
+            if ($node->tag !== 'template' && (in_array($node->tag, self::ACTION_CONTAINERS, true) || str_ends_with($node->tag, 'Toolbar'))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function actionGroups(string $path, VueTemplate $template): array
     {
         $found = [];
@@ -106,8 +122,7 @@ final class Layout
             if ($slot === 'default' && $container->tag === 'template') {
                 continue; // read through the owner's flow
             }
-            if (in_array($owner, self::ACTION_CONTAINERS, true) || str_ends_with($owner, 'Toolbar')
-                || ($slot === 'actions' && in_array($owner, ['Page', 'SectionHeader'], true))) {
+            if (self::grouped($container)) {
                 continue;
             }
             $run = [];
@@ -176,7 +191,7 @@ final class Layout
                 }
             }
             foreach ($page->descendants() as $node) {
-                if (! in_array($node->tag, ['Button', 'Link', 'a', 'button', 'InertiaAction'], true) || $node->inSlot('~^actions$~', $page)
+                if (! in_array($node->tag, ['Button', 'Link', 'a', 'button', 'InertiaAction'], true) || self::inPageActions($node, $page)
                     || $node->closest(['EmptyState']) !== null) {
                     continue;
                 }
@@ -192,6 +207,18 @@ final class Layout
         }
 
         return $found;
+    }
+
+    /** In this Page's own #actions slot, not a SectionHeader's or any other component's. */
+    private static function inPageActions(VueTemplate $node, VueTemplate $page): bool
+    {
+        for (; $node !== null && $node !== $page; $node = $node->parent) {
+            if ($node->slot() === 'actions' && $node->parent === $page) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // ui.no-outer-margins (and flush)
@@ -309,10 +336,24 @@ final class Layout
 
     private function pointer(string $path, VueTemplate|int $at, string $primitive, string $shape): array
     {
+        $shipped = $this->shipped($primitive); // loads the export set before the name is chosen
         $name = $primitive === 'Stack' && $this->exports !== null && ! in_array('Stack', $this->exports, true) && in_array('BlockStack', $this->exports, true) ? 'BlockStack' : $primitive;
         $line = $at instanceof VueTemplate ? $at->line : $at;
 
-        return ['target' => $path, 'check' => "hand-rolled {$primitive} ({$shape}): use the kit's {$name}", 'line' => $line, ...($this->shipped($primitive) ? [] : ['advisory' => true])];
+        return ['target' => $path, 'check' => "hand-rolled {$primitive} ({$shape}): use the kit's {$name}", 'line' => $line, ...($shipped ? [] : ['advisory' => true])];
+    }
+
+    /**
+     * A check that is advisory by kind (the English label test, or a pointer to a primitive the kit has not shipped): its allowlist entry never
+     * fails as stale, even once its finding is gone, because such a finding never failed in the first place.
+     */
+    public function quiet(string $check): bool
+    {
+        if (preg_match('~^a ".*" action sits outside the Page header: if it creates~s', $check) === 1) {
+            return true;
+        }
+
+        return preg_match('~^hand-rolled (\w+) \(~', $check, $match) === 1 && ! $this->shipped($match[1]);
     }
 
     private function primitives(string $path, ?VueTemplate $template): array

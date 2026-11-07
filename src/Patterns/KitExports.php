@@ -117,6 +117,9 @@ final class KitExports
         // A kit from before a rename still exports the component under its old name: not missing.
         $missing = array_filter(array_diff($snapshot, $installed), fn (string $name): bool => ! in_array(self::RENAMED[$name] ?? null, $installed, true));
 
-        return [array_values($missing), array_values(array_diff($installed, $snapshot))];
+        // ...and its old name is not a new component either.
+        $extra = array_filter(array_diff($installed, $snapshot), fn (string $name): bool => ! in_array(array_search($name, self::RENAMED, true), $snapshot, true));
+
+        return [array_values($missing), array_values($extra)];
     }
 }
