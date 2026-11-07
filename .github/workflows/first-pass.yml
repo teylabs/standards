@@ -1,0 +1,68 @@
+name: First pass
+
+# Reusable: the first-pass metric's CI sample. It records the first pushed commit's per-file findings on changed lines as an artifact
+# (kept 90 days) and a check summary. It never fails, so it is not a gate. Call it from a workflow that runs when a PR opens:
+#   on:
+#     pull_request:
+#       types: [opened]
+#   jobs:
+#     first-pass:
+#       uses: teylabs/standards/.github/workflows/first-pass.yml@v0.11
+#       with:
+#         base-ref: ${{ github.base_ref }}
+on:
+  workflow_call:
+    inputs:
+      php-version:
+        type: string
+        default: '8.4'
+      base-ref:
+        description: The PR's base branch; changed files compare against origin/<base-ref>.
+        type: string
+        required: true
+      runs-on:
+        description: Runner label for the job.
+        type: string
+        default: ubuntu-latest
+      timeout-minutes:
+        description: Job timeout in minutes.
+        type: number
+        default: 15
+
+permissions:
+  contents: read
+
+jobs:
+  first-pass:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The commit the PR opened with: the first pushed state, which later pushes can't reshape.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: ${{ inputs.php-version }}
+          tools: composer:v2
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare environment
+        run: |
+          [ -f .env ] || cp .env.example .env
+          php artisan key:generate --force
+      - name: Record the first pass
+        env:
+          BASE_REF: ${{ inputs.base-ref }}
+        run: php artisan standards:first-pass --ci --base="origin/$BASE_REF" --out=first-pass.jsonl
+      - name: Keep the first-pass record
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: first-pass
+          path: first-pass.jsonl
+          retention-days: 90
+          if-no-files-found: ignore

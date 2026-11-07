@@ -895,6 +895,59 @@ There is no PHAR yet: the CLI still needs PHP 8.4 and the Illuminate 13 componen
 
 The pattern leaf `ui-page.kit-adoption` carries the recipes.
 
+### 6. First-pass metric: `standards:first-pass`
+
+Measures whether agents build to the catalog on the first pass, and whether consulting the tree predicts it. It is off by default. Opt in with `standards.telemetry.first_pass` (`STANDARDS_TELEMETRY_FIRST_PASS=true`).
+
+**Run log.** When it is on, every `standards:check` run appends a record to `storage/standards/runs.jsonl`. That includes the hooks' gate runs at commit, Stop and after an edit. `standards:pattern` and `standards:make` append lookup records. The package writes a `.gitignore` beside the log so git ignores it. Each line carries `prev`, the sha256 of the line before it, so an edited, deleted or reordered line shows up as a chain break. A record holds:
+
+- paths, rule ids, line counts, a 16-character content hash and the mtime of each changed file;
+- the candidate pattern leaves for each file;
+- who ran it, read from the environment only: `SOLO_PROCESS_ID`, `SOLO_PROJECT_ID`, `CLAUDE_CODE_SESSION_ID`, and the model from `ANTHROPIC_MODEL` or `CLAUDE_MODEL` when set;
+- the tey/standards version, and a ruleset hash over the rule ids, the advisory and optional lists and the app's configuration file. The allowlist is not part of the hash.
+
+It never holds source code or a finding's message. Logging fails open: a write error is swallowed and never changes a run's exit code or output. The recipe MCP's find and recipe tools can log lookups through the same log with `app(Tey\Standards\Telemetry\Recorder::class)->lookup('bakery.find', $leafIds, $paths)`.
+
+**Episodes.** A file's episode opens at the first gate run that sees its content differ from its last clean state. It closes at the next run that finds it clean.
+
+- First pass: the findings at the opening run.
+- Corrected: the episode closes clean later, after `runs - 1` corrections.
+- Abandoned: the file drops out of a `--changed` or full run (reverted) or is deleted.
+
+Only findings on changed lines count, against the same base as `--changed`. A finding without a line counts only in a new file, so old debt does not penalise the builder. Advisories don't count. A run where the gate could not run (a missing configuration, say) opens no episode. A file counts as consulted when a lookup naming it, or one of its pattern leaves, came before its first write. The first write is the mtime the opening run saw, which is conservative.
+
+```sh
+php artisan standards:first-pass                         # first-pass rate, corrections per episode, most-tripped rules, consulted vs not
+php artisan standards:first-pass --since=2026-11-01 --by=rule|agent|pattern --source=ci|local --json
+php artisan standards:first-pass --log=artifacts/*.jsonl --source=ci   # read downloaded CI artifacts instead of the local log
+php artisan standards:first-pass --recompute v1.2.0..HEAD              # the milestone cross-check
+```
+
+The report prints the sample size beside every rate. It states that consulted versus not consulted is a correlation. When the log spans more than one ruleset, it lists them, so rates are compared within one ruleset. Chain breaks are listed.
+
+**Recompute.** `--recompute <range>` is the cross-check for apps without CI. Someone other than the builder runs it. It adds a detached worktree, copies `vendor` into it and rebuilds the autoloader there. It then replays `standards:check --file=…` on each commit's changed files, with telemetry off, and rebuilds commit-level episodes from history. Each committed file is compared with the log. A mismatch is any of these:
+
+- a file the log never gated;
+- committed content that differs from the last content the log gated;
+- a file the log last saw clean that the replay finds findings in.
+
+It exits 1 on any mismatch or chain break, and removes the worktree afterwards.
+
+**CI.** On apps with PRs, CI is the authoritative sample, because agents can't shape it. Call the reusable workflow when a PR opens, so it checks out the first pushed commit:
+
+```yaml
+on:
+  pull_request:
+    types: [opened]
+jobs:
+  first-pass:
+    uses: teylabs/standards/.github/workflows/first-pass.yml@v0.11
+    with:
+      base-ref: ${{ github.base_ref }}
+```
+
+It runs `standards:first-pass --ci`, which writes that commit's per-file findings on changed lines to `first-pass.jsonl` (one run record, `source: ci`) and a table to the job's step summary. The record is uploaded as the `first-pass` artifact and kept for 90 days. It always exits 0, so it is not a gate. Download the artifacts and read them with `--log=… --source=ci`.
+
 ## Agent guidance
 
 The package ships a Laravel Boost guideline. Select `tey/standards` during `php artisan boost:install` to include it in the application's agent instructions. `standards:install` adds the pattern index, per-recipe skills and Claude hooks described above.

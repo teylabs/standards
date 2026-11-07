@@ -59,11 +59,19 @@ final class Maker
     /** Each file written (or, in a dry run, planned): its path, its kind and whether it was created or modified. @var list<array{path: string, type: string, action: string}> */
     private array $planned = [];
 
+    private ?string $leafId = null;
+
     /** Names this run moved to the host's placement: a conventional class name, page render name or route-file path => the host's. @var array<string, string> */
     private array $renames = [];
 
     /** The namespace each placed PHP file declares instead of its conventional one: placed path => [conventional, placed]. @var array<string, array{0: string, 1: string}> */
     private array $namespaces = [];
+
+    /** The leaf the last make stamped (null before one runs). */
+    public function leafId(): ?string
+    {
+        return $this->leafId;
+    }
 
     /**
      * The files the last make() wrote, or planned in a dry run: path, kind (`class`, `test`, `page`, `routes`, `migration`, `config` and so on) and
@@ -223,7 +231,7 @@ final class Maker
         // A name that already carries the unit's suffix (SlideWorkbench, BillingSettings, ReadPostsTool) is the base name: the suffix is never doubled.
         $name = self::base($unit, $name);
 
-        $leaf = $leafId ?? $this->leaf($unit, $flavor);
+        $leaf = $this->leafId = $leafId ?? $this->leaf($unit, $flavor);
 
         if ($leafId !== null) {
             $node = $this->catalog->node($leafId);

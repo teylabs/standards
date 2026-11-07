@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **First-pass metric (opt-in, `standards.telemetry.first_pass`).** With it on, `standards:check` (and so every hook gate run), `standards:pattern` and `standards:make` append records to `storage/standards/runs.jsonl`. The log is git-ignored and hash-chained, and holds paths, rule ids, counts and content hashes, never code. Each record carries attribution read from the environment (`SOLO_PROCESS_ID`, `SOLO_PROJECT_ID`, `CLAUDE_CODE_SESSION_ID`, and `ANTHROPIC_MODEL` or `CLAUDE_MODEL`), the standards version and a ruleset hash. Logging fails open.
+- **`standards:first-pass`** rebuilds file-change episodes from the log and counts only findings on changed lines. It reports the first-pass rate, corrections per episode, the most-tripped rules, and consulted versus not consulted with sample sizes. Filter with `--since=` and `--source=ci|local`, and group with `--by=rule|agent|pattern`. `--recompute <range>` replays the gate per commit in a clean worktree and flags mismatches with the log and chain breaks. `--ci` writes the first pushed commit's per-file findings as an artifact record and a step summary.
+- **Reusable workflow `first-pass.yml`** for apps with PRs: it runs on PR open, uploads the `first-pass` artifact (kept 90 days) and never gates.
+
 ## 0.11.78 - 2026-11-07
 
 ### Added

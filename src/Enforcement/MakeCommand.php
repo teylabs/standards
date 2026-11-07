@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use InvalidArgumentException;
 use Tey\Standards\Patterns\TreeCatalog;
+use Tey\Standards\Telemetry\Recorder;
 
 final class MakeCommand extends Command
 {
@@ -76,6 +77,12 @@ final class MakeCommand extends Command
 
             return 0;
         }
+        // The first-pass run log (opt-in, fails open): a make is a lookup that names its leaf and the files it wrote.
+        try {
+            $this->laravel->make(Recorder::class)->lookup('standards:make', array_values(array_filter([$this->option('leaf') ?? $maker->leafId()])), array_values(array_filter($files, 'is_string')));
+        } catch (\Throwable) {
+        }
+
         foreach ($files as $file) {
             $this->line('✓ '.$file);
         }
