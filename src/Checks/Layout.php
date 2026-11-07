@@ -196,35 +196,112 @@ final class Layout
     {
         $found = [];
         foreach ((new \Tey\Standards\Source($this->config))->files($this->config->sourceRoots) as $path => $source) {
-            preg_match_all('~(?:\bnew\s+\\\\?(?:[\w\\\\]+\\\\)?Action|\bAction::(?:make|disabled))\s*\(\s*(?:label\s*:\s*)?(?<arg>"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|\$\w+(?:->\w+|\[[^\]]*\])+)(?<tail>\s*\.)?~', $source, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
-            foreach ($matches as $match) {
-                $arg = $match['arg'][0];
-                $interpolated = $arg[0] === '$' || ($match['tail'][0] ?? '') !== '' || ($arg[0] === '"' && preg_match('~(?<!\\\\)\$~', $arg) === 1);
-                $found[] = $this->labelFinding($path, $source, $match[0][1], $arg, $interpolated);
+            preg_match_all('~(?:\bnew\s+\\\\?(?:[\w\\\\]+\\\\)?Action|\bAction::(?:make|disabled))\s*\(~', $source, $calls, PREG_OFFSET_CAPTURE);
+            foreach ($calls[0] as [$call, $at]) {
+                $arguments = self::arguments($source, $at + strlen($call));
+                // The label is the `label:` argument wherever it sits, else the first positional one.
+                $named = array_values(array_filter($arguments, fn (array $argument): bool => preg_match('~^label\s*:~', $argument[0]) === 1));
+                [$arg, $offset] = $named[0] ?? (isset($arguments[0]) && preg_match('~^\w+\s*:(?!:)~', $arguments[0][0]) !== 1 ? $arguments[0] : ['', $at]);
+                $arg = trim((string) preg_replace('~^label\s*:\s*~', '', $arg));
+                if ($arg === '') {
+                    continue;
+                }
+                $literal = preg_match('~^\'(?:[^\'\\\\]|\\\\.)*\'$~s', $arg) === 1 || (preg_match('~^"(?:[^"\\\\]|\\\\.)*"$~s', $arg) === 1 && ! self::interpolates($arg));
+                if (! $literal && ! self::interpolates($arg)) {
+                    continue; // a translation call or a constant: nothing to read
+                }
+                $found[] = $this->labelFinding($path, $source, $offset, $arg, ! $literal);
             }
         }
         foreach ($this->files() as $path => $source) {
-            $script = FrontendSource::script($path, $source);
-            $offset = strpos($source, $script) ?: 0;
-            preg_match_all('~\blabel\s*:\s*(?<arg>`(?:[^`\\\\]|\\\\.)*`|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^,}\n]+)(?<tail>\s*\+)?~', $script, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
-            foreach ($matches as $match) {
-                $at = $match[0][1];
-                // The object literal the label sits in, with `${…}` masked so its braces don't count: a form field's label beside an action array is not an action.
-                $masked = preg_replace_callback('~\\$\\{[^}]*\\}~', fn (array $m): string => str_repeat('_', strlen($m[0])), $script) ?? $script;
-                $open = strrpos(substr($masked, 0, $at), '{');
-                $close = strpos($masked, '}', $at);
-                $window = $open === false || $close === false ? '' : substr($script, $open, $close - $open);
-                if (preg_match('~\burl\s*:~', $window) !== 1 || preg_match('~\bmethod\s*:~', $window) !== 1) {
-                    continue;
+            preg_match_all('~<script\b[^>]*>(.*?)</script\s*>~si', $source, $blocks, PREG_OFFSET_CAPTURE);
+            foreach ($blocks[1] as [$script, $offset]) {
+                // `${…}` masked so its braces don't count when finding the object literal a label sits in.
+                $masked = preg_replace_callback('~\$\{[^}]*\}~', fn (array $m): string => str_repeat('_', strlen($m[0])), $script) ?? $script;
+                preg_match_all('~\blabel\s*:\s*(?<arg>`(?:[^`\\\\]|\\\\.)*`|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^,}\n]+)(?<tail>\s*\+)?~', $script, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+                foreach ($matches as $match) {
+                    $at = $match[0][1];
+                    // Only an action object (url and method beside the label) counts: a form field's label is not an action.
+                    $window = self::enclosingObject($masked, $at);
+                    if (preg_match('~\burl\s*:~', $window) !== 1 || preg_match('~\bmethod\s*:~', $window) !== 1) {
+                        continue;
+                    }
+                    $arg = trim($match['arg'][0]);
+                    $quoted = in_array($arg[0] ?? '', ['"', "'", '`'], true);
+                    $interpolated = ! $quoted || ($match['tail'][0] ?? '') !== '' || ($arg[0] === '`' && str_contains($arg, '${'));
+                    $found[] = $this->labelFinding($path, $source, $offset + $at, $arg, $interpolated);
                 }
-                $arg = trim($match['arg'][0]);
-                $quoted = in_array($arg[0] ?? '', ['"', "'", '`'], true);
-                $interpolated = ! $quoted || ($match['tail'][0] ?? '') !== '' || ($arg[0] === '`' && str_contains($arg, '${'));
-                $found[] = $this->labelFinding($path, $source, $offset + $at, $arg, $interpolated);
             }
         }
 
         return array_values(array_filter($found));
+    }
+
+    /** A variable in PHP source outside single quotes: `$name`, `{$…}` or `${…}`; a literal `$5` is not one. */
+    private static function interpolates(string $arg): bool
+    {
+        $unquoted = (string) preg_replace('~\'(?:[^\'\\\\]|\\\\.)*\'~s', "''", $arg);
+
+        return preg_match('~(?<!\\\\)\$(?:[A-Za-z_\x80-\xff]|\{)~', $unquoted) === 1;
+    }
+
+    /**
+     * The top-level arguments of a call, from just after its `(`: each argument's text and offset, quotes and nested brackets respected.
+     *
+     * @return list<array{0: string, 1: int}>
+     */
+    private static function arguments(string $source, int $from): array
+    {
+        $arguments = [];
+        $depth = 0;
+        $start = $from;
+        $length = strlen($source);
+        for ($i = $from; $i < $length; $i++) {
+            $char = $source[$i];
+            if ($char === '"' || $char === "'") {
+                for ($i++; $i < $length && $source[$i] !== $char; $i++) {
+                    $i += $source[$i] === '\\' ? 1 : 0;
+                }
+            } elseif (in_array($char, ['(', '[', '{'], true)) {
+                $depth++;
+            } elseif (in_array($char, [')', ']', '}'], true) && $depth > 0) {
+                $depth--;
+            } elseif ($depth === 0 && ($char === ',' || $char === ')')) {
+                $text = substr($source, $start, $i - $start);
+                if (trim($text) !== '') {
+                    $arguments[] = [trim($text), $start + strlen($text) - strlen(ltrim($text))];
+                }
+                if ($char === ')') {
+                    break;
+                }
+                $start = $i + 1;
+            }
+        }
+
+        return $arguments;
+    }
+
+    /** The object literal around an offset, by brace depth, so a nested `confirm: { … }` does not end it early. */
+    private static function enclosingObject(string $script, int $at): string
+    {
+        $open = null;
+        for ($i = $at - 1, $depth = 0; $i >= 0; $i--) {
+            if ($script[$i] === '}') {
+                $depth++;
+            } elseif ($script[$i] === '{' && $depth-- === 0) {
+                $open = $i;
+                break;
+            }
+        }
+        for ($i = $at, $depth = 0, $length = strlen($script); $open !== null && $i < $length; $i++) {
+            if ($script[$i] === '{') {
+                $depth++;
+            } elseif ($script[$i] === '}' && $depth-- === 0) {
+                return substr($script, $open, $i - $open + 1);
+            }
+        }
+
+        return '';
     }
 
     /** @return array{target: string, check: string, line: int}|null */

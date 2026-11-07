@@ -326,6 +326,9 @@ test('ui.row-action-label flags PHP action labels that interpolate a value or ru
         $e = new Action('Remove', '/g/1', 'delete', ariaLabel: 'Remove '.$grant->label);
         $f = Action::disabled('Revoke', '/g/1', 'delete', 'Owners cannot be revoked');
         $g = new \Tey\Kit\Features\Core\Data\Action(label: 'Archive', url: '/o/1');
+        $h = new Action(url: '/o/1', label: $member->name);
+        $i = new Action("Charge $5", '/o/1/charge');
+        $j = new Action(__('Remove'), '/g/1');
         PHP);
 
     try {
@@ -337,9 +340,10 @@ test('ui.row-action-label flags PHP action labels that interpolate a value or ru
 
     expect($findings)->toBe([
         'app/Http/GrantsController.php:2 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
-        "app/Http/GrantsController.php:3 row action label 'Remove ' interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm",
+        'app/Http/GrantsController.php:3 row action label \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
         'app/Http/GrantsController.php:4 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
         "app/Http/GrantsController.php:5 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/GrantsController.php:9 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
     ]);
 });
 
@@ -361,5 +365,21 @@ test('ui.row-action-label flags Vue row action labels that interpolate a value o
         "resources/js/pages/People.vue:6 row action label 'Change role of ' interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm",
         'resources/js/pages/People.vue:7 row action label row.name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
         "resources/js/pages/People.vue:8 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label reads a nested confirm and each script block at its own line', function () {
+    expect(layoutFindings(Layout::ROW_ACTION_LABEL, ['pages/Grants.vue' => <<<'VUE'
+        <template><DataTable :table="table" /></template>
+        <script lang="ts">
+        export default { name: 'Grants' };
+        </script>
+        <script setup lang="ts">
+        const actions = (grant) => [
+            { key: 'remove', label: `Remove ${grant.label}`, confirm: { title: 'Remove it?', description: 'Gone.', label: 'Remove' }, url: '/g/1', method: 'delete' },
+        ];
+        </script>
+        VUE]))->toBe([
+        'resources/js/pages/Grants.vue:7 row action label `Remove ${grant.label}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
     ]);
 });
