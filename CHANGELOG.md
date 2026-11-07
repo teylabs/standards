@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Advisory rule `tenant.scoped-exists`:** an `exists` rule on workspace records is scoped to the current workspace. In a FormRequest or an MCP tool, `Rule::exists(Model::class)`, `new Exists(...)` or `exists:<table>` on a tenant-scoped model or table is flagged unless chained with `->where('workspace_id', ...)` (or a `where` closure), or the string names the key. Unscoped, another workspace's id passes validation and the composite foreign key then answers 500, which reveals that the id exists. Opt in through `Configuration::$optionalRules`. Checked on the `ui-page.form` and `mcp.write` leaves.
+
 ## 0.11.76 - 2026-11-07
 
 ### Fixed

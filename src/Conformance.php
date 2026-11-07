@@ -39,6 +39,7 @@ final class Conformance
         'integrations' => '[integrations] webhooks verify their sender and API calls go through a contract',
         'versioned-writes' => '[versioned-writes] query-builder writes on a versioned model bump its version',
         'tenant-aware' => '[tenant-aware] commands and queued jobs that touch tenant-scoped models run per tenant (spatie/laravel-multitenancy)',
+        'tenant.scoped-exists' => '[tenant.scoped-exists] an exists rule on workspace records is scoped to the current workspace',
         'destructive-db' => '[destructive-db] a service provider prohibits destructive database commands outside testing',
         'live.broadcast-now' => '[live.broadcast-now] the notice a live prop listens for is ShouldBroadcastNow',
         'vm.typed-pages' => '[vm.typed-pages] a page declares its props as its generated ViewModel type',
@@ -125,7 +126,7 @@ final class Conformance
         }
 
         // Advisory until an app opts in: static write detection can miss a write or flag a non-write.
-        if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists'], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             // An allowlisted advisory that stopped firing is stale, as a findings entry is: fail on it, else skip as advisory.
             $stale = $this->ratchet->staleAdvisories($rule, $violations);
             expect($stale)->toBe([], implode("\n", $stale));
@@ -210,6 +211,10 @@ final class Conformance
 
         if ($rule === 'guards.declared') {
             return (new Checks\GuardsDeclared($this->config, $this->source))->violations();
+        }
+
+        if ($rule === 'tenant.scoped-exists') {
+            return (new Checks\ScopedExists($this->config, $this->source))->violations();
         }
 
         if ($rule === 'tenant-aware') {

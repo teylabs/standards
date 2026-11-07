@@ -32,7 +32,7 @@ nodes:
     kit: ['Tey\Kit\Features\Mcp\CapabilityTool', 'Tey\Kit\Features\Mcp\Capability']
     make: standards:make capability-tool --flavor=write
     recipe_make: "mod:butter/mcp-parity {Name}"
-    checks: ['55', 'actions']
+    checks: ['55', 'actions', 'tenant.scoped-exists']
     paths: ['app/Mcp/Tools/**']
     keywords: [mcp, tool, write, update, delete, mutate, parity]
     status: ready
