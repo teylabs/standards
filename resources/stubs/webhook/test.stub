@@ -48,7 +48,7 @@ afterEach(function () {
     Schema::dropIfExists('{{ slug_snake }}_webhook_effects');
 });
 
-it('refuses a bad signature or an expired timestamp with a 403, storing nothing', function () {
+it('refuses a bad signature or an expired timestamp with a 403 and stores nothing', function () {
     $id = ($this->event)('evt');
     ($this->deliver)(['id' => $id, 'type' => '{{ example_event }}'], 'wrong-secret')->assertForbidden();
     ($this->deliver)(['id' => $id, 'type' => '{{ example_event }}'], timestamp: time() - {{ name }}SignatureValidator::TOLERANCE_SECONDS - 60)->assertForbidden();
@@ -56,7 +56,7 @@ it('refuses a bad signature or an expired timestamp with a 403, storing nothing'
     expect(WebhookCall::query()->where('event_id', $id)->count())->toBe(0)->and(($this->handled)())->toBe(0);
 });
 
-it('processes an event once, however many times it is delivered', function () {
+it('processes an event once however many times it is delivered', function () {
     $id = ($this->event)('evt');
     ($this->deliver)(['id' => $id, 'type' => '{{ example_event }}'])->assertSuccessful();
     ($this->deliver)(['id' => $id, 'type' => '{{ example_event }}'])->assertSuccessful();

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`standards:make crud --mcp` tools gate on the declared capability.** They named `<table>.read` and `<table>.write` as their kit capability, which the generated provider never declares (it declares `<table>`), so the tools were never admitted. They now use `#[Capability('<table>', scope: '<table>.read|write')]`: the capability is the module's feature switch, the scope is the operation.
+- **Generated test titles carry no commas**, so a `docs/mcp-capabilities.json` `test_*` symbol can name each one.
+
 ## 0.11.75 - 2026-11-07
 
 ### Fixed

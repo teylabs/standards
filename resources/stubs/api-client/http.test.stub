@@ -17,7 +17,7 @@ beforeEach(function () {
     config(['services.{{ slug }}.base_url' => 'https://{{ slug }}.example.test', 'services.{{ slug }}.token' => 'test-token']);
 });
 
-it('retries a server error, then answers', function () {
+it('retries a server error and then answers', function () {
     Http::fake(['{{ slug }}.example.test/*' => Http::sequence()->push('unavailable', 503)->push(['id' => 'rec_1'], 200)]);
 
     expect((new Http{{ name }}Client)->find('rec_1'))->toBe(['id' => 'rec_1']);
@@ -25,7 +25,7 @@ it('retries a server error, then answers', function () {
     Http::assertSent(fn (Request $request): bool => $request->hasHeader('Authorization', 'Bearer test-token'));
 });
 
-it('gives up with the status only, never the body', function () {
+it('gives up with the status only and never the body', function () {
     Http::fake(['{{ slug }}.example.test/*' => Http::response('secret details', 404)]);
 
     expect(fn () => (new Http{{ name }}Client)->find('rec_1'))->toThrow({{ name }}Exception::class, '{{ slug }}: 404');

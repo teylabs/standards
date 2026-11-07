@@ -70,7 +70,7 @@ function {{ var }}WorkbenchOrder(int $workspace): array
     return array_column(app({{ name }}WorkbenchItems::class)->read($workspace)['items'], 'id');
 }
 
-it('opens the workbench with its items, inspectors, reorder action, version and remembered layout', function () {
+it('opens the workbench with its items and inspectors and reorder action and version and remembered layout', function () {
     $this->actingAs($this->owner);
 
     $this->get({{ var }}WorkbenchUrl($this->workspace), {{ var }}WorkbenchInertia())->assertOk()
@@ -84,7 +84,7 @@ it('opens the workbench with its items, inspectors, reorder action, version and 
         ->assertJsonPath('props.workbenchLayout.preference.url', '/me/workbenches/{{ slug }}');
 });
 
-it('saves a new order at the current version and refuses a stale one, which changes nothing', function () {
+it('saves a new order at the current version and refuses a stale one that changes nothing', function () {
     $this->actingAs($this->owner);
 
     $this->putJson({{ var }}WorkbenchUrl($this->workspace, '/order'), ['order' => ['third', 'first', 'second'], 'version' => 0])->assertOk()->assertJsonPath('version', 1);
@@ -107,7 +107,7 @@ it('lets a viewer open the workbench but not rearrange it', function () {
     expect({{ var }}WorkbenchOrder($this->workspace))->toBe(['first', 'second', 'third']);
 });
 
-it('refuses a signed-in person who is not a member, and hides the workbench while the capability is off', function () {
+it('refuses a signed-in person who is not a member and hides the workbench while the capability is off', function () {
     $this->actingAs($this->stranger);
     expect($this->getJson({{ var }}WorkbenchUrl($this->workspace))->status())->toBeIn([403, 404]);
     expect($this->putJson({{ var }}WorkbenchUrl($this->workspace, '/order'), ['order' => ['third', 'first', 'second'], 'version' => 0])->status())->toBeIn([403, 404]);

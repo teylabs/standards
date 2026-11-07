@@ -299,6 +299,7 @@ final class Maker
             'action' => $name,
             'test_suffix' => '',
             'capability' => str_replace('-', '_', $slug).'.'.($flavor === 'write' ? 'update' : 'read'),
+            'scope' => str_replace('-', '_', $slug).'.'.($flavor === 'write' ? 'update' : 'read'),
             'capability_group' => str_replace('-', '_', $slug),
             'tool_rules' => $flavor === 'write' ? "'id' => ['required', 'integer'], 'intent_key' => ['sometimes', 'string', 'max:120']" : '',
             'rules' => $flavor === 'toggles' ? "'updates' => ['sometimes', 'boolean']" : "'name' => ['required', 'string', 'max:255']",
@@ -709,11 +710,11 @@ final class Maker
         }
         if (in_array('mcp', $options, true)) {
             $tool = ['flavor' => 'read', 'tool_rules' => ''];
-            $files["{$app}/Mcp/Tools/Read{$plural}Tool.php"] = ['capability-tool.stub', [...$tool, 'name' => "Read{$plural}", 'title' => 'Read '.strtolower($titles), 'capability' => "{$table}.read", 'leaf' => 'mcp.read']];
-            $files["{$tests}/Mcp/Read{$plural}ToolTest.php"] = ['capability-tool.test.stub', [...$tool, 'name' => "Read{$plural}", 'capability' => "{$table}.read", 'leaf' => 'mcp.read']];
+            $files["{$app}/Mcp/Tools/Read{$plural}Tool.php"] = ['capability-tool.stub', [...$tool, 'name' => "Read{$plural}", 'title' => 'Read '.strtolower($titles), 'capability' => $table, 'scope' => "{$table}.read", 'leaf' => 'mcp.read']];
+            $files["{$tests}/Mcp/Read{$plural}ToolTest.php"] = ['capability-tool.test.stub', [...$tool, 'name' => "Read{$plural}", 'capability' => $table, 'scope' => "{$table}.read", 'leaf' => 'mcp.read']];
             $write = ['flavor' => 'write', 'tool_rules' => "'id' => ['required', 'integer'], 'name' => ['required', 'string', 'max:255'], 'lock_version' => ['required', 'integer', 'min:1'], 'intent_key' => ['sometimes', 'string', 'max:120']"];
-            $files["{$app}/Mcp/Tools/Update{$name}Tool.php"] = ['capability-tool.stub', [...$write, 'name' => "Update{$name}", 'title' => 'Update a '.strtolower($title), 'capability' => "{$table}.write", 'leaf' => 'mcp.write']];
-            $files["{$tests}/Mcp/Update{$name}ToolTest.php"] = ['capability-tool.test.stub', [...$write, 'name' => "Update{$name}", 'capability' => "{$table}.write", 'leaf' => 'mcp.write']];
+            $files["{$app}/Mcp/Tools/Update{$name}Tool.php"] = ['capability-tool.stub', [...$write, 'name' => "Update{$name}", 'title' => 'Update a '.strtolower($title), 'capability' => $table, 'scope' => "{$table}.write", 'leaf' => 'mcp.write']];
+            $files["{$tests}/Mcp/Update{$name}ToolTest.php"] = ['capability-tool.test.stub', [...$write, 'name' => "Update{$name}", 'capability' => $table, 'scope' => "{$table}.write", 'leaf' => 'mcp.write']];
         }
         $values['route_uses'] = implode('', array_map(fn (string $class): string => "use {$class};\n", $uses));
         $written = $this->emit($files, $values);
