@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Generated tests name PostgreSQL as the test database.** The `standards:make` test stubs (model, tenant model, crud, workbench) now say each test migrates the app's test database, PostgreSQL by default with its own database per parallel worker, instead of SQLite memory. Jasper's ruling, 2026-11-07: new apps test on PostgreSQL in parallel; SQLite only for tiny pure unit tests.
+
 ## 0.11.79 - 2026-11-07
 
 ### Added

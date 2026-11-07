@@ -19,7 +19,7 @@ use Tey\Kit\Features\SessionUi\Http\Middleware\HandleInertiaRequests;
 use Tey\Kit\Features\Workspaces\Models\Workspace;
 use Tey\Kit\Features\Workspaces\TenantBoundary;
 
-// The {{ title_lower }} workbench over HTTP. Self-contained: each test migrates the app's empty test database (SQLite memory by default) and makes its own people.
+// The {{ title_lower }} workbench over HTTP. Self-contained: each test migrates the app's empty test database (PostgreSQL by default, its own database per parallel worker) and makes its own people.
 // Two workspaces, each with an owner; the first also has a viewer; and one signed-in person who belongs to neither. Nothing here reads a seeded fixture.
 
 beforeEach(function () {

@@ -3,7 +3,7 @@
 // standards-pattern: {{ leaf }}
 
 {{ test_imports }}
-// {{ titles }} at the database: each test migrates the app's empty test database (SQLite memory by default) and makes its own rows. Never skipped.
+// {{ titles }} at the database: each test migrates the app's empty test database (PostgreSQL by default, its own database per parallel worker) and makes its own rows. Never skipped.
 
 beforeEach(function () {
     Artisan::call('migrate', ['--force' => true, '--no-interaction' => true]);
