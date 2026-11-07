@@ -1,0 +1,39 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Actions;
+
+use {{ namespace }}\Models\{{ name }};
+use {{ vm_namespace }}\{{ name }}ShowViewModel;
+use Illuminate\Support\Facades\Gate;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Core\RequestMemo;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+
+/** The read side the MCP tools share with the pages: the same policy, and the same record shape as the show page. */
+final class List{{ plural }}
+{
+    /** @return list<array<string, mixed>> up to 50 {{ titles_lower }}, by name, matching the search when one is given */
+    public function handle(Principal $principal, int $workspace, ?string $search = null): array
+    {
+        $user = RequestMemo::user($principal->actorId);
+        Gate::forUser($user)->authorize('viewAny', [{{ name }}::class, Workspace::required()]);
+        $query = {{ name }}::query()->where('workspace_id', $workspace)->orderBy('name')->limit(50);
+        if ($search !== null && $search !== '') {
+            $query->where('name', 'like', '%'.addcslashes($search, '%_\\').'%');
+        }
+
+        return $query->get()->map(fn ({{ name }} $record): array => (new {{ name }}ShowViewModel($workspace, $record, $user))->record())->all();
+    }
+
+    /** @return array<string, mixed> one {{ title_lower }}; a missing one is a 404, which the MCP gate reports as not_found */
+    public function one(Principal $principal, int $workspace, int $id): array
+    {
+        $user = RequestMemo::user($principal->actorId);
+        $record = {{ name }}::query()->where('workspace_id', $workspace)->findOrFail($id);
+        Gate::forUser($user)->authorize('view', $record);
+
+        return (new {{ name }}ShowViewModel($workspace, $record, $user))->record();
+    }
+}

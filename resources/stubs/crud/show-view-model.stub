@@ -27,15 +27,15 @@ final class {{ name }}ShowViewModel extends {{ view_model_base }}
         return ['id' => (int) $this->{{ var }}->getKey(), 'name' => $this->{{ var }}->name, 'updated_at' => $this->{{ var }}->updated_at?->toIso8601String()];
     }
 
-    /** @return list<Action> */
+    /** @return array{edit: Action|null, delete: Action|null} the header's actions by name; null means this viewer may not */
     public function actions(): array
     {
         $gate = Gate::forUser($this->user);
         $url = WorkspaceUrl::to($this->workspace, '{{ slug }}/'.$this->{{ var }}->getKey());
 
-        return array_values(array_filter([
-            $gate->allows('update', $this->{{ var }}) ? new Action('Edit', $url.'/edit', 'get', key: 'edit') : null,
-            $gate->allows('delete', $this->{{ var }}) ? new Action('Delete', $url, 'delete', confirm: ['title' => 'Delete this {{ title_lower }}?', 'description' => '“'.$this->{{ var }}->name.'” will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true, menu: true) : null,
-        ]));
+        return [
+            'edit' => $gate->allows('update', $this->{{ var }}) ? new Action('Edit', $url.'/edit', 'get', key: 'edit') : null,
+            'delete' => $gate->allows('delete', $this->{{ var }}) ? new Action('Delete', $url, 'delete', confirm: ['title' => 'Delete this {{ title_lower }}?', 'description' => '“'.$this->{{ var }}->name.'” will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true) : null,
+        ];
     }
 }

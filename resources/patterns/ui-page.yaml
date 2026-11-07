@@ -130,10 +130,10 @@ nodes:
   - id: ui-page.index
     recipe: Inertia index page
     summary: A CRUDDY index controller passes a typed ViewModel to resources/js/pages/<Area>/Index/Page.vue; its table is a TableQuery (search, declared filters and sorts from the URL, an unknown one a 400) with each row's actions decided on the server.
-    kit: ['@kit/ui Page', '@kit/ui SectionHeader', '@kit/ui DataTable', '@kit/ui IndexToolbar', '@kit/ui RowActions']
+    kit: ['@kit/ui Page', '@kit/ui ButtonGroup', '@kit/ui InertiaAction', '@kit/ui DataTable', '@kit/ui IndexToolbar', '@kit/ui RowActions']
     components:
-      - { name: "page shell", kit_component: Page, use: "Wraps the whole page with title and breadcrumbs", props_hint: "title" }
-      - { name: "header", kit_component: SectionHeader, use: "Title plus the primary add action", props_hint: "title, actions slot" }
+      - { name: "page shell", kit_component: Page, use: "Wraps the whole page with title and breadcrumbs; its #actions slot holds the header actions (ui-page.header-actions). No SectionHeader repeating the title above the table", props_hint: "title, #actions" }
+      - { name: "add action", kit_component: InertiaAction, use: "The create action by name in the header's ButtonGroup (null renders nothing)", props_hint: "action" }
       - { name: "rows", kit_component: DataTable, use: "The record list, server-driven: rows, URL state, empty states", props_hint: "table (TableData)" }
       - { name: "filters", kit_component: IndexToolbar, use: "Search and the server's filter choices (DataTable renders it)", props_hint: "table.choices" }
       - { name: "row menu", kit_component: RowActions, use: "Per-row actions from the server (DataTable renders it)", props_hint: "row.actions descriptors" }
@@ -145,10 +145,9 @@ nodes:
   - id: ui-page.show
     recipe: Inertia show page
     summary: A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand.
-    kit: ['@kit/ui Page', '@kit/ui SectionHeader', '@kit/ui Section', '@kit/ui DescriptionList', '@kit/ui ButtonGroup', '@kit/ui InertiaAction', '@kit/ui DropdownAction']
+    kit: ['@kit/ui Page', '@kit/ui Section', '@kit/ui DescriptionList', '@kit/ui ButtonGroup', '@kit/ui InertiaAction', '@kit/ui DropdownAction']
     components:
-      - { name: "page shell", kit_component: Page, use: "Wraps the record page", props_hint: "title" }
-      - { name: "header", kit_component: SectionHeader, use: "Record title and its actions", props_hint: "title, actions slot" }
+      - { name: "page shell", kit_component: Page, use: "Wraps the record page; its #actions slot holds the record's actions (ui-page.header-actions), with no SectionHeader repeating the title", props_hint: "title, #actions" }
       - { name: "details", kit_component: Section, use: "Groups the record fields", props_hint: "title" }
       - { name: "fields", kit_component: DescriptionList, use: "The record's fields as term and description pairs (a real dl), with copy for an id or key", props_hint: "items, layout, copyable" }
       - { name: "actions", kit_component: ButtonGroup, use: "The record's actions written out by name: buttons in the default slot, the rest in the #menu (chevron)", props_hint: "default slot, #menu" }
@@ -435,8 +434,8 @@ nodes:
       `standards:make crud <Record>` emits a whole workspace-owned resource: model and migration (with lock_version), a policy gated by the record's capability
       then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first,
       stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture.
-      `--bulk` adds selection and a bulk delete, `--mcp` read and write capability tools, `--soft-deletes` soft deletes and a restoration.
-    kit: ['@kit/ui DataTable', '@kit/ui FormCard', '@kit/ui SectionHeader', '@kit/ui Dialog']
+      `--bulk` adds selection and a bulk delete, `--mcp` Read, Write (create or update) and Delete capability tools over a List action, `--soft-deletes` soft deletes and a restoration.
+    kit: ['@kit/ui DataTable', '@kit/ui FormCard', '@kit/ui ButtonGroup', '@kit/ui InertiaAction', '@kit/ui DropdownAction']
     make: standards:make crud --flavor=resource
     checks: ['20', '21', 'actions', 'descriptors', 'toast', 'js-imports']
     paths: ['app/Models/**', 'app/Policies/**', 'app/Providers/**ServiceProvider.php', 'routes/**']

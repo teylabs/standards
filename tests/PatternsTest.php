@@ -71,6 +71,9 @@ function fakeModGenerator(string $base, array &$calls): Closure
 }
 
 /** A temporary copy of the fixture app whose classes autoload. */
+/** A trait an app's tests/Pest.php applies with uses() or pest()->use(): it boots nothing, so it never stands in for the TestCase. */
+trait RecordsStories {}
+
 function fixtureApp(): string
 {
     $base = sys_get_temp_dir().'/standards-app-'.bin2hex(random_bytes(6));
@@ -559,6 +562,7 @@ test('generated tests bind the app TestCase themselves when tests/Pest.php does 
         $bound
             ? expect($test)->toContain("// standards-pattern: ui-page.index\n\npest()->extend(\\Tests\\TestCase::class);\n")
             : expect($test)->not->toContain('pest()->extend');
+        expect(file_get_contents($base.'/resources/js/pages/Widgets/Index/Page.vue'))->not->toContain('SectionHeader');
         expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped())['violations'])->toBe([]);
     } finally {
         (new Filesystem)->deleteDirectory($base);
@@ -568,6 +572,8 @@ test('generated tests bind the app TestCase themselves when tests/Pest.php does 
     'no Pest.php ->in() at all' => ["<?php\n", true],
     'Feature covered' => ["<?php\n\nuses(Tests\\TestCase::class)->in('Feature');\n", false],
     'a glob over Feature' => ["<?php\n\npest()->extend(Tests\\TestCase::class)->in('Feature/*');\n", false],
+    'Feature given only a trait, which boots nothing' => ["<?php\n\npest()->use(RecordsStories::class)->in('Feature');\n", true],
+    'Feature given only a trait through uses()' => ["<?php\n\nuses(RecordsStories::class)->in('Feature');\n", true],
 ]);
 
 test('several leaves sharing a make command are told apart by --leaf', function () {
@@ -650,14 +656,15 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
             'app/Http/Controllers/InvoiceController.php', 'app/Http/Controllers/InvoiceSelectionController.php', 'app/Http/Controllers/InvoiceRestorationController.php',
             'app/Actions/CreateInvoice.php', 'app/Actions/UpdateInvoice.php', 'app/Actions/DeleteInvoice.php', 'app/Actions/RestoreInvoice.php',
             'app/ViewModels/Invoices/InvoiceIndexViewModel.php', 'resources/js/pages/Invoices/Index/Page.vue', 'resources/js/pages/Invoices/Form/Page.vue',
-            'resources/js/pages/Invoices/Show/Page.vue', 'tests/Feature/Invoices/InvoiceTest.php', 'app/Mcp/Tools/ReadInvoicesTool.php', 'app/Mcp/Tools/UpdateInvoiceTool.php',
+            'resources/js/pages/Invoices/Show/Page.vue', 'tests/Feature/Invoices/InvoiceTest.php', 'app/Mcp/Tools/ReadInvoicesTool.php', 'app/Mcp/Tools/WriteInvoiceTool.php', 'app/Mcp/Tools/DeleteInvoiceTool.php', 'app/Actions/ListInvoices.php',
             'bootstrap/providers.php',
         );
         expect(file_get_contents($base.'/app/ViewModels/Invoices/InvoiceIndexViewModel.php'))->toContain('standards-pattern: ui-page.index')->toContain('extends ViewModel')->toContain("->bulk(new Action('Delete'")
             ->and(file_get_contents($base.'/app/Actions/UpdateInvoice.php'))->toContain('->updateIfCurrent(')
             ->and(file_get_contents($base.'/app/Models/Invoice.php'))->toContain('use BelongsToWorkspace, GuardsStaleWrites, HasFactory, SoftDeletes;')->toContain('standards-pattern: data-actions.domain-model')
             ->and(file_get_contents($base.'/routes/invoices.php'))->toContain("use App\\Http\\Controllers\\InvoiceSelectionController;\n")->toContain("prefix('invoices/selection')")
-            ->and(file_get_contents($base.'/app/Mcp/Tools/UpdateInvoiceTool.php'))->toContain("#[Capability('invoices', scope: 'invoices.write')]")
+            ->and(file_get_contents($base.'/app/Mcp/Tools/WriteInvoiceTool.php'))->toContain("#[Capability('invoices', scope: 'invoices.write')]")->toContain('app(UpdateInvoice::class)')->toContain('app(CreateInvoice::class)')
+            ->and(file_get_contents($base.'/app/Mcp/Tools/DeleteInvoiceTool.php'))->toContain("#[Capability('invoices', destructive: true, scope: 'invoices.write')]")->toContain('app(DeleteInvoice::class)')
             ->and(file_get_contents($base.'/app/Mcp/Tools/ReadInvoicesTool.php'))->toContain("#[Capability('invoices', scope: 'invoices.read')]")
             // The tools' capability is the one the generated provider declares (InvoicePolicy::CAPABILITY), not an undeclared `.write`.
             ->and(file_get_contents($base.'/app/Policies/InvoicePolicy.php'))->toContain("public const CAPABILITY = 'invoices';")
@@ -677,6 +684,10 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
             ->and($boot[1] ?? '')->toContain('Gate::policy(Invoice::class, InvoicePolicy::class);')->not->toContain('Registry');
         expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped())['violations'])->toBe([]);
 
+        // The page header carries the actions (ui-page.header-actions): no SectionHeader repeats the title above the table or the record.
+        expect(file_get_contents($base.'/resources/js/pages/Invoices/Index/Page.vue'))->toContain('<template #actions>')->toContain('<InertiaAction :action="create as never" />')->not->toContain('SectionHeader')
+            ->and(file_get_contents($base.'/resources/js/pages/Invoices/Show/Page.vue'))->toContain('<InertiaAction :action="actions.edit as never" />')->toContain('<DropdownAction :action="actions.delete as never" />')->not->toContain('SectionHeader')
+            ->and(file_get_contents($base.'/app/ViewModels/Invoices/InvoiceShowViewModel.php'))->toContain("'edit' => \$gate->allows('update'")->toContain("'delete' => \$gate->allows('delete'");
         // Test titles carry no comma, so a docs/mcp-capabilities.json `test_*` symbol can name each one.
         foreach (array_filter($files, fn (string $file): bool => str_starts_with($file, 'tests/')) as $test) {
             preg_match_all("/^it\\('([^']*)'/m", file_get_contents($base.'/'.$test), $titles);
@@ -693,6 +704,38 @@ test('make crud emits a whole resource, its flags add to it, and the result pass
         expect(fn () => (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Invoice', 'resource'))->toThrow(InvalidArgumentException::class, 'never overwrites')
             ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('crud', 'Other', 'resource', null, ['archive']))->toThrow(InvalidArgumentException::class, 'Unknown option --archive')
             ->and(fn () => (new Maker($base, TreeCatalog::shipped()))->make('page', 'Other', 'index', null, ['bulk']))->toThrow(InvalidArgumentException::class, 'Unknown option --bulk');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('make crud names a two-word record in kebab case everywhere the kit reads a name, emits Read, Write and Delete tools, and its tests bind the TestCase outside the folders Pest.php extends', function () {
+    $base = fixtureApp();
+
+    try {
+        // As a starter app sets it up: the TestCase extends only top-level tests, and a use() of a trait (which boots nothing) covers Feature/Modules.
+        $pest = str_replace("pest()->extend(TestCase::class)->in('Feature');", "pest()->use(RecordsStories::class)->in('Feature');\npest()->extend(TestCase::class)->in(...array_values(glob(__DIR__.'/*Test.php')));", file_get_contents($base.'/tests/Pest.php'));
+        file_put_contents($base.'/tests/Pest.php', $pest);
+        $files = (new Maker($base, TreeCatalog::shipped()))->make('crud', 'BillingEntity', 'resource', null, ['mcp']);
+
+        expect($files)->toContain('app/Mcp/Tools/ReadBillingEntitiesTool.php', 'app/Mcp/Tools/WriteBillingEntityTool.php', 'app/Mcp/Tools/DeleteBillingEntityTool.php', 'app/Actions/ListBillingEntities.php',
+            'tests/Feature/Mcp/ReadBillingEntitiesToolTest.php', 'tests/Feature/Mcp/WriteBillingEntityToolTest.php', 'tests/Feature/Mcp/DeleteBillingEntityToolTest.php')
+            ->not->toContain('app/Mcp/Tools/UpdateBillingEntityTool.php');
+        expect(file_get_contents($base.'/app/Policies/BillingEntityPolicy.php'))->toContain("public const CAPABILITY = 'billing-entities';")
+            ->and(file_get_contents($base.'/app/Providers/BillingEntityServiceProvider.php'))->toContain("->permission('billing-entities.view'")->toContain("['billing-entities.read']")->toContain("->abilities(['billing-entities.read' => BillingEntityPolicy::CAPABILITY])")
+            ->and(file_get_contents($base.'/app/Mcp/Tools/ReadBillingEntitiesTool.php'))->toContain("#[Capability('billing-entities', scope: 'billing-entities.read')]")->toContain("public const ABILITY = 'billing-entities.read';")
+            ->and(file_get_contents($base.'/app/Mcp/Tools/WriteBillingEntityTool.php'))->toContain("#[Capability('billing-entities', scope: 'billing-entities.write')]")
+            ->and(file_get_contents($base.'/tests/Feature/Mcp/DeleteBillingEntityToolTest.php'))->toContain("->toBe('billing-entities')")->toContain("->toBe('billing-entities.write')");
+        // Every permission, ability and scope name passes the kit's Registry::permission pattern; the snake name is the table's alone.
+        $written = implode("\n", array_map(fn (string $file): string => file_get_contents($base.'/'.$file), $files));
+        preg_match_all("/'(billing[-_]entities\\.[a-z.]+)'/", $written, $names);
+        expect(array_unique($names[1]))->not->toBeEmpty()->each->toMatch('/\A[a-z0-9]+(?:[.-][a-z0-9]+)+\z/')
+            ->and($written)->not->toContain("Capability('billing_entities'")->not->toContain("CAPABILITY = 'billing_entities'");
+        // Pest.php's use() binds no TestCase, so each generated test under Feature binds it itself.
+        foreach (array_filter($files, fn (string $file): bool => str_starts_with($file, 'tests/')) as $test) {
+            expect(file_get_contents($base.'/'.$test))->toContain('pest()->extend(TestCase::class);')->toContain("use Tests\\TestCase;\n");
+        }
+        expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-27'), TreeCatalog::shipped())['violations'])->toBe([]);
     } finally {
         (new Filesystem)->deleteDirectory($base);
     }
@@ -938,6 +981,14 @@ test('make declares the routes it writes in the capability manifest: an existing
         $capabilities = collect(json_decode(file_get_contents($path))->capabilities)->keyBy('id');
         expect($capabilities['invoices.write']->routes)->toBe(['records.archive', 'POST /invoices', 'PUT /invoices/{id}', 'DELETE /invoices/{id}'])
             ->and($capabilities->has('generated.crud.invoice'))->toBeFalse();
+        // A two-word record's routes join its kebab-case write scope, the one its tools declare, not a placeholder.
+        $manifest = json_decode(file_get_contents($path));
+        $manifest->capabilities[] = (object) ['id' => 'billing-entities.write', 'routes' => []];
+        file_put_contents($path, json_encode($manifest));
+        (new Maker($base, TreeCatalog::shipped()))->make('crud', 'BillingEntity', 'resource', null, ['mcp']);
+        $capabilities = collect(json_decode(file_get_contents($path))->capabilities)->keyBy('id');
+        expect($capabilities['billing-entities.write']->routes)->toBe(['POST /billing-entities', 'PUT /billing-entities/{id}', 'DELETE /billing-entities/{id}'])
+            ->and($capabilities->has('generated.crud.billing-entity'))->toBeFalse();
 
         // Both sections append to routes/web.php: the second run sees the first's route already declared and adds only its own.
         (new Maker($base, TreeCatalog::shipped()))->make('settings-section', 'Alerts', 'form');

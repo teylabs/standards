@@ -192,7 +192,8 @@ final class Maker
         if ($keys === []) {
             return [];
         }
-        $mcp = $unit === 'crud' && in_array('mcp', $options, true) ? Str::snake(Str::plural($name)).'.write' : null;
+        // The write scope the generated tools declare: kebab case, as every generated capability name is.
+        $mcp = $unit === 'crud' && in_array('mcp', $options, true) ? Str::kebab(Str::plural($name)).'.write' : null;
         $placeholder = 'generated.'.$unit.'.'.Str::kebab($name);
         $target = null;
         foreach ($data->capabilities as $capability) {
@@ -306,9 +307,10 @@ final class Maker
             'flavor' => $flavor,
             'action' => $name,
             'test_suffix' => '',
-            'capability' => str_replace('-', '_', $slug).'.'.($flavor === 'write' ? 'update' : 'read'),
-            'scope' => str_replace('-', '_', $slug).'.'.($flavor === 'write' ? 'update' : 'read'),
-            'capability_group' => str_replace('-', '_', $slug),
+            // Kebab case, as the kit's Registry requires of permission and capability names.
+            'capability' => $slug.'.'.($flavor === 'write' ? 'update' : 'read'),
+            'scope' => $slug.'.'.($flavor === 'write' ? 'update' : 'read'),
+            'capability_group' => $slug,
             'tool_rules' => $flavor === 'write' ? "'id' => ['required', 'integer'], 'intent_key' => ['sometimes', 'string', 'max:120']" : '',
             'rules' => $flavor === 'toggles' ? "'updates' => ['sometimes', 'boolean']" : "'name' => ['required', 'string', 'max:255']",
         ];
@@ -539,7 +541,7 @@ final class Maker
         // Pint's ordered_traits.
         sort($traits);
         $values = [
-            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'table' => $table, 'perm' => $table, 'var' => Str::camel($name), 'slug' => Str::kebab($plural),
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'table' => $table, 'perm' => Str::kebab($plural), 'var' => Str::camel($name), 'slug' => Str::kebab($plural),
             'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'titles_lower' => strtolower($titles), 'leaf' => $leaf, 'migration' => $migration,
             'model_imports' => implode('', array_map(fn (string $class): string => "use {$class};\n", array_unique($imports))),
             'model_doc' => $doc, 'model_implements' => $implements, 'model_traits' => implode(', ', $traits), 'model_guarded' => implode(', ', $guarded),
@@ -622,7 +624,7 @@ final class Maker
         $title = ucfirst(str_replace('-', ' ', Str::kebab($name)));
         $titles = ucfirst(str_replace('-', ' ', $slug));
         $values = [
-            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'perm' => Str::snake($plural), 'var' => Str::camel($name),
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'perm' => $slug, 'var' => Str::camel($name),
             'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'vm_namespace' => $viewModels[1].'\\'.$plural, 'leaf' => 'ui-page.workbench',
         ];
         $files = [
@@ -673,7 +675,7 @@ final class Maker
         $modelFiles = array_map(fn (string|array $stub): array => is_array($stub) ? [$stub[0], ['leaf' => 'data-actions.domain-model', ...$stub[1]]] : [$stub, ['leaf' => 'data-actions.domain-model']], $modelFiles);
         $migration = $modelValues['migration'];
         $values = [...$modelValues,
-            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'table' => $table, 'perm' => $table,
+            'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'table' => $table, 'perm' => $slug,
             'var' => Str::camel($name), 'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'titles_lower' => strtolower($titles),
             'view_model' => ltrim($viewModel, '\\'), 'view_model_base' => class_basename($viewModel), 'vm_namespace' => $viewModels[1].'\\'.$plural, 'migration' => $migration, 'leaf' => 'ui-page.crud-resource',
             'bulk_table' => $bulk ? "            ->bulk(new Action('Delete', WorkspaceUrl::to(\$this->workspace, '{$slug}/selection'), 'delete', confirm: ['title' => 'Delete the selected ".strtolower($titles)."?', 'description' => 'Every selected ".strtolower($title)." will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true))\n" : '',
@@ -717,12 +719,14 @@ final class Maker
             $files["{$app}/Actions/Restore{$name}.php"] = ['crud/restore-action.stub', ['leaf' => 'data-actions.action']];
         }
         if (in_array('mcp', $options, true)) {
-            $tool = ['flavor' => 'read', 'tool_rules' => ''];
-            $files["{$app}/Mcp/Tools/Read{$plural}Tool.php"] = ['capability-tool.stub', [...$tool, 'name' => "Read{$plural}", 'title' => 'Read '.strtolower($titles), 'capability' => $table, 'scope' => "{$table}.read", 'leaf' => 'mcp.read']];
-            $files["{$tests}/Mcp/Read{$plural}ToolTest.php"] = ['capability-tool.test.stub', [...$tool, 'name' => "Read{$plural}", 'capability' => $table, 'scope' => "{$table}.read", 'leaf' => 'mcp.read']];
-            $write = ['flavor' => 'write', 'tool_rules' => "'id' => ['required', 'integer'], 'name' => ['required', 'string', 'max:255'], 'lock_version' => ['required', 'integer', 'min:1'], 'intent_key' => ['sometimes', 'string', 'max:120']"];
-            $files["{$app}/Mcp/Tools/Update{$name}Tool.php"] = ['capability-tool.stub', [...$write, 'name' => "Update{$name}", 'title' => 'Update a '.strtolower($title), 'capability' => $table, 'scope' => "{$table}.write", 'leaf' => 'mcp.write']];
-            $files["{$tests}/Mcp/Update{$name}ToolTest.php"] = ['capability-tool.test.stub', [...$write, 'name' => "Update{$name}", 'capability' => $table, 'scope' => "{$table}.write", 'leaf' => 'mcp.write']];
+            // As the pages do: Read (one or a page), Write (create, or update at its lock_version) and Delete, all through the Actions, with List for the read side.
+            $files["{$app}/Actions/List{$plural}.php"] = ['crud/list-action.stub', ['leaf' => 'data-actions.action']];
+            $files["{$app}/Mcp/Tools/Read{$plural}Tool.php"] = ['crud/mcp-read-tool.stub', ['leaf' => 'mcp.read']];
+            $files["{$app}/Mcp/Tools/Write{$name}Tool.php"] = ['crud/mcp-write-tool.stub', ['leaf' => 'mcp.write']];
+            $files["{$app}/Mcp/Tools/Delete{$name}Tool.php"] = ['crud/mcp-delete-tool.stub', ['leaf' => 'mcp.write']];
+            foreach (["Read{$plural}" => ['read', 'mcp.read'], "Write{$name}" => ['write', 'mcp.write'], "Delete{$name}" => ['write', 'mcp.write']] as $tool => [$operation, $leaf]) {
+                $files["{$tests}/Mcp/{$tool}ToolTest.php"] = ['capability-tool.test.stub', ['name' => $tool, 'capability' => $slug, 'scope' => "{$slug}.{$operation}", 'leaf' => $leaf]];
+            }
         }
         $values['route_uses'] = implode('', array_map(fn (string $class): string => "use {$class};\n", $uses));
         $written = $this->emit($files, $values);
@@ -1008,9 +1012,8 @@ final class Maker
             return $contents;
         }
 
-        preg_match_all('/->in\(([^)]*)\)/', $pest, $calls);
-
-        foreach ($calls[1] as $arguments) {
+        // Only a chain that binds a test case covers a folder: a trait (`pest()->use(...)`, or `uses()` of a trait) boots nothing.
+        foreach ($this->caseChains($pest) as [, $arguments]) {
             preg_match_all('/[\'"]([^\'"]+)[\'"]/', $arguments, $globs);
 
             foreach ($globs[1] as $glob) {
@@ -1044,6 +1047,34 @@ final class Maker
     }
 
     /**
+     * The extend()/uses() chains in tests/Pest.php that bind a test case: [the class, resolved through the file's imports; the ->in() arguments].
+     * `pest()->use()` is never one, and neither is `uses()` of a trait (it adds behaviour and boots no application).
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private function caseChains(string $pest): array
+    {
+        $imports = [];
+        preg_match_all('/^use\s+\\\\?([\w\\\\]+)(?:\s+as\s+(\w+))?\s*;/m', $pest, $uses, PREG_SET_ORDER);
+        foreach ($uses as $use) {
+            $alias = ($use[2] ?? '') !== '' ? $use[2] : substr((string) strrchr('\\'.$use[1], '\\'), 1);
+            $imports[$alias] = $use[1];
+        }
+        $chains = [];
+        preg_match_all('/(?:extend|uses)\(\s*([\\\\\w]+)::class[^;]*?->in\(([^)]*)\)/s', $pest, $matches, PREG_SET_ORDER);
+        foreach ($matches as $match) {
+            $name = ltrim($match[1], '\\');
+            $first = explode('\\', $name)[0];
+            $class = isset($imports[$first]) ? $imports[$first].substr($name, strlen($first)) : $name;
+            if (! trait_exists($class)) {
+                $chains[] = [$class, $match[2]];
+            }
+        }
+
+        return $chains;
+    }
+
+    /**
      * The application's test case from tests/Pest.php: the extend()/uses()
      * whose ->in() covers general tests (a glob, Feature or Unit), never one
      * scoped to browser tests; else Tests\TestCase. Names resolve through the
@@ -1051,40 +1082,22 @@ final class Maker
      */
     private function applicationCase(string $pest): string
     {
-        $imports = [];
-
-        preg_match_all('/^use\s+\\\\?([\w\\\\]+)(?:\s+as\s+(\w+))?\s*;/m', $pest, $uses, PREG_SET_ORDER);
-
-        foreach ($uses as $use) {
-            $alias = ($use[2] ?? '') !== '' ? $use[2] : substr((string) strrchr('\\'.$use[1], '\\'), 1);
-            $imports[$alias] = $use[1];
-        }
-
-        $resolve = function (string $name) use ($imports): string {
-            $name = ltrim($name, '\\');
-            $first = explode('\\', $name)[0];
-
-            return isset($imports[$first]) ? $imports[$first].substr($name, strlen($first)) : $name;
-        };
-
         $candidates = [];
 
-        preg_match_all('/(?:extend|uses)\(\s*([\\\\\w]+)::class[^;]*?->in\(([^)]*)\)/s', $pest, $chains, PREG_SET_ORDER);
-
-        foreach ($chains as $chain) {
-            preg_match_all('/[\'"]([^\'"]+)[\'"]/', $chain[2], $folders);
+        foreach ($this->caseChains($pest) as $chain) {
+            preg_match_all('/[\'"]([^\'"]+)[\'"]/', $chain[1], $folders);
             $folders = $folders[1];
 
             if ($folders !== [] && array_filter($folders, fn (string $folder): bool => stripos($folder, 'browser') === false) === []) {
                 continue;
             }
 
-            if (stripos($chain[1], 'browser') !== false) {
+            if (stripos($chain[0], 'browser') !== false) {
                 continue;
             }
 
             $general = array_filter($folders, fn (string $folder): bool => str_contains($folder, '*') || in_array(trim($folder, '/'), ['.', '', 'Feature', 'Unit'], true));
-            $candidates[] = [$general !== [] ? 0 : 1, $resolve($chain[1])];
+            $candidates[] = [$general !== [] ? 0 : 1, $chain[0]];
         }
 
         usort($candidates, fn (array $a, array $b): int => $a[0] <=> $b[0]);
