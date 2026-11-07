@@ -7,6 +7,7 @@ namespace Tey\Standards\Telemetry;
 use Closure;
 use RuntimeException;
 use Symfony\Component\Process\Process;
+use Tey\Standards\Source;
 
 /**
  * The milestone cross-check: replays the gate on each commit of a git range in a clean worktree, rebuilds commit-level episodes from
@@ -50,7 +51,8 @@ final class Recompute
 
             foreach ($commits as $commit) {
                 $this->mustGit($worktree, ['checkout', '--quiet', '--force', '--detach', $commit]);
-                $files = array_values(array_filter(explode("\n", trim((string) Diff::git($worktree, ['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', '--diff-filter=d', $commit])))));
+                // Only files the gate can check: a docs or changelog commit is not an episode, so it is never a mismatch.
+                $files = array_values(array_filter(explode("\n", trim((string) Diff::git($worktree, ['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', '--diff-filter=d', $commit]))), Source::gated(...)));
                 $parent = Diff::git($worktree, ['rev-parse', '--verify', '--quiet', $commit.'^']);
                 $report = $files === [] ? ['violations' => []] : ($this->gate)($worktree, $files);
                 $recorder = new Recorder($worktree, false, $this->configurationFile);

@@ -271,6 +271,39 @@ test('recompute finds no mismatch when the log gated each committed file', funct
     expect($result['mismatches'])->toBe([]);
 });
 
+test('recompute and the log skip files the gate cannot check', function () {
+    ($this->git)('init', '--quiet', '--initial-branch=main');
+    ($this->write)('README.md', "fixture\n");
+    ($this->git)('add', '.');
+    ($this->git)('commit', '--quiet', '-m', 'Root');
+    ($this->write)('app/A.php', "<?php\n");
+    ($this->write)('resources/js/pages/A.vue', "<template />\n");
+    ($this->write)('docs/patterns.md', "# Patterns\n");
+    ($this->write)('CHANGELOG.md', "# Changelog\n");
+    ($this->write)('vendor/acme/Lib.php', "<?php\n");
+    ($this->git)('add', '--force', '.');
+    ($this->git)('commit', '--quiet', '-m', 'Code and docs');
+    $hash = fn (string $contents): string => substr(hash('sha256', $contents), 0, 16);
+    $gated = [];
+    $gate = function (string $worktree, array $files) use (&$gated): array {
+        $gated = $files;
+
+        return ['violations' => []];
+    };
+    $log = [fpRun('2000-01-01T00:00:00+00:00', [fpFile('app/A.php', $hash("<?php\n")), fpFile('resources/js/pages/A.vue', $hash("<template />\n"))])];
+
+    $result = (new Recompute($this->fpBase, $gate))->run('HEAD~1..HEAD', $log);
+
+    expect($result['mismatches'])->toBe([])
+        ->and($gated)->toBe(['app/A.php', 'resources/js/pages/A.vue']);
+
+    ($this->write)('docs/patterns.md', "# Patterns\n\nMore.\n");
+    ($this->write)('app/A.php', "<?php\n// more\n");
+    $record = (new Recorder($this->fpBase, true, environment: $this->environment))->runRecord(['scope' => 'changed', 'violations' => []], 'HEAD');
+
+    expect(array_column($record['files'], 'path'))->toBe(['app/A.php']);
+});
+
 test('recompute needs a range', function () {
     (new Recompute($this->fpBase, fn (): array => []))->run('HEAD', []);
 })->throws(RuntimeException::class, 'git range');

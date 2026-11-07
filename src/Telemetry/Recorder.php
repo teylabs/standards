@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Tey\Standards\Enforcement\ChangedFiles;
 use Tey\Standards\Patterns\PatternCatalog;
 use Tey\Standards\Patterns\TreeCatalog;
+use Tey\Standards\Source;
 use Throwable;
 
 /**
@@ -64,7 +65,8 @@ final class Recorder
     {
         $changed = ChangedFiles::since($this->base, $ref);
         $scope = is_array($report['paths'] ?? null) && ($report['scope'] ?? null) === 'file' ? $report['paths'] : null;
-        $files = array_values(array_filter($changed, fn (string $file): bool => $scope === null || in_array($file, $scope, true)));
+        // Only files the gate can check, the same scope --recompute replays (Source::gated).
+        $files = array_values(array_filter($changed, fn (string $file): bool => Source::gated($file) && ($scope === null || in_array($file, $scope, true))));
 
         return [
             'kind' => 'run',
