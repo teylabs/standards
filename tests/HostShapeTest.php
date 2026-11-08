@@ -172,9 +172,9 @@ test('the workspace and MCP recipes on the modular host with the kit features ad
         $host = new HostShape(teylabsLayout(), HostShape::kitUiAlias($base), ['core', 'workspaces', 'access', 'mcp'], 'Slides');
         $make = fn (string $unit, string $name, string $flavor, array $options = []): array => (new Maker($base, TreeCatalog::shipped(), kit: true, host: $host))->make($unit, $name, $flavor, null, $options);
         $files = [...$make('crud', 'Deck', 'resource', ['bulk', 'mcp', 'soft-deletes']), ...$make('capability-tool', 'ReadSlidesTool', 'read'), ...$make('model', 'Theme', 'domain', ['tenant']), ...$make('settings-section', 'BillingSettings', 'form')];
-        // A module has one settings section, so the toggles flavor is made in a module of its own.
+        // The toggles flavor, made in a module of its own.
         $toggles = (new Maker($base, TreeCatalog::shipped(), kit: true, host: new HostShape(teylabsLayout(), HostShape::kitUiAlias($base), ['core', 'workspaces', 'access'], 'Alerts')))->make('settings-section', 'Alerts', 'toggles');
-        expect($files)->toContain('app/Modules/Slides/Http/Controllers/Settings/BillingController.php', 'app/Modules/Slides/routes/slides-settings.php', 'app/Modules/Slides/Providers/SlidesSettingsServiceProvider.php')
+        expect($files)->toContain('app/Modules/Slides/Http/Controllers/Settings/BillingController.php', 'app/Modules/Slides/routes/billing-settings.php', 'app/Modules/Slides/Providers/BillingSettingsServiceProvider.php')
             ->and($toggles)->toContain('app/Modules/Alerts/Http/Controllers/Settings/AlertsController.php')
             ->and((string) file_get_contents($base.'/app/Modules/Alerts/resources/js/pages/settings/Alerts/Page.vue'))->toContain('<Checkbox')->not->toContain('@kit/ui');
         expectWellPlaced($base, $host, array_values(array_unique($files)));
@@ -269,26 +269,33 @@ test('a module owns its URL prefix: records nest under it, the main record sits 
         $before = array_map(fn (string $file): string => $file.' '.hash('sha256', $read($file)), hostFiles($base));
         expect($make('crud', 'Room', 'resource'))->toBe([])->and(array_map(fn (string $file): string => $file.' '.hash('sha256', $read($file)), hostFiles($base)))->toBe($before);
 
-        // The module's occasional setup is a workspace settings section at /settings/<module>, in the kit's settings.workspace shape.
+        // The module's occasional setup is a workspace settings section, in the kit's settings.workspace shape. Its URL names what the person sets
+        // (the section's own name), not the module: the module only decides where the code lives.
         $settings = $make('settings-section', 'BookingRules', 'form');
         expect($settings)->not->toContain('routes/web.php')
-            ->and($read('app/Modules/Bookings/routes/bookings-settings.php'))->toContain('WorkspaceRoutes::define(')->toContain("->prefix('settings/bookings')")
-            ->toContain("WorkspaceRoutes::page(Route::get('', 'edit'), \$full, 'settings', 'workspaces.settings.bookings', 'Bookings', ['session-ui', 'workspaces.settings.index']);")
+            ->and($read('app/Modules/Bookings/routes/booking-rules-settings.php'))->toContain('WorkspaceRoutes::define(')->toContain("->prefix('settings/booking-rules')")
+            ->not->toContain("'settings/bookings'")
+            ->toContain("WorkspaceRoutes::page(Route::get('', 'edit'), \$full, 'settings', 'workspaces.settings.booking-rules', 'Booking rules', ['session-ui', 'workspaces.settings.index']);")
             ->toContain("Route::put('', 'update');")
-            ->and($read('app/Modules/Bookings/Providers/BookingsSettingsServiceProvider.php'))->toContain("->settingsSection('workspace', 'bookings', 'Bookings',")
-            ->toContain("->routes(base_path('app/Modules/Bookings/routes/bookings-settings.php'))")->toContain('Gate::policy(BookingsSettings::class, BookingsSettingsPolicy::class);')
-            ->and($read('bootstrap/providers.php'))->toContain('BookingsSettingsServiceProvider')
+            ->and($read('app/Modules/Bookings/Providers/BookingRulesSettingsServiceProvider.php'))->toContain("->settingsSection('workspace', 'booking-rules', 'Booking rules',")
+            ->toContain("->routes(base_path('app/Modules/Bookings/routes/booking-rules-settings.php'))")->toContain('Gate::policy(BookingRulesSettings::class, BookingRulesSettingsPolicy::class);')
+            ->and($read('bootstrap/providers.php'))->toContain('BookingRulesSettingsServiceProvider')
             ->and($read('app/Modules/Bookings/Http/Controllers/Settings/BookingRulesController.php'))->toContain('app(TenantBoundary::class)->run($workspace,')
-            ->toContain("authorize('viewAny', [BookingsSettings::class, Workspace::required()])")->toContain("Inertia::render('Bookings::settings/BookingRules/Page'")
-            ->toContain("WorkspaceUrl::to(\$workspace, 'settings/bookings', 'settings')")->not->toContain('to_route(')
-            ->and($read('app/Modules/Bookings/Policies/BookingsSettingsPolicy.php'))->toContain("public const CAPABILITY = 'bookings';")->toContain('Response::denyAsNotFound()')
-            ->and($read('app/Modules/Bookings/Actions/UpdateBookingsSettings.php'))->toContain("authorize('update', [BookingsSettings::class, Workspace::required()])")->toContain('updateIfCurrent(')
-            ->and((string) file_get_contents((glob($base.'/app/UI/Bookings/ViewModels/{,*/}BookingsSettingsViewModel.php', GLOB_BRACE) ?: [''])[0]))->toContain('extends PageViewModel')->toContain("return 'workspace';")
-            ->and($read('tests/Feature/Modules/Bookings/Settings/BookingRulesTest.php'))->toContain("'/settings/bookings'")->toContain('$this->actingAs($this->owner);')
+            ->toContain("authorize('viewAny', [BookingRulesSettings::class, Workspace::required()])")->toContain("Inertia::render('Bookings::settings/BookingRules/Page'")
+            ->toContain("WorkspaceUrl::to(\$workspace, 'settings/booking-rules', 'settings')")->not->toContain('to_route(')
+            ->and($read('app/Modules/Bookings/Policies/BookingRulesSettingsPolicy.php'))->toContain("public const CAPABILITY = 'booking-rules';")->toContain('Response::denyAsNotFound()')
+            ->and($read('app/Modules/Bookings/Actions/UpdateBookingRulesSettings.php'))->toContain("authorize('update', [BookingRulesSettings::class, Workspace::required()])")->toContain('updateIfCurrent(')
+            ->and((string) file_get_contents((glob($base.'/app/UI/Bookings/ViewModels/{,*/}BookingRulesSettingsViewModel.php', GLOB_BRACE) ?: [''])[0]))->toContain('extends PageViewModel')->toContain("return 'workspace';")
+            ->and($read('tests/Feature/Modules/Bookings/Settings/BookingRulesTest.php'))->toContain("'/settings/booking-rules'")->toContain('$this->actingAs($this->owner);')
             ->toContain('EstablishWorkspace::run(')->toContain('standards-pattern: settings.workspace')->toContain("->assertJsonPath('component', 'Bookings::settings/BookingRules/Page')");
-        // A module has one settings section: a second is refused before anything is written.
-        expect(fn () => $make('settings-section', 'BookingAlerts', 'form'))->toThrow(InvalidArgumentException::class, 'already has its settings section')
-            ->and(glob($base.'/app/Modules/Bookings/Http/Controllers/Settings/BookingAlertsController.php') ?: [])->toBe([]);
+        // A module may hold a second, differently named section, at its own slug.
+        expect($make('settings-section', 'Accounting', 'form'))->toContain('app/Modules/Bookings/routes/accounting-settings.php')
+            ->and($read('app/Modules/Bookings/routes/accounting-settings.php'))->toContain("->prefix('settings/accounting')")->toContain("'workspaces.settings.accounting'");
+        // A slug already taken is refused before anything is written, in this module or another.
+        expect(fn () => $make('settings-section', 'BookingRulesSettings', 'form'))->toThrow(InvalidArgumentException::class, 'already at /settings/booking-rules')
+            ->and(fn () => (new Maker($base, TreeCatalog::shipped(), kit: true, host: new HostShape(teylabsLayout(), HostShape::kitUiAlias($base), ['core', 'workspaces', 'access'], 'Billing')))->make('settings-section', 'Accounting', 'form'))
+            ->toThrow(InvalidArgumentException::class, 'already at /settings/accounting')
+            ->and(glob($base.'/app/Modules/Billing/Http/Controllers/Settings/AccountingController.php') ?: [])->toBe([]);
         // A record with its own capability in the module nests the same way, with a navigation link of its own (no module provider to sit under).
         $make('crud', 'Pass', 'resource', ['capability=passes']);
         expect($read('app/Modules/Bookings/Providers/PassServiceProvider.php'))->toContain("->navigation('passes.read', 'Passes', 'bookings/passes', active: 'bookings/passes');")
