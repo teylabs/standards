@@ -44,6 +44,7 @@ final class Conformance
         'browser.accessible' => '[browser.accessible] a browser test that visits a page checks it with axe (assertAccessible)',
         'notifications.chat-via-channel' => '[notifications.chat-via-channel] chat messages are Notifications sent through their channel (toSlack), not direct API calls',
         'ui.page-purpose' => '[ui.page-purpose] each page ViewModel states @purpose <who>: <main job> (warn only)',
+        'ui.page-view-model' => '[ui.page-view-model] every rendered page extends PageViewModel; widgets and partials use ViewModel; $standalone = true opts out',
         'ui.dashboard-composition' => '[ui.dashboard-composition] dashboard widgets: one feed at most, each kind in its column, every widget declares kind() (warn only)',
         'ui.surface-on-tinted-ground' => '[ui.surface-on-tinted-ground] on a tinted page ground, tables and forms sit on a card, not straight on the ground (warn only)',
         'destructive-db' => '[destructive-db] a service provider prohibits destructive database commands outside testing',
@@ -261,6 +262,10 @@ final class Conformance
         // Warn only: every finding is advisory, whatever optionalRules says.
         if ($rule === 'ui.page-purpose') {
             return (new Checks\PagePurpose($this->config, $this->source))->violations();
+        }
+
+        if ($rule === 'ui.page-view-model') {
+            return (new Checks\UiPageViewModel($this->config, $this->source))->violations();
         }
 
         if ($rule === 'ui.dashboard-composition') {

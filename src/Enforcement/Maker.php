@@ -685,6 +685,8 @@ final class Maker
         $table = Str::snake($plural);
         $title = ucfirst(str_replace('-', ' ', Str::kebab($name)));
         [$viewModel, $viewModels] = $this->viewModels($app, $namespace);
+        // The index, form and show ViewModels are rendered pages (rule ui.page-view-model): on the kit's base they extend its PageViewModel.
+        $viewModel = ltrim($viewModel, '\\') === 'Tey\\Kit\\Features\\Core\\ViewModels\\ViewModel' ? 'Tey\\Kit\\Features\\Core\\ViewModels\\PageViewModel' : $viewModel;
         $bulk = in_array('bulk', $options, true);
         $soft = in_array('soft-deletes', $options, true);
         // The model is the domain-model generator's (workspace-owned, stale-write guarded), so crud and model share one implementation.

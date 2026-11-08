@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- **Rule `ui.page-view-model`: every rendered page extends PageViewModel.** A ViewModel the app passes to `Inertia::render()` or `inertia()` as the props, or returns from a controller action, must extend the kit's `PageViewModel` (directly or through an app base) or set `protected bool $standalone = true` (tey/kit 0.15.30's opt-out for a page drawn without the shell). Widgets and child ViewModels that are never rendered as the page stay on the plain `ViewModel`. Render sites are read from the parsed code, so a mention in a comment or docblock is ignored. Enforced, with the allowlist for a real exception. It closes the gap in `ui.page-purpose`, which only sees `PageViewModel` subclasses. The `ui-page.index`, `ui-page.show` and `ui-page.form` leaves list the rule and its line.
+
+### Changed
+
+- **`standards:make crud` generates its index, form and show ViewModels on the kit's `PageViewModel`** when the app's typed ViewModel base is the kit's plain `ViewModel`, so a generated resource passes `ui.page-view-model`. An app whose typed base is its own class keeps it; that base extends `PageViewModel` for the pages to pass.
+
 ## 0.11.89 - 2026-11-08
 
 ### Added
