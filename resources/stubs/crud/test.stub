@@ -51,11 +51,11 @@ function {{ var }}Capability(int $workspace, bool $on): void
     app(TenantBoundary::class)->run($workspace, fn () => app(Capabilities::class)->setForWorkspace({{ name }}Policy::CAPABILITY, Workspace::query()->findOrFail($workspace), $on));
 }
 
-/** The full-form URL of a page in a workspace: `/@<slug>/{{ slug }}...`. */
+/** The full-form URL of a page in a workspace: `/@<slug>/{{ prefix }}...`. */
 function {{ var }}Url(int $workspace, string $path = ''): string
 {
     // From the workspace's own slug, not the signed-in person's view of it: a non-member must be able to ask, and be refused.
-    return '/@'.Workspace::query()->findOrFail($workspace)->slug.'/{{ slug }}'.$path;
+    return '/@'.Workspace::query()->findOrFail($workspace)->slug.'/{{ prefix }}'.$path;
 }
 
 /** @return array<string, string> the headers of an Inertia visit, so a page answers with its props */

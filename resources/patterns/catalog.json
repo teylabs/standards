@@ -477,8 +477,8 @@
                     "next": "ui-page.look"
                 },
                 {
-                    "answer": "The signed-in shell or navigation: the header, primary nav, account menu, switcher, breadcrumbs or page tabs",
-                    "next": "ui-page.chrome"
+                    "answer": "The signed-in shell (header, primary nav, account menu, workspace switcher), navigation inside it (breadcrumbs, page tabs), or where a module's pages live (its URLs)",
+                    "next": "ui-page.navigation"
                 },
                 {
                     "answer": "Across the whole app: adopting every kit surface, or a test that guards every route or page",
@@ -490,22 +490,26 @@
                 }
             ]
         },
-        "ui-page.chrome": {
-            "id": "ui-page.chrome",
-            "question": "The shell itself, or navigation inside it?",
-            "why": "The shell is one kit Layout every signed-in page shares; breadcrumbs and tabs are how a page places itself in it, decided on the server.",
+        "ui-page.navigation": {
+            "id": "ui-page.navigation",
+            "question": "The signed-in shell, navigation inside it, or where a module's pages live?",
+            "why": "The shell is the chrome every signed-in page renders in; a module's URLs are where its records and settings sit below the workspace.",
             "options": [
                 {
                     "answer": "The signed-in shell: the header, primary nav, account menu or workspace switcher",
                     "next": "ui-page.shell"
                 },
                 {
+                    "answer": "Where a module's pages live: its URL prefix, its records' URLs, their route names and its settings",
+                    "next": "ui-page.module-urls"
+                },
+                {
                     "answer": "Breadcrumbs, a module's sibling pages or a record's sections (tabs, sub-nav)",
-                    "next": "ui-page.navigation"
+                    "next": "ui-page.page-tabs"
                 },
                 {
                     "answer": "None of these",
-                    "next": "ui-page.chrome.byo"
+                    "next": "ui-page.navigation.byo"
                 }
             ]
         },
@@ -576,7 +580,7 @@
         "ui-page.own": {
             "id": "ui-page.own",
             "question": "What does the page mainly do?",
-            "why": "Each answer has its own controller method, page shape and test.",
+            "why": "Step 1, before choosing components: state the page purpose, who opens it and their first job, in one line on the page ViewModel's class docblock as `@purpose <who>: <main job>` (`@purpose Staff: watch unsigned agreements; send one occasionally.`). The answer below follows from that job; each has its own controller method, page shape and test.",
             "options": [
                 {
                     "answer": "Lists records",
@@ -832,7 +836,8 @@
                 "vm.nested-reach",
                 "vue.bare-handler-argument",
                 "inertia.pure",
-                "vm.page-size"
+                "vm.page-size",
+                "ui.page-purpose"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -903,7 +908,8 @@
                 "vm.nested-reach",
                 "vue.bare-handler-argument",
                 "inertia.pure",
-                "vm.page-size"
+                "vm.page-size",
+                "ui.page-purpose"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -973,7 +979,8 @@
                 "toast",
                 "actions",
                 "descriptors",
-                "tenant.scoped-exists"
+                "tenant.scoped-exists",
+                "ui.page-purpose"
             ],
             "paths": [
                 "app/**/Http/Requests/**",
@@ -1139,8 +1146,8 @@
                 "A real exception goes in the allowlist: rule ui.kit-shell, the finding's target and check, a reason and an expires Y-m-d date. An entry without a reason is rejected and one without an expiry fails."
             ]
         },
-        "ui-page.navigation": {
-            "id": "ui-page.navigation",
+        "ui-page.page-tabs": {
+            "id": "ui-page.page-tabs",
             "recipe": "Breadcrumbs and page tabs",
             "summary": "Breadcrumbs are the kit's bar under the header, always. A module's sibling pages are PageTabs, registered with Registry::modulePage and sent by the server as the page's layout.navigation, which <Page> draws. A record's sections are PageTabs too, from the record ViewModel's own navigation, inside the record's frame under its header. No hand-rolled sub-nav strips.",
             "kit": [
@@ -1187,9 +1194,49 @@
             ],
             "rules": [
                 "Breadcrumbs = bar, always (Jasper, fleet-wide): the shell's Layout draws the whole trail under the header, the current page last, so every page shows one trail in the same place. Don't pass breadcrumbs=\"page\" and don't draw a trail inside a page. The trail comes from the route's breadcrumbs through the page ViewModel's layout().",
-                "A module's sibling pages = PageTabs. Register each with Registry::modulePage($module, $ability, $label, $suffix, order:, active:) in the module's service provider. The server sends the ones the viewer may open as the page's layout.navigation, and a top-level <Page> draws them. Don't hand-write the tab list in a page.",
+                "A module's sibling pages = PageTabs. Register each with Registry::modulePage($module, $ability, $label, $suffix, order:, active:) in the module's service provider, its suffix nested under the module's prefix (`bookings/calendar`, as ui-page.module-urls says; the kit warns in development otherwise). The server sends the ones the viewer may open as the page's layout.navigation, and a top-level <Page> draws them. Don't hand-write the tab list in a page.",
                 "A record's sections = PageTabs, as AppraisalBench's case pages do: the record ViewModel sets its own layout.navigation, and the record's frame (its folder Layout.vue) renders one <PageTabs> from it under the record's header. That replaces the module's tabs, so a page never has two tab rows.",
                 "No hand-rolled sub-nav strips: no row of links under the header or above the heading built from a page's own array, and no new use of the kit's deprecated SubNav strip (Layout sub-nav=\"strip\")."
+            ]
+        },
+        "ui-page.module-urls": {
+            "id": "ui-page.module-urls",
+            "recipe": "Module URL nesting",
+            "summary": "A module owns one URL prefix, `/@{workspace}/<module>` (kebab case), and every page of it nests below: its records at `/<module>/<records>`, a record's pages at `/<module>/<records>/{id}/<section>`. The record named after the module, or its main record, sits at the prefix itself. Setup the module needs only occasionally is a settings section at `/settings/<module>`. Route names follow the path, dots for slashes. Existing apps keep their URLs.",
+            "kit": [
+                "tey/kit Registry::navigation",
+                "tey/kit Registry::modulePage",
+                "tey/kit Registry::settingsSection",
+                "tey/kit WorkspaceRoutes::page"
+            ],
+            "make": "standards:make crud --flavor=resource",
+            "checks": [],
+            "paths": [
+                "routes/**",
+                "app/**/routes/**",
+                "app/**/Providers/**ServiceProvider.php"
+            ],
+            "keywords": [
+                "module",
+                "url",
+                "prefix",
+                "nesting",
+                "nested routes",
+                "route names",
+                "module page",
+                "sub nav",
+                "settings section",
+                "url structure"
+            ],
+            "status": "ready",
+            "rules": [
+                "A module owns `/@{workspace}/<module>`, the module's name in kebab case. Its records nest under it: `/<module>/<records>` (`/bookings/resources`), never a top-level `/<records>` of their own.",
+                "The record named after the module (its plural is the module's name), or the module's main record, sits at the prefix itself: `/bookings`, not `/bookings/bookings`.",
+                "A record's own pages nest under the record: `/<module>/<records>/{id}/<section>` (`/bookings/resources/12/availability`).",
+                "Setup the module needs only occasionally is one settings section at `/settings/<module>`, not a page in the module's own navigation.",
+                "Route names follow the path, dots for slashes: `bookings.resources.index`, `bookings.resources.show`, the main record `bookings.index`. Two modules' records of one name never collide, and a name is read off its URL.",
+                "Navigation: the module registers one link at its prefix (Registry::navigation, suffix `<module>`), and each record is one of its pages (Registry::modulePage, suffix `<module>/<records>`). The main record's page is current on its own routes only (active: its `route:` names), not on its siblings below the prefix.",
+                "`standards:make crud <Record> --module=<Module>` emits this shape; without --module a record keeps its own `/<records>` prefix, names and navigation link. Existing apps keep their URLs: this is the default for new modules, not a migration."
             ]
         },
         "ui-page.kit-adoption": {
@@ -1324,6 +1371,9 @@
                 "Page-level grid-cols-* and col-span-* become PageGrid (preset main-aside, halves or thirds) and PageGridItem :span. Grids inside a card, form or widget body and the dashboard widget grid are not page-level.",
                 "Hand-rolled Stack, PageSection, Aside, Banner, NavGrid, CardSection, Pills and DividerSection shapes point to the primitive; a pointer stays advisory until the kit the app runs exports the primitive.",
                 "Row action labels are short verbs (Remove, Revoke). A label never interpolates a value (Action::make(\"Revoke {$x->name}\"), 'Remove '.$grant, a model field, or a Vue action object's `${…}` label): the record goes in ariaLabel and the confirm. A literal label stays within 24 characters and 3 words, or RowActions clamps it.",
+                "A record in a restricted state (suspended, archived, cancelled, revoked) offers only its restore action (Reinstate, Restore, Reopen, Reactivate). It may also offer at most one final action, such as Delete or Remove, when that state allows it.",
+                "Every other action comes back only after the record is restored.",
+                "The server enforces this in the policy and the action list. Hiding actions in the UI is not enough.",
                 "A real exception goes in the allowlist: the rule, the finding's target and check, a reason and an expires Y-m-d date."
             ]
         },
@@ -1710,7 +1760,7 @@
         "ui-page.crud-resource": {
             "id": "ui-page.crud-resource",
             "recipe": "CRUD resource screens",
-            "summary": "`standards:make crud <Record>` emits a whole workspace-owned resource: model and migration (with lock_version), a policy gated by the record's capability then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first, stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture. `--bulk` adds selection and a bulk delete, `--mcp` Read, Write (create or update) and Delete capability tools over a List action, `--soft-deletes` soft deletes and a restoration.",
+            "summary": "`standards:make crud <Record>` emits a whole workspace-owned resource: model and migration (with lock_version), a policy gated by the record's capability then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first, stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture. `--bulk` adds selection and a bulk delete, `--mcp` Read, Write (create or update) and Delete capability tools over a List action, `--soft-deletes` soft deletes and a restoration. With `--module=<Module>` the record nests under the module's prefix, `/<module>/<records>` named `<module>.<records>.*` (the main record at `/<module>`), as one of the module's pages (see ui-page.module-urls).",
             "kit": [
                 "@kit/ui DataTable",
                 "@kit/ui FormCard",
@@ -2123,8 +2173,8 @@
             "keywords": [],
             "status": "byo"
         },
-        "ui-page.shared.byo": {
-            "id": "ui-page.shared.byo",
+        "ui-page.navigation.byo": {
+            "id": "ui-page.navigation.byo",
             "recipe": "Build your own",
             "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
             "kit": [],
@@ -2134,8 +2184,8 @@
             "keywords": [],
             "status": "byo"
         },
-        "ui-page.chrome.byo": {
-            "id": "ui-page.chrome.byo",
+        "ui-page.shared.byo": {
+            "id": "ui-page.shared.byo",
             "recipe": "Build your own",
             "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
             "kit": [],

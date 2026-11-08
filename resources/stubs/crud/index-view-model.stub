@@ -27,7 +27,7 @@ final class {{ name }}IndexViewModel extends {{ view_model_base }}
 
     public function create(): ?Action
     {
-        return Gate::forUser($this->user)->allows('create', [{{ name }}::class, Workspace::required()]) ? new Action('New {{ title_lower }}', WorkspaceUrl::to($this->workspace, '{{ slug }}/create'), 'get', key: 'create') : null;
+        return Gate::forUser($this->user)->allows('create', [{{ name }}::class, Workspace::required()]) ? new Action('New {{ title_lower }}', WorkspaceUrl::to($this->workspace, '{{ prefix }}/create'), 'get', key: 'create') : null;
     }
 
     public function table(): TableData
@@ -50,7 +50,7 @@ final class {{ name }}IndexViewModel extends {{ view_model_base }}
     private function actions({{ name }} ${{ var }}): array
     {
         $gate = Gate::forUser($this->user);
-        $url = WorkspaceUrl::to($this->workspace, '{{ slug }}/'.${{ var }}->getKey());
+        $url = WorkspaceUrl::to($this->workspace, '{{ prefix }}/'.${{ var }}->getKey());
 
         return array_values(array_filter([
             $gate->allows('view', ${{ var }}) ? new Action('Open', $url, 'get', key: 'open') : null,

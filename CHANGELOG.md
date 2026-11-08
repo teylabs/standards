@@ -4,13 +4,26 @@
 
 ### Added
 
-- **Pattern leaf `ui-page.navigation`: breadcrumbs and page tabs.**
+- **Pattern leaf `ui-page.page-tabs`: breadcrumbs and page tabs.**
   - Breadcrumbs always use the shell's bar.
   - A module's sibling pages are PageTabs: register them with `Registry::modulePage`, the server sends them as the page's `layout.navigation`, and `<Page>` draws them.
   - A record's sections are PageTabs too, from the record ViewModel's own navigation. They sit inside the record frame under its header, as AppraisalBench's case pages do.
   - No hand-rolled sub-nav strips, and no new use of the kit's deprecated SubNav strip.
 
-  It's reached through a new branch, `ui-page.chrome` ("The shell itself, or navigation inside it?"), under `ui-page.shared`. It is guidance only and has no check.
+  It is the new third answer of the `ui-page.navigation` branch (beside the shell and `ui-page.module-urls`, whose nesting matches the kit's `Registry::modulePage` prefix warning). It is guidance only and has no check.
+
+## 0.11.87 - 2026-11-08
+
+### Added
+
+- **Pattern leaf `ui-page.module-urls`: a module owns its URL prefix.** A module owns `/@{workspace}/<module>` (kebab case); its records nest under it at `/<module>/<records>`, a record's pages at `/<module>/<records>/{id}/<section>`, and the record named after the module (or its main record) sits at the prefix itself. Occasional setup is a settings section at `/settings/<module>`. Route names follow the path, dots for slashes. Reached from `ui-page.shared` through a new `ui-page.navigation` branch (the signed-in shell, or a module's URLs). Existing apps keep their URLs.
+- **Page purpose first, and warn-only rule `ui.page-purpose`.** Step 1 of the page method (`ui-page.own`) is now to state the page purpose before choosing components: who opens it and their main job, as `@purpose <who>: <main job>` on the page ViewModel's class docblock. The rule warns on a concrete `PageViewModel` (or `AdHocViewModel`) subclass with no `@purpose` or a malformed one; abstract bases are skipped. Every finding is advisory and the rule is never enforced, even if listed in `optionalRules`.
+
+### Changed
+
+- **`standards:make crud --module=<Module>` nests the record under the module's prefix.** Routes are at `<module>/<records>` (just `<module>` when the record's plural is the module's name), named `<module>.<records>.*` (the main record `<module>.*`). The selection and restoration routes, every generated redirect and URL, and the feature tests' URLs follow. The module provider registers one navigation link at `<module>` and each record as a `modulePage` at its prefix; the main record's page is current on its own routes only. A record with its own `--capability` in a module nests the same way, with a navigation link of its own at its nested prefix (it has no module provider to sit under). A module provider made before this change has no module link, so a record added to it keeps a navigation link of its own, at its nested prefix. Without `--module` nothing changes, and a re-run on a record already made still changes nothing. MCP tools carry no paths and are unchanged.
+- **`standards:make settings-section --module=<Module>` is at `/settings/<module>`** (routes `settings.<module>.edit` and `.update`), whatever the section's class is called. A module has one: a second settings section in the same module is refused before anything is written. Without `--module` it stays at `/settings/<name>`.
+- **Pattern leaf `ui-page.layout-rhythm`: row actions on a restricted record.** A record in a restricted state (suspended, archived, cancelled, revoked) offers only its restore action (Reinstate, Restore, Reopen, Reactivate), plus at most one final action such as Delete or Remove when that state allows it. Every other action comes back only after the record is restored. The server enforces this in the policy and the action list; hiding actions in the UI is not enough. Guidance only: no check and no kit change.
 
 ## 0.11.86 - 2026-11-08
 
