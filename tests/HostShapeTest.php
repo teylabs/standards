@@ -296,6 +296,10 @@ test('a module owns its URL prefix: records nest under it, the main record sits 
             ->and(fn () => (new Maker($base, TreeCatalog::shipped(), kit: true, host: new HostShape(teylabsLayout(), HostShape::kitUiAlias($base), ['core', 'workspaces', 'access'], 'Billing')))->make('settings-section', 'Accounting', 'form'))
             ->toThrow(InvalidArgumentException::class, 'already at /settings/accounting')
             ->and(glob($base.'/app/Modules/Billing/Http/Controllers/Settings/AccountingController.php') ?: [])->toBe([]);
+        // A slug the app's own routes already serve, in any routes directory, is refused too.
+        (new Filesystem)->ensureDirectoryExists($base.'/somewhere/else/routes');
+        file_put_contents($base.'/somewhere/else/routes/web.php', "<?php\nRoute::get('/settings/appearance', fn () => null)->name('settings.appearance.edit');\n");
+        expect(fn () => $make('settings-section', 'Appearance', 'form'))->toThrow(InvalidArgumentException::class, 'already at /settings/appearance');
         // A record with its own capability in the module nests the same way, with a navigation link of its own (no module provider to sit under).
         $make('crud', 'Pass', 'resource', ['capability=passes']);
         expect($read('app/Modules/Bookings/Providers/PassServiceProvider.php'))->toContain("->navigation('passes.read', 'Passes', 'bookings/passes', active: 'bookings/passes');")

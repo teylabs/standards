@@ -786,8 +786,7 @@ final class Maker
         $slug = Str::kebab($name);
         $model = Str::studly($slug).'Settings';
         $routes = "routes/{$slug}-settings.php";
-        $taken = glob($this->base.'/{routes,app/Modules/*/routes,app-modules/*/routes,modules/*/routes}/'.$slug.'-settings.php', GLOB_BRACE) ?: [];
-        if ($taken !== [] || $this->exists($this->placed($routes)) || $this->exists($this->placed("{$app}/Providers/{$model}ServiceProvider.php"))) {
+        if ($this->settingsSlugTaken($slug) || $this->exists($this->placed($routes)) || $this->exists($this->placed("{$app}/Providers/{$model}ServiceProvider.php"))) {
             throw new InvalidArgumentException("A settings section is already at /settings/{$slug}; a slug names one section. Add {$name}'s fields to it, or give the new section a name of its own.");
         }
         $table = Str::snake($slug).'_settings';
@@ -1552,6 +1551,29 @@ final class Maker
         }
 
         return $contents;
+    }
+
+    /**
+     * Whether any route file of the app (every `routes` directory outside vendor, whatever the module layout) already serves `/settings/<slug>` or names
+     * its route, or a `<slug>-settings.php` routes file exists there.
+     */
+    private function settingsSlugTaken(string $slug): bool
+    {
+        $pattern = '#[\'"/]settings/'.preg_quote($slug, '#').'[\'"/]|[\'"]settings/'.preg_quote($slug, '#').'[\'"]|settings\.'.preg_quote($slug, '#').'(\.|[\'"])#';
+        $skip = ['vendor', 'node_modules', '.git', 'storage', 'bootstrap'];
+        $files = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(
+            new \RecursiveDirectoryIterator($this->base, \FilesystemIterator::SKIP_DOTS),
+            fn (\SplFileInfo $file): bool => ! ($file->isDir() && in_array($file->getFilename(), $skip, true)),
+        ));
+        foreach ($files as $file) {
+            $path = str_replace('\\', '/', $file->getPathname());
+            if ($file->isFile() && str_ends_with($path, '.php') && str_contains($path, '/routes/')
+                && ($file->getFilename() === "{$slug}-settings.php" || preg_match($pattern, (string) file_get_contents($path)) === 1)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function exists(string $path): bool
