@@ -504,6 +504,10 @@
                     "next": "ui-page.layout-rhythm"
                 },
                 {
+                    "answer": "A tinted page ground: a theme whose ground isn't white, and the cards content sits on",
+                    "next": "ui-page.tinted-ground"
+                },
+                {
                     "answer": "None of these",
                     "next": "ui-page.look.byo"
                 }
@@ -1254,6 +1258,48 @@
                 "Row action labels are short verbs (Remove, Revoke). A label never interpolates a value (Action::make(\"Revoke {$x->name}\"), 'Remove '.$grant, a model field, or a Vue action object's `${…}` label): the record goes in ariaLabel and the confirm. A literal label stays within 24 characters and 3 words, or RowActions clamps it.",
                 "A real exception goes in the allowlist: the rule, the finding's target and check, a reason and an expires Y-m-d date."
             ]
+        },
+        "ui-page.tinted-ground": {
+            "id": "ui-page.tinted-ground",
+            "recipe": "Tinted page ground",
+            "summary": "Rule ui.surface-on-tinted-ground (warn only). A theme whose page ground is tinted declares it with one token, --kit-ground: tinted, in its own resources/css. On it the content sits on cards and the page chrome stays on the ground; from tey/kit 0.15.21 the kit's DataTable, EmptyState, Workbench and PageSection draw that card themselves, and FormCard is a card on any ground.",
+            "kit": [
+                "@kit/ui Page",
+                "@kit/ui DataTable",
+                "@kit/ui FormCard",
+                "@kit/ui EmptyState",
+                "@kit/ui Card"
+            ],
+            "make": null,
+            "checks": [
+                "ui.surface-on-tinted-ground"
+            ],
+            "paths": [
+                "resources/css/**"
+            ],
+            "keywords": [
+                "ui.surface-on-tinted-ground",
+                "tinted ground",
+                "page ground",
+                "kit-ground",
+                "surface",
+                "card",
+                "background",
+                "theme"
+            ],
+            "status": "draft",
+            "rules": [
+                "Declare a tinted ground with --kit-ground: tinted on :root in the app's own CSS, next to the colours: the ground (--background, or --shell-ground for the shell alone) and a lighter --card. A white ground declares nothing.",
+                "On a tinted ground, content sits on a card (bg-card text-card-foreground border rounded-xl, as a dashboard widget): the kit's DataTable, EmptyState, Workbench and PageSection content draw it from tey/kit 0.15.21, and FormCard and the form Section are cards already. Never a card inside a card.",
+                "Page, PageGrid and the page chrome stay on the ground: the page header, breadcrumbs, SubNav, tabs and section headings. PageSection surface=\"none\" leaves a section's content on the ground.",
+                "A raw <table> or <form> is never a direct child of Page, PageGrid or PageGridItem on a tinted ground: use DataTable or FormCard, or put it in a Card or a PageSection. On a kit before 0.15.21 a DataTable there needs a card too.",
+                "Contrast on a tinted ground: --card against the ground at least 1.1:1 with a --border edge, --border against --card at least 1.5:1, --input against --card at least 3:1, and --foreground and --muted-foreground at least 4.5:1 on the ground and on the card (tey/kit's test:token-contrast)."
+            ],
+            "related": [
+                "ui-page.layout-rhythm",
+                "ui-page.styling"
+            ],
+            "graduate": "To a ready leaf when a second app adopts a tinted ground and the kit's minimums are checked from the app (kit:status)."
         },
         "ui-page.add-button": {
             "id": "ui-page.add-button",
