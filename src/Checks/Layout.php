@@ -233,7 +233,7 @@ final class Layout
                         continue;
                     }
                     // A TypeScript type literal (`{ label: string; url: string }`) describes an action; it has no label to read.
-                    if (preg_match('~\blabel\s*\??\s*:\s*[^,;}]*;~', $window) === 1) {
+                    if (preg_match('~\blabel\s*\??\s*:\s*[^,;}]*;~', $window) === 1 || preg_match('~\blabel\s*\??\s*:\s*(?:string|number|boolean|any|unknown|null|undefined)(?:\s*\|\s*(?:string|number|boolean|any|unknown|null|undefined))*\s*[,}]~', $window) === 1) {
                         continue;
                     }
                     // A form's submit object (`submit: { label, url, method }`) is not a row action.
@@ -354,7 +354,28 @@ final class Layout
             return true;
         }
 
-        return preg_match_all('~\bfunction\s+(\w+)\s*\(~', $before, $functions) > 0 && in_array(strtolower((string) end($functions[1])), ['submit', 'save'], true);
+        // Inside the body of a submit() or save() method: its opening brace is before the Action and its closing brace after it.
+        preg_match_all('~\bfunction\s+(?:submit|save)\s*\([^)]*\)[^{;]*\{~i', $before, $methods, PREG_OFFSET_CAPTURE);
+        foreach ($methods[0] as [$head, $start]) {
+            $depth = 0;
+            for ($i = $start + strlen($head) - 1, $length = strlen($source); $i < $length; $i++) {
+                $char = $source[$i];
+                if ($char === '"' || $char === "'") {
+                    for ($i++; $i < $length && $source[$i] !== $char; $i++) {
+                        $i += $source[$i] === '\\' ? 1 : 0;
+                    }
+                } elseif ($char === '{') {
+                    $depth++;
+                } elseif ($char === '}' && --$depth === 0) {
+                    if ($i > $at) {
+                        return true;
+                    }
+                    break;
+                }
+            }
+        }
+
+        return false;
     }
 
     /** A variable in PHP source outside single quotes: `$name`, `{$…}` or `${…}`; a literal `$5` is not one. */

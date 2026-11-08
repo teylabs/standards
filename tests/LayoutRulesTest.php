@@ -342,6 +342,8 @@ test('ui.row-action-label flags PHP action labels that interpolate a value or ru
                 return $this->open ? new Action('I agree and sign', '/sign', 'post', key: 'sign') : null;
             }
         }
+
+        $p = new Action('Resend the invitation email again', '/i/1');
         PHP);
 
     try {
@@ -360,6 +362,8 @@ test('ui.row-action-label flags PHP action labels that interpolate a value or ru
         // A ternary of literals is read arm by arm: a long arm is flagged, a short one is not; an arm with a value still interpolates.
         "app/Http/GrantsController.php:14 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
         'app/Http/GrantsController.php:15 row action label $on ? \'Off\' : \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // After a submit() method has closed, an Action is a row action again.
+        "app/Http/GrantsController.php:26 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
     ]);
 });
 
@@ -377,6 +381,7 @@ test('ui.row-action-label flags Vue row action labels that interpolate a value o
             { key: 'join', label: row.full ? 'Join the waitlist now please' : 'Join', url: '/p/1/join', method: 'post' },
         ];
         const props = defineProps<{ submit: { label: string; url: string; method: string; key?: string | null } }>();
+        type RowAction = { label: string, url: string, method: string };
         const form = { submit: { label: 'Book this room for the whole day', url: '/b', method: 'post' } };
         </script>
         <template><DataTable :table="table" /></template>
