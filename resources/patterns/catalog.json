@@ -557,7 +557,7 @@
         "ui-page.own": {
             "id": "ui-page.own",
             "question": "What does the page mainly do?",
-            "why": "Each answer has its own controller method, page shape and test.",
+            "why": "Step 1, before choosing components: state the page purpose, who opens it and their first job, in one line on the page ViewModel's class docblock as `@purpose <who>: <main job>` (`@purpose Staff: watch unsigned agreements; send one occasionally.`). The answer below follows from that job; each has its own controller method, page shape and test.",
             "options": [
                 {
                     "answer": "Lists records",
@@ -813,7 +813,8 @@
                 "vm.nested-reach",
                 "vue.bare-handler-argument",
                 "inertia.pure",
-                "vm.page-size"
+                "vm.page-size",
+                "ui.page-purpose"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -884,7 +885,8 @@
                 "vm.nested-reach",
                 "vue.bare-handler-argument",
                 "inertia.pure",
-                "vm.page-size"
+                "vm.page-size",
+                "ui.page-purpose"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -954,7 +956,8 @@
                 "toast",
                 "actions",
                 "descriptors",
-                "tenant.scoped-exists"
+                "tenant.scoped-exists",
+                "ui.page-purpose"
             ],
             "paths": [
                 "app/**/Http/Requests/**",

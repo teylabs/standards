@@ -43,6 +43,7 @@ final class Conformance
         'tenant.scoped-exists' => '[tenant.scoped-exists] an exists rule on workspace records is scoped to the current workspace',
         'browser.accessible' => '[browser.accessible] a browser test that visits a page checks it with axe (assertAccessible)',
         'notifications.chat-via-channel' => '[notifications.chat-via-channel] chat messages are Notifications sent through their channel (toSlack), not direct API calls',
+        'ui.page-purpose' => '[ui.page-purpose] each page ViewModel states @purpose <who>: <main job> (warn only)',
         'ui.dashboard-composition' => '[ui.dashboard-composition] dashboard widgets: one feed at most, each kind in its column, every widget declares kind() (warn only)',
         'destructive-db' => '[destructive-db] a service provider prohibits destructive database commands outside testing',
         'live.broadcast-now' => '[live.broadcast-now] the notice a live prop listens for is ShouldBroadcastNow',
@@ -145,7 +146,7 @@ final class Conformance
         }
 
         // Warn only, whatever optionalRules says: the findings are reported, the test never fails on them.
-        if ($rule === 'ui.dashboard-composition') {
+        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose'], true)) {
             Assert::markTestSkipped('Rule ['.$rule.'] warns only ('.count($violations).' findings).'.implode('', array_map(fn (array $violation): string => "\n".$violation['check'], $violations)));
         }
 
@@ -257,6 +258,10 @@ final class Conformance
         }
 
         // Warn only: every finding is advisory, whatever optionalRules says.
+        if ($rule === 'ui.page-purpose') {
+            return (new Checks\PagePurpose($this->config, $this->source))->violations();
+        }
+
         if ($rule === 'ui.dashboard-composition') {
             return (new Checks\DashboardComposition($this->config, $this->source))->violations();
         }
