@@ -1087,3 +1087,11 @@ test('make crud on the kit\'s own ViewModel base generates its pages on PageView
         (new Filesystem)->deleteDirectory($base);
     }
 });
+
+it('says settings sections are named for what the person sets, not the module', function (): void {
+    $leaf = collect(json_decode((string) file_get_contents(dirname(__DIR__).'/resources/patterns/catalog.json'), true, flags: JSON_THROW_ON_ERROR)['nodes'] ?? [])->firstWhere('id', 'ui-page.module-urls');
+    $text = $leaf['summary'].' '.implode(' ', $leaf['rules']);
+
+    expect($text)->toContain('Settings sections are the exception')->toContain('names what the person sets')->toContain('`/settings/accounting`')
+        ->not->toContain('`/settings/<module>`');
+});

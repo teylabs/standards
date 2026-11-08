@@ -9,6 +9,8 @@
 ### Changed
 
 - **`standards:make crud` generates its index, form and show ViewModels on the kit's `PageViewModel`** when the app's typed ViewModel base is the kit's plain `ViewModel`, so a generated resource passes `ui.page-view-model`. An app whose typed base is its own class keeps it; that base extends `PageViewModel` for the pages to pass.
+- **Settings URLs name what the person sets, not the module.** Pattern leaf `ui-page.module-urls` now says module URL nesting (`<module>/<records>`) applies to module pages, and settings sections are the exception: their slug names what the person sets (`/settings/accounting`, `/settings/appearance`), chosen for the reader, not the internal module's name, and such a URL is kept even when the code lives in a differently named module.
+- **`standards:make settings-section <Name> --module=<Module>` takes its slug from the section's name.** It was `/settings/<module>`; it is now `/settings/<name>` (kebab case: the route `workspaces.settings.<name>`, the `<name>` capability and permissions, the `<Name>Settings` model, `routes/<name>-settings.php`). The module only decides where the code lives. A module may hold several differently named sections; a slug already taken, in the same module, another module or the app's own `routes/`, is refused before anything is written. Every `routes` directory outside vendor is scanned, whatever the module layout, for a `<slug>-settings.php` file, a `/settings/<slug>` URL or a `settings.<slug>` route name. A person's section (no module) was already at `/settings/<name>` and is unchanged.
 
 ## 0.11.89 - 2026-11-08
 

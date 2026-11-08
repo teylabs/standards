@@ -772,8 +772,9 @@ final class Maker
      * form, a page named `workspaces.settings.<slug>` under the settings landing page), a controller that runs each request inside TenantBoundary and asks
      * the policy first, a policy that gates on the capability and entitlement and then a view or manage permission, a principal-first Action that asks the
      * policy again and refuses a stale save, a workspace-owned row (one per workspace), a PageViewModel in the workspace settings layout, the Inertia page,
-     * the provider that registers the section on the landing page, and a feature test that signs in and works inside two workspaces. In a module the
-     * slug is the module's (`/settings/<module>`), and a module has one section: a second is refused before anything is written.
+     * the provider that registers the section on the landing page, and a feature test that signs in and works inside two workspaces. The slug names what
+     * the person sets: the section's own name in kebab case (`/settings/booking-rules`), never the module's; the module only decides where the code lives.
+     * A module may hold several sections, but a slug already taken (in this module, another or the app) is refused before anything is written.
      *
      * @return list<string>
      */
@@ -784,11 +785,11 @@ final class Maker
         $tests = $this->paths['tests'] ?? 'tests/Feature';
         $namespace = $this->paths['namespace'] ?? 'App';
         $module = (string) $this->host?->module;
-        $slug = Str::kebab($module !== '' ? $module : $name);
+        $slug = Str::kebab($name);
         $model = Str::studly($slug).'Settings';
         $routes = "routes/{$slug}-settings.php";
-        if ($module !== '' && ($this->exists($this->placed($routes)) || $this->exists($this->placed("{$app}/Providers/{$model}ServiceProvider.php")))) {
-            throw new InvalidArgumentException("The {$module} module already has its settings section at /settings/{$slug}; a module has one. Add {$name}'s fields to it.");
+        if ($this->settingsSlugTaken($slug) || $this->exists($this->placed($routes)) || $this->exists($this->placed("{$app}/Providers/{$model}ServiceProvider.php"))) {
+            throw new InvalidArgumentException("A settings section is already at /settings/{$slug}; a slug names one section. Add {$name}'s fields to it, or give the new section a name of its own.");
         }
         $table = Str::snake($slug).'_settings';
         $title = ucfirst(str_replace('-', ' ', $slug));
@@ -1552,6 +1553,29 @@ final class Maker
         }
 
         return $contents;
+    }
+
+    /**
+     * Whether any route file of the app (every `routes` directory outside vendor, whatever the module layout) already serves `/settings/<slug>` or names
+     * its route, or a `<slug>-settings.php` routes file exists there.
+     */
+    private function settingsSlugTaken(string $slug): bool
+    {
+        $pattern = '#[\'"/]settings/'.preg_quote($slug, '#').'[\'"/]|[\'"]settings/'.preg_quote($slug, '#').'[\'"]|settings\.'.preg_quote($slug, '#').'(\.|[\'"])#';
+        $skip = ['vendor', 'node_modules', '.git', 'storage', 'bootstrap'];
+        $files = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(
+            new \RecursiveDirectoryIterator($this->base, \FilesystemIterator::SKIP_DOTS),
+            fn (\SplFileInfo $file): bool => ! ($file->isDir() && in_array($file->getFilename(), $skip, true)),
+        ));
+        foreach ($files as $file) {
+            $path = str_replace('\\', '/', $file->getPathname());
+            if ($file->isFile() && str_ends_with($path, '.php') && str_contains($path, '/routes/')
+                && ($file->getFilename() === "{$slug}-settings.php" || preg_match($pattern, (string) file_get_contents($path)) === 1)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function exists(string $path): bool

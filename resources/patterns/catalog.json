@@ -1219,7 +1219,7 @@
         "ui-page.module-urls": {
             "id": "ui-page.module-urls",
             "recipe": "Module URL nesting",
-            "summary": "A module owns one URL prefix, `/@{workspace}/<module>` (kebab case), and every page of it nests below: its records at `/<module>/<records>`, a record's pages at `/<module>/<records>/{id}/<section>`. The record named after the module, or its main record, sits at the prefix itself. Setup the module needs only occasionally is a settings section at `/settings/<module>`. Route names follow the path, dots for slashes. Existing apps keep their URLs.",
+            "summary": "A module owns one URL prefix, `/@{workspace}/<module>` (kebab case), and every page of it nests below: its records at `/<module>/<records>`, a record's pages at `/<module>/<records>/{id}/<section>`. The record named after the module, or its main record, sits at the prefix itself. Settings sections are the exception: their slug names what the person sets (`/settings/accounting`, `/settings/appearance`), chosen for the reader, not the internal module's name. Route names follow the path, dots for slashes. Existing apps keep their URLs.",
             "kit": [
                 "tey/kit Registry::navigation",
                 "tey/kit Registry::modulePage",
@@ -1250,7 +1250,8 @@
                 "A module owns `/@{workspace}/<module>`, the module's name in kebab case. Its records nest under it: `/<module>/<records>` (`/bookings/resources`), never a top-level `/<records>` of their own.",
                 "The record named after the module (its plural is the module's name), or the module's main record, sits at the prefix itself: `/bookings`, not `/bookings/bookings`.",
                 "A record's own pages nest under the record: `/<module>/<records>/{id}/<section>` (`/bookings/resources/12/availability`).",
-                "Setup the module needs only occasionally is one settings section at `/settings/<module>`, not a page in the module's own navigation.",
+                "Module URL nesting (`<module>/<records>`) applies to module pages. Settings sections are the exception: setup the module needs only occasionally is a settings section, not a page in the module's own navigation, and its slug names what the person sets, chosen for the reader (`/settings/accounting`, `/settings/appearance`), not the internal module's name. Keep such a URL even when the code lives in a differently named module; a module may hold several sections, each at its own slug.",
+                "`standards:make settings-section <Name> --module=<Module>` puts the section at `/settings/<name>` (kebab case, routes `workspaces.settings.<name>`); the module only decides where the code lives. A slug already taken is refused.",
                 "Route names follow the path, dots for slashes: `bookings.resources.index`, `bookings.resources.show`, the main record `bookings.index`. Two modules' records of one name never collide, and a name is read off its URL.",
                 "Navigation: the module registers one link at its prefix (Registry::navigation, suffix `<module>`), and each record is one of its pages (Registry::modulePage, suffix `<module>/<records>`). The main record's page is current on its own routes only (active: its `route:` names), not on its siblings below the prefix.",
                 "`standards:make crud <Record> --module=<Module>` emits this shape; without --module a record keeps its own `/<records>` prefix, names and navigation link. Existing apps keep their URLs: this is the default for new modules, not a migration."
