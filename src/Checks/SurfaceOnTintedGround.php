@@ -26,7 +26,7 @@ final readonly class SurfaceOnTintedGround
     public const RULE = 'ui.surface-on-tinted-ground';
 
     /** The first tey/kit release whose DataTable, EmptyState, Workbench and PageSection draw their own card on a tinted ground. */
-    public const KIT_SURFACES = '0.15.21';
+    public const KIT_SURFACES = '0.15.22';
 
     private const GROUND = ['Page', 'PageGrid', 'PageGridItem'];
 
