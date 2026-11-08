@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **Advisory rule `browser.accessible`.** A browser test file that calls `visit(` must also call `assertAccessible(` (the starter's axe helper: WCAG 2.2 AA, every impact level, dated exceptions, survey mode) or `assertNoAccessibilityIssues(`. Advisory until an app lists it in `Configuration::$optionalRules`. New catalog leaf `ui-page.accessible-pages`.
+
 ## 0.11.82 - 2026-11-07
 
 ### Fixed
