@@ -1,0 +1,26 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+{{ migration_imports }}
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('{{ table }}', function (Blueprint $table): void {
+            $table->id();
+            // One row per workspace: a workspace with settings cannot be deleted until they are.
+            $table->foreignId('workspace_id')->unique()->constrained()->restrictOnDelete();
+{{ migration_columns }}            $table->unsignedInteger('lock_version')->default(1);
+            $table->timestamps();
+        });
+{{ migration_up }}    }
+
+    public function down(): void
+    {
+{{ migration_down }}        Schema::dropIfExists('{{ table }}');
+    }
+};

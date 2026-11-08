@@ -1,0 +1,40 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Tey\Kit\Features\Workspaces\Concerns\BelongsToWorkspace;
+use Tey\Kit\Features\Workspaces\Concerns\GuardsStaleWrites;
+
+/**
+ * The {{ section_title_lower }} settings of one workspace: at most one row per workspace (a unique `workspace_id`), read and written only inside it
+ * (BelongsToWorkspace), and changed through updateIfCurrent() so a stale save is refused (GuardsStaleWrites). No row yet means the defaults.
+ */
+final class {{ model }} extends Model
+{
+    use BelongsToWorkspace, GuardsStaleWrites;
+
+    protected $table = '{{ table }}';
+
+    /** Set by the model itself, never mass-assigned. */
+    protected $guarded = ['id', 'workspace_id', 'lock_version'];
+
+    protected function casts(): array
+    {
+        return [{{ model_casts }}'workspace_id' => 'integer', 'lock_version' => 'integer'];
+    }
+
+    /** This workspace's settings to read: its row, or the defaults (unsaved) before the first save. Call it inside the workspace (TenantBoundary). */
+    public static function read(): self
+    {
+        return self::query()->first() ?? new self;
+    }
+
+    /** This workspace's row to write, created with the defaults on first use; a concurrent first save that loses the insert reads the winner's row. Call it inside the workspace (TenantBoundary). */
+    public static function current(): self
+    {
+        return self::query()->createOrFirst([]);
+    }
+}

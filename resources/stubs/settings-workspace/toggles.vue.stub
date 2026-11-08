@@ -1,0 +1,20 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+import { router } from '@inertiajs/vue3';
+import { Checkbox, Field, Page, Section } from '{{ kit_ui }}';
+
+// The {{ section_title_lower }} preferences of this workspace: each saves on change, with the `lock_version` the page loaded. Without a save the viewer only reads them.
+const props = defineProps<{ title: string; values: { updates: boolean; lock_version: number }; submit: { label: string; url: string; method: string; key?: string | null } | null }>();
+
+const save = (key: string, value: boolean) => props.submit && router.put(props.submit.url, { ...props.values, [key]: value }, { preserveScroll: true });
+</script>
+
+<template>
+    <Page md :title="title">
+        <Section title="Preferences">
+            <Field id="{{ settings_slug }}-updates" label="Email updates">
+                <Checkbox id="{{ settings_slug }}-updates" name="updates" :model-value="values.updates" :disabled="!submit" @update:model-value="(value: boolean | undefined) => save('updates', value === true)" />
+            </Field>
+        </Section>
+    </Page>
+</template>

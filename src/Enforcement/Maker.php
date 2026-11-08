@@ -256,7 +256,13 @@ final class Maker
         }
 
         // Code is only emitted against tey/kit features the host has adopted.
-        $needed = self::features($unit, $flavor, $options);
+        // A workspace's settings section (made in a module, or for the settings.workspace leaf) runs inside a workspace behind a policy.
+        $workspaceSettings = $unit === 'settings-section' && ((string) $this->host?->module !== '' || $leaf === 'settings.workspace');
+        // Without --leaf the first leaf sharing the make command is a person's (settings.form): a module's section is stamped as the workspace's.
+        if ($workspaceSettings && $leafId === null && $flavor === 'form') {
+            $leaf = $this->leafId = 'settings.workspace';
+        }
+        $needed = $workspaceSettings ? ['core', 'workspaces', 'access'] : self::features($unit, $flavor, $options);
         $missing = $this->host?->missingFeatures($needed) ?? [];
         if ($missing !== []) {
             throw new InvalidArgumentException("{$unit} needs tey/kit's ".implode(' and ', $missing).' feature'.(count($missing) > 1 ? 's' : '').', which this app has not adopted. Add '.(count($missing) > 1 ? 'them' : 'it').' first: php artisan kit:add '.implode(' ', $missing));
@@ -273,6 +279,12 @@ final class Maker
             $created = $this->delegate(self::DELEGATED[$unit], $name, $leaf);
 
             return $unit === 'job' ? $this->tenantJob($created, in_array('landlord', $options, true)) : $created;
+        }
+
+        if ($workspaceSettings) {
+            $this->requireKit('settings-section');
+
+            return $this->workspaceSettings($name, $flavor, $leaf);
         }
 
         if ($unit === 'crud') {
@@ -298,8 +310,8 @@ final class Maker
         $pages = $this->paths['pages'] ?? 'resources/js/pages';
         $tests = $this->paths['tests'] ?? 'tests/Feature';
         $slug = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $name));
-        // A module's occasional setup is one settings section at `/settings/<module>`, whatever the section's class is called.
-        $settingsSlug = $unit === 'settings-section' && (string) $this->host?->module !== '' ? Str::kebab((string) $this->host?->module) : $slug;
+        // A person's settings section outside a module; a module's (or a workspace's) is workspaceSettings().
+        $settingsSlug = $slug;
         $values = [
             'namespace' => $this->paths['namespace'] ?? 'App',
             'name' => $name,
@@ -352,12 +364,6 @@ final class Maker
             ], self::group("{$values['namespace']}\\Http\\Controllers\\Settings\\{$name}Controller", ["Route::get('/settings/{$settingsSlug}', 'edit')->name('settings.{$settingsSlug}.edit');", "Route::patch('/settings/{$settingsSlug}', 'update')->name('settings.{$settingsSlug}.update');"])],
         };
 
-        if ($unit === 'settings-section' && $settingsSlug !== $slug) {
-            $routes = $this->paths['routes'] ?? 'routes/web.php';
-            if ($this->exists($this->placed($routes)) && str_contains($this->read($this->placed($routes)), "->name('settings.{$settingsSlug}.edit')")) {
-                throw new InvalidArgumentException("The {$this->host?->module} module already has its settings section at /settings/{$settingsSlug}; a module has one. Add {$name}'s fields to it.");
-            }
-        }
         $written = $this->emit($files, $values);
 
         if ($route !== null) {
@@ -757,6 +763,68 @@ final class Maker
         $written = [...$written, ...$this->factoryAutoload()];
 
         return $written;
+    }
+
+    /**
+     * A workspace's settings section, in the kit's settings.workspace shape: routes through WorkspaceRoutes (`/@{workspace}/settings/<slug>` and the short
+     * form, a page named `workspaces.settings.<slug>` under the settings landing page), a controller that runs each request inside TenantBoundary and asks
+     * the policy first, a policy that gates on the capability and entitlement and then a view or manage permission, a principal-first Action that asks the
+     * policy again and refuses a stale save, a workspace-owned row (one per workspace), a PageViewModel in the workspace settings layout, the Inertia page,
+     * the provider that registers the section on the landing page, and a feature test that signs in and works inside two workspaces. In a module the
+     * slug is the module's (`/settings/<module>`), and a module has one section: a second is refused before anything is written.
+     *
+     * @return list<string>
+     */
+    private function workspaceSettings(string $name, string $flavor, string $leaf): array
+    {
+        $app = $this->paths['app'] ?? 'app';
+        $pages = $this->paths['pages'] ?? 'resources/js/pages';
+        $tests = $this->paths['tests'] ?? 'tests/Feature';
+        $namespace = $this->paths['namespace'] ?? 'App';
+        $module = (string) $this->host?->module;
+        $slug = Str::kebab($module !== '' ? $module : $name);
+        $model = Str::studly($slug).'Settings';
+        $routes = "routes/{$slug}-settings.php";
+        if ($module !== '' && ($this->exists($this->placed($routes)) || $this->exists($this->placed("{$app}/Providers/{$model}ServiceProvider.php")))) {
+            throw new InvalidArgumentException("The {$module} module already has its settings section at /settings/{$slug}; a module has one. Add {$name}'s fields to it.");
+        }
+        $table = Str::snake($slug).'_settings';
+        $title = ucfirst(str_replace('-', ' ', $slug));
+        [, $viewModels] = $this->viewModels($app, $namespace);
+        $toggles = $flavor === 'toggles';
+        $rls = $this->rls ?? class_exists('Tey\\Kit\\Features\\Workspaces\\Rls');
+        $values = [
+            'namespace' => $namespace, 'name' => $name, 'model' => $model, 'table' => $table, 'leaf' => $leaf, 'var' => Str::camel($name),
+            'settings_slug' => $slug, 'route' => "workspaces.settings.{$slug}", 'section_title' => $title, 'section_title_lower' => strtolower($title),
+            'capability' => $slug, 'perm_view' => "{$slug}.view", 'perm_manage' => "{$slug}.manage", 'ability_read' => "{$slug}.read", 'ability_write' => "{$slug}.write",
+            'event' => "{$slug}.settings.update", 'vm_namespace' => $viewModels[1],
+            'rules' => $toggles ? "'updates' => ['required', 'boolean']" : "'name' => ['nullable', 'string', 'max:255']",
+            'model_casts' => $toggles ? "'updates' => 'boolean', " : '',
+            'migration_columns' => $toggles ? "            \$table->boolean('updates')->default(false);\n" : "            \$table->string('name')->nullable();\n",
+            'migration_imports' => $rls ? "use Tey\\Kit\\Features\\Workspaces\\Rls;\n" : '',
+            'migration_up' => $rls ? "        // The database's own workspace lock under the app's scoping (tey/kit docs/rls.md); nothing until kit.tenancy.rls.enabled, on PostgreSQL.\n        Rls::protect('{$table}');\n" : '',
+            'migration_down' => $rls ? "        Rls::unprotect('{$table}');\n" : '',
+            'save_fields' => $toggles ? "'updates' => (bool) \$attributes['updates']" : "'name' => \$attributes['name'] ?? null",
+            'row_fields' => $toggles ? "'updates' => (bool) \$settings->updates, " : "'name' => (string) \$settings->name, ",
+            'sample' => $toggles ? "'updates' => true" : "'name' => 'Northwind'",
+            'sample_field' => $toggles ? 'updates' : 'name',
+            'sample_value' => $toggles ? 'true' : "'Northwind'",
+        ];
+        $files = [
+            "{$app}/Models/{$model}.php" => 'settings-workspace/model.stub',
+            'database/migrations/'.date('Y_m_d_His')."_create_{$table}_table.php" => 'settings-workspace/migration.stub',
+            "{$app}/Policies/{$model}Policy.php" => 'settings-workspace/policy.stub',
+            "{$app}/Providers/{$model}ServiceProvider.php" => 'settings-workspace/provider.stub',
+            $routes => 'settings-workspace/routes.stub',
+            "{$app}/Http/Controllers/Settings/{$name}Controller.php" => 'settings-workspace/controller.stub',
+            "{$app}/Http/Requests/Update{$model}Request.php" => 'settings-workspace/request.stub',
+            "{$app}/Actions/Update{$model}.php" => 'settings-workspace/action.stub',
+            "{$viewModels[0]}/{$model}ViewModel.php" => 'settings-workspace/view-model.stub',
+            "{$pages}/settings/{$name}/Page.vue" => "settings-workspace/{$flavor}.vue.stub",
+            "{$tests}/Settings/{$name}Test.php" => 'settings-workspace/test.stub',
+        ];
+
+        return [...$this->emit($files, $values), $this->provide("{$namespace}\\Providers\\{$model}ServiceProvider", $leaf)];
     }
 
     /**
