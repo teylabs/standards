@@ -56,7 +56,7 @@ final readonly class ChatViaChannel
                         [$class, $classDepth] = [null, null];
                     }
                 } elseif (is_array($token) && $token[0] === T_CLASS && $class === null && ! (is_array($tokens[$i - 1] ?? null) && $tokens[$i - 1][0] === T_DOUBLE_COLON)) {
-                    $class = ['exempt' => str_contains($doc, self::MARKER) || $this->channel($tokens, $i)];
+                    $class = ['exempt' => preg_match('~(?:^|\s)'.preg_quote(self::MARKER, '~').'[ \t]+\S~m', $doc) === 1 || $this->channel($tokens, $i)];
                     $classDepth = $depth + 1;
                 } elseif (is_array($token) && in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)
                     && preg_match(self::ENDPOINT, $token[1]) === 1 && ! ($class['exempt'] ?? false) && $this->argument($tokens, $i)) {
@@ -76,6 +76,10 @@ final readonly class ChatViaChannel
     {
         for ($j = $i - 1; $j >= 0; $j--) {
             $token = $tokens[$j];
+            // A named argument (`url: '…'`): its name and colon sit between the string and the call's `(` or `,`.
+            if ($token === ':' && is_array($tokens[$j - 1] ?? null) && $tokens[$j - 1][0] === T_STRING && in_array($tokens[$j - 2] ?? null, ['(', ','], true)) {
+                return true;
+            }
             if ($token === '.' || $token === '"' || (is_array($token) && in_array($token[0], [T_VARIABLE, T_STRING, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON, T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true))) {
                 continue;
             }

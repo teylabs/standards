@@ -26,12 +26,14 @@ test('notifications.chat-via-channel flags a direct post to chat.postMessage, a 
                 Http::slack($token)->post('/api/chat.postMessage', ['channel' => $channel, 'text' => $text]);
                 Http::post('https://hooks.slack.com/services/'.$this->path, ['text' => $text]);
                 Http::withToken($token)->post(self::BASE.'/api/chat.meMessage', []);
+                Http::post(url: '/api/chat.postMessage', data: []);
             }
         }
         PHP]))->toBe([
         "src/SlackChatProvider.php:9 a chat message posted straight to the provider's API (/api/chat.postMessage) instead of through a Notification channel",
         "src/SlackChatProvider.php:10 a chat message posted straight to the provider's API (https://hooks.slack.com/services/) instead of through a Notification channel",
         "src/SlackChatProvider.php:11 a chat message posted straight to the provider's API (/api/chat.meMessage) instead of through a Notification channel",
+        "src/SlackChatProvider.php:12 a chat message posted straight to the provider's API (/api/chat.postMessage) instead of through a Notification channel",
     ])->and(Gate::ADVISORY)->toContain('notifications.chat-via-channel');
 });
 
@@ -64,6 +66,14 @@ test('notifications.chat-via-channel passes a call inside a Notification channel
             }
             PHP,
     ]))->toBe([]);
+});
+
+test('notifications.chat-via-channel takes the digest tag only as a tag with a reason', function () {
+    $client = fn (string $tag): array => ['Client.php' => "/**\n * {$tag}\n */\nfinal class Client\n{\n    public function post(): void\n    {\n        Http::post('/api/chat.update', []);\n    }\n}\n"];
+
+    expect(chatFindings($client('@chat-digest')))->toHaveCount(1)
+        ->and(chatFindings($client('@chat-digestible edits in place')))->toHaveCount(1)
+        ->and(chatFindings($client('@chat-digest edits the daily digest in place')))->toBe([]);
 });
 
 test('notifications.chat-via-channel ignores a mention in a comment or a plain string', function () {
