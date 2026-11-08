@@ -6,14 +6,14 @@ use {{ namespace }}\Http\Controllers\{{ name }}Controller;
 {{ route_uses }}use Illuminate\Support\Facades\Route;
 use Tey\Kit\Features\Workspaces\WorkspaceRoutes;
 
-// {{ titles }}: workspace pages, in the full (`/@{workspace}/{{ slug }}`) and short forms. Loaded through the kit Registry by {{ name }}ServiceProvider.
+// {{ titles }}: workspace pages, in the full (`/@{workspace}/{{ prefix }}`) and short forms. Loaded through the kit Registry by {{ name }}ServiceProvider.
 WorkspaceRoutes::define(function (bool $full): void {
-{{ extra_routes }}    Route::controller({{ name }}Controller::class)->prefix('{{ slug }}')->group(function () use ($full): void {
-        WorkspaceRoutes::page(Route::get('', 'index'), $full, 'app', '{{ slug }}.index', '{{ titles }}', ['session-ui', 'home']);
-        WorkspaceRoutes::page(Route::get('create', 'create'), $full, 'app', '{{ slug }}.create', 'New {{ title_lower }}', ['app', '{{ slug }}.index']);
+{{ extra_routes }}    Route::controller({{ name }}Controller::class)->prefix('{{ prefix }}')->group(function () use ($full): void {
+        WorkspaceRoutes::page(Route::get('', 'index'), $full, 'app', '{{ route }}.index', '{{ titles }}', ['session-ui', 'home']);
+        WorkspaceRoutes::page(Route::get('create', 'create'), $full, 'app', '{{ route }}.create', 'New {{ title_lower }}', ['app', '{{ route }}.index']);
         Route::post('', 'store');
-        WorkspaceRoutes::page(Route::get('{id}', 'show')->whereNumber('id'), $full, 'app', '{{ slug }}.show', '{{ title }}', ['app', '{{ slug }}.index']);
-        WorkspaceRoutes::page(Route::get('{id}/edit', 'edit')->whereNumber('id'), $full, 'app', '{{ slug }}.edit', 'Edit', ['app', '{{ slug }}.show']);
+        WorkspaceRoutes::page(Route::get('{id}', 'show')->whereNumber('id'), $full, 'app', '{{ route }}.show', '{{ title }}', ['app', '{{ route }}.index']);
+        WorkspaceRoutes::page(Route::get('{id}/edit', 'edit')->whereNumber('id'), $full, 'app', '{{ route }}.edit', 'Edit', ['app', '{{ route }}.show']);
         Route::put('{id}', 'update')->whereNumber('id');
         Route::delete('{id}', 'destroy')->whereNumber('id');
     });

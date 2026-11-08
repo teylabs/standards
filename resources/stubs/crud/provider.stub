@@ -26,7 +26,7 @@ final class {{ name }}ServiceProvider extends ServiceProvider
             ->permission('{{ perm }}.delete', ['owner', 'admin'], {{ name }}Policy::CAPABILITY)
             ->abilities(['{{ perm }}.read' => {{ name }}Policy::CAPABILITY])
             ->routes(base_path('routes/{{ slug }}.php'))
-            ->navigation('{{ perm }}.read', '{{ titles }}', '{{ slug }}', active: '{{ slug }}');
+            ->{{ nav }};
     }
 
     public function boot(): void

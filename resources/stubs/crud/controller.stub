@@ -55,7 +55,7 @@ final class {{ name }}Controller
 
         $this->toast('{{ title }} created.')->from('save');
 
-        return redirect(WorkspaceUrl::to($workspace, '{{ slug }}/'.${{ var }}->getKey()));
+        return redirect(WorkspaceUrl::to($workspace, '{{ prefix }}/'.${{ var }}->getKey()));
     }
 
     public function show(Request $request, int $workspace, int $id): Response
@@ -85,7 +85,7 @@ final class {{ name }}Controller
 
         $this->toast('{{ title }} saved.')->from('save');
 
-        return redirect(WorkspaceUrl::to($workspace, '{{ slug }}/'.$id));
+        return redirect(WorkspaceUrl::to($workspace, '{{ prefix }}/'.$id));
     }
 
     public function destroy(Request $request, int $workspace, int $id, Delete{{ name }} $delete): RedirectResponse
@@ -95,6 +95,6 @@ final class {{ name }}Controller
 
         $this->toast('{{ title }} deleted.');
 
-        return redirect(WorkspaceUrl::to($workspace, '{{ slug }}'));
+        return redirect(WorkspaceUrl::to($workspace, '{{ prefix }}'));
     }
 }

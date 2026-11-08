@@ -26,6 +26,6 @@ final class {{ name }}Controller
 
         $this->toast('Settings saved.')->from('save');
 
-        return to_route('settings.{{ slug }}.edit');
+        return to_route('settings.{{ settings_slug }}.edit');
     }
 }

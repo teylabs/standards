@@ -25,9 +25,16 @@ nodes:
     options:
       - { answer: "Feedback after a save or a background result (a toast)", next: ui-page.toast }
       - { answer: "Styling or page layout: CSS, theme tokens, spacing between blocks, columns, action groups", next: ui-page.look }
-      - { answer: "The signed-in shell: the header, primary nav, account menu or workspace switcher", next: ui-page.shell }
+      - { answer: "The signed-in shell (header, primary nav, account menu, workspace switcher), or where a module's pages live (its URLs)", next: ui-page.navigation }
       - { answer: "Across the whole app: adopting every kit surface, or a test that guards every route or page", next: ui-page.app-wide }
       - { answer: "None of these", next: ui-page.shared.byo }
+  - id: ui-page.navigation
+    question: The signed-in shell, or where a module's pages live?
+    why: The shell is the chrome every signed-in page renders in; a module's URLs are where its records and settings sit below the workspace.
+    options:
+      - { answer: "The signed-in shell: the header, primary nav, account menu or workspace switcher", next: ui-page.shell }
+      - { answer: "Where a module's pages live: its URL prefix, its records' URLs, their route names and its settings", next: ui-page.module-urls }
+      - { answer: "None of these", next: ui-page.navigation.byo }
   - id: ui-page.look
     question: Styling, or page layout?
     why: Styling is how elements look (Tailwind and theme tokens); page layout is how a page spaces and arranges its blocks with the kit's primitives.
@@ -53,7 +60,7 @@ nodes:
       - { answer: "None of these", next: ui-page.kit-owned.byo }
   - id: ui-page.own
     question: What does the page mainly do?
-    why: Each answer has its own controller method, page shape and test.
+    why: "Step 1, before choosing components: state the page purpose, who opens it and their first job, in one line on the page ViewModel's class docblock as `@purpose <who>: <main job>` (`@purpose Staff: watch unsigned agreements; send one occasionally.`). The answer below follows from that job; each has its own controller method, page shape and test."
     options:
       - { answer: "Lists records", next: ui-page.list }
       - { answer: "Shows one record", next: ui-page.show }
@@ -140,7 +147,7 @@ nodes:
       - { name: "filters", kit_component: IndexToolbar, use: "Search and the server's filter choices (DataTable renders it)", props_hint: "table.choices" }
       - { name: "row menu", kit_component: RowActions, use: "Per-row actions from the server (DataTable renders it)", props_hint: "row.actions descriptors" }
     make: standards:make crud --flavor=resource
-    checks: ['20', '21', 'descriptors', 'js-imports', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size']
+    checks: ['20', '21', 'descriptors', 'js-imports', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'ui.page-purpose']
     paths: ['app/**/Http/Controllers/**', 'app/**/ViewModels/**', 'resources/js/pages/**/Index/Page.vue']
     keywords: [list, index, table, browse, overview]
     status: ready
@@ -156,7 +163,7 @@ nodes:
       - { name: "action button", kit_component: InertiaAction, use: "One named server action as a button; confirms when the action has a confirmationMessage", props_hint: "action (null renders nothing)" }
       - { name: "menu action", kit_component: DropdownAction, use: "One named server action as a menu item", props_hint: "action" }
     make: standards:make crud --flavor=resource
-    checks: ['20', '21', 'descriptors', 'js-imports', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size']
+    checks: ['20', '21', 'descriptors', 'js-imports', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'ui.page-purpose']
     paths: ['app/**/Http/Controllers/**', 'resources/js/pages/**/Show/Page.vue']
     keywords: [show, detail, view, record, relative time, date]
     status: ready
@@ -171,7 +178,7 @@ nodes:
       - { name: "input", kit_component: Input, use: "Text input inside a Field", props_hint: "v-model, name" }
       - { name: "submit", kit_component: FormActions, use: "Submit and cancel buttons", props_hint: "processing" }
     make: standards:make crud --flavor=resource
-    checks: ['20', '21', 'toast', 'actions', 'descriptors', 'tenant.scoped-exists']
+    checks: ['20', '21', 'toast', 'actions', 'descriptors', 'tenant.scoped-exists', 'ui.page-purpose']
     paths: ['app/**/Http/Requests/**', 'resources/js/pages/**/Form/Page.vue']
     keywords: [form, create, edit, store, update, save, toast, feedback]
     status: ready
@@ -230,6 +237,27 @@ nodes:
       - "App parts go in the Layout's slots: mark (the logo), nav and drawer-nav (an app's own module switcher), bar and actions (header controls), extra (account-menu items), user-menu and workspace-switcher (replacements with the same props), footer. Pages come from the server's navigation (Registry::navigation), not a hand-written nav."
       - "Public pages use PublicShell, sign-in pages GuestShell, and a focus flow its own layout; their headers are not signed-in shells. A page's own tabs or section nav inside the content area are fine."
       - "A real exception goes in the allowlist: rule ui.kit-shell, the finding's target and check, a reason and an expires Y-m-d date. An entry without a reason is rejected and one without an expiry fails."
+  - id: ui-page.module-urls
+    recipe: Module URL nesting
+    summary: >-
+      A module owns one URL prefix, `/@{workspace}/<module>` (kebab case), and every page of it nests below: its records at `/<module>/<records>`, a
+      record's pages at `/<module>/<records>/{id}/<section>`. The record named after the module, or its main record, sits at the prefix itself. Setup the
+      module needs only occasionally is a settings section at `/settings/<module>`. Route names follow the path, dots for slashes. Existing apps keep their URLs.
+    kit: ['tey/kit Registry::navigation', 'tey/kit Registry::modulePage', 'tey/kit Registry::settingsSection', 'tey/kit WorkspaceRoutes::page']
+    components: []
+    make: standards:make crud --flavor=resource
+    checks: []
+    paths: ['routes/**', 'app/**/routes/**', 'app/**/Providers/**ServiceProvider.php']
+    keywords: [module, url, prefix, nesting, nested routes, route names, module page, sub nav, settings section, url structure]
+    status: ready
+    rules:
+      - "A module owns `/@{workspace}/<module>`, the module's name in kebab case. Its records nest under it: `/<module>/<records>` (`/bookings/resources`), never a top-level `/<records>` of their own."
+      - "The record named after the module (its plural is the module's name), or the module's main record, sits at the prefix itself: `/bookings`, not `/bookings/bookings`."
+      - "A record's own pages nest under the record: `/<module>/<records>/{id}/<section>` (`/bookings/resources/12/availability`)."
+      - "Setup the module needs only occasionally is one settings section at `/settings/<module>`, not a page in the module's own navigation."
+      - "Route names follow the path, dots for slashes: `bookings.resources.index`, `bookings.resources.show`, the main record `bookings.index`. Two modules' records of one name never collide, and a name is read off its URL."
+      - "Navigation: the module registers one link at its prefix (Registry::navigation, suffix `<module>`), and each record is one of its pages (Registry::modulePage, suffix `<module>/<records>`). The main record's page is current on its own routes only (active: its `route:` names), not on its siblings below the prefix."
+      - "`standards:make crud <Record> --module=<Module>` emits this shape; without --module a record keeps its own `/<records>` prefix, names and navigation link. Existing apps keep their URLs: this is the default for new modules, not a migration."
   - id: ui-page.kit-adoption
     recipe: Kit adoption
     summary: >-
@@ -312,12 +340,15 @@ nodes:
       - "Page-level grid-cols-* and col-span-* become PageGrid (preset main-aside, halves or thirds) and PageGridItem :span. Grids inside a card, form or widget body and the dashboard widget grid are not page-level."
       - "Hand-rolled Stack, PageSection, Aside, Banner, NavGrid, CardSection, Pills and DividerSection shapes point to the primitive; a pointer stays advisory until the kit the app runs exports the primitive."
       - "Row action labels are short verbs (Remove, Revoke). A label never interpolates a value (Action::make(\"Revoke {$x->name}\"), 'Remove '.$grant, a model field, or a Vue action object's `${…}` label): the record goes in ariaLabel and the confirm. A literal label stays within 24 characters and 3 words, or RowActions clamps it."
+      - "A record in a restricted state (suspended, archived, cancelled, revoked) offers only its restore action (Reinstate, Restore, Reopen, Reactivate). It may also offer at most one final action, such as Delete or Remove, when that state allows it."
+      - "Every other action comes back only after the record is restored."
+      - "The server enforces this in the policy and the action list. Hiding actions in the UI is not enough."
       - "A real exception goes in the allowlist: the rule, the finding's target and check, a reason and an expires Y-m-d date."
   - id: ui-page.tinted-ground
     recipe: Tinted page ground
     summary: >-
       Rule ui.surface-on-tinted-ground (warn only). A theme whose page ground is tinted declares it with one token, --kit-ground: tinted, in its own
-      resources/css. On it the content sits on cards and the page chrome stays on the ground; from tey/kit 0.15.22 the kit's DataTable, EmptyState,
+      resources/css. On it the content sits on cards and the page chrome stays on the ground; from tey/kit 0.15.27 the kit's DataTable, EmptyState,
       Workbench and PageSection draw that card themselves, and FormCard is a card on any ground.
     kit: ['@kit/ui Page', '@kit/ui DataTable', '@kit/ui FormCard', '@kit/ui EmptyState', '@kit/ui Card']
     checks: ['ui.surface-on-tinted-ground']
@@ -326,9 +357,9 @@ nodes:
     status: draft
     rules:
       - "Declare a tinted ground with --kit-ground: tinted on :root in the app's own CSS, next to the colours: the ground (--background, or --shell-ground for the shell alone) and a lighter --card. A white ground declares nothing."
-      - "On a tinted ground, content sits on a card (bg-card text-card-foreground border rounded-xl, as a dashboard widget): the kit's DataTable, EmptyState, Workbench and PageSection content draw it from tey/kit 0.15.22, and FormCard and the form Section are cards already. Never a card inside a card."
+      - "On a tinted ground, content sits on a card (bg-card text-card-foreground border rounded-xl, as a dashboard widget): the kit's DataTable, EmptyState, Workbench and PageSection content draw it from tey/kit 0.15.27, and FormCard and the form Section are cards already. Never a card inside a card."
       - "Page, PageGrid and the page chrome stay on the ground: the page header, breadcrumbs, SubNav, tabs and section headings. PageSection surface=\"none\" leaves a section's content on the ground."
-      - "A raw <table> or <form> is never a direct child of Page, PageGrid or PageGridItem on a tinted ground: use DataTable or FormCard, or put it in a Card or a PageSection. On a kit before 0.15.22 a DataTable there needs a card too."
+      - "A raw <table> or <form> is never a direct child of Page, PageGrid or PageGridItem on a tinted ground: use DataTable or FormCard, or put it in a Card or a PageSection. On a kit before 0.15.27 a DataTable there needs a card too."
       - "Contrast on a tinted ground: --card against the ground at least 1.1:1 with a --border edge, --border against --card at least 1.5:1, --input against --card at least 3:1, and --foreground and --muted-foreground at least 4.5:1 on the ground and on the card (tey/kit's test:token-contrast)."
     related: ['ui-page.layout-rhythm', 'ui-page.styling']
     graduate: "To a ready leaf when a second app adopts a tinted ground and the kit's minimums are checked from the app (kit:status)."
@@ -465,6 +496,8 @@ nodes:
       then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first,
       stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture.
       `--bulk` adds selection and a bulk delete, `--mcp` Read, Write (create or update) and Delete capability tools over a List action, `--soft-deletes` soft deletes and a restoration.
+      With `--module=<Module>` the record nests under the module's prefix, `/<module>/<records>` named `<module>.<records>.*` (the main record at `/<module>`),
+      as one of the module's pages (see ui-page.module-urls).
     kit: ['@kit/ui DataTable', '@kit/ui FormCard', '@kit/ui ButtonGroup', '@kit/ui InertiaAction', '@kit/ui DropdownAction']
     make: standards:make crud --flavor=resource
     checks: ['20', '21', 'actions', 'descriptors', 'toast', 'js-imports']
@@ -632,6 +665,14 @@ nodes:
     keywords: []
     status: byo
   - id: ui-page.app-wide.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.navigation.byo
     recipe: Build your own
     summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
     kit: []

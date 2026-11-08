@@ -3,7 +3,7 @@
 import { Checkbox, Field, Section, SettingsFrame } from '{{ kit_ui }}';
 import { router } from '@inertiajs/vue3';
 
-const save = (key: string, value: boolean) => router.patch('/settings/{{ slug }}', { [key]: value }, { preserveScroll: true });
+const save = (key: string, value: boolean) => router.patch('/settings/{{ settings_slug }}', { [key]: value }, { preserveScroll: true });
 </script>
 
 <template>
