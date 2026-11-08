@@ -8,6 +8,7 @@
 
 ### Changed
 
+- **Pattern leaf `ui-page.layout-rhythm`: row actions on a restricted record.** A record in a restricted state (suspended, archived, cancelled, revoked) offers only its restore action (Reinstate, Restore, Reopen, Reactivate), plus at most one final action such as Delete or Remove when that state allows it. Every other action comes back only after the record is restored. The server enforces this in the policy and the action list; hiding actions in the UI is not enough. Guidance only: no check and no kit change.
 - **Pattern leaf `ui-page.dashboard-widget`: main and aside, and widget kinds.** A widget registers with `region()` main or aside plus its order and never forks the page. Main is for the viewer's primary work (queues, activity), aside for context (you, people, short status). Each widget picks a kind (task, feed, status or setup); task and feed go in main, status and setup in aside with setup last; the dashboard has exactly one feed; each widget declares its empty state. "Things that need you" is one task widget listing every actionable item for the viewer's role, with the "N things need you today" subline. The leaf stays a gap.
 
 ## 0.11.85 - 2026-11-08
