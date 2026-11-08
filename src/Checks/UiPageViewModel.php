@@ -93,16 +93,19 @@ final readonly class UiPageViewModel
     private function rendered(?Node\Expr $expr, Node $at, int $depth = 0): ?string
     {
         if ($expr instanceof Node\Expr\MethodCall) {
-            return $this->rendered($expr->var, $at, $depth);
+            return $expr->name instanceof Node\Identifier && $expr->name->toString() === 'toArray' ? $this->rendered($expr->var, $at, $depth) : null;
         }
-        if (($expr instanceof Node\Expr\New_ || $expr instanceof Node\Expr\StaticCall) && $expr->class instanceof Node\Name) {
+        $made = $expr instanceof Node\Expr\StaticCall && $expr->name instanceof Node\Identifier && $expr->name->toString() === 'make';
+        if (($expr instanceof Node\Expr\New_ || $made) && $expr->class instanceof Node\Name) {
             $name = ltrim($expr->class->toString(), '\\');
 
             return in_array(strtolower($name), ['self', 'static', 'parent'], true) ? $this->enclosingClass($at) : $name;
         }
         if ($expr instanceof Node\Expr\Variable && is_string($expr->name) && $depth < 3 && ($scope = $this->enclosingFunction($at)) !== null) {
+            // Only this function's own assignments: one inside a nested closure or function is another scope.
             $assigned = (new NodeFinder)->find((array) $scope->getStmts(), fn (Node $node): bool => $node instanceof Node\Expr\Assign
-                && $node->var instanceof Node\Expr\Variable && $node->var->name === $expr->name && $node->getStartLine() <= $at->getStartLine());
+                && $node->var instanceof Node\Expr\Variable && $node->var->name === $expr->name && $node->getStartLine() <= $at->getStartLine()
+                && $this->enclosingFunction($node) === $scope);
             $last = end($assigned);
 
             return $last instanceof Node\Expr\Assign ? $this->rendered($last->expr, $at, $depth + 1) : null;
@@ -173,6 +176,10 @@ final readonly class UiPageViewModel
     private function standalone(Node\Stmt\Class_ $class): bool
     {
         foreach ($class->getProperties() as $property) {
+            // The kit's opt-out exactly: `protected bool $standalone = true`, not any property of that name.
+            if (! $property->isProtected() || $property->isStatic() || ! $property->type instanceof Node\Identifier || $property->type->toLowerString() !== 'bool') {
+                continue;
+            }
             foreach ($property->props as $prop) {
                 if ($prop->name->toString() === 'standalone' && $prop->default instanceof Node\Expr\ConstFetch && strtolower($prop->default->name->toString()) === 'true') {
                     return true;

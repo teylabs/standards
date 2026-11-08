@@ -91,6 +91,37 @@ test('ui.page-view-model ignores a render mention inside a comment or docblock',
     ]))->toBe([]);
 });
 
+test('ui.page-view-model reads an aliased Inertia import and a namespaced controller return', function () {
+    expect(pageVmFindings([
+        'OrdersViewModel.php' => pageVmClass('OrdersViewModel', 'ViewModel'),
+        'OrdersController.php' => str_replace('use Inertia\\Inertia;', 'use Inertia\\Inertia as Ui;', str_replace('Inertia::render', 'Ui::render', pageVmController('new OrdersViewModel()'))),
+    ]))->toBe(['src/OrdersController.php FixtureScratch\\OrdersViewModel']);
+});
+
+test('ui.page-view-model flags only toArray() and make(), and ignores an assignment inside a nested closure', function () {
+    expect(pageVmFindings([
+        'OrdersViewModel.php' => pageVmClass('OrdersViewModel', 'ViewModel', "    public static function from(): self\n    {\n        return new self();\n    }\n"),
+        'OrdersController.php' => pageVmController('OrdersViewModel::from()'),
+    ]))->toBe([])
+        ->and(pageVmFindings([
+            'OrdersViewModel.php' => pageVmClass('OrdersViewModel', 'ViewModel'),
+            'OrdersController.php' => pageVmController('$page', "        \$page = [];\n        \$later = function () { \$page = new OrdersViewModel(); };\n"),
+        ]))->toBe([])
+        ->and(pageVmFindings([
+            'OrdersViewModel.php' => pageVmClass('OrdersViewModel', 'ViewModel'),
+            'OrdersController.php' => pageVmController('(new OrdersViewModel())->toArray()'),
+        ]))->toBe(['src/OrdersController.php FixtureScratch\\OrdersViewModel']);
+});
+
+test('ui.page-view-model accepts only `protected bool $standalone = true` as the opt-out', function () {
+    foreach (['public bool $standalone = true;', 'protected $standalone = true;', 'protected static bool $standalone = true;'] as $property) {
+        expect(pageVmFindings([
+            'TermsViewModel.php' => pageVmClass('TermsViewModel', 'ViewModel', "    {$property}\n"),
+            'OrdersController.php' => pageVmController('new TermsViewModel()'),
+        ]))->toBe(['src/OrdersController.php FixtureScratch\\TermsViewModel']);
+    }
+});
+
 test('ui.page-view-model is enforced: not an opt-in advisory', function () {
     expect(Gate::ADVISORY)->not->toContain('ui.page-view-model')
         ->and(Gate::OPTIONAL)->not->toContain('ui.page-view-model');
