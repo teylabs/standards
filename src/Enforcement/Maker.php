@@ -352,6 +352,12 @@ final class Maker
             ], self::group("{$values['namespace']}\\Http\\Controllers\\Settings\\{$name}Controller", ["Route::get('/settings/{$settingsSlug}', 'edit')->name('settings.{$settingsSlug}.edit');", "Route::patch('/settings/{$settingsSlug}', 'update')->name('settings.{$settingsSlug}.update');"])],
         };
 
+        if ($unit === 'settings-section' && $settingsSlug !== $slug) {
+            $routes = $this->paths['routes'] ?? 'routes/web.php';
+            if ($this->exists($this->placed($routes)) && str_contains($this->read($this->placed($routes)), "->name('settings.{$settingsSlug}.edit')")) {
+                throw new InvalidArgumentException("The {$this->host?->module} module already has its settings section at /settings/{$settingsSlug}; a module has one. Add {$name}'s fields to it.");
+            }
+        }
         $written = $this->emit($files, $values);
 
         if ($route !== null) {
@@ -669,7 +675,7 @@ final class Maker
         $slug = Str::kebab($plural);
         [$perm, $shared] = $this->crudCapability($name, $options);
         $titles = ucfirst(str_replace('-', ' ', $slug));
-        [$prefix, $routeName, $nav] = $this->crudPrefix($slug, $perm, $titles);
+        [$prefix, $routeName, $nav] = $this->crudPrefix($slug, $perm, $titles, $shared);
         $table = Str::snake($plural);
         $title = ucfirst(str_replace('-', ' ', Str::kebab($name)));
         [$viewModel, $viewModels] = $this->viewModels($app, $namespace);
@@ -787,7 +793,7 @@ final class Maker
      *
      * @return array{0: string, 1: string, 2: string}
      */
-    private function crudPrefix(string $slug, string $capability, string $titles): array
+    private function crudPrefix(string $slug, string $capability, string $titles, bool $shared = true): array
     {
         $module = (string) $this->host?->module;
         if ($module === '') {
@@ -799,6 +805,11 @@ final class Maker
         $active = $slug === $moduleSlug
             ? ', active: ['.implode(', ', array_map(fn (string $page): string => "'route:{$routeName}.{$page}', 'route:short.{$routeName}.{$page}'", ['index', 'create', 'show', 'edit'])).']'
             : '';
+
+        // A record with its own capability has no module provider to hang a module page under: it keeps a link of its own, at its nested prefix.
+        if (! $shared) {
+            return [$prefix, $routeName, "navigation('{$capability}.read', '{$titles}', '{$prefix}', active: '{$prefix}')"];
+        }
 
         return [$prefix, $routeName, "modulePage('{$moduleSlug}', '{$capability}.read', '{$titles}', '{$prefix}'{$active})"];
     }

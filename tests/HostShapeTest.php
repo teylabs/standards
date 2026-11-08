@@ -139,10 +139,13 @@ test('every recipe on the modular host with kit core alone goes in the module, c
         $make = fn (string $unit, string $name, string $flavor, array $options = []): array => (new Maker($base, TreeCatalog::shipped(), kit: true, host: $host))->make($unit, $name, $flavor, null, $options);
         $files = [
             ...$make('page', 'Posts', 'index'), ...$make('page', 'PostDetail', 'show'), ...$make('page', 'PostEditor', 'form'), ...$make('action', 'PublishPost', 'plain'),
-            ...$make('settings-section', 'BillingSettings', 'form'), ...$make('settings-section', 'Alerts', 'toggles'), ...$make('command', 'BackfillSlugs', 'backfill'),
+            ...$make('settings-section', 'BillingSettings', 'form'), ...$make('command', 'BackfillSlugs', 'backfill'),
             ...$make('command', 'PruneDrafts', 'maintenance'), ...$make('command', 'CountSlides', 'report'), ...$make('webhook', 'Acme', 'signed'),
             ...$make('api-client', 'AcmeClient', 'http'), ...$make('api-client', 'Globex', 'sdk'), ...$make('model', 'Slide', 'domain', ['soft-deletes', 'sortable']),
         ];
+        // A module has one settings section, so the toggles flavor is made in a module of its own.
+        $toggles = (new Maker($base, TreeCatalog::shipped(), kit: true, host: new HostShape(teylabsLayout(), HostShape::kitUiAlias($base), ['core'], 'Alerts')))->make('settings-section', 'Alerts', 'toggles');
+        expect($toggles)->toContain('app/Modules/Alerts/Http/Controllers/Settings/AlertsController.php');
         $placed = array_filter($files, fn (string $file): bool => str_starts_with($file, 'app/'));
         expect(array_filter($placed, fn (string $file): bool => ! preg_match('#^app/(Modules/Slides|UI/Slides)/#', $file)))->toBe([], 'every class goes in the Slides module (or its ui mount)')
             ->and($files)->toContain('app/Modules/Slides/Http/Controllers/Settings/BillingController.php', 'app/Modules/Slides/Console/BackfillSlugsCommand.php', 'app/Modules/Slides/Services/Acme/AcmeClient.php', 'app/Modules/Slides/Models/Slide.php')
@@ -266,6 +269,13 @@ test('a module owns its URL prefix: records nest under it, the main record sits 
         expect($read((string) current(array_filter($settings, fn (string $file): bool => str_ends_with($file, 'routes/web.php')))))->toContain("Route::get('/settings/bookings', 'edit')->name('settings.bookings.edit');")
             ->and($read('app/Modules/Bookings/Http/Controllers/Settings/BookingRulesController.php'))->toContain("to_route('settings.bookings.edit')")
             ->and($read('tests/Feature/Modules/Bookings/Settings/BookingRulesTest.php'))->toContain("'/settings/bookings'");
+        // A module has one settings section: a second is refused before anything is written.
+        expect(fn () => $make('settings-section', 'BookingAlerts', 'form'))->toThrow(InvalidArgumentException::class, 'already has its settings section')
+            ->and(glob($base.'/app/Modules/Bookings/Http/Controllers/Settings/BookingAlertsController.php') ?: [])->toBe([]);
+        // A record with its own capability in the module nests the same way, with a navigation link of its own (no module provider to sit under).
+        $make('crud', 'Pass', 'resource', ['capability=passes']);
+        expect($read('app/Modules/Bookings/Providers/PassServiceProvider.php'))->toContain("->navigation('passes.read', 'Passes', 'bookings/passes', active: 'bookings/passes');")
+            ->and($read('app/Modules/Bookings/routes/passes.php'))->toContain("->prefix('bookings/passes')");
         expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-28'), TreeCatalog::shipped())['violations'])->toBe([]);
     } finally {
         (new Filesystem)->deleteDirectory($base);
