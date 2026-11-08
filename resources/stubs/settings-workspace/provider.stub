@@ -1,0 +1,35 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Providers;
+
+use {{ namespace }}\Models\{{ model }};
+use {{ namespace }}\Policies\{{ model }}Policy;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\ServiceProvider;
+use Tey\Kit\Features\Core\Registry;
+
+/**
+ * Wires the {{ section_title_lower }} settings section into the kit: the policy, the `{{ capability }}` capability (off until switched on, in `kit.capabilities` or per
+ * workspace), `{{ perm_view }}` and `{{ perm_manage }}` granted to roles, the routes, and the section on the workspace settings landing page at
+ * `/@{workspace}/settings/{{ settings_slug }}`. A declaration repeated exactly by another provider of the same capability is accepted by the Registry.
+ */
+final class {{ model }}ServiceProvider extends ServiceProvider
+{
+    /** Contributions go in register(), not boot(): tey/kit 0.15.0 and earlier define each declared capability while the kit boots, before this provider's boot() runs. */
+    public function register(): void
+    {
+        $this->app->make(Registry::class)->capabilities([{{ model }}Policy::CAPABILITY])
+            ->permission('{{ perm_view }}', ['owner', 'admin', 'viewer'], {{ model }}Policy::CAPABILITY, ['{{ ability_read }}'])
+            ->permission('{{ perm_manage }}', ['owner', 'admin'], {{ model }}Policy::CAPABILITY, ['{{ ability_write }}'])
+            ->abilities(['{{ ability_read }}' => {{ model }}Policy::CAPABILITY, '{{ ability_write }}' => {{ model }}Policy::CAPABILITY])
+            ->routes(base_path('routes/{{ settings_slug }}-settings.php'))
+            ->settingsSection('workspace', '{{ settings_slug }}', '{{ section_title }}', 'The {{ section_title_lower }} settings of this workspace.', '{{ ability_read }}');
+    }
+
+    public function boot(): void
+    {
+        Gate::policy({{ model }}::class, {{ model }}Policy::class);
+    }
+}

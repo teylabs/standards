@@ -1,0 +1,47 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Actions;
+
+use {{ namespace }}\Models\{{ model }};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
+use Tey\Kit\Features\Core\Audit;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Core\RequestMemo;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+
+/**
+ * The one place the {{ section_title_lower }} settings change; the page calls it inside the workspace (TenantBoundary). It asks the policy itself, so no caller
+ * can skip the check. A stale save fails closed: updateIfCurrent lands only while `lock_version` is still the one the page loaded.
+ */
+final class Update{{ model }}
+{
+    /** @param  array<string, mixed>  $attributes */
+    public function handle(Principal $principal, int $workspace, array $attributes): {{ model }}
+    {
+        Gate::forUser(RequestMemo::user($principal->actorId))->authorize('update', [{{ model }}::class, Workspace::required()]);
+
+        try {
+            return DB::transaction(function () use ($principal, $workspace, $attributes): {{ model }} {
+                $saved = {{ model }}::current()->updateIfCurrent((int) $attributes['lock_version'], [{{ save_fields }}]);
+                app(Audit::class)->write($principal->actorId, $workspace, '{{ event }}', ['id' => $saved->getKey(), 'lock_version' => $saved->lock_version]);
+
+                return $saved;
+            });
+        } catch (\RuntimeException $error) {
+            if ($error->getMessage() !== 'stale_write') {
+                throw $error;
+            }
+            throw ValidationException::withMessages(['lock_version' => 'These settings changed since you opened them. Reload to see the latest, then save again.']);
+        }
+    }
+
+    /** @return array<string, mixed> the settings in the page's shape */
+    public static function row({{ model }} $settings): array
+    {
+        return [{{ row_fields }}'lock_version' => (int) ($settings->lock_version ?? 1)];
+    }
+}

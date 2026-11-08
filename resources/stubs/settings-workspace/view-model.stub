@@ -1,0 +1,42 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ vm_namespace }};
+
+use {{ namespace }}\Actions\Update{{ model }};
+use {{ namespace }}\Models\{{ model }};
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\Gate;
+use Tey\Kit\Features\Core\Data\Action;
+use Tey\Kit\Features\Core\ViewModels\PageViewModel;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+use Tey\Kit\Features\Workspaces\WorkspaceUrl;
+
+/** The {{ section_title }} section: the values, and a Save only for a viewer the policy lets change them. It sits in the workspace settings layout. */
+final class {{ model }}ViewModel extends PageViewModel
+{
+    public function __construct(private readonly int $workspace, private readonly Authenticatable $user) {}
+
+    public function title(): string
+    {
+        return '{{ section_title }}';
+    }
+
+    /** @return array<string, mixed> */
+    public function values(): array
+    {
+        return Update{{ model }}::row({{ model }}::read());
+    }
+
+    /** Save: null when this viewer may only read the settings. */
+    public function submit(): ?Action
+    {
+        return Gate::forUser($this->user)->allows('update', [{{ model }}::class, Workspace::required()]) ? new Action('Save', WorkspaceUrl::to($this->workspace, 'settings/{{ settings_slug }}', 'settings'), 'put', key: 'save') : null;
+    }
+
+    protected function section(): ?string
+    {
+        return 'workspace';
+    }
+}

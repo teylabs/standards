@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **`standards:make settings-section --module=<Module>` generates the kit's settings.workspace shape.** It wrote routes into `routes/web.php`, a `Settings/<Name>Controller` with no tenant boundary or policy, and a test with no session. A workspace's settings section (made with `--module`, or with `--leaf=settings.workspace --flavor=form`) now writes a routes file declared through `WorkspaceRoutes::define` and `WorkspaceRoutes::page` (`/@{workspace}/settings/<module>` and the short form, a page named `workspaces.settings.<module>` under the settings landing page, and a `PUT` to save), a controller whose every request runs inside `TenantBoundary` and asks the policy first, a policy that gates on the `<module>` capability and entitlement (a 404 while off) and then `<module>.view` or `<module>.manage`, a principal-first `Update<Module>Settings` Action that asks the policy again, refuses a stale save on `lock_version` and audits `<module>.settings.update`, a one-row-per-workspace `<Module>Settings` model (BelongsToWorkspace, GuardsStaleWrites) and its migration (with `Rls::protect` when the kit has it), a `PageViewModel` in the workspace settings layout whose Save is absent for a viewer who may only read, the Inertia page (`form` or `toggles`), a provider that registers the permissions, routes and the section on the settings landing page (added to `bootstrap/providers.php`), and a feature test that signs in and works inside two workspaces: an owner's save and a stale save refused, the settings kept in their workspace, a non-member refused, a viewer without a save, and a 404 while the capability is off. It needs tey/kit's workspaces and access features and says so when they are missing. The `/settings/<module>` prefix and the one-section-per-module refusal are kept. A person's section (no module, `settings.form` or `settings.toggles`) is unchanged.
+
 ## 0.11.87 - 2026-11-08
 
 ### Added

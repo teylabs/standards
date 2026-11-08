@@ -3287,9 +3287,9 @@
         "settings.workspace": {
             "id": "settings.workspace",
             "recipe": "Workspace settings",
-            "summary": "A settings section per workspace group from the settings-section generator, guarded by a permission (rule 32) and audited.",
+            "summary": "A workspace's settings section at /@{workspace}/settings/<slug> (WorkspaceRoutes::page under the settings landing page), each request inside TenantBoundary behind a capability-gated policy (rule 32), a stale-write guarded and audited Action, and a PageViewModel in the workspace settings layout.",
             "kit": [
-                "@kit/ui SettingsFrame",
+                "@kit/ui Page",
                 "@kit/ui FormCard",
                 "@kit/ui Field"
             ],
@@ -3299,7 +3299,8 @@
             ],
             "paths": [
                 "app/**/Http/Controllers/Settings/**",
-                "resources/js/pages/settings/**"
+                "resources/js/pages/settings/**",
+                "app/**/Policies/*SettingsPolicy.php"
             ],
             "keywords": [
                 "workspace",
