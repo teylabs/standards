@@ -200,7 +200,8 @@ test('crud records in a module share one module capability, declared once in one
             ->toContain("->permission('billing.view', ['owner', 'admin', 'viewer'], self::CAPABILITY, ['billing.read'])")
             ->toContain("->permission('billing.manage', ['owner', 'admin'], self::CAPABILITY, ['billing.write'])")
             ->toContain('Gate::policy(Plan::class, PlanPolicy::class);')->toContain('Gate::policy(BillingEntity::class, BillingEntityPolicy::class);')
-            ->toContain("->navigation('billing.read', 'Plans', 'plans', active: 'plans')")->toContain("->navigation('billing.read', 'Billing entities', 'billing-entities', active: 'billing-entities')")
+            ->toContain("->navigation('billing.read', 'Billing', 'billing');")
+            ->toContain("->modulePage('billing', 'billing.read', 'Plans', 'billing/plans')")->toContain("->modulePage('billing', 'billing.read', 'Billing entities', 'billing/billing-entities')")
             ->toContain('namespace App\\Modules\\Billing\\Providers;')->toContain('use App\\Modules\\Billing\\Models\\Plan;')
             ->and(substr_count($contents, 'standards-record: plans'))->toBe(2)
             ->and(substr_count(file_get_contents($base.'/bootstrap/providers.php'), 'BillingServiceProvider::class'))->toBe(1);
@@ -220,6 +221,78 @@ test('crud records in a module share one module capability, declared once in one
             ->and(file_get_contents($base.'/'.$provider))->toBe($contents);
         expect(fn () => $make('Coupon', ['capability=Coupons_X']))->toThrow(InvalidArgumentException::class, 'must be kebab case');
         expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-28'), TreeCatalog::shipped())['violations'])->toBe([]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('a module owns its URL prefix: records nest under it, the main record sits at it, settings go under /settings/<module>; outside a module nothing changes', function () {
+    $base = hostApp('Modular');
+
+    try {
+        $host = new HostShape(teylabsLayout(), HostShape::kitUiAlias($base), ['core', 'workspaces', 'access', 'mcp'], 'Bookings');
+        $make = fn (string $unit, string $name, string $flavor, array $options = []): array => (new Maker($base, TreeCatalog::shipped(), kit: true, host: $host))->make($unit, $name, $flavor, null, $options);
+        $read = fn (string $file): string => (string) file_get_contents($base.'/'.$file);
+        $make('crud', 'Resource', 'resource', ['bulk', 'soft-deletes', 'mcp']);
+        $make('crud', 'Room', 'resource');
+        $make('crud', 'Booking', 'resource');
+        $provider = 'app/Modules/Bookings/Providers/BookingsServiceProvider.php';
+        $contents = $read($provider);
+
+        // The record rows: [record, its routes file, the prefix, the route name prefix].
+        foreach ([['Resource', 'resources', 'bookings/resources', 'bookings.resources'], ['Room', 'rooms', 'bookings/rooms', 'bookings.rooms'], ['Booking', 'bookings', 'bookings', 'bookings']] as [$record, $file, $prefix, $name]) {
+            $routes = $read("app/Modules/Bookings/routes/{$file}.php");
+            expect($routes)->toContain("->prefix('{$prefix}')")
+                ->toContain("'{$name}.index'")->toContain("'{$name}.create'")->toContain("'{$name}.show'")->toContain("['app', '{$name}.show']")
+                ->and($read("app/Modules/Bookings/Http/Controllers/{$record}Controller.php"))->toContain("WorkspaceUrl::to(\$workspace, '{$prefix}/'")
+                ->and((string) file_get_contents((glob($base."/app/UI/Bookings/ViewModels/{,*/}{$record}IndexViewModel.php", GLOB_BRACE) ?: [''])[0]))->toContain("WorkspaceUrl::to(\$this->workspace, '{$prefix}/create')")
+                ->and((string) file_get_contents((glob($base."/tests/Feature/Modules/Bookings/{,*/}{$record}Test.php", GLOB_BRACE) ?: [''])[0]))->toContain("->slug.'/{$prefix}'.\$path");
+        }
+        expect($read('app/Modules/Bookings/routes/resources.php'))->toContain("->prefix('bookings/resources/selection')")->toContain("->prefix('bookings/resources/{id}/restoration')")
+            ->and($read('app/Modules/Bookings/Http/Controllers/ResourceSelectionController.php'))->toContain("WorkspaceUrl::to(\$workspace, 'bookings/resources')")
+            ->and($read('app/Modules/Bookings/Http/Controllers/ResourceRestorationController.php'))->toContain("WorkspaceUrl::to(\$workspace, 'bookings/resources/'");
+        // One navigation link, at the module's prefix; each record is one of its pages. The main record's tab is current on its own routes, not its siblings'.
+        expect(substr_count($contents, '->navigation('))->toBe(1)->and($contents)->toContain("->navigation('bookings.read', 'Bookings', 'bookings');")
+            ->toContain("->modulePage('bookings', 'bookings.read', 'Resources', 'bookings/resources');")
+            ->toContain("->modulePage('bookings', 'bookings.read', 'Rooms', 'bookings/rooms');")
+            ->toContain("->modulePage('bookings', 'bookings.read', 'Bookings', 'bookings', active: ['route:bookings.index', 'route:short.bookings.index', 'route:bookings.create', 'route:short.bookings.create', 'route:bookings.show', 'route:short.bookings.show', 'route:bookings.edit', 'route:short.bookings.edit']);");
+
+        // A re-run on a record already made changes nothing.
+        $before = array_map(fn (string $file): string => $file.' '.hash('sha256', $read($file)), hostFiles($base));
+        expect($make('crud', 'Room', 'resource'))->toBe([])->and(array_map(fn (string $file): string => $file.' '.hash('sha256', $read($file)), hostFiles($base)))->toBe($before);
+
+        // The module's occasional setup is a settings section at /settings/<module>.
+        $settings = $make('settings-section', 'BookingRules', 'form');
+        expect($read((string) current(array_filter($settings, fn (string $file): bool => str_ends_with($file, 'routes/web.php')))))->toContain("Route::get('/settings/bookings', 'edit')->name('settings.bookings.edit');")
+            ->and($read('app/Modules/Bookings/Http/Controllers/Settings/BookingRulesController.php'))->toContain("to_route('settings.bookings.edit')")
+            ->and($read('tests/Feature/Modules/Bookings/Settings/BookingRulesTest.php'))->toContain("'/settings/bookings'");
+        expect(CheckReport::build($base, 'tests/Arch/configuration.php', null, 'full', new DateTimeImmutable('2026-10-28'), TreeCatalog::shipped())['violations'])->toBe([]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+
+    // Without --module a record keeps its own prefix, route names and navigation link.
+    $base = hostApp('App');
+    try {
+        (new Maker($base, TreeCatalog::shipped(), kit: true))->make('crud', 'Room', 'resource');
+        expect(file_get_contents($base.'/routes/rooms.php'))->toContain("->prefix('rooms')")->toContain("'rooms.index'")
+            ->and(file_get_contents($base.'/app/Providers/RoomServiceProvider.php'))->toContain("->navigation('rooms.read', 'Rooms', 'rooms', active: 'rooms');")->not->toContain('modulePage');
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
+test('a module provider made before modules owned a prefix gets no module link: a new record keeps a navigation link of its own, at its nested prefix', function () {
+    $base = hostApp('Modular');
+
+    try {
+        $host = new HostShape(teylabsLayout(), HostShape::kitUiAlias($base), ['core', 'workspaces', 'access'], 'Bookings');
+        $make = fn (string $name): array => (new Maker($base, TreeCatalog::shipped(), kit: true, host: $host))->make('crud', $name, 'resource');
+        $make('Resource');
+        $provider = $base.'/app/Modules/Bookings/Providers/BookingsServiceProvider.php';
+        file_put_contents($provider, (string) preg_replace("/\n\s*\/\/ standards-module: navigation[^\n]*\n\s*->navigation\('bookings.read', 'Bookings', 'bookings'\)/", '', (string) file_get_contents($provider)));
+        $make('Room');
+        expect(file_get_contents($provider))->toContain("->navigation('bookings.read', 'Rooms', 'bookings/rooms', active: 'bookings/rooms');")->not->toContain("modulePage('bookings', 'bookings.read', 'Rooms'");
     } finally {
         (new Filesystem)->deleteDirectory($base);
     }

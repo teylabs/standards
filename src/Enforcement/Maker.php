@@ -298,12 +298,15 @@ final class Maker
         $pages = $this->paths['pages'] ?? 'resources/js/pages';
         $tests = $this->paths['tests'] ?? 'tests/Feature';
         $slug = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $name));
+        // A module's occasional setup is one settings section at `/settings/<module>`, whatever the section's class is called.
+        $settingsSlug = $unit === 'settings-section' && (string) $this->host?->module !== '' ? Str::kebab((string) $this->host?->module) : $slug;
         $values = [
             'namespace' => $this->paths['namespace'] ?? 'App',
             'name' => $name,
             'slug' => $slug,
             'title' => ucfirst(str_replace('-', ' ', $slug)),
             'leaf' => $leaf,
+            'settings_slug' => $settingsSlug,
             'flavor' => $flavor,
             'action' => $name,
             'test_suffix' => '',
@@ -346,7 +349,7 @@ final class Maker
                 "{$app}/Actions/Update{$name}Settings.php" => ['action.stub', ['action' => "Update{$name}Settings"]],
                 "{$pages}/settings/{$name}/Page.vue" => "settings.{$flavor}.vue.stub",
                 "{$tests}/Settings/{$name}Test.php" => 'settings.test.stub',
-            ], self::group("{$values['namespace']}\\Http\\Controllers\\Settings\\{$name}Controller", ["Route::get('/settings/{$slug}', 'edit')->name('settings.{$slug}.edit');", "Route::patch('/settings/{$slug}', 'update')->name('settings.{$slug}.update');"])],
+            ], self::group("{$values['namespace']}\\Http\\Controllers\\Settings\\{$name}Controller", ["Route::get('/settings/{$settingsSlug}', 'edit')->name('settings.{$settingsSlug}.edit');", "Route::patch('/settings/{$settingsSlug}', 'update')->name('settings.{$settingsSlug}.update');"])],
         };
 
         $written = $this->emit($files, $values);
@@ -665,9 +668,10 @@ final class Maker
         $plural = Str::plural($name);
         $slug = Str::kebab($plural);
         [$perm, $shared] = $this->crudCapability($name, $options);
+        $titles = ucfirst(str_replace('-', ' ', $slug));
+        [$prefix, $routeName, $nav] = $this->crudPrefix($slug, $perm, $titles);
         $table = Str::snake($plural);
         $title = ucfirst(str_replace('-', ' ', Str::kebab($name)));
-        $titles = ucfirst(str_replace('-', ' ', $slug));
         [$viewModel, $viewModels] = $this->viewModels($app, $namespace);
         $bulk = in_array('bulk', $options, true);
         $soft = in_array('soft-deletes', $options, true);
@@ -677,23 +681,24 @@ final class Maker
         $migration = $modelValues['migration'];
         $values = [...$modelValues,
             'namespace' => $namespace, 'name' => $name, 'plural' => $plural, 'slug' => $slug, 'table' => $table, 'perm' => $perm, 'event' => $slug,
+            'prefix' => $prefix, 'route' => $routeName, 'nav' => $nav,
             // A module shares one capability: viewing is `<module>.view`, every change `<module>.manage`. A record of its own gets one permission per operation.
             'perm_view' => $perm.'.view', 'perm_create' => $perm.($shared ? '.manage' : '.create'), 'perm_update' => $perm.($shared ? '.manage' : '.update'), 'perm_delete' => $perm.($shared ? '.manage' : '.delete'),
             'var' => Str::camel($name), 'title' => $title, 'title_lower' => strtolower($title), 'titles' => $titles, 'titles_lower' => strtolower($titles),
             'view_model' => ltrim($viewModel, '\\'), 'view_model_base' => class_basename($viewModel), 'vm_namespace' => $viewModels[1].'\\'.$plural, 'migration' => $migration, 'leaf' => 'ui-page.crud-resource',
-            'bulk_table' => $bulk ? "            ->bulk(new Action('Delete', WorkspaceUrl::to(\$this->workspace, '{$slug}/selection'), 'delete', confirm: ['title' => 'Delete the selected ".strtolower($titles)."?', 'description' => 'Every selected ".strtolower($title)." will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true))\n" : '',
+            'bulk_table' => $bulk ? "            ->bulk(new Action('Delete', WorkspaceUrl::to(\$this->workspace, '{$prefix}/selection'), 'delete', confirm: ['title' => 'Delete the selected ".strtolower($titles)."?', 'description' => 'Every selected ".strtolower($title)." will be deleted.', 'label' => 'Delete'], key: 'delete', destructive: true))\n" : '',
             'extra_routes' => '',
             'bulk_test' => '',
         ];
         $uses = [];
         if ($bulk) {
             $uses[] = "{$namespace}\\Http\\Controllers\\{$name}SelectionController";
-            $values['extra_routes'] .= "    // Before `{id}`: the selection is its own resource.\n    Route::controller({$name}SelectionController::class)->prefix('{$slug}/selection')->group(function (): void {\n        Route::delete('', 'destroy');\n    });\n";
+            $values['extra_routes'] .= "    // Before `{id}`: the selection is its own resource.\n    Route::controller({$name}SelectionController::class)->prefix('{$prefix}/selection')->group(function (): void {\n        Route::delete('', 'destroy');\n    });\n";
             $values['bulk_test'] = $this->render('crud/bulk-test.stub', $values);
         }
         if ($soft) {
             $uses[] = "{$namespace}\\Http\\Controllers\\{$name}RestorationController";
-            $values['extra_routes'] .= "    Route::controller({$name}RestorationController::class)->prefix('{$slug}/{id}/restoration')->whereNumber('id')->group(function (): void {\n        Route::post('', 'store');\n    });\n";
+            $values['extra_routes'] .= "    Route::controller({$name}RestorationController::class)->prefix('{$prefix}/{id}/restoration')->whereNumber('id')->group(function (): void {\n        Route::post('', 'store');\n    });\n";
         }
         $form = ['leaf' => 'ui-page.form'];
         $files = [
@@ -773,6 +778,32 @@ final class Maker
     }
 
     /**
+     * Where a crud record lives and how it is named and navigated. A module owns the URL prefix `<module>` (kebab case): its records nest under it at
+     * `<module>/<records>`, and the record whose plural is the module's name (its main record) sits at the prefix itself. Route names follow the path,
+     * dots for slashes (`<module>.<records>.index`, the main record `<module>.index`), so two modules' records of one name never collide and a name is
+     * read off its URL. A module record is a page of the module (`modulePage`), under the one navigation link the module provider registers at its
+     * prefix; the main record's tab is current on its own routes only, not on its siblings below the prefix. A record outside a module is unchanged:
+     * `<records>`, named `<records>.*`, with its own navigation link.
+     *
+     * @return array{0: string, 1: string, 2: string}
+     */
+    private function crudPrefix(string $slug, string $capability, string $titles): array
+    {
+        $module = (string) $this->host?->module;
+        if ($module === '') {
+            return [$slug, $slug, "navigation('{$capability}.read', '{$titles}', '{$slug}', active: '{$slug}')"];
+        }
+        $moduleSlug = Str::kebab($module);
+        $prefix = $slug === $moduleSlug ? $moduleSlug : "{$moduleSlug}/{$slug}";
+        $routeName = str_replace('/', '.', $prefix);
+        $active = $slug === $moduleSlug
+            ? ', active: ['.implode(', ', array_map(fn (string $page): string => "'route:{$routeName}.{$page}', 'route:short.{$routeName}.{$page}'", ['index', 'create', 'show', 'edit'])).']'
+            : '';
+
+        return [$prefix, $routeName, "modulePage('{$moduleSlug}', '{$capability}.read', '{$titles}', '{$prefix}'{$active})"];
+    }
+
+    /**
      * The module's provider, which declares its one capability and its two permissions: created on the module's first record, then each record's
      * policy, routes and navigation entry are added between its markers. A record already listed is left as it is, so a re-run changes nothing; a
      * provider of that name the generator did not write (no markers) is refused with the lines to add by hand. Checked before the record's files are
@@ -790,15 +821,19 @@ final class Maker
         $this->plan([$target]);
         $path = $this->placed($target);
         $stamp = "// standards-record: {$values['slug']}";
-        $register = "        {$stamp}\n        \$registry->routes(base_path('routes/{$values['slug']}.php'))->navigation('{$capability}.read', '{$values['titles']}', '{$values['slug']}', active: '{$values['slug']}');\n";
+        $register = "        {$stamp}\n        \$registry->routes(base_path('routes/{$values['slug']}.php'))->{$values['nav']};\n";
         $boot = "        Gate::policy({$values['name']}::class, {$values['name']}Policy::class); {$stamp}\n";
         $classes = ["{$namespace}\\Models\\{$values['name']}", "{$namespace}\\Policies\\{$values['name']}Policy"];
         $current = $this->exists($path)
             ? $this->read($path)
-            : rtrim($this->render('crud/module-provider.stub', [...$values, 'leaf' => 'ui-page.crud-resource', 'module' => $module, 'module_title' => strtolower((string) preg_replace('/(?<!^)[A-Z]/', ' $0', $module)), 'capability' => $capability]))."\n";
+            : rtrim($this->render('crud/module-provider.stub', [...$values, 'leaf' => 'ui-page.crud-resource', 'module' => $module, 'module_title' => strtolower((string) preg_replace('/(?<!^)[A-Z]/', ' $0', $module)), 'module_label' => ucfirst(strtolower((string) preg_replace('/(?<!^)[A-Z]/', ' $0', $module))), 'module_slug' => Str::kebab($module), 'capability' => $capability]))."\n";
         $markers = ['        // standards-module: records (register)', '        // standards-module: records (boot)'];
         if (! str_contains($current, $markers[0]) || ! str_contains($current, $markers[1])) {
             throw new InvalidArgumentException("{$path} exists but was not written by standards:make (it has no standards-module markers). Add the {$values['titles']} record to it by hand: in register(), {$register} and in boot(), {$boot}");
+        }
+        // A provider written before modules owned a prefix has no module link for a module page to sit under: the record keeps a link of its own, at its nested prefix.
+        if (! str_contains($current, '// standards-module: navigation')) {
+            $register = str_replace("->{$values['nav']};", "->navigation('{$capability}.read', '{$values['titles']}', '{$values['prefix']}', active: '{$values['prefix']}');", $register);
         }
         if (str_contains($current, $stamp)) {
             return null;

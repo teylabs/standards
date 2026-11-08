@@ -31,7 +31,7 @@ final class {{ name }}ShowViewModel extends {{ view_model_base }}
     public function actions(): array
     {
         $gate = Gate::forUser($this->user);
-        $url = WorkspaceUrl::to($this->workspace, '{{ slug }}/'.$this->{{ var }}->getKey());
+        $url = WorkspaceUrl::to($this->workspace, '{{ prefix }}/'.$this->{{ var }}->getKey());
 
         return [
             'edit' => $gate->allows('update', $this->{{ var }}) ? new Action('Edit', $url.'/edit', 'get', key: 'edit') : null,

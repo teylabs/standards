@@ -8,7 +8,7 @@ const form = useForm({ name: '' });
 
 <template>
     <SettingsFrame title="{{ title }}">
-        <FormCard title="{{ title }}" @submit="form.patch('/settings/{{ slug }}')">
+        <FormCard title="{{ title }}" @submit="form.patch('/settings/{{ settings_slug }}')">
             <Field id="{{ slug }}-name" label="Name" :error="form.errors.name">
                 <Input id="{{ slug }}-name" v-model="form.name" name="name" />
             </Field>
