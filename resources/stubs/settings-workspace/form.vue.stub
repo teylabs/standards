@@ -1,0 +1,27 @@
+<!-- standards-pattern: {{ leaf }} -->
+<script setup lang="ts">
+import { Form } from '@inertiajs/vue3';
+import { Field, FormCard, Input, Page } from '{{ kit_ui }}';
+
+// The {{ section_title_lower }} settings of this workspace. The server decides whether this viewer may save; `lock_version` goes back with the save, so a stale edit is refused.
+defineProps<{ title: string; values: { name: string; lock_version: number }; submit: { label: string; url: string; method: string; key?: string | null } | null }>();
+</script>
+
+<template>
+    <Page md :title="title">
+        <Form v-if="submit" :action="submit.url" :method="submit.method as never" :options="{ preserveScroll: true }">
+            <template #default="{ errors }">
+                <FormCard title="{{ section_title }}" :submit="submit" busy-label="Saving…">
+                    <Input type="hidden" name="lock_version" :model-value="String(values.lock_version)" />
+                    <p v-if="errors.lock_version" class="col-span-6 text-sm text-destructive" role="alert">{{ errors.lock_version }}</p>
+                    <Field id="{{ settings_slug }}-name" name="name" label="Name" :span="4" :error="errors.name">
+                        <Input id="{{ settings_slug }}-name" name="name" :model-value="values.name" maxlength="255" />
+                    </Field>
+                </FormCard>
+            </template>
+        </Form>
+        <FormCard v-else title="{{ section_title }}">
+            <p class="col-span-6 text-sm">Name: <span class="font-medium">{{ values.name || '—' }}</span></p>
+        </FormCard>
+    </Page>
+</template>
