@@ -1164,7 +1164,8 @@
             "checks": [],
             "paths": [
                 "resources/js/pages/**/Layout.vue",
-                "app/**/Providers/*ServiceProvider.php"
+                "app/**/Providers/*ServiceProvider.php",
+                "app/**/ViewModels/**"
             ],
             "keywords": [
                 "breadcrumbs",
@@ -1197,7 +1198,7 @@
                 }
             ],
             "rules": [
-                "Breadcrumbs = bar, always (Jasper, fleet-wide): the shell's Layout draws the whole trail under the header, the current page last, so every page shows one trail in the same place. Don't pass breadcrumbs=\"page\" and don't draw a trail inside a page. The trail comes from the route's breadcrumbs through the page ViewModel's layout().",
+                "Breadcrumbs = bar, always (Jasper, fleet-wide): the shell's Layout draws the whole trail under the header, the current page last, so every page with route breadcrumbs shows one trail in the same place (a page with no trail gets no bar). Don't pass breadcrumbs=\"page\" and don't draw a trail inside a page. The trail comes from the route's breadcrumbs through the page ViewModel's layout().",
                 "A module's sibling pages = PageTabs. Register each with Registry::modulePage($module, $ability, $label, $suffix, order:, active:) in the module's service provider, its suffix nested under the module's prefix (`bookings/calendar`, as ui-page.module-urls says; the kit warns in development otherwise). The server sends the ones the viewer may open as the page's layout.navigation, and a top-level <Page> draws them. Don't hand-write the tab list in a page.",
                 "A record's sections = PageTabs, as AppraisalBench's case pages do: the record ViewModel sets its own layout.navigation, and the record's frame (its folder Layout.vue) renders one <PageTabs> from it under the record's header. That replaces the module's tabs, so a page never has two tab rows.",
                 "No hand-rolled sub-nav strips: no row of links under the header or above the heading built from a page's own array, and no new use of the kit's deprecated SubNav strip (Layout sub-nav=\"strip\")."
