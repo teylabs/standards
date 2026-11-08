@@ -1,0 +1,115 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Models\{{ model }};
+use {{ namespace }}\Policies\{{ model }}Policy;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Tey\Concierge\Actions\AcceptInvitation;
+use Tey\Concierge\Actions\EstablishWorkspace;
+use Tey\Concierge\Actions\InviteMember;
+use Tey\Concierge\Support\GrantSet;
+use Tey\Kit\Features\Access\Capabilities;
+use Tey\Kit\Features\SessionUi\Http\Middleware\HandleInertiaRequests;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+use Tey\Kit\Features\Workspaces\TenantBoundary;
+
+// The {{ section_title }} settings section over HTTP, signed in, inside a workspace. Self-contained: each test migrates the app's empty test database and makes its own
+// people. Two workspaces, each with an owner; the first also has a viewer; and one signed-in person who belongs to neither. Nothing here reads a seeded fixture.
+
+beforeEach(function () {
+    // No provider side effects: the viewer's invitation is accepted in place, never delivered.
+    config(['concierge.invitations.deliver' => false]);
+    Artisan::call('migrate', ['--force' => true, '--no-interaction' => true]);
+    Artisan::call('concierge:sync-roles', ['--no-interaction' => true]);
+    Artisan::call('kit:permissions:sync', ['--no-interaction' => true]);
+    $person = fn (string $name): Authenticatable => config('auth.providers.users.model')::query()->forceCreate(['name' => $name, 'email' => strtolower($name).'@example.test', 'email_verified_at' => now(), 'password' => Hash::make(Str::random(40))]);
+    $this->owner = $person('Owner');
+    $this->otherOwner = $person('Other');
+    $this->viewer = $person('Viewer');
+    $this->stranger = $person('Stranger');
+    $open = function (string $name, Authenticatable $owner): int {
+        $workspace = Workspace::query()->create(['name' => $name, 'slug' => strtolower($name)]);
+        EstablishWorkspace::run($workspace, $owner);
+
+        return (int) $workspace->getKey();
+    };
+    $this->workspace = $open('Alpha', $this->owner);
+    $this->otherWorkspace = $open('Beta', $this->otherOwner);
+    AcceptInvitation::run($this->viewer, InviteMember::run($this->owner, Workspace::query()->findOrFail($this->workspace), $this->viewer->email, new GrantSet(['viewer']))->token);
+    foreach ([$this->workspace, $this->otherWorkspace] as $workspace) {
+        {{ var }}SettingsCapability($workspace, true);
+    }
+});
+
+function {{ var }}SettingsCapability(int $workspace, bool $on): void
+{
+    app(TenantBoundary::class)->run($workspace, fn () => app(Capabilities::class)->setForWorkspace({{ model }}Policy::CAPABILITY, Workspace::query()->findOrFail($workspace), $on));
+}
+
+/** The section's full-form URL in a workspace: `/@<slug>/settings/{{ settings_slug }}`, from the workspace's own slug so a non-member can ask and be refused. */
+function {{ var }}SettingsUrl(int $workspace): string
+{
+    return '/@'.Workspace::query()->findOrFail($workspace)->slug.'/settings/{{ settings_slug }}';
+}
+
+/** @return array<string, string> the headers of an Inertia visit, so the page answers with its props */
+function {{ var }}SettingsInertia(): array
+{
+    return ['X-Inertia' => 'true', 'Accept' => 'text/html', 'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')) ?? ''];
+}
+
+/** The workspace's row as stored, read past the workspace scope on purpose: what a request did, seen from outside any workspace. */
+function {{ var }}SettingsStored(int $workspace): ?{{ model }}
+{
+    return {{ model }}::withoutGlobalScope('workspace')->where('workspace_id', $workspace)->first();
+}
+
+it('lets an owner read the defaults and save, refuses a stale save, and audits the change', function () {
+    $this->actingAs($this->owner);
+
+    $this->get({{ var }}SettingsUrl($this->workspace), {{ var }}SettingsInertia())->assertOk()->assertJsonPath('component', 'settings/{{ name }}/Page')
+        ->assertJsonPath('props.values.lock_version', 1)->assertJsonPath('props.submit.key', 'save');
+    expect({{ var }}SettingsStored($this->workspace))->toBeNull('reading the section writes nothing');
+
+    $this->put({{ var }}SettingsUrl($this->workspace), [{{ sample }}, 'lock_version' => 1])->assertRedirect()->assertSessionHasNoErrors();
+    $this->put({{ var }}SettingsUrl($this->workspace), [{{ sample }}, 'lock_version' => 1])->assertSessionHasErrors('lock_version');
+
+    $stored = {{ var }}SettingsStored($this->workspace);
+    expect($stored->{{ sample_field }})->toBe({{ sample_value }})->and($stored->lock_version)->toBe(2)
+        ->and(DB::table('audit_events')->where('event', '{{ event }}')->where('workspace_id', $this->workspace)->count())->toBe(1);
+    $this->get({{ var }}SettingsUrl($this->workspace), {{ var }}SettingsInertia())->assertOk()->assertJsonPath('props.values.{{ sample_field }}', {{ sample_value }});
+});
+
+it('keeps the settings inside their workspace and refuses a non-member', function () {
+    $this->actingAs($this->owner);
+    $this->put({{ var }}SettingsUrl($this->workspace), [{{ sample }}, 'lock_version' => 1])->assertRedirect()->assertSessionHasNoErrors();
+    expect({{ var }}SettingsStored($this->otherWorkspace))->toBeNull();
+
+    $this->actingAs($this->otherOwner);
+    $this->get({{ var }}SettingsUrl($this->otherWorkspace), {{ var }}SettingsInertia())->assertOk()->assertJsonPath('props.values.lock_version', 1);
+
+    $this->actingAs($this->stranger);
+    expect($this->getJson({{ var }}SettingsUrl($this->workspace))->status())->toBeIn([403, 404])
+        ->and($this->putJson({{ var }}SettingsUrl($this->workspace), [{{ sample }}, 'lock_version' => 2])->status())->toBeIn([403, 404])
+        ->and({{ var }}SettingsStored($this->workspace)->lock_version)->toBe(2);
+});
+
+it('lets a viewer read without a save and hides the section while the capability is off', function () {
+    $this->actingAs($this->viewer);
+
+    $this->get({{ var }}SettingsUrl($this->workspace), {{ var }}SettingsInertia())->assertOk()->assertJsonPath('props.submit', null);
+    $this->putJson({{ var }}SettingsUrl($this->workspace), [{{ sample }}, 'lock_version' => 1])->assertForbidden();
+    expect({{ var }}SettingsStored($this->workspace))->toBeNull();
+
+    {{ var }}SettingsCapability($this->workspace, false);
+    $this->actingAs($this->owner);
+    $this->get({{ var }}SettingsUrl($this->workspace), {{ var }}SettingsInertia())->assertNotFound();
+    $this->putJson({{ var }}SettingsUrl($this->workspace), [{{ sample }}, 'lock_version' => 1])->assertNotFound();
+    expect({{ var }}SettingsStored($this->workspace))->toBeNull();
+});

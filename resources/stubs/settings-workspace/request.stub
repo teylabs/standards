@@ -1,0 +1,19 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+final class Update{{ model }}Request extends FormRequest
+{
+    /** @return array<string, list<string>> the settings, and the `lock_version` the page loaded */
+    public function rules(): array
+    {
+        return [
+            {{ rules }},
+            'lock_version' => ['required', 'integer', 'min:1'],
+        ];
+    }
+}
