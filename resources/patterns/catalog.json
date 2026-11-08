@@ -1755,7 +1755,9 @@
             "summary": "Register a widget with its order and placement; never fork the kit dashboard page.",
             "kit": [],
             "make": null,
-            "checks": [],
+            "checks": [
+                "ui.dashboard-composition"
+            ],
             "paths": [],
             "keywords": [
                 "dashboard",

@@ -43,6 +43,7 @@ final class Conformance
         'tenant.scoped-exists' => '[tenant.scoped-exists] an exists rule on workspace records is scoped to the current workspace',
         'browser.accessible' => '[browser.accessible] a browser test that visits a page checks it with axe (assertAccessible)',
         'notifications.chat-via-channel' => '[notifications.chat-via-channel] chat messages are Notifications sent through their channel (toSlack), not direct API calls',
+        'ui.dashboard-composition' => '[ui.dashboard-composition] dashboard widgets: one feed at most, each kind in its column, every widget declares kind() (warn only)',
         'destructive-db' => '[destructive-db] a service provider prohibits destructive database commands outside testing',
         'live.broadcast-now' => '[live.broadcast-now] the notice a live prop listens for is ShouldBroadcastNow',
         'vm.typed-pages' => '[vm.typed-pages] a page declares its props as its generated ViewModel type',
@@ -141,6 +142,11 @@ final class Conformance
             expect($stale)->toBe([], implode("\n", $stale));
 
             Assert::markTestSkipped('Rule ['.$rule.'] is advisory until listed in Configuration::optionalRules ('.count($violations).' findings).');
+        }
+
+        // Warn only, whatever optionalRules says: the findings are reported, the test never fails on them.
+        if ($rule === 'ui.dashboard-composition') {
+            Assert::markTestSkipped('Rule ['.$rule.'] warns only ('.count($violations).' findings).'.implode('', array_map(fn (array $violation): string => "\n".$violation['check'], $violations)));
         }
 
         // A finding the check marks advisory (a rule that checked nothing) is never a silent pass under Pest either: the test is skipped, saying why.
@@ -248,6 +254,11 @@ final class Conformance
 
         if ($rule === 'guards.declared') {
             return (new Checks\GuardsDeclared($this->config, $this->source))->violations();
+        }
+
+        // Warn only: every finding is advisory, whatever optionalRules says.
+        if ($rule === 'ui.dashboard-composition') {
+            return (new Checks\DashboardComposition($this->config, $this->source))->violations();
         }
 
         if ($rule === 'notifications.chat-via-channel') {
