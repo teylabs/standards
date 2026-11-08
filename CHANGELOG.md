@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.11.87 - 2026-11-08
+
 ### Added
 
 - **Pattern leaf `ui-page.module-urls`: a module owns its URL prefix.** A module owns `/@{workspace}/<module>` (kebab case); its records nest under it at `/<module>/<records>`, a record's pages at `/<module>/<records>/{id}/<section>`, and the record named after the module (or its main record) sits at the prefix itself. Occasional setup is a settings section at `/settings/<module>`. Route names follow the path, dots for slashes. Reached from `ui-page.shared` through a new `ui-page.navigation` branch (the signed-in shell, or a module's URLs). Existing apps keep their URLs.
