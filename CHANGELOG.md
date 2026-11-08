@@ -5,6 +5,7 @@
 ### Added
 
 - **Pattern leaf `ui-page.module-urls`: a module owns its URL prefix.** A module owns `/@{workspace}/<module>` (kebab case); its records nest under it at `/<module>/<records>`, a record's pages at `/<module>/<records>/{id}/<section>`, and the record named after the module (or its main record) sits at the prefix itself. Occasional setup is a settings section at `/settings/<module>`. Route names follow the path, dots for slashes. Reached from `ui-page.shared` through a new `ui-page.navigation` branch (the signed-in shell, or a module's URLs). Existing apps keep their URLs.
+- **Page purpose first, and warn-only rule `ui.page-purpose`.** Step 1 of the page method (`ui-page.own`) is now to state the page purpose before choosing components: who opens it and their main job, as `@purpose <who>: <main job>` on the page ViewModel's class docblock. The rule warns on a concrete `PageViewModel` (or `AdHocViewModel`) subclass with no `@purpose` or a malformed one; abstract bases are skipped. Every finding is advisory and the rule is never enforced, even if listed in `optionalRules`.
 
 ### Changed
 
