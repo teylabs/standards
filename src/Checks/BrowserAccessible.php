@@ -42,7 +42,7 @@ final readonly class BrowserAccessible
             if (! $file->isFile() || ! str_ends_with($file->getFilename(), '.php')) {
                 continue;
             }
-            // Comments don't count: a commented-out visit() is not a test, and a commented-out check is not a check.
+            // Comments and strings don't count: a visit() or a check in a comment or a string is not a call.
             $code = $this->code((string) file_get_contents($file->getPathname()));
             if (preg_match('/(?<![\w$>:])visit\s*\(/', $code) === 1 && preg_match('/\b(?:assertAccessible|assertNoAccessibilityIssues)\s*\(/', $code) !== 1) {
                 $violations[] = [
@@ -61,7 +61,9 @@ final readonly class BrowserAccessible
     {
         $code = '';
         foreach (token_get_all($source) as $token) {
-            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT, T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE, T_INLINE_HTML], true)) {
+                $code .= ' ';
+
                 continue;
             }
             $code .= is_array($token) ? $token[1] : $token;

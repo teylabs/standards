@@ -26,13 +26,15 @@ test('browser.accessible flags a test file that visits a page without an axe che
         'Browser/SettingsTest.php' => "test('settings', function () {\n    \$page = visit('/settings');\n    assertAccessible(\$page, 'the settings page');\n});\n",
         'Browser/LegacyTest.php' => "it('loads', function () {\n    visit('/')->assertNoAccessibilityIssues();\n});\n",
         'Browser/CommentedTest.php' => "test('x', function () {\n    \$page = visit('/x');\n    // assertAccessible(\$page, 'x');\n});\n",
+        'Browser/StringTest.php' => "test('s', function () {\n    \$hint = 'assertAccessible(\$page)';\n    \$page = visit('/s');\n});\n",
+        'Feature/DocsTest.php' => "test('docs', function () {\n    \$hint = \"visit('/docs')\";\n});\n",
         'Feature/VisitorTest.php' => "test('a method named visit is not a page visit', function () {\n    \$tracker->visit('/');\n    Tracker::visit('/');\n    // visit('/');\n});\n",
         'fixtures/Browser/FixtureTest.php' => "visit('/');\n",
     ]);
 
     try {
         $findings = (new Conformance(tenantConfiguration($base)))->violations('browser.accessible');
-        expect(array_column($findings, 'target'))->toBe(['tests/Browser/CommentedTest.php', 'tests/Browser/DashboardTest.php'])
+        expect(array_column($findings, 'target'))->toBe(['tests/Browser/CommentedTest.php', 'tests/Browser/DashboardTest.php', 'tests/Browser/StringTest.php'])
             ->and($findings[0]['check'])->toBe('a browser test visits a page without checking its accessibility')
             ->and($findings[0]['hint'])->toContain('assertAccessible(')
             ->and(Gate::ADVISORY)->toContain('browser.accessible');
