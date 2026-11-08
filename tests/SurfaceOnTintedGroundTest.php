@@ -98,6 +98,8 @@ test('ui.surface-on-tinted-ground does nothing without a tinted ground: none dec
     'no declaration' => ["@import 'tailwindcss';\n:root { --background: #f3f5e7; }\n"],
     'another value' => [":root { --kit-ground: white; }\n"],
     'a comment' => ["/* :root { --kit-ground: tinted; } */\n:root { --background: #fff; }\n"],
+    'a string' => [".x { content: \"--kit-ground: tinted;\"; }\n"],
+    'another selector' => [".theme { --kit-ground: tinted; }\n"],
 ]);
 
 test('ui.surface-on-tinted-ground reads a declaration in any stylesheet under resources/css and skips the kit\'s own files', function () use ($page) {
@@ -106,6 +108,13 @@ test('ui.surface-on-tinted-ground reads a declaration in any stylesheet under re
         'resources/js/components/Kit/Layout/Example.vue' => $page,
         'resources/js/pages/Plain.vue' => "<template>\n    <Page>\n        <table />\n    </Page>\n</template>\n",
     ]))->toBe(['resources/js/pages/Plain.vue:3 a <table> sits straight on the tinted ground in <Page>: put it on a card [advisory]']);
+});
+
+test('ui.surface-on-tinted-ground reads kebab-case kit tags and looks through a template wrapper in a form', function () {
+    expect(tintedFindings([
+        'resources/css/app.css' => TINTED_CSS,
+        'resources/js/pages/Kebab.vue' => "<template>\n    <page-grid>\n        <page-grid-item>\n            <table />\n        </page-grid-item>\n    </page-grid>\n    <Page>\n        <form><template v-if=\"show\"><FormCard /></template></form>\n    </Page>\n</template>\n",
+    ]))->toBe(['resources/js/pages/Kebab.vue:4 a <table> sits straight on the tinted ground in <PageGridItem>: put it on a card [advisory]']);
 });
 
 test('ui.surface-on-tinted-ground stays warn only: not an opt-in advisory, and listing it in optionalRules still warns', function () {

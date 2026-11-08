@@ -9,8 +9,8 @@ use Tey\Standards\Source;
 
 /**
  * Rule `ui.surface-on-tinted-ground` (warn only; pattern leaf ui-page.tinted-ground): on a tinted page ground, content sits on a card.
- * It applies only to an app whose theme declares a tinted ground: a stylesheet under `resources/css` sets `--kit-ground: tinted` (tey/kit's
- * declaration; comments don't count). Then, in the app's own Vue files (not the kit's), it warns on content placed straight on the ground, a direct
+ * It applies only to an app whose theme declares a tinted ground: a stylesheet under `resources/css` sets `--kit-ground: tinted` in a `:root`
+ * block (tey/kit's declaration; comments and strings don't count). Then, in the app's own Vue files (not the kit's), it warns on content placed straight on the ground, a direct
  * child of `<Page>`, `<PageGrid>` or `<PageGridItem>`:
  * - a raw `<table>`;
  * - a raw `<form>` whose first element is not a card (`FormCard`, `Card`, `Section` or `Surface`);
@@ -46,7 +46,7 @@ final readonly class SurfaceOnTintedGround
         $kitPredates = $kit !== null && version_compare($kit, self::KIT_SURFACES, '<');
         $found = [];
         foreach ((new FrontendSource($this->config))->appFiles() as $path => $text) {
-            if (! str_ends_with($path, '.vue') || ! str_contains($text, '<Page')) {
+            if (! str_ends_with($path, '.vue')) {
                 continue;
             }
             $template = VueTemplate::parse($text);
@@ -63,7 +63,7 @@ final readonly class SurfaceOnTintedGround
                     }
                     if ($child->tag === 'table') {
                         $found[] = $this->finding($path, $child->line, "a <table> sits straight on the tinted ground in <{$node->tag}>: put it on a card");
-                    } elseif ($child->tag === 'form' && ! in_array($child->elements()[0]->tag ?? '', self::CARDS, true)) {
+                    } elseif ($child->tag === 'form' && ! in_array($this->firstElement($child)?->tag, self::CARDS, true)) {
                         $found[] = $this->finding($path, $child->line, "a <form> sits straight on the tinted ground in <{$node->tag}>: use FormCard or put it on a card");
                     } elseif ($child->tag === 'DataTable' && $kitPredates) {
                         $found[] = $this->finding($path, $child->line, "a <DataTable> sits straight on the tinted ground in <{$node->tag}>, and tey/kit {$kit} draws no card for it (".self::KIT_SURFACES.'+ does): put it on a card or update the kit');
@@ -75,6 +75,18 @@ final readonly class SurfaceOnTintedGround
         return $found;
     }
 
+    /** The first element a <form> renders: `<template>` wrappers (v-if, v-for, the default slot) are looked through. */
+    private function firstElement(VueTemplate $node): ?VueTemplate
+    {
+        foreach ($node->flow() as $child) {
+            if ($child instanceof VueTemplate) {
+                return $child;
+            }
+        }
+
+        return null;
+    }
+
     /** Whether a stylesheet under resources/css declares `--kit-ground: tinted`. */
     private function tinted(): bool
     {
@@ -82,9 +94,13 @@ final readonly class SurfaceOnTintedGround
             return false;
         }
         foreach ($this->source->files(['resources/css'], '*.css') as $css) {
-            $css = preg_replace('~/\*.*?\*/~s', '', $css) ?? '';
-            if (preg_match('~--kit-ground\s*:\s*tinted\s*(?:;|\}|!important|$)~m', $css) === 1) {
-                return true;
+            // Comments and quoted strings never declare anything; the token counts only in a :root block.
+            $css = preg_replace('~/\*.*?\*/|"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'~s', '', $css) ?? '';
+            preg_match_all('~(?:^|[},;\s]):root\s*\{([^{}]*)\}~', $css, $blocks);
+            foreach ($blocks[1] as $block) {
+                if (preg_match('~(?:^|;|\s)--kit-ground\s*:\s*tinted\s*(?:!important\s*)?(?:;|$)~', $block) === 1) {
+                    return true;
+                }
             }
         }
 
