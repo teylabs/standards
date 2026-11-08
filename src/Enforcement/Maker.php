@@ -258,6 +258,10 @@ final class Maker
         // Code is only emitted against tey/kit features the host has adopted.
         // A workspace's settings section (made in a module, or for the settings.workspace leaf) runs inside a workspace behind a policy.
         $workspaceSettings = $unit === 'settings-section' && ((string) $this->host?->module !== '' || $leaf === 'settings.workspace');
+        // Without --leaf the first leaf sharing the make command is a person's (settings.form): a module's section is stamped as the workspace's.
+        if ($workspaceSettings && $leafId === null && $flavor === 'form') {
+            $leaf = $this->leafId = 'settings.workspace';
+        }
         $needed = $workspaceSettings ? ['core', 'workspaces', 'access'] : self::features($unit, $flavor, $options);
         $missing = $this->host?->missingFeatures($needed) ?? [];
         if ($missing !== []) {

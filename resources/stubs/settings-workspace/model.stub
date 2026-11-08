@@ -32,9 +32,9 @@ final class {{ model }} extends Model
         return self::query()->first() ?? new self;
     }
 
-    /** This workspace's row to write, created with the defaults on first use. Call it inside the workspace (TenantBoundary). */
+    /** This workspace's row to write, created with the defaults on first use; a concurrent first save that loses the insert reads the winner's row. Call it inside the workspace (TenantBoundary). */
     public static function current(): self
     {
-        return self::query()->firstOrCreate([]);
+        return self::query()->createOrFirst([]);
     }
 }

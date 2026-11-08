@@ -285,7 +285,7 @@ test('a module owns its URL prefix: records nest under it, the main record sits 
             ->and($read('app/Modules/Bookings/Actions/UpdateBookingsSettings.php'))->toContain("authorize('update', [BookingsSettings::class, Workspace::required()])")->toContain('updateIfCurrent(')
             ->and((string) file_get_contents((glob($base.'/app/UI/Bookings/ViewModels/{,*/}BookingsSettingsViewModel.php', GLOB_BRACE) ?: [''])[0]))->toContain('extends PageViewModel')->toContain("return 'workspace';")
             ->and($read('tests/Feature/Modules/Bookings/Settings/BookingRulesTest.php'))->toContain("'/settings/bookings'")->toContain('$this->actingAs($this->owner);')
-            ->toContain('EstablishWorkspace::run(')->toContain("->assertJsonPath('component', 'Bookings::settings/BookingRules/Page')");
+            ->toContain('EstablishWorkspace::run(')->toContain('standards-pattern: settings.workspace')->toContain("->assertJsonPath('component', 'Bookings::settings/BookingRules/Page')");
         // A module has one settings section: a second is refused before anything is written.
         expect(fn () => $make('settings-section', 'BookingAlerts', 'form'))->toThrow(InvalidArgumentException::class, 'already has its settings section')
             ->and(glob($base.'/app/Modules/Bookings/Http/Controllers/Settings/BookingAlertsController.php') ?: [])->toBe([]);
