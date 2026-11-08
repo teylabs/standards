@@ -42,6 +42,7 @@ nodes:
       - { answer: "Adopting every kit surface across the app (standards:adoption)", next: ui-page.kit-adoption }
       - { answer: "A test that guards every route or page (a route snapshot, a list of modal or exempt pages)", next: ui-page.declared-guards }
       - { answer: "A browser test of a page's layout or look (sizes, spacing, colours, fonts)", next: ui-page.layout-tests }
+      - { answer: "A browser test that checks a page is accessible (axe, WCAG)", next: ui-page.accessible-pages }
       - { answer: "None of these", next: ui-page.app-wide.byo }
   - id: ui-page.kit-owned
     question: Which kit-owned page?
@@ -363,6 +364,15 @@ nodes:
     checks: ['no-pixel-pins']
     paths: []
     keywords: [browser test, layout test, getComputedStyle, getBoundingClientRect, pixel, px, height, width, font, colour, brittle test, visual]
+    status: draft
+  - id: ui-page.accessible-pages
+    recipe: Browser tests check accessibility
+    summary: "Each page a browser test visits is checked with assertAccessible($page, 'what it shows'): axe against WCAG 2.2 AA (wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa) at every impact level, after animations settle. A violation that cannot be fixed yet takes an AXE_EXCEPTIONS entry with a reason and an expiry date; AXE_SURVEY=1 prints the violations instead of failing, to size the work."
+    kit: []
+    components: []
+    checks: ['browser.accessible']
+    paths: ['tests/Pest.php']
+    keywords: [accessibility, a11y, axe, wcag, wcag 2.2, contrast, assertAccessible, assertNoAccessibilityIssues, browser test, survey]
     status: draft
   - id: ui-page.header-actions
     recipe: Page header actions

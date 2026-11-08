@@ -25,7 +25,7 @@ final class Gate
     public const OPTIONAL = ['ui plus', 'ui new-tab', 'ui dropzone', 'ui toast', 'ui header-actions', 'destructive-db', 'format-lint'];
 
     /** Rules reported as advisories, never drift, until an app lists them in Configuration::optionalRules. */
-    public const ADVISORY = ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists', ...\Tey\Standards\Checks\Layout::RULES];
+    public const ADVISORY = ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists', 'browser.accessible', ...\Tey\Standards\Checks\Layout::RULES];
 
     public function __construct(
         private readonly Configuration $config,

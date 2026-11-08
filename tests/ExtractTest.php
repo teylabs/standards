@@ -176,7 +176,9 @@ test('extraction moves the inline Configuration with its imports and variables, 
     $asserted = [];
 
     foreach (array_keys(Conformance::TESTS) as $rule) {
-        if (! in_array((string) $rule, $report['skipped'], true)) {
+        // An advisory rule the app has not switched on reports advisories, not violations, in both the gate and the Arch suite.
+        $advisory = in_array((string) $rule, Gate::ADVISORY, true) && ! in_array((string) $rule, badConfiguration()->optionalRules, true);
+        if (! $advisory && ! in_array((string) $rule, $report['skipped'], true)) {
             foreach ($pest->violations((string) $rule) as $violation) {
                 $asserted[] = [(string) $rule, $violation['target'], $violation['check']];
             }

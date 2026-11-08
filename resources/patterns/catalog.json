@@ -527,6 +527,10 @@
                     "next": "ui-page.layout-tests"
                 },
                 {
+                    "answer": "A browser test that checks a page is accessible (axe, WCAG)",
+                    "next": "ui-page.accessible-pages"
+                },
+                {
                     "answer": "None of these",
                     "next": "ui-page.app-wide.byo"
                 }
@@ -1388,6 +1392,32 @@
                 "colour",
                 "brittle test",
                 "visual"
+            ],
+            "status": "draft"
+        },
+        "ui-page.accessible-pages": {
+            "id": "ui-page.accessible-pages",
+            "recipe": "Browser tests check accessibility",
+            "summary": "Each page a browser test visits is checked with assertAccessible($page, 'what it shows'): axe against WCAG 2.2 AA (wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa) at every impact level, after animations settle. A violation that cannot be fixed yet takes an AXE_EXCEPTIONS entry with a reason and an expiry date; AXE_SURVEY=1 prints the violations instead of failing, to size the work.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "browser.accessible"
+            ],
+            "paths": [
+                "tests/Pest.php"
+            ],
+            "keywords": [
+                "accessibility",
+                "a11y",
+                "axe",
+                "wcag",
+                "wcag 2.2",
+                "contrast",
+                "assertAccessible",
+                "assertNoAccessibilityIssues",
+                "browser test",
+                "survey"
             ],
             "status": "draft"
         },
