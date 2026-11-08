@@ -1,0 +1,35 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Providers;
+
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\ServiceProvider;
+use Tey\Kit\Features\Core\Registry;
+
+/**
+ * Wires the {{ module_title }} module into the kit: one `{{ capability }}` capability for every record in it (off until switched on, in `kit.capabilities` or per
+ * workspace), `{{ capability }}.view` and `{{ capability }}.manage` granted to roles, and each record's policy, routes and navigation entry. `standards:make crud
+ * --module={{ module }}` adds a record between the markers; a record already listed is left as it is.
+ */
+final class {{ module }}ServiceProvider extends ServiceProvider
+{
+    public const CAPABILITY = '{{ capability }}';
+
+    /** Contributions go in register(), not boot(): tey/kit 0.15.0 and earlier define each declared capability while the kit boots, before this provider's boot() runs. */
+    public function register(): void
+    {
+        $registry = $this->app->make(Registry::class);
+        $registry->capabilities([self::CAPABILITY])
+            ->permission('{{ capability }}.view', ['owner', 'admin', 'viewer'], self::CAPABILITY, ['{{ capability }}.read'])
+            ->permission('{{ capability }}.manage', ['owner', 'admin'], self::CAPABILITY, ['{{ capability }}.write'])
+            ->abilities(['{{ capability }}.read' => self::CAPABILITY]);
+        // standards-module: records (register)
+    }
+
+    public function boot(): void
+    {
+        // standards-module: records (boot)
+    }
+}

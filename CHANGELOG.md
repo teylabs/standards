@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **`standards:make crud --module=X` gives the module one capability.** The records in a module share one capability, `x`, with `x.view` and `x.manage` (aliases `x.read` and `x.write`). The policies gate on these, the MCP tools use the `x.read`/`x.write` scopes, and one `{Module}ServiceProvider` declares the capability once and adds each record's policy, routes and navigation between its markers. Each record is stamped, so running the command again changes nothing. An existing provider without the markers is refused, and the error lists the lines to add by hand. Pass `--capability=<kebab>` to give a record its own capability and provider, as before. Audit event names keep the record's name (`plans.create`).
+
 ## 0.11.82 - 2026-11-07
 
 ### Fixed
