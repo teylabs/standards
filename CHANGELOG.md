@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **Pattern leaf `mail-notifications.chat`, and advisory rule `notifications.chat-via-channel`.** Chat apps (Slack now; Teams and Discord to follow) send Notifications through their channel: `toSlack()` with laravel/slack-notification-channel, the tenant's bot token from `routeNotificationForSlack($notification)` (fail closed), and the channel chosen in `via()`. The rule flags direct calls to `chat.postMessage`, `/api/chat.` endpoints or `hooks.slack.com` webhooks outside a Notification channel class or a class tagged `@chat-digest <reason>`, the exception for digests edited in place with `chat.update`. Advisory until an app lists it in `Configuration::$optionalRules`. The tree's root question now reads "mail, SMS, chat or an agent recipient?".
+
 ## 0.11.84 - 2026-11-08
 
 ### Fixed

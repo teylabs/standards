@@ -3373,11 +3373,15 @@
         },
         "mail-notifications": {
             "id": "mail-notifications",
-            "question": "Is the channel mail, SMS or an agent recipient?",
+            "question": "Is the channel mail, SMS, chat or an agent recipient?",
             "options": [
                 {
                     "answer": "Mail",
                     "next": "mail-notifications.mail"
+                },
+                {
+                    "answer": "A chat app (Slack; Teams and Discord to follow)",
+                    "next": "mail-notifications.chat"
                 },
                 {
                     "answer": "SMS or an agent",
@@ -3481,6 +3485,39 @@
                 "batch email"
             ],
             "status": "gap"
+        },
+        "mail-notifications.chat": {
+            "id": "mail-notifications.chat",
+            "recipe": "Chat notification",
+            "summary": "A message to a chat app is a Notification sent through its channel: toSlack() with laravel/slack-notification-channel. Each tenant's bot token comes from routeNotificationForSlack($notification), which resolves the tenant's connection and fails closed when none is connected; the notifiable's rule or preference picks the channel in via(). Slack now; Teams and Discord follow the same shape.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "notifications.chat-via-channel"
+            ],
+            "paths": [
+                "app/**/Notifications/**"
+            ],
+            "keywords": [
+                "slack",
+                "chat",
+                "teams",
+                "discord",
+                "chat.postMessage",
+                "webhook",
+                "bot token",
+                "toSlack",
+                "slack notification",
+                "channel message"
+            ],
+            "status": "draft",
+            "rules": [
+                "Send through the Notification channel: via() returns ['slack'] when the notifiable's rule or preference asks for it, and toSlack() builds a SlackMessage.",
+                "The bot token is the tenant's: routeNotificationForSlack($notification) resolves the tenant's connection and returns SlackRoute::make($channel, $token); with no connection it returns null so nothing is sent (fail closed), never a shared or default token.",
+                "Example: public function via(object $notifiable): array { return $notifiable->wantsChat() ? ['slack'] : []; } and public function toSlack(object $notifiable): SlackMessage { return (new SlackMessage)->text('Booking confirmed'); }",
+                "Do not post with Http to chat.postMessage, the /api/chat. endpoints or a hooks.slack.com webhook from a service or provider class: that skips via(), the tenant's routing and Notification failure handling.",
+                "One exception: a digest edited in place (chat.update on a stored ts) stays on a provider client. Mark that class with a `@chat-digest <reason>` docblock tag."
+            ]
         },
         "mail-notifications.custom-channel": {
             "id": "mail-notifications.custom-channel",
