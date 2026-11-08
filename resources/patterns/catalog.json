@@ -477,8 +477,8 @@
                     "next": "ui-page.look"
                 },
                 {
-                    "answer": "The signed-in shell: the header, primary nav, account menu or workspace switcher",
-                    "next": "ui-page.shell"
+                    "answer": "The signed-in shell (header, primary nav, account menu, workspace switcher), or where a module's pages live (its URLs)",
+                    "next": "ui-page.navigation"
                 },
                 {
                     "answer": "Across the whole app: adopting every kit surface, or a test that guards every route or page",
@@ -487,6 +487,25 @@
                 {
                     "answer": "None of these",
                     "next": "ui-page.shared.byo"
+                }
+            ]
+        },
+        "ui-page.navigation": {
+            "id": "ui-page.navigation",
+            "question": "The signed-in shell, or where a module's pages live?",
+            "why": "The shell is the chrome every signed-in page renders in; a module's URLs are where its records and settings sit below the workspace.",
+            "options": [
+                {
+                    "answer": "The signed-in shell: the header, primary nav, account menu or workspace switcher",
+                    "next": "ui-page.shell"
+                },
+                {
+                    "answer": "Where a module's pages live: its URL prefix, its records' URLs, their route names and its settings",
+                    "next": "ui-page.module-urls"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.navigation.byo"
                 }
             ]
         },
@@ -1123,6 +1142,46 @@
                 "A real exception goes in the allowlist: rule ui.kit-shell, the finding's target and check, a reason and an expires Y-m-d date. An entry without a reason is rejected and one without an expiry fails."
             ]
         },
+        "ui-page.module-urls": {
+            "id": "ui-page.module-urls",
+            "recipe": "Module URL nesting",
+            "summary": "A module owns one URL prefix, `/@{workspace}/<module>` (kebab case), and every page of it nests below: its records at `/<module>/<records>`, a record's pages at `/<module>/<records>/{id}/<section>`. The record named after the module, or its main record, sits at the prefix itself. Setup the module needs only occasionally is a settings section at `/settings/<module>`. Route names follow the path, dots for slashes. Existing apps keep their URLs.",
+            "kit": [
+                "tey/kit Registry::navigation",
+                "tey/kit Registry::modulePage",
+                "tey/kit Registry::settingsSection",
+                "tey/kit WorkspaceRoutes::page"
+            ],
+            "make": "standards:make crud --flavor=resource",
+            "checks": [],
+            "paths": [
+                "routes/**",
+                "app/**/routes/**",
+                "app/**/Providers/**ServiceProvider.php"
+            ],
+            "keywords": [
+                "module",
+                "url",
+                "prefix",
+                "nesting",
+                "nested routes",
+                "route names",
+                "module page",
+                "sub nav",
+                "settings section",
+                "url structure"
+            ],
+            "status": "ready",
+            "rules": [
+                "A module owns `/@{workspace}/<module>`, the module's name in kebab case. Its records nest under it: `/<module>/<records>` (`/bookings/resources`), never a top-level `/<records>` of their own.",
+                "The record named after the module (its plural is the module's name), or the module's main record, sits at the prefix itself: `/bookings`, not `/bookings/bookings`.",
+                "A record's own pages nest under the record: `/<module>/<records>/{id}/<section>` (`/bookings/resources/12/availability`).",
+                "Setup the module needs only occasionally is one settings section at `/settings/<module>`, not a page in the module's own navigation.",
+                "Route names follow the path, dots for slashes: `bookings.resources.index`, `bookings.resources.show`, the main record `bookings.index`. Two modules' records of one name never collide, and a name is read off its URL.",
+                "Navigation: the module registers one link at its prefix (Registry::navigation, suffix `<module>`), and each record is one of its pages (Registry::modulePage, suffix `<module>/<records>`). The main record's page is current on its own routes only (active: its `route:` names), not on its siblings below the prefix.",
+                "`standards:make crud <Record> --module=<Module>` emits this shape; without --module a record keeps its own `/<records>` prefix, names and navigation link. Existing apps keep their URLs: this is the default for new modules, not a migration."
+            ]
+        },
         "ui-page.kit-adoption": {
             "id": "ui-page.kit-adoption",
             "recipe": "Kit adoption",
@@ -1644,7 +1703,7 @@
         "ui-page.crud-resource": {
             "id": "ui-page.crud-resource",
             "recipe": "CRUD resource screens",
-            "summary": "`standards:make crud <Record>` emits a whole workspace-owned resource: model and migration (with lock_version), a policy gated by the record's capability then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first, stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture. `--bulk` adds selection and a bulk delete, `--mcp` Read, Write (create or update) and Delete capability tools over a List action, `--soft-deletes` soft deletes and a restoration.",
+            "summary": "`standards:make crud <Record>` emits a whole workspace-owned resource: model and migration (with lock_version), a policy gated by the record's capability then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first, stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture. `--bulk` adds selection and a bulk delete, `--mcp` Read, Write (create or update) and Delete capability tools over a List action, `--soft-deletes` soft deletes and a restoration. With `--module=<Module>` the record nests under the module's prefix, `/<module>/<records>` named `<module>.<records>.*` (the main record at `/<module>`), as one of the module's pages (see ui-page.module-urls).",
             "kit": [
                 "@kit/ui DataTable",
                 "@kit/ui FormCard",
@@ -2048,6 +2107,17 @@
         },
         "ui-page.app-wide.byo": {
             "id": "ui-page.app-wide.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.navigation.byo": {
+            "id": "ui-page.navigation.byo",
             "recipe": "Build your own",
             "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
             "kit": [],
