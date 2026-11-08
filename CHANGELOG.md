@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **Pattern leaf `ui-page.layout-rhythm`: row actions on a restricted record.** A record in a restricted state (suspended, archived, cancelled, revoked) offers only its restore action (Reinstate, Restore, Reopen, Reactivate), plus at most one final action such as Delete or Remove when that state allows it. Every other action comes back only after the record is restored. The server enforces this in the policy and the action list; hiding actions in the UI is not enough. Guidance only: no check and no kit change.
+
 ## 0.11.86 - 2026-11-08
 
 ### Added
