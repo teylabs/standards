@@ -479,7 +479,7 @@ nodes:
     kit: []
     components:
       - { name: "lane", kit_component: ScrollList, use: "A scrolling widget lane", props_hint: "items" }
-    checks: []
+    checks: ['ui.dashboard-composition']
     paths: []
     keywords: [dashboard, widget, home, lane, main, aside, region, kind, task, feed, status, setup]
     status: gap

@@ -1755,7 +1755,9 @@
             "summary": "Register a widget with `region()` main or aside, plus its order; never fork the page.",
             "kit": [],
             "make": null,
-            "checks": [],
+            "checks": [
+                "ui.dashboard-composition"
+            ],
             "paths": [],
             "keywords": [
                 "dashboard",
