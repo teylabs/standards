@@ -1255,6 +1255,9 @@
                 "Page-level grid-cols-* and col-span-* become PageGrid (preset main-aside, halves or thirds) and PageGridItem :span. Grids inside a card, form or widget body and the dashboard widget grid are not page-level.",
                 "Hand-rolled Stack, PageSection, Aside, Banner, NavGrid, CardSection, Pills and DividerSection shapes point to the primitive; a pointer stays advisory until the kit the app runs exports the primitive.",
                 "Row action labels are short verbs (Remove, Revoke). A label never interpolates a value (Action::make(\"Revoke {$x->name}\"), 'Remove '.$grant, a model field, or a Vue action object's `${…}` label): the record goes in ariaLabel and the confirm. A literal label stays within 24 characters and 3 words, or RowActions clamps it.",
+                "A record in a restricted state (suspended, archived, cancelled, revoked) offers only its restore action (Reinstate, Restore, Reopen, Reactivate). It may also offer at most one final action, such as Delete or Remove, when that state allows it.",
+                "Every other action comes back only after the record is restored.",
+                "The server enforces this in the policy and the action list. Hiding actions in the UI is not enough.",
                 "A real exception goes in the allowlist: the rule, the finding's target and check, a reason and an expires Y-m-d date."
             ]
         },

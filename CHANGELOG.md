@@ -6,6 +6,10 @@
 
 - **Page purpose first, and warn-only rule `ui.page-purpose`.** Step 1 of the page method (`ui-page.own`) is now to state the page purpose before choosing components: who opens it and their main job, as `@purpose <who>: <main job>` on the page ViewModel's class docblock. The rule warns on a concrete `PageViewModel` (or `AdHocViewModel`) subclass with no `@purpose` or a malformed one; abstract bases are skipped. Every finding is advisory and the rule is never enforced, even if listed in `optionalRules`.
 
+### Changed
+
+- **Pattern leaf `ui-page.layout-rhythm`: row actions on a restricted record.** A record in a restricted state (suspended, archived, cancelled, revoked) offers only its restore action (Reinstate, Restore, Reopen, Reactivate), plus at most one final action such as Delete or Remove when that state allows it. Every other action comes back only after the record is restored. The server enforces this in the policy and the action list; hiding actions in the UI is not enough. Guidance only: no check and no kit change.
+
 ## 0.11.86 - 2026-11-08
 
 ### Added
