@@ -707,7 +707,7 @@ Every path ends in a leaf. Gap and byo leaves return their nearest recipes, the 
 
 **Generators fit the host.** Every `standards:make` unit reads the host before it writes anything:
 
-- **Placement:** in an app whose tey/mod layout places files by a dimension (a `modules` layout, or one extending it), files go where tey/mod places them in the module named by `--module=<Name>`, through `Mod::current()->place()`.
+- **Placement:** in an app whose tey/mod layout places files by a dimension (a `modules` layout, or one extending it), files go where tey/mod places them in the module named by `--module=<Name>`, through `Mod::current()->place()`. `crud` records in a module share one capability named after it (`billing`: `billing.view`, `billing.manage`, aliases `billing.read`/`billing.write`), declared once in the module's `{Module}ServiceProvider`; each record's policy, routes and navigation are added there once. `--capability=<kebab>` gives a record its own.
   - Controllers, requests, policies, providers, models, actions, queries, view models, commands, enums and factories use the layout's own file types.
   - A folder the layout has no type for (`Mcp/Tools`, `Services`, `Webhooks`) goes under the module's root.
   - Tests go under the layout's test folder, keeping their subfolder. Pages go in the module's pages, rendered as `<Module>::<name>`. Route files and migrations go under the module.

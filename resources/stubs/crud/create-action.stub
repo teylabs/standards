@@ -22,7 +22,7 @@ final class Create{{ name }}
 
         return DB::transaction(function () use ($principal, $workspace, $attributes): {{ name }} {
             ${{ var }} = {{ name }}::query()->create(['name' => $attributes['name']]);
-            app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.create', ['id' => ${{ var }}->getKey()]);
+            app(Audit::class)->write($principal->actorId, $workspace, '{{ event }}.create', ['id' => ${{ var }}->getKey()]);
 
             return ${{ var }};
         });
