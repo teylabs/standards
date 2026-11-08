@@ -1752,7 +1752,7 @@
         "ui-page.dashboard-widget": {
             "id": "ui-page.dashboard-widget",
             "recipe": "Dashboard widget",
-            "summary": "Register a widget with its order and placement; never fork the kit dashboard page.",
+            "summary": "Register a widget with `region()` main or aside, plus its order; never fork the page.",
             "kit": [],
             "make": null,
             "checks": [
@@ -1763,7 +1763,15 @@
                 "dashboard",
                 "widget",
                 "home",
-                "lane"
+                "lane",
+                "main",
+                "aside",
+                "region",
+                "kind",
+                "task",
+                "feed",
+                "status",
+                "setup"
             ],
             "status": "gap",
             "evidence": {
@@ -1780,6 +1788,14 @@
                     "use": "A scrolling widget lane",
                     "props_hint": "items"
                 }
+            ],
+            "rules": [
+                "Register each widget with Registry::widget() and set its region() to main or aside, plus its order; never fork the dashboard page. Main is for the viewer's primary work, such as queues and activity; aside is for context, such as you, people and short status.",
+                "Pick each widget's kind(): task, feed, status or setup.",
+                "Placement follows kind: task and feed in main, status and setup in aside, with setup last. Region is set on its own and never derived from kind.",
+                "The dashboard has exactly one feed. Two activity sources are merged into that one feed.",
+                "Each widget declares what it shows when it is empty.",
+                "\"Things that need you\" is one task widget, listing every actionable item for the viewer's role, with the \"N things need you today\" subline."
             ]
         },
         "ui-page.auth-override": {
