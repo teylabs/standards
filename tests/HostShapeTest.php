@@ -210,6 +210,9 @@ test('crud records in a module share one module capability, declared once in one
             ->and(file_get_contents($base.'/app/Modules/Billing/Mcp/Tools/WritePlanTool.php'))->toContain("#[Capability('billing', scope: 'billing.write')]")->toContain("public const ABILITY = 'billing.write';")
             ->and(file_get_contents($base.'/app/Modules/Billing/Actions/CreatePlan.php'))->toContain("'plans.create'");
 
+        // Making a record the module already lists again changes nothing: no file is refused, none is written.
+        expect($make('Plan', ['mcp']))->toBe([])->and(file_get_contents($base.'/'.$provider))->toBe($contents);
+
         // A record with its own capability keeps its own provider and permissions, and the module provider is left alone.
         $own = $make('Pass', ['capability=passes']);
         expect($own)->toContain('app/Modules/Billing/Providers/PassServiceProvider.php')->not->toContain($provider)
@@ -232,6 +235,8 @@ test('a module provider the generator did not write is refused, with the lines t
 
         expect(fn () => (new Maker($base, TreeCatalog::shipped(), kit: true, host: $host))->make('crud', 'Plan', 'resource'))
             ->toThrow(InvalidArgumentException::class, 'was not written by standards:make');
+        // Refused before anything was written, so a retry once the markers are added is not blocked by the record's own files.
+        expect(glob($base.'/app/Modules/Billing/Models/*') ?: [])->toBe([])->and(is_file($base.'/routes/plans.php'))->toBeFalse();
     } finally {
         (new Filesystem)->deleteDirectory($base);
     }

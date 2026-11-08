@@ -732,10 +732,16 @@ final class Maker
             }
         }
         $values['route_uses'] = implode('', array_map(fn (string $class): string => "use {$class};\n", $uses));
+        // The module provider is checked before anything is written: a record it already lists was made before, so the run changes nothing,
+        // and a provider without the markers is refused while the record's files are still unwritten.
+        $module = $shared ? $this->moduleProvider($perm, $values) : null;
+        if ($shared && $module === null) {
+            return [];
+        }
         $written = $this->emit($files, $values);
 
-        $written = [...$written, ...($shared
-            ? $this->moduleProvider($perm, $values)
+        $written = [...$written, ...($module !== null
+            ? $module()
             : [$this->provide("{$namespace}\\Providers\\{$name}ServiceProvider", 'ui-page.crud-resource')])];
         $written = [...$written, ...$this->factoryAutoload()];
 
@@ -769,12 +775,13 @@ final class Maker
     /**
      * The module's provider, which declares its one capability and its two permissions: created on the module's first record, then each record's
      * policy, routes and navigation entry are added between its markers. A record already listed is left as it is, so a re-run changes nothing; a
-     * provider of that name the generator did not write (no markers) is refused with the lines to add by hand.
+     * provider of that name the generator did not write (no markers) is refused with the lines to add by hand. Checked before the record's files are
+     * written: null when the record is already listed, else the write to run once they are.
      *
      * @param  array<string, string>  $values
-     * @return list<string>
+     * @return (\Closure(): list<string>)|null
      */
-    private function moduleProvider(string $capability, array $values): array
+    private function moduleProvider(string $capability, array $values): ?\Closure
     {
         $module = (string) $this->host?->module;
         $namespace = $values['namespace'];
@@ -794,19 +801,20 @@ final class Maker
             throw new InvalidArgumentException("{$path} exists but was not written by standards:make (it has no standards-module markers). Add the {$values['titles']} record to it by hand: in register(), {$register} and in boot(), {$boot}");
         }
         if (str_contains($current, $stamp)) {
-            return [];
+            return null;
         }
-        $updated = str_replace([$markers[0], $markers[1]], [$register.$markers[0], $boot.$markers[1]], $current);
-        $file = $this->write($target, self::imports($updated, $classes));
-        // As emit() does: the names were placed while writing, so the import block is sorted again.
-        if ($this->renames !== []) {
-            $this->overlay[$file] = self::imports($this->overlay[$file]);
-            $this->dryRun || file_put_contents($this->base.'/'.$file, $this->overlay[$file]);
-        }
-        $written = [$file];
-        $written[] = $this->provide("{$namespace}\\Providers\\{$module}ServiceProvider", 'ui-page.crud-resource');
 
-        return $written;
+        return function () use ($target, $current, $markers, $register, $boot, $classes, $namespace, $module): array {
+            $updated = str_replace([$markers[0], $markers[1]], [$register.$markers[0], $boot.$markers[1]], $current);
+            $file = $this->write($target, self::imports($updated, $classes));
+            // As emit() does: the names were placed while writing, so the import block is sorted again.
+            if ($this->renames !== []) {
+                $this->overlay[$file] = self::imports($this->overlay[$file]);
+                $this->dryRun || file_put_contents($this->base.'/'.$file, $this->overlay[$file]);
+            }
+
+            return [$file, $this->provide("{$namespace}\\Providers\\{$module}ServiceProvider", 'ui-page.crud-resource')];
+        };
     }
 
     /**
