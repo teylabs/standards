@@ -38,7 +38,9 @@ test('ui.page-purpose warns on an @purpose not shaped <who>: <main job>', functi
         'NoColonViewModel.php' => purposePage('NoColonViewModel', "/**\n * @purpose watch unsigned agreements\n */"),
         'NoJobViewModel.php' => purposePage('NoJobViewModel', "/**\n * @purpose Staff:\n */"),
         'NoWhoViewModel.php' => purposePage('NoWhoViewModel', "/** @purpose : watch unsigned agreements */"),
+        'InlineNoJobViewModel.php' => purposePage('InlineNoJobViewModel', '/** @purpose Staff: */'),
     ]))->toBe([
+        "src/InlineNoJobViewModel.php FixtureScratch\\InlineNoJobViewModel's @purpose is not shaped `<who>: <main job>` [advisory]",
         "src/NoColonViewModel.php FixtureScratch\\NoColonViewModel's @purpose is not shaped `<who>: <main job>` [advisory]",
         "src/NoJobViewModel.php FixtureScratch\\NoJobViewModel's @purpose is not shaped `<who>: <main job>` [advisory]",
         "src/NoWhoViewModel.php FixtureScratch\\NoWhoViewModel's @purpose is not shaped `<who>: <main job>` [advisory]",
@@ -50,7 +52,18 @@ test('ui.page-purpose passes a valid @purpose and skips an abstract base and a c
         'AgreementsViewModel.php' => purposePage('AgreementsViewModel', "/**\n * The agreements list.\n *\n * @purpose Staff: watch unsigned agreements; send one occasionally.\n */"),
         'BaseViewModel.php' => purposePage('BaseViewModel', '', 'abstract'),
         'Other.php' => "final class Other extends \\App\\PageViewModel\n{\n}\n",
+        'InlineViewModel.php' => purposePage('InlineViewModel', '/** @purpose Staff: watch unsigned agreements */'),
     ]))->toBe([]);
+});
+
+test('ui.page-purpose checks a page that extends an abstract base of the app', function () {
+    expect(purposeFindings([
+        'BasePageViewModel.php' => purposePage('BasePageViewModel', '', 'abstract'),
+        'OrdersViewModel.php' => "/** The orders list. */\nfinal class OrdersViewModel extends BasePageViewModel\n{\n}\n",
+        'InvoicesViewModel.php' => "/** @purpose Finance: chase unpaid invoices. */\nfinal class InvoicesViewModel extends BasePageViewModel\n{\n}\n",
+    ]))->toBe([
+        'src/OrdersViewModel.php FixtureScratch\\OrdersViewModel does not state its purpose: add `@purpose <who>: <main job>` to its class docblock [advisory]',
+    ]);
 });
 
 test('ui.page-purpose stays warn only: not an opt-in advisory, and listing it in optionalRules still warns', function () {

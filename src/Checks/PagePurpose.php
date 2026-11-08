@@ -22,7 +22,7 @@ final readonly class PagePurpose
     public const BASES = ['Tey\Kit\Features\Core\ViewModels\PageViewModel', 'Tey\Kit\Features\Core\ViewModels\AdHocViewModel'];
 
     /** `@purpose`, then who (no colon), a colon, and the job. */
-    private const SHAPE = '~^\s*\*?\s*@purpose[ \t]+([^:\n]*\S)[ \t]*:[ \t]*(\S[^\n]*)$~m';
+    private const SHAPE = '~^\s*(?:/\*\*)?\s*\*?\s*@purpose[ \t]+([^:\n]*\S)[ \t]*:[ \t]*(?!\*/)(\S[^\n]*?)\s*(?:\*/)?\s*$~m';
 
     private const HINT = 'State the page purpose first (ui-page.own, step 1): one line on the ViewModel\'s class docblock, `@purpose <who>: <main job>`, e.g. `@purpose Staff: watch unsigned agreements; send one occasionally.`';
 
@@ -31,26 +31,51 @@ final readonly class PagePurpose
     /** @return list<array{target: string, check: string, line: int, hint: string, advisory: true}> */
     public function violations(): array
     {
-        $found = [];
+        // Every app class and its parent, so a page extending the app's own (abstract) base still counts.
+        $classes = [];
         foreach ($this->source->files($this->config->sourceRoots) as $path => $text) {
-            if (! str_contains($text, 'ViewModel')) {
+            foreach ((new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Stmt\Class_::class) as $class) {
+                if ($class->name !== null) {
+                    $classes[$class->namespacedName?->toString() ?? (string) $class->name] = [$path, $class];
+                }
+            }
+        }
+        $found = [];
+        foreach ($classes as [$path, $class]) {
+            if ($class->isAbstract() || ! $this->isPage($class, $classes)) {
                 continue;
             }
-            foreach ((new NodeFinder)->findInstanceOf($this->source->nodes($path), Node\Stmt\Class_::class) as $class) {
-                if ($class->extends === null || $class->isAbstract() || ! in_array(ltrim($class->extends->toString(), '\\'), self::BASES, true)) {
-                    continue;
-                }
-                $name = $class->namespacedName?->toString() ?? (string) $class->name;
-                $doc = (string) $class->getDocComment()?->getText();
-                if (preg_match('~@purpose\b~', $doc) !== 1) {
-                    $found[] = $this->finding($path, $class->getStartLine(), "{$name} does not state its purpose: add `@purpose <who>: <main job>` to its class docblock");
-                } elseif (preg_match(self::SHAPE, $doc) !== 1) {
-                    $found[] = $this->finding($path, $class->getStartLine(), "{$name}'s @purpose is not shaped `<who>: <main job>`");
-                }
+            $name = $class->namespacedName?->toString() ?? (string) $class->name;
+            $doc = (string) $class->getDocComment()?->getText();
+            if (preg_match('~@purpose\b~', $doc) !== 1) {
+                $found[] = $this->finding($path, $class->getStartLine(), "{$name} does not state its purpose: add `@purpose <who>: <main job>` to its class docblock");
+            } elseif (preg_match(self::SHAPE, $doc) !== 1) {
+                $found[] = $this->finding($path, $class->getStartLine(), "{$name}'s @purpose is not shaped `<who>: <main job>`");
             }
         }
 
         return $found;
+    }
+
+    /**
+     * Whether the class descends from a kit page base, through the app's own classes.
+     *
+     * @param  array<string, array{0: string, 1: Node\Stmt\Class_}>  $classes
+     */
+    private function isPage(Node\Stmt\Class_ $class, array $classes): bool
+    {
+        for ($seen = []; $class->extends !== null; $class = $classes[$parent][1]) {
+            $parent = ltrim($class->extends->toString(), '\\');
+            if (in_array($parent, self::BASES, true)) {
+                return true;
+            }
+            if (! isset($classes[$parent]) || isset($seen[$parent])) {
+                return false;
+            }
+            $seen[$parent] = true;
+        }
+
+        return false;
     }
 
     /** @return array{target: string, check: string, line: int, hint: string, advisory: true} */
