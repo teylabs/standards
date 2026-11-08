@@ -841,7 +841,8 @@
                 "vue.bare-handler-argument",
                 "inertia.pure",
                 "vm.page-size",
-                "ui.page-purpose"
+                "ui.page-purpose",
+                "ui.page-view-model"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -887,6 +888,9 @@
                     "use": "Per-row actions from the server (DataTable renders it)",
                     "props_hint": "row.actions descriptors"
                 }
+            ],
+            "rules": [
+                "Every rendered page extends PageViewModel; widgets and partials use ViewModel; `$standalone = true` opts a deliberate exception out (rule ui.page-view-model)."
             ]
         },
         "ui-page.show": {
@@ -913,7 +917,8 @@
                 "vue.bare-handler-argument",
                 "inertia.pure",
                 "vm.page-size",
-                "ui.page-purpose"
+                "ui.page-purpose",
+                "ui.page-view-model"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -965,6 +970,9 @@
                     "use": "One named server action as a menu item",
                     "props_hint": "action"
                 }
+            ],
+            "rules": [
+                "Every rendered page extends PageViewModel; widgets and partials use ViewModel; `$standalone = true` opts a deliberate exception out (rule ui.page-view-model)."
             ]
         },
         "ui-page.form": {
@@ -984,7 +992,8 @@
                 "actions",
                 "descriptors",
                 "tenant.scoped-exists",
-                "ui.page-purpose"
+                "ui.page-purpose",
+                "ui.page-view-model"
             ],
             "paths": [
                 "app/**/Http/Requests/**",
@@ -1032,6 +1041,9 @@
                     "use": "Submit and cancel buttons",
                     "props_hint": "processing"
                 }
+            ],
+            "rules": [
+                "Every rendered page extends PageViewModel; widgets and partials use ViewModel; `$standalone = true` opts a deliberate exception out (rule ui.page-view-model)."
             ]
         },
         "ui-page.toast": {

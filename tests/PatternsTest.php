@@ -1069,6 +1069,25 @@ test('make page declares what the page is: --public adds #[PublicRoute] with its
     }
 });
 
+test('make crud on the kit\'s own ViewModel base generates its pages on PageViewModel', function () {
+    $base = fixtureApp();
+    $config = $base.'/tests/Arch/configuration.php';
+    file_put_contents($config, str_replace("'App\\\\UI\\\\ViewModel'", "'Tey\\\\Kit\\\\Features\\\\Core\\\\ViewModels\\\\ViewModel'", (string) file_get_contents($config)));
+
+    try {
+        $calls = [];
+        $files = (new Maker($base, TreeCatalog::shipped(), generators: array_values(Maker::DELEGATED), run: fakeModGenerator($base, $calls)))->make('crud', 'Ledger', 'resource');
+        $pages = array_values(array_filter($files, fn (string $file): bool => preg_match('~(Index|Form|Show)ViewModel\.php$~', $file) === 1));
+
+        expect($pages)->toHaveCount(3);
+        foreach ($pages as $page) {
+            expect(file_get_contents($base.'/'.$page))->toContain('use Tey\\Kit\\Features\\Core\\ViewModels\\PageViewModel;')->toContain('extends PageViewModel');
+        }
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
 it('says settings sections are named for what the person sets, not the module', function (): void {
     $leaf = collect(json_decode((string) file_get_contents(dirname(__DIR__).'/resources/patterns/catalog.json'), true, flags: JSON_THROW_ON_ERROR)['nodes'] ?? [])->firstWhere('id', 'ui-page.module-urls');
     $text = $leaf['summary'].' '.implode(' ', $leaf['rules']);
