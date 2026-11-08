@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.11.89 - 2026-11-08
+
 ### Added
 
 - **Pattern leaf `ui-page.page-tabs`: breadcrumbs and page tabs.**
