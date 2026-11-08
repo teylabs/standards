@@ -45,6 +45,7 @@ final class Conformance
         'notifications.chat-via-channel' => '[notifications.chat-via-channel] chat messages are Notifications sent through their channel (toSlack), not direct API calls',
         'ui.page-purpose' => '[ui.page-purpose] each page ViewModel states @purpose <who>: <main job> (warn only)',
         'ui.dashboard-composition' => '[ui.dashboard-composition] dashboard widgets: one feed at most, each kind in its column, every widget declares kind() (warn only)',
+        'ui.surface-on-tinted-ground' => '[ui.surface-on-tinted-ground] on a tinted page ground, tables and forms sit on a card, not straight on the ground (warn only)',
         'destructive-db' => '[destructive-db] a service provider prohibits destructive database commands outside testing',
         'live.broadcast-now' => '[live.broadcast-now] the notice a live prop listens for is ShouldBroadcastNow',
         'vm.typed-pages' => '[vm.typed-pages] a page declares its props as its generated ViewModel type',
@@ -146,7 +147,7 @@ final class Conformance
         }
 
         // Warn only, whatever optionalRules says: the findings are reported, the test never fails on them.
-        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose'], true)) {
+        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose', 'ui.surface-on-tinted-ground'], true)) {
             Assert::markTestSkipped('Rule ['.$rule.'] warns only ('.count($violations).' findings).'.implode('', array_map(fn (array $violation): string => "\n".$violation['check'], $violations)));
         }
 
@@ -264,6 +265,11 @@ final class Conformance
 
         if ($rule === 'ui.dashboard-composition') {
             return (new Checks\DashboardComposition($this->config, $this->source))->violations();
+        }
+
+        // Warn only: every finding is advisory, whatever optionalRules says.
+        if ($rule === 'ui.surface-on-tinted-ground') {
+            return (new Checks\SurfaceOnTintedGround($this->config, $this->source))->violations();
         }
 
         if ($rule === 'notifications.chat-via-channel') {
