@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.11.86 - 2026-11-08
+
 ### Added
 
 - **Warn-only rule `ui.dashboard-composition`.** Warns when a dashboard has more than one `feed` widget, when a widget's `region()` doesn't match its `kind()` (`task` and `feed` in `main`, `status` and `setup` in `aside`), or when a kit `Widget` subclass doesn't declare `kind()`. A non-literal `kind()` or `region()` is reported as "can't verify". Every finding is advisory and the rule is never enforced, even if listed in `optionalRules`.
