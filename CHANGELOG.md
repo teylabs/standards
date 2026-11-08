@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **`ui.row-action-label` false positives.** A ternary whose arms are all string literals (`$on ? 'Switch off' : 'Switch on'`, nested too) is read arm by arm, not as interpolation. A form's submit Action (returned by `submit()`/`save()`, or under a `submit`/`save` key) is not a row action. A TypeScript type literal (`{ label: string; url: string; method: string }`) is not read as a label. Interpolated and over-long row action labels still fail.
+
 ## 0.11.83 - 2026-11-07
 
 ### Added

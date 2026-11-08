@@ -329,6 +329,21 @@ test('ui.row-action-label flags PHP action labels that interpolate a value or ru
         $h = new Action(url: '/o/1', label: $member->name);
         $i = new Action("Charge $5", '/o/1/charge');
         $j = new Action(__('Remove'), '/g/1');
+        $k = new Action($rule->enabled ? 'Switch off' : 'Switch on', '/r/1', 'post');
+        $l = [new Action($e->isFull() ? 'Join the waitlist' : ($e->isFree() ? 'RSVP' : 'Get a ticket'), '/e/1/rsvp', 'post')];
+        $m = new Action($on ? 'Off' : 'Resend the invitation email now', '/r/1');
+        $n = new Action($on ? 'Off' : 'Remove '.$grant->label, '/r/1');
+        $o = ['submit' => new Action('Book this room for the whole day', '/b', 'post')];
+
+        final class SignViewModel
+        {
+            public function submit(): ?Action
+            {
+                return $this->open ? new Action('I agree and sign', '/sign', 'post', key: 'sign') : null;
+            }
+        }
+
+        $p = new Action('Resend the invitation email again', '/i/1');
         PHP);
 
     try {
@@ -344,6 +359,11 @@ test('ui.row-action-label flags PHP action labels that interpolate a value or ru
         'app/Http/GrantsController.php:4 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
         "app/Http/GrantsController.php:5 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
         'app/Http/GrantsController.php:9 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // A ternary of literals is read arm by arm: a long arm is flagged, a short one is not; an arm with a value still interpolates.
+        "app/Http/GrantsController.php:14 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/GrantsController.php:15 row action label $on ? \'Off\' : \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // After a submit() method has closed, an Action is a row action again.
+        "app/Http/GrantsController.php:26 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
     ]);
 });
 
@@ -357,7 +377,12 @@ test('ui.row-action-label flags Vue row action labels that interpolate a value o
             { key: 'open', label: row.name, url: '/p/1', method: 'get' },
             { key: 'resend', label: 'Resend the invitation email', url: '/p/1/resend', method: 'post' },
             { key: 'archive', label: 'Archive', url: '/p/1/archive', method: 'post' },
+            { key: 'toggle', label: row.on ? 'Switch off' : 'Switch on', url: '/p/1/toggle', method: 'post' },
+            { key: 'join', label: row.full ? 'Join the waitlist now please' : 'Join', url: '/p/1/join', method: 'post' },
         ];
+        const props = defineProps<{ submit: { label: string; url: string; method: string; key?: string | null } }>();
+        type RowAction = { label: string, url: string, method: string };
+        const form = { submit: { label: 'Book this room for the whole day', url: '/b', method: 'post' } };
         </script>
         <template><DataTable :table="table" /></template>
         VUE]))->toBe([
@@ -365,6 +390,7 @@ test('ui.row-action-label flags Vue row action labels that interpolate a value o
         "resources/js/pages/People.vue:6 row action label 'Change role of ' interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm",
         'resources/js/pages/People.vue:7 row action label row.name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
         "resources/js/pages/People.vue:8 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "resources/js/pages/People.vue:11 row action label 'Join the waitlist now please' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
     ]);
 });
 

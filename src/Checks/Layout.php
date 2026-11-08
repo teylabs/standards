@@ -206,11 +206,17 @@ final class Layout
                 if ($arg === '') {
                     continue;
                 }
-                $literal = preg_match('~^\'(?:[^\'\\\\]|\\\\.)*\'$~s', $arg) === 1 || (preg_match('~^"(?:[^"\\\\]|\\\\.)*"$~s', $arg) === 1 && ! self::interpolates($arg));
-                if (! $literal && ! self::interpolates($arg)) {
-                    continue; // a translation call or a constant: nothing to read
+                if (self::formSubmit($source, $at)) {
+                    continue; // a form's submit button, not a row action
                 }
-                $found[] = $this->labelFinding($path, $source, $offset, $arg, ! $literal);
+                // A ternary whose arms are all literals picks a label: each arm is read as its own.
+                foreach (self::arms($arg) ?? [$arg] as $label) {
+                    $literal = self::phpLiteral($label);
+                    if (! $literal && ! self::interpolates($label)) {
+                        continue; // a translation call or a constant: nothing to read
+                    }
+                    $found[] = $this->labelFinding($path, $source, $offset, $label, ! $literal);
+                }
             }
         }
         foreach ($this->files() as $path => $source) {
@@ -226,7 +232,22 @@ final class Layout
                     if (preg_match('~\burl\s*:~', $window) !== 1 || preg_match('~\bmethod\s*:~', $window) !== 1) {
                         continue;
                     }
+                    // A TypeScript type literal (`{ label: string; url: string }`) describes an action; it has no label to read.
+                    if (preg_match('~\blabel\s*\??\s*:\s*[^,;}]*;~', $window) === 1 || preg_match('~\blabel\s*\??\s*:\s*(?:string|number|boolean|any|unknown|null|undefined)(?:\s*\|\s*(?:string|number|boolean|any|unknown|null|undefined))*\s*[,}]~', $window) === 1) {
+                        continue;
+                    }
+                    // A form's submit object (`submit: { label, url, method }`) is not a row action.
+                    if (preg_match('~\b(?:submit|save)\s*:\s*$~', substr($masked, 0, max(0, strrpos(substr($masked, 0, $at), '{') ?: 0))) === 1) {
+                        continue;
+                    }
                     $arg = trim($match['arg'][0]);
+                    if (($arms = self::arms(self::enclosingValue($script, $at))) !== null && count($arms) > 1) {
+                        foreach ($arms as $arm) {
+                            $found[] = $this->labelFinding($path, $source, $offset + $at, $arm, false);
+                        }
+
+                        continue;
+                    }
                     $quoted = in_array($arg[0] ?? '', ['"', "'", '`'], true);
                     $interpolated = ! $quoted || ($match['tail'][0] ?? '') !== '' || ($arg[0] === '`' && str_contains($arg, '${'));
                     $found[] = $this->labelFinding($path, $source, $offset + $at, $arg, $interpolated);
@@ -235,6 +256,126 @@ final class Layout
         }
 
         return array_values(array_filter($found));
+    }
+
+    /** Whether a PHP argument is one plain string literal. */
+    private static function phpLiteral(string $arg): bool
+    {
+        return preg_match('~^\'(?:[^\'\\\\]|\\\\.)*\'$~s', $arg) === 1 || (preg_match('~^"(?:[^"\\\\]|\\\\.)*"$~s', $arg) === 1 && ! self::interpolates($arg));
+    }
+
+    /**
+     * The arms of a ternary whose every arm is a plain string literal (`$on ? 'Switch off' : 'Switch on'`, nested and parenthesised arms too), or null.
+     *
+     * @return list<string>|null
+     */
+    private static function arms(string $expression): ?array
+    {
+        $expression = trim($expression);
+        while (str_starts_with($expression, '(') && self::closing($expression, 0) === strlen($expression) - 1) {
+            $expression = trim(substr($expression, 1, -1));
+        }
+        if (self::phpLiteral($expression) || preg_match('~^`[^`$]*`$~', $expression) === 1) {
+            return [$expression];
+        }
+        // The first top-level `?` (not `?->`, `??` or `?.`) and its matching `:`.
+        $depth = 0;
+        $question = null;
+        $nested = 0;
+        $length = strlen($expression);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $expression[$i];
+            if ($char === '"' || $char === "'" || $char === '`') {
+                for ($i++; $i < $length && $expression[$i] !== $char; $i++) {
+                    $i += $expression[$i] === '\\' ? 1 : 0;
+                }
+            } elseif (in_array($char, ['(', '[', '{'], true)) {
+                $depth++;
+            } elseif (in_array($char, [')', ']', '}'], true)) {
+                $depth--;
+            } elseif ($depth === 0 && $char === '?' && ! in_array($expression[$i + 1] ?? '', ['-', '?', '.', ':'], true) && ($expression[$i - 1] ?? '') !== '?') {
+                if ($question === null) {
+                    $question = $i;
+                } else {
+                    $nested++;
+                }
+            } elseif ($depth === 0 && $char === ':' && $question !== null && ($expression[$i + 1] ?? '') !== ':' && ($expression[$i - 1] ?? '') !== ':') {
+                if ($nested > 0) {
+                    $nested--;
+
+                    continue;
+                }
+                $then = self::arms(substr($expression, $question + 1, $i - $question - 1));
+                $else = self::arms(substr($expression, $i + 1));
+
+                return $then === null || $else === null ? null : [...$then, ...$else];
+            }
+        }
+
+        return null;
+    }
+
+    /** The offset of the bracket closing the one at $open, or -1. */
+    private static function closing(string $text, int $open): int
+    {
+        for ($i = $open, $depth = 0, $length = strlen($text); $i < $length; $i++) {
+            $char = $text[$i];
+            if ($char === '"' || $char === "'" || $char === '`') {
+                for ($i++; $i < $length && $text[$i] !== $char; $i++) {
+                    $i += $text[$i] === '\\' ? 1 : 0;
+                }
+            } elseif ($char === '(') {
+                $depth++;
+            } elseif ($char === ')' && --$depth === 0) {
+                return $i;
+            }
+        }
+
+        return -1;
+    }
+
+    /** The value of the `label:` property at $at, up to the comma or brace that ends it at its own depth. */
+    private static function enclosingValue(string $script, int $at): string
+    {
+        $colon = strpos($script, ':', $at);
+        if ($colon === false) {
+            return '';
+        }
+        $arguments = self::arguments(str_replace('}', ')', substr($script, $colon + 1)), 0);
+
+        return $arguments[0][0] ?? '';
+    }
+
+    /** Whether the Action at $at is a form's submit: returned by a `submit()`/`save()` method, or the value of a `submit`/`save` key or argument. */
+    private static function formSubmit(string $source, int $at): bool
+    {
+        $before = substr($source, 0, $at);
+        if (preg_match('~[\'"]?\b(?:submit|save)\b[\'"]?\s*(?:=>|:)\s*(?:[^,\[\](){};]*\?\s*)?$~', $before) === 1) {
+            return true;
+        }
+
+        // Inside the body of a submit() or save() method: its opening brace is before the Action and its closing brace after it.
+        preg_match_all('~\bfunction\s+(?:submit|save)\s*\([^)]*\)[^{;]*\{~i', $before, $methods, PREG_OFFSET_CAPTURE);
+        foreach ($methods[0] as [$head, $start]) {
+            $depth = 0;
+            for ($i = $start + strlen($head) - 1, $length = strlen($source); $i < $length; $i++) {
+                $char = $source[$i];
+                if ($char === '"' || $char === "'") {
+                    for ($i++; $i < $length && $source[$i] !== $char; $i++) {
+                        $i += $source[$i] === '\\' ? 1 : 0;
+                    }
+                } elseif ($char === '{') {
+                    $depth++;
+                } elseif ($char === '}' && --$depth === 0) {
+                    if ($i > $at) {
+                        return true;
+                    }
+                    break;
+                }
+            }
+        }
+
+        return false;
     }
 
     /** A variable in PHP source outside single quotes: `$name`, `{$…}` or `${…}`; a literal `$5` is not one. */
