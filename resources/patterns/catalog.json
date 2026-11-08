@@ -477,7 +477,7 @@
                     "next": "ui-page.look"
                 },
                 {
-                    "answer": "The signed-in shell (header, primary nav, account menu, workspace switcher), or where a module's pages live (its URLs)",
+                    "answer": "The signed-in shell (header, primary nav, account menu, workspace switcher), navigation inside it (breadcrumbs, page tabs), or where a module's pages live (its URLs)",
                     "next": "ui-page.navigation"
                 },
                 {
@@ -492,7 +492,7 @@
         },
         "ui-page.navigation": {
             "id": "ui-page.navigation",
-            "question": "The signed-in shell, or where a module's pages live?",
+            "question": "The signed-in shell, navigation inside it, or where a module's pages live?",
             "why": "The shell is the chrome every signed-in page renders in; a module's URLs are where its records and settings sit below the workspace.",
             "options": [
                 {
@@ -502,6 +502,10 @@
                 {
                     "answer": "Where a module's pages live: its URL prefix, its records' URLs, their route names and its settings",
                     "next": "ui-page.module-urls"
+                },
+                {
+                    "answer": "Breadcrumbs, a module's sibling pages or a record's sections (tabs, sub-nav)",
+                    "next": "ui-page.page-tabs"
                 },
                 {
                     "answer": "None of these",
@@ -1144,6 +1148,60 @@
                 "App parts go in the Layout's slots: mark (the logo), nav and drawer-nav (an app's own module switcher), bar and actions (header controls), extra (account-menu items), user-menu and workspace-switcher (replacements with the same props), footer. Pages come from the server's navigation (Registry::navigation), not a hand-written nav.",
                 "Public pages use PublicShell, sign-in pages GuestShell, and a focus flow its own layout; their headers are not signed-in shells. A page's own tabs or section nav inside the content area are fine.",
                 "A real exception goes in the allowlist: rule ui.kit-shell, the finding's target and check, a reason and an expires Y-m-d date. An entry without a reason is rejected and one without an expiry fails."
+            ]
+        },
+        "ui-page.page-tabs": {
+            "id": "ui-page.page-tabs",
+            "recipe": "Breadcrumbs and page tabs",
+            "summary": "Breadcrumbs are the kit's bar under the header, always. A module's sibling pages are PageTabs, registered with Registry::modulePage and sent by the server as the page's layout.navigation, which <Page> draws. A record's sections are PageTabs too, from the record ViewModel's own navigation, inside the record's frame under its header. No hand-rolled sub-nav strips.",
+            "kit": [
+                "shell Layout (pages/Workspace/Layout.vue)",
+                "@kit/ui Page",
+                "@kit/ui PageTabs",
+                "tey/kit Registry::modulePage()"
+            ],
+            "make": null,
+            "checks": [],
+            "paths": [
+                "resources/js/pages/**/Layout.vue",
+                "app/**/Providers/*ServiceProvider.php",
+                "app/**/ViewModels/**"
+            ],
+            "keywords": [
+                "breadcrumbs",
+                "breadcrumb bar",
+                "trail",
+                "tabs",
+                "page tabs",
+                "sub nav",
+                "subnav",
+                "sub-navigation",
+                "module pages",
+                "sibling pages",
+                "record tabs",
+                "section tabs",
+                "modulePage"
+            ],
+            "status": "draft",
+            "components": [
+                {
+                    "name": "page tabs",
+                    "kit_component": "PageTabs",
+                    "use": "A module's sibling pages, or a record's sections: route links with the current one marked",
+                    "props_hint": "tabs, label"
+                },
+                {
+                    "name": "page",
+                    "kit_component": "Page",
+                    "use": "Draws the page's layout.navigation as PageTabs above its heading",
+                    "props_hint": "default slot"
+                }
+            ],
+            "rules": [
+                "Breadcrumbs = bar, always (Jasper, fleet-wide): the shell's Layout draws the whole trail under the header, the current page last, so every page with route breadcrumbs shows one trail in the same place (a page with no trail gets no bar). Don't pass breadcrumbs=\"page\" and don't draw a trail inside a page. The trail comes from the route's breadcrumbs through the page ViewModel's layout().",
+                "A module's sibling pages = PageTabs. Register each with Registry::modulePage($module, $ability, $label, $suffix, order:, active:) in the module's service provider, its suffix nested under the module's prefix (`bookings/calendar`, as ui-page.module-urls says; the kit warns in development otherwise). The server sends the ones the viewer may open as the page's layout.navigation, and a top-level <Page> draws them. Don't hand-write the tab list in a page.",
+                "A record's sections = PageTabs, as AppraisalBench's case pages do: the record ViewModel sets its own layout.navigation, and the record's frame (its folder Layout.vue) renders one <PageTabs> from it under the record's header. That replaces the module's tabs, so a page never has two tab rows.",
+                "No hand-rolled sub-nav strips: no row of links under the header or above the heading built from a page's own array, and no new use of the kit's deprecated SubNav strip (Layout sub-nav=\"strip\")."
             ]
         },
         "ui-page.module-urls": {
