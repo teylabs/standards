@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.11.86 - 2026-11-08
+
 ### Added
 
 - **Warn-only rule `ui.surface-on-tinted-ground`.** Applies only to an app whose theme declares a tinted page ground (`--kit-ground: tinted` in a stylesheet under `resources/css`, tey/kit's declaration). It warns on a raw `<table>`, or a raw `<form>` not wrapping a FormCard, Card, Section or Surface, that is a direct child of `<Page>`, `<PageGrid>` or `<PageGridItem>`, and on a `<DataTable>` there when composer.lock locks a tey/kit older than 0.15.21, the release whose DataTable draws its own card on a tinted ground. Every finding is advisory and the rule is never enforced, even if listed in `optionalRules`. New pattern leaf `ui-page.tinted-ground` (under Styling or page layout) describes the convention.
