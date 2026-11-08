@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- **Pattern leaf `ui-page.navigation`: breadcrumbs and page tabs.**
+  - Breadcrumbs always use the shell's bar.
+  - A module's sibling pages are PageTabs: register them with `Registry::modulePage`, the server sends them as the page's `layout.navigation`, and `<Page>` draws them.
+  - A record's sections are PageTabs too, from the record ViewModel's own navigation. They sit inside the record frame under its header, as AppraisalBench's case pages do.
+  - No hand-rolled sub-nav strips, and no new use of the kit's deprecated SubNav strip.
+
+  It's reached through a new branch, `ui-page.chrome` ("The shell itself, or navigation inside it?"), under `ui-page.shared`. It is guidance only and has no check.
+
 ## 0.11.86 - 2026-11-08
 
 ### Added

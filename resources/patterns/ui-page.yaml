@@ -25,9 +25,16 @@ nodes:
     options:
       - { answer: "Feedback after a save or a background result (a toast)", next: ui-page.toast }
       - { answer: "Styling or page layout: CSS, theme tokens, spacing between blocks, columns, action groups", next: ui-page.look }
-      - { answer: "The signed-in shell: the header, primary nav, account menu or workspace switcher", next: ui-page.shell }
+      - { answer: "The signed-in shell or navigation: the header, primary nav, account menu, switcher, breadcrumbs or page tabs", next: ui-page.chrome }
       - { answer: "Across the whole app: adopting every kit surface, or a test that guards every route or page", next: ui-page.app-wide }
       - { answer: "None of these", next: ui-page.shared.byo }
+  - id: ui-page.chrome
+    question: The shell itself, or navigation inside it?
+    why: The shell is one kit Layout every signed-in page shares; breadcrumbs and tabs are how a page places itself in it, decided on the server.
+    options:
+      - { answer: "The signed-in shell: the header, primary nav, account menu or workspace switcher", next: ui-page.shell }
+      - { answer: "Breadcrumbs, a module's sibling pages or a record's sections (tabs, sub-nav)", next: ui-page.navigation }
+      - { answer: "None of these", next: ui-page.chrome.byo }
   - id: ui-page.look
     question: Styling, or page layout?
     why: Styling is how elements look (Tailwind and theme tokens); page layout is how a page spaces and arranges its blocks with the kit's primitives.
@@ -229,6 +236,25 @@ nodes:
       - "App parts go in the Layout's slots: mark (the logo), nav and drawer-nav (an app's own module switcher), bar and actions (header controls), extra (account-menu items), user-menu and workspace-switcher (replacements with the same props), footer. Pages come from the server's navigation (Registry::navigation), not a hand-written nav."
       - "Public pages use PublicShell, sign-in pages GuestShell, and a focus flow its own layout; their headers are not signed-in shells. A page's own tabs or section nav inside the content area are fine."
       - "A real exception goes in the allowlist: rule ui.kit-shell, the finding's target and check, a reason and an expires Y-m-d date. An entry without a reason is rejected and one without an expiry fails."
+  - id: ui-page.navigation
+    recipe: Breadcrumbs and page tabs
+    summary: >-
+      Breadcrumbs are the kit's bar under the header, always. A module's sibling pages are PageTabs, registered with Registry::modulePage and sent by the server
+      as the page's layout.navigation, which <Page> draws. A record's sections are PageTabs too, from the record ViewModel's own navigation, inside the record's
+      frame under its header. No hand-rolled sub-nav strips.
+    kit: ['shell Layout (pages/Workspace/Layout.vue)', '@kit/ui Page', '@kit/ui PageTabs', 'tey/kit Registry::modulePage()']
+    components:
+      - { name: "page tabs", kit_component: PageTabs, use: "A module's sibling pages, or a record's sections: route links with the current one marked", props_hint: "tabs, label" }
+      - { name: "page", kit_component: Page, use: "Draws the page's layout.navigation as PageTabs above its heading", props_hint: "default slot" }
+    checks: []
+    paths: ['resources/js/pages/**/Layout.vue', 'app/**/Providers/*ServiceProvider.php']
+    keywords: [breadcrumbs, breadcrumb bar, trail, tabs, page tabs, sub nav, subnav, sub-navigation, module pages, sibling pages, record tabs, section tabs, modulePage]
+    status: draft
+    rules:
+      - "Breadcrumbs = bar, always (Jasper, fleet-wide): the shell's Layout draws the whole trail under the header, the current page last, so every page shows one trail in the same place. Don't pass breadcrumbs=\"page\" and don't draw a trail inside a page. The trail comes from the route's breadcrumbs through the page ViewModel's layout()."
+      - "A module's sibling pages = PageTabs. Register each with Registry::modulePage($module, $ability, $label, $suffix, order:, active:) in the module's service provider. The server sends the ones the viewer may open as the page's layout.navigation, and a top-level <Page> draws them. Don't hand-write the tab list in a page."
+      - "A record's sections = PageTabs, as AppraisalBench's case pages do: the record ViewModel sets its own layout.navigation, and the record's frame (its folder Layout.vue) renders one <PageTabs> from it under the record's header. That replaces the module's tabs, so a page never has two tab rows."
+      - "No hand-rolled sub-nav strips: no row of links under the header or above the heading built from a page's own array, and no new use of the kit's deprecated SubNav strip (Layout sub-nav=\"strip\")."
   - id: ui-page.kit-adoption
     recipe: Kit adoption
     summary: >-
@@ -620,6 +646,14 @@ nodes:
     keywords: []
     status: byo
   - id: ui-page.shared.byo
+    recipe: Build your own
+    summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
+    kit: []
+    checks: []
+    paths: []
+    keywords: []
+    status: byo
+  - id: ui-page.chrome.byo
     recipe: Build your own
     summary: "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded."
     kit: []
