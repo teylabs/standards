@@ -531,6 +531,10 @@
                     "next": "ui-page.tinted-ground"
                 },
                 {
+                    "answer": "The app's brand: its name, colours and logo (config/brand.php, not env)",
+                    "next": "ui-page.brand-config"
+                },
+                {
                     "answer": "None of these",
                     "next": "ui-page.look.byo"
                 }
@@ -2221,6 +2225,42 @@
             "paths": [],
             "keywords": [],
             "status": "byo"
+        },
+        "ui-page.brand-config": {
+            "id": "ui-page.brand-config",
+            "recipe": "Brand in config",
+            "summary": "Rule brand.no-env-colours (warn only). The app's brand (its name, colours and logo) is a committed config/brand.php, not KIT_BRAND_* env keys: env keeps only secrets and per-environment values. `php artisan kit:brand:migrate` writes config/brand.php from the env keys. The rule becomes an error in the tey/kit 0.16 era.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "brand.no-env-colours"
+            ],
+            "paths": [
+                "config/brand.php",
+                "config/kit.php",
+                ".env.example"
+            ],
+            "keywords": [
+                "brand.no-env-colours",
+                "brand",
+                "brand colours",
+                "accent",
+                "KIT_BRAND",
+                "env",
+                "config/brand.php",
+                "kit:brand:migrate"
+            ],
+            "status": "draft",
+            "rules": [
+                "The brand lives in config/brand.php as committed values. Neither config/brand.php nor config/kit.php reads it with env('KIT_BRAND_…').",
+                ".env.example and every committed .env.* file carry no KIT_BRAND_* keys; .env itself is never committed and is not read.",
+                "To move an app: run `php artisan kit:brand:migrate`, commit config/brand.php, then delete the KIT_BRAND_* lines from the env files.",
+                "Warn only until the tey/kit 0.16 era, when the rule becomes an error."
+            ],
+            "related": [
+                "ui-page.styling"
+            ],
+            "graduate": "To a ready leaf, and the rule to an error, in the tey/kit 0.16 era, once kit:brand:migrate has shipped and the apps have moved."
         },
         "ui-page.app-wide.byo": {
             "id": "ui-page.app-wide.byo",
