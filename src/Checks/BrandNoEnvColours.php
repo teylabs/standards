@@ -105,12 +105,13 @@ final readonly class BrandNoEnvColours
         }
         $keys = [];
         foreach (preg_split('~\R~', (string) file_get_contents($file)) ?: [] as $index => $line) {
+            // One finding per key and file: a key set twice is reported at its first line.
             if (preg_match('~^\s*(?:export\s+)?(KIT_BRAND_[A-Za-z0-9_]*)\s*=~', $line, $match) === 1) {
-                $keys[] = [$match[1], $index + 1];
+                $keys[$match[1]] ??= [$match[1], $index + 1];
             }
         }
 
-        return $keys;
+        return array_values($keys);
     }
 
     /**
@@ -143,12 +144,13 @@ final readonly class BrandNoEnvColours
                 continue;
             }
             $key = substr($argument->text, 1, -1);
+            // One finding per key and file: a key read twice is reported at its first read.
             if (str_starts_with($key, 'KIT_BRAND_')) {
-                $reads[] = [$key, $argument->line];
+                $reads[$key] ??= [$key, $argument->line];
             }
         }
 
-        return $reads;
+        return array_values($reads);
     }
 
     /** @return array{target: string, check: string, line: int, hint: string, advisory: true} */

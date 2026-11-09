@@ -59,6 +59,16 @@ test('brand.no-env-colours warns on each KIT_BRAND_* key in .env.example, naming
     ]);
 });
 
+test('brand.no-env-colours reports a key set or read twice in one file once, at its first line', function () {
+    expect(brandFindings([
+        '.env.example' => "KIT_BRAND_ACCENT=#3355ff\nKIT_BRAND_ACCENT=#112233\n",
+        'config/brand.php' => "<?php\n\nreturn [\n    'a' => env('KIT_BRAND_ACCENT'),\n    'b' => env('KIT_BRAND_ACCENT'),\n];\n",
+    ]))->toBe([
+        '.env.example:1 .env.example sets brand key KIT_BRAND_ACCENT: brand settings belong in config/brand.php, not env'.BRAND_FIX,
+        "config/brand.php:4 config/brand.php reads brand key KIT_BRAND_ACCENT with env('KIT_BRAND_ACCENT'): brand settings belong in config/brand.php as committed values".BRAND_FIX,
+    ]);
+});
+
 test('brand.no-env-colours passes env files without KIT_BRAND_* keys', function () {
     expect(brandFindings(['.env.example' => "APP_NAME=Acme\n# KIT_BRAND_ACCENT=#3355ff\nMY_KIT_BRAND_ACCENT=x\n", '.env.testing' => "APP_ENV=testing\n"], ['.env.example', '.env.testing']))->toBe([]);
 });
