@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.11.91 - 2026-11-09
+
 ### Added
 
 - **Warn-only rule `brand.no-env-colours`.** Brand settings are moving from `KIT_BRAND_*` env keys into a committed `config/brand.php`; env keeps only secrets and per-environment values. The rule warns, naming each key and file, when `.env.example` or any other git-tracked `.env.*` file (never `.env` itself, and never an untracked one) sets a `KIT_BRAND_*` key, and when `config/kit.php` or `config/brand.php` reads one with `env('KIT_BRAND_…')`. The message says: run `php artisan kit:brand:migrate`, commit `config/brand.php`, then delete the env lines. Every finding is advisory and the rule is never enforced, even if listed in `optionalRules`; it becomes an error in the tey/kit 0.16 era. New pattern leaf `ui-page.brand-config` (under Styling or page layout) describes the convention.
