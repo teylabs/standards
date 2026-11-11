@@ -108,3 +108,31 @@ test('media.image-api ignores mentions in comments and strings, and unrelated na
         }
         PHP]))->toBe([]);
 });
+
+test('media.image-api allows a custom driver for Laravel\'s image API, implemented or registered with Image::extend', function () {
+    expect(imageFindings([
+        'Images/HeicDriver.php' => <<<'PHP'
+            use Illuminate\Contracts\Image\Driver;
+
+            final class HeicDriver implements Driver
+            {
+                public function load(string $path): void
+                {
+                    $image = new \Imagick($path);
+                }
+            }
+            PHP,
+        'Providers/ImageServiceProvider.php' => <<<'PHP'
+            use Illuminate\Support\Facades\Image;
+
+            final class ImageServiceProvider
+            {
+                public function boot(): void
+                {
+                    Image::extend('heic', fn () => new class { public function load(string $p): void { $image = new \Imagick($p); } });
+                }
+            }
+            PHP,
+    ]))->toBe([])
+        ->and(imageFindings(['Images/Other.php' => "use App\\Contracts\\Driver;\n\nfinal class Other implements Driver\n{\n    public function load(\$p): void\n    {\n        \$image = new \\Imagick(\$p);\n    }\n}\n"]))->toHaveCount(1);
+});

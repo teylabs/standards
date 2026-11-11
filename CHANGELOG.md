@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Advisory rule `media.image-api`.** Userland image code uses Laravel's first-party image API; Media Library keeps spatie/image, and raw Imagick or GD is only for reading pixels. The rule flags a raw `new Imagick`, a GD `imagecreate*()` call and direct use of Intervention's `ImageManager`, except in vendor, in Media Library code (a `MediaLibrary` or `media-library` directory, or a file importing `Spatie\MediaLibrary`), and on a line with a `// @raw-image <reason>` comment on it or one of the two lines above. Advisory until an app lists it in `Configuration::$optionalRules`. Listed on the `data-actions.media-library` leaf.
+- **Advisory rule `media.image-api`.** Userland image code uses Laravel's first-party image API; Media Library keeps spatie/image, and raw Imagick or GD is only for reading pixels. The rule flags a raw `new Imagick`, a GD `imagecreate*()` call and direct use of Intervention's `ImageManager`, except in vendor, in Media Library code (a `MediaLibrary` or `media-library` directory, or a file importing `Spatie\MediaLibrary`), in a custom driver for Laravel's image API (a file implementing `Illuminate\Contracts\Image\Driver` or registering one with `Image::extend()`), and on a line with a `// @raw-image <reason>` comment on it or one of the two lines above. Advisory until an app lists it in `Configuration::$optionalRules`. Listed on the `data-actions.media-library` leaf.
 
 ## 0.11.92 - 2026-11-11
 

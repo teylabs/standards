@@ -11,7 +11,8 @@ use Tey\Standards\Source;
  * Rule `media.image-api`: userland image code goes through Laravel's first-party image API; Media Library keeps spatie/image. A raw `new Imagick`,
  * a GD `imagecreate*()` call, or direct use of Intervention's `ImageManager` (`new ImageManager`, `ImageManager::…`, a fully qualified name) is
  * flagged. Allowed: vendor (never scanned), Media Library code (a path with a `MediaLibrary` or `media-library` segment, or a file that imports
- * `Spatie\MediaLibrary`), and a line that reads pixels, marked by a `@raw-image <reason>` comment on the same line or one of the two lines above.
+ * `Spatie\MediaLibrary`), a custom driver for Laravel's image API (a file that implements
+ * `Illuminate\Contracts\Image\Driver` or registers one with `Image::extend()`), and a line that reads pixels, marked by a `@raw-image <reason>` comment on the same line or one of the two lines above.
  *
  * Lexical: a mention in a comment or a string doesn't count. Advisory until an app lists the rule in Configuration::$optionalRules.
  */
@@ -40,6 +41,9 @@ final readonly class ImageApi
             $marked = $this->markedLines($all);
             $tokens = array_values(array_filter($all, fn (mixed $token): bool => ! is_array($token) || ! in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)));
             $intervention = preg_match('~^\s*use\s+\\\\?Intervention\\\\Image\\\\ImageManager\b~mi', $text) === 1;
+            if ($this->customDriver($tokens, $text)) {
+                continue;
+            }
             foreach ($tokens as $i => $token) {
                 $finding = $this->finding($tokens, $i, $intervention);
                 if ($finding !== null && ! isset($marked[$token[2]])) {
@@ -93,6 +97,35 @@ final readonly class ImageApi
         }
 
         return $lines;
+    }
+
+    /**
+     * A custom driver for Laravel's image API needs the raw library: a file that implements Illuminate\Contracts\Image\Driver, or registers a
+     * driver with Image::extend(), is allowed.
+     */
+    private function customDriver(array $tokens, string $text): bool
+    {
+        $imported = preg_match('~^\s*use\s+\\\\?Illuminate\\\\Contracts\\\\Image\\\\Driver\s*;~mi', $text) === 1;
+        $implements = false;
+        foreach ($tokens as $i => $token) {
+            if (is_array($token) && $token[0] === T_IMPLEMENTS) {
+                $implements = true;
+            } elseif ($token === '{') {
+                $implements = false;
+            } elseif ($implements && is_array($token)) {
+                $name = ltrim($token[1], '\\');
+                if (strcasecmp($name, 'Illuminate\\Contracts\\Image\\Driver') === 0 || ($imported && $token[0] === T_STRING && $name === 'Driver')) {
+                    return true;
+                }
+            }
+            if (is_array($token) && in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+                && preg_match('~(?:^|\\\\)Image$~', $token[1]) === 1 && ($tokens[$i + 1][0] ?? null) === T_DOUBLE_COLON
+                && strcasecmp($tokens[$i + 2][1] ?? '', 'extend') === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Media Library code keeps spatie/image and whatever driver it wraps. */
