@@ -44,12 +44,12 @@ test('media.image-api flags a raw new Imagick, a GD imagecreate call and direct 
             }
             PHP,
     ]))->toBe([
-        'src/Qualified.php:9 direct use of Intervention\'s ImageManager outside Media Library, with no @raw-image reason',
+        'src/Qualified.php:9 direct use of Intervention\'s ImageManager outside Media Library',
         'src/Thumbnails.php:11 a raw `new Imagick` outside Media Library, with no @raw-image reason',
         'src/Thumbnails.php:12 a GD `imagecreatefromjpeg()` call outside Media Library, with no @raw-image reason',
         'src/Thumbnails.php:13 a GD `imagecreatetruecolor()` call outside Media Library, with no @raw-image reason',
-        'src/Thumbnails.php:14 direct use of Intervention\'s ImageManager outside Media Library, with no @raw-image reason',
-        'src/Thumbnails.php:15 direct use of Intervention\'s ImageManager outside Media Library, with no @raw-image reason',
+        'src/Thumbnails.php:14 direct use of Intervention\'s ImageManager outside Media Library',
+        'src/Thumbnails.php:15 direct use of Intervention\'s ImageManager outside Media Library',
     ])->and(Gate::ADVISORY)->toContain('media.image-api');
 });
 
@@ -135,4 +135,38 @@ test('media.image-api allows a custom driver for Laravel\'s image API, implement
             PHP,
     ]))->toBe([])
         ->and(imageFindings(['Images/Other.php' => "use App\\Contracts\\Driver;\n\nfinal class Other implements Driver\n{\n    public function load(\$p): void\n    {\n        \$image = new \\Imagick(\$p);\n    }\n}\n"]))->toHaveCount(1);
+});
+
+test('media.image-api reads imports from tokens: aliases and groups count, comment and nowdoc lines do not', function () {
+    expect(imageFindings([
+        'Aliased.php' => "use Intervention\\Image\\ImageManager as Img;\n\nfinal class Aliased\n{\n    public function make(): void\n    {\n        \$m = new Img([]);\n    }\n}\n",
+        'Grouped.php' => "use Intervention\\Image\\{ImageManager, Image};\n\nfinal class Grouped\n{\n    public function make(): void\n    {\n        \$m = ImageManager::gd();\n    }\n}\n",
+        'Commented.php' => <<<'PHP'
+            /*
+            use Spatie\MediaLibrary\Conversions\Conversion;
+            use Intervention\Image\ImageManager;
+            */
+            final class Commented
+            {
+                public const DOC = <<<'TXT'
+            use Spatie\MediaLibrary\Conversions\Conversion;
+            TXT;
+
+                public function make(string $p): void
+                {
+                    $image = new \Imagick($p);
+                    $m = new ImageManager();
+                }
+            }
+            PHP,
+    ]))->toBe([
+        'src/Aliased.php:11 direct use of Intervention\'s ImageManager outside Media Library',
+        'src/Commented.php:17 a raw `new Imagick` outside Media Library, with no @raw-image reason',
+        'src/Grouped.php:11 direct use of Intervention\'s ImageManager outside Media Library',
+    ]);
+});
+
+test('media.image-api: the @raw-image marker excuses raw Imagick or GD, never Intervention\'s ImageManager', function () {
+    expect(imageFindings(['Resizer.php' => "use Intervention\\Image\\ImageManager;\n\nfinal class Resizer\n{\n    public function make(): void\n    {\n        // @raw-image needed for resizing\n        \$m = new ImageManager([]);\n    }\n}\n"]))
+        ->toBe(['src/Resizer.php:12 direct use of Intervention\'s ImageManager outside Media Library']);
 });
