@@ -140,7 +140,7 @@ nodes:
     kit: ['@kit/ui FileInput']
     components:
       - { name: "file field", kit_component: FileInput, use: "Uploads the record's file or photo", props_hint: "v-model, accept" }
-    checks: ['19', 'ui dropzone']
+    checks: ['19', 'ui dropzone', 'media.image-api']
     paths: []
     keywords: [attachment, photo, file storage, media, medialibrary, upload to record]
     status: draft
