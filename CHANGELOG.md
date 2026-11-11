@@ -4,7 +4,146 @@
 
 ### Fixed
 
-- **First pass counts only files the gate can check.** `standards:first-pass --recompute` no longer flags a committed docs or changelog file as "committed but never gated in the log", and the run log no longer records such files as clean episodes. Both use `Source::gated()`, which derives from the gate's own source patterns (`Source::PHP` and the frontend pattern `FrontendSource` reads) and skips vendor, node_modules and bootstrap/cache. Found in the Hubcommons milestone 7 cross-check (`CHANGELOG.md` and `docs/patterns.md`).
+- **First pass counts only files the gate can check.** `standards:first-pass --recompute` no longer flags a committed docs or changelog file as "committed but never gated in the log", and the run log no longer records such files as clean episodes. Both use `Source::gated()`, which derives from the gate's own source patterns (`Source::PHP`, the frontend pattern `FrontendSource` reads, and `Source::CSS` for the stylesheets `PureTailwind` checks) and skips vendor, node_modules and bootstrap/cache. Found in the Hubcommons milestone 7 cross-check (`CHANGELOG.md` and `docs/patterns.md`).
+
+## 0.11.91 - 2026-11-09
+
+### Added
+
+- **Warn-only rule `brand.no-env-colours`.** Brand settings are moving from `KIT_BRAND_*` env keys into a committed `config/brand.php`; env keeps only secrets and per-environment values. The rule warns, naming each key and file, when `.env.example` or any other git-tracked `.env.*` file (never `.env` itself, and never an untracked one) sets a `KIT_BRAND_*` key, and when `config/kit.php` or `config/brand.php` reads one with `env('KIT_BRAND_…')`. The message says: run `php artisan kit:brand:migrate`, commit `config/brand.php`, then delete the env lines. Every finding is advisory and the rule is never enforced, even if listed in `optionalRules`; it becomes an error in the tey/kit 0.16 era. New pattern leaf `ui-page.brand-config` (under Styling or page layout) describes the convention.
+
+## 0.11.90 - 2026-11-08
+
+### Added
+
+- **Rule `ui.page-view-model`: every rendered page extends PageViewModel.** A ViewModel the app passes to `Inertia::render()` or `inertia()` as the props, or returns from a controller action, must extend the kit's `PageViewModel` (directly or through an app base) or set `protected bool $standalone = true` (tey/kit 0.15.30's opt-out for a page drawn without the shell). Widgets and child ViewModels that are never rendered as the page stay on the plain `ViewModel`. Render sites are read from the parsed code, so a mention in a comment or docblock is ignored. Enforced, with the allowlist for a real exception. It closes the gap in `ui.page-purpose`, which only sees `PageViewModel` subclasses. The `ui-page.index`, `ui-page.show` and `ui-page.form` leaves list the rule and its line.
+
+### Changed
+
+- **`standards:make crud` generates its index, form and show ViewModels on the kit's `PageViewModel`** when the app's typed ViewModel base is the kit's plain `ViewModel`, so a generated resource passes `ui.page-view-model`. An app whose typed base is its own class keeps it; that base extends `PageViewModel` for the pages to pass.
+- **Settings URLs name what the person sets, not the module.** Pattern leaf `ui-page.module-urls` now says module URL nesting (`<module>/<records>`) applies to module pages, and settings sections are the exception: their slug names what the person sets (`/settings/accounting`, `/settings/appearance`), chosen for the reader, not the internal module's name, and such a URL is kept even when the code lives in a differently named module.
+- **`standards:make settings-section <Name> --module=<Module>` takes its slug from the section's name.** It was `/settings/<module>`; it is now `/settings/<name>` (kebab case: the route `workspaces.settings.<name>`, the `<name>` capability and permissions, the `<Name>Settings` model, `routes/<name>-settings.php`). The module only decides where the code lives. A module may hold several differently named sections; a slug already taken, in the same module, another module or the app's own `routes/`, is refused before anything is written. Every `routes` directory outside vendor is scanned, whatever the module layout, for a `<slug>-settings.php` file, a `/settings/<slug>` URL or a `settings.<slug>` route name. A person's section (no module) was already at `/settings/<name>` and is unchanged.
+
+## 0.11.89 - 2026-11-08
+
+### Added
+
+- **Pattern leaf `ui-page.page-tabs`: breadcrumbs and page tabs.**
+  - Breadcrumbs always use the shell's bar.
+  - A module's sibling pages are PageTabs: register them with `Registry::modulePage`, the server sends them as the page's `layout.navigation`, and `<Page>` draws them.
+  - A record's sections are PageTabs too, from the record ViewModel's own navigation. They sit inside the record frame under its header, as AppraisalBench's case pages do.
+  - No hand-rolled sub-nav strips, and no new use of the kit's deprecated SubNav strip.
+
+  It is the new third answer of the `ui-page.navigation` branch (beside the shell and `ui-page.module-urls`, whose nesting matches the kit's `Registry::modulePage` prefix warning). It is guidance only and has no check.
+
+## 0.11.88 - 2026-11-08
+
+### Added
+
+- **Warn-only rule `ui.surface-on-tinted-ground`.** Applies only to an app whose theme declares a tinted page ground (`--kit-ground: tinted` in a stylesheet under `resources/css`, tey/kit's declaration). It warns on a raw `<table>`, or a raw `<form>` not wrapping a FormCard, Card, Section or Surface, that is a direct child of `<Page>`, `<PageGrid>` or `<PageGridItem>`, and on a `<DataTable>` there when composer.lock locks a tey/kit older than 0.15.27, the release whose DataTable draws its own card on a tinted ground. Every finding is advisory and the rule is never enforced, even if listed in `optionalRules`. New pattern leaf `ui-page.tinted-ground` (under Styling or page layout) describes the convention.
+
+### Changed
+
+- **`standards:make settings-section --module=<Module>` generates the kit's settings.workspace shape.** It wrote routes into `routes/web.php`, a `Settings/<Name>Controller` with no tenant boundary or policy, and a test with no session. A workspace's settings section (made with `--module`, or with `--leaf=settings.workspace --flavor=form`) now writes a routes file declared through `WorkspaceRoutes::define` and `WorkspaceRoutes::page` (`/@{workspace}/settings/<module>` and the short form, a page named `workspaces.settings.<module>` under the settings landing page, and a `PUT` to save), a controller whose every request runs inside `TenantBoundary` and asks the policy first, a policy that gates on the `<module>` capability and entitlement (a 404 while off) and then `<module>.view` or `<module>.manage`, a principal-first `Update<Module>Settings` Action that asks the policy again, refuses a stale save on `lock_version` and audits `<module>.settings.update`, a one-row-per-workspace `<Module>Settings` model (BelongsToWorkspace, GuardsStaleWrites) and its migration (with `Rls::protect` when the kit has it), a `PageViewModel` in the workspace settings layout whose Save is absent for a viewer who may only read, the Inertia page (`form` or `toggles`), a provider that registers the permissions, routes and the section on the settings landing page (added to `bootstrap/providers.php`), and a feature test that signs in and works inside two workspaces: an owner's save and a stale save refused, the settings kept in their workspace, a non-member refused, a viewer without a save, and a 404 while the capability is off. It needs tey/kit's workspaces and access features and says so when they are missing. The `/settings/<module>` prefix and the one-section-per-module refusal are kept. A module's `form` section is stamped `standards-pattern: settings.workspace`, and the first save of two at once reads the winner's row (`createOrFirst`) rather than failing on the unique `workspace_id`. A person's section (no module, `settings.form` or `settings.toggles`) is unchanged.
+
+## 0.11.87 - 2026-11-08
+
+### Added
+
+- **Pattern leaf `ui-page.module-urls`: a module owns its URL prefix.** A module owns `/@{workspace}/<module>` (kebab case); its records nest under it at `/<module>/<records>`, a record's pages at `/<module>/<records>/{id}/<section>`, and the record named after the module (or its main record) sits at the prefix itself. Occasional setup is a settings section at `/settings/<module>`. Route names follow the path, dots for slashes. Reached from `ui-page.shared` through a new `ui-page.navigation` branch (the signed-in shell, or a module's URLs). Existing apps keep their URLs.
+- **Page purpose first, and warn-only rule `ui.page-purpose`.** Step 1 of the page method (`ui-page.own`) is now to state the page purpose before choosing components: who opens it and their main job, as `@purpose <who>: <main job>` on the page ViewModel's class docblock. The rule warns on a concrete `PageViewModel` (or `AdHocViewModel`) subclass with no `@purpose` or a malformed one; abstract bases are skipped. Every finding is advisory and the rule is never enforced, even if listed in `optionalRules`.
+
+### Changed
+
+- **`standards:make crud --module=<Module>` nests the record under the module's prefix.** Routes are at `<module>/<records>` (just `<module>` when the record's plural is the module's name), named `<module>.<records>.*` (the main record `<module>.*`). The selection and restoration routes, every generated redirect and URL, and the feature tests' URLs follow. The module provider registers one navigation link at `<module>` and each record as a `modulePage` at its prefix; the main record's page is current on its own routes only. A record with its own `--capability` in a module nests the same way, with a navigation link of its own at its nested prefix (it has no module provider to sit under). A module provider made before this change has no module link, so a record added to it keeps a navigation link of its own, at its nested prefix. Without `--module` nothing changes, and a re-run on a record already made still changes nothing. MCP tools carry no paths and are unchanged.
+- **`standards:make settings-section --module=<Module>` is at `/settings/<module>`** (routes `settings.<module>.edit` and `.update`), whatever the section's class is called. A module has one: a second settings section in the same module is refused before anything is written. Without `--module` it stays at `/settings/<name>`.
+- **Pattern leaf `ui-page.layout-rhythm`: row actions on a restricted record.** A record in a restricted state (suspended, archived, cancelled, revoked) offers only its restore action (Reinstate, Restore, Reopen, Reactivate), plus at most one final action such as Delete or Remove when that state allows it. Every other action comes back only after the record is restored. The server enforces this in the policy and the action list; hiding actions in the UI is not enough. Guidance only: no check and no kit change.
+
+## 0.11.86 - 2026-11-08
+
+### Added
+
+- **Warn-only rule `ui.dashboard-composition`.** Warns when a dashboard has more than one `feed` widget, when a widget's `region()` doesn't match its `kind()` (`task` and `feed` in `main`, `status` and `setup` in `aside`), or when a kit `Widget` subclass doesn't declare `kind()`. A non-literal `kind()` or `region()` is reported as "can't verify". Every finding is advisory and the rule is never enforced, even if listed in `optionalRules`.
+
+### Changed
+
+- **Pattern leaf `ui-page.dashboard-widget`: main and aside, and widget kinds.** A widget registers with `region()` main or aside plus its order and never forks the page. Main is for the viewer's primary work (queues, activity), aside for context (you, people, short status). Each widget picks a kind (task, feed, status or setup); task and feed go in main, status and setup in aside with setup last; the dashboard has exactly one feed; each widget declares its empty state. "Things that need you" is one task widget listing every actionable item for the viewer's role, with the "N things need you today" subline. The leaf stays a gap.
+
+## 0.11.85 - 2026-11-08
+
+### Added
+
+- **Pattern leaf `mail-notifications.chat`, and advisory rule `notifications.chat-via-channel`.** Chat apps (Slack now; Teams and Discord to follow) send Notifications through their channel: `toSlack()` with laravel/slack-notification-channel, the tenant's bot token from `routeNotificationForSlack($notification)` (fail closed), and the channel chosen in `via()`. The rule flags direct calls to `chat.postMessage`, `/api/chat.` endpoints or `hooks.slack.com` webhooks outside a Notification channel class or a class tagged `@chat-digest <reason>`, the exception for digests edited in place with `chat.update`. Advisory until an app lists it in `Configuration::$optionalRules`. The tree's root question now reads "mail, SMS, chat or an agent recipient?".
+
+## 0.11.84 - 2026-11-08
+
+### Fixed
+
+- **`ui.row-action-label` false positives.** A ternary whose arms are all string literals (`$on ? 'Switch off' : 'Switch on'`, nested too) is read arm by arm, not as interpolation. A form's submit Action (returned by `submit()`/`save()`, or under a `submit`/`save` key) is not a row action. A TypeScript type literal (`{ label: string; url: string; method: string }`) is not read as a label. Interpolated and over-long row action labels still fail.
+
+## 0.11.83 - 2026-11-07
+
+### Added
+
+- **Advisory rule `browser.accessible`.** A browser test file that calls `visit(` must also call `assertAccessible(` (the starter's axe helper: WCAG 2.2 AA, every impact level, dated exceptions, survey mode) or `assertNoAccessibilityIssues(`. Advisory until an app lists it in `Configuration::$optionalRules`. New catalog leaf `ui-page.accessible-pages`.
+
+### Changed
+
+- **`standards:make crud --module=X` gives the module one capability.** The records in a module share one capability, `x`, with `x.view` and `x.manage` (aliases `x.read` and `x.write`). The policies gate on these, the MCP tools use the `x.read`/`x.write` scopes, and one `{Module}ServiceProvider` declares the capability once and adds each record's policy, routes and navigation between its markers. Each record is stamped, so running the command again changes nothing. An existing provider without the markers is refused, and the error lists the lines to add by hand. Pass `--capability=<kebab>` to give a record its own capability and provider, as before. Audit event names keep the record's name (`plans.create`).
+
+## 0.11.82 - 2026-11-07
+
+### Fixed
+
+- **`standards:make` names capabilities, permissions and scopes in kebab case.** A two-word record (`BillingEntity`) emitted `billing_entities.view`, which the kit's `Registry::permission` refuses, so the app would not boot. The policy, provider, tools, scopes and tests now share one name, `billing-entities`; the database table stays `billing_entities`.
+- **Generated tests bind the app's TestCase wherever they land.** A `pest()->use(Trait::class)->in(...)` chain in `tests/Pest.php` was taken as the TestCase covering that folder, so tests generated there failed with "Target class [config] does not exist". Only `extend()`/`uses()` of a test case counts now.
+
+### Changed
+
+- **Generated index and show pages put their actions in the page header.** The crud, `page --flavor=index` and `page --flavor=show` stubs rendered `<Page :title>` and then a `<SectionHeader>` with the same title right above the table or record. That showed the title twice, and put "New" against the DataTable toolbar with no gap. Actions now go in Page's `#actions` slot, written out by name in a ButtonGroup (ui-page.header-actions), and the repeated SectionHeader is gone. The crud show ViewModel's `actions()` now returns a keyed map, `['edit' => ?Action, 'delete' => ?Action]`, instead of a list.
+
+  **Migrating pages generated before this release** (by hand; nothing rewrites them). On an index page:
+
+  ```vue
+  <!-- before -->
+  import { DataTable, Page, SectionHeader } from '@kit/ui';
+  <Page :title="title">
+      <SectionHeader :title="title" :actions="create ? [create] : []" />
+      <DataTable ... />
+
+  <!-- after -->
+  import { ButtonGroup, DataTable, InertiaAction, Page } from '@kit/ui';
+  <Page :title="title">
+      <template #actions>
+          <ButtonGroup v-if="create">
+              <InertiaAction :action="create as never" />
+          </ButtonGroup>
+      </template>
+      <DataTable ... />
+  ```
+
+  On a show page, change the ViewModel's `actions()` to return `['edit' => ..., 'delete' => ...]`: the same `Action`s, keyed, null when not allowed, and drop `menu: true`. Then replace the SectionHeader, the `perform`/`run` functions and the confirm `Dialog` with:
+
+  ```vue
+  <template #actions>
+      <ButtonGroup v-if="actions.edit || actions.delete">
+          <InertiaAction :action="actions.edit as never" />
+          <template #menu>
+              <DropdownAction :action="actions.delete as never" />
+          </template>
+      </ButtonGroup>
+  </template>
+  ```
+
+  The prop type becomes `actions: { edit: Action | null; delete: Action | null }`. InertiaAction and DropdownAction ask for the delete confirmation themselves. A page with no actions just drops its `<SectionHeader title="..." />`.
+
+- **`standards:make crud --mcp` emits Read, Write and Delete tools over a `List<Plural>` action**, replacing the single `Update<Name>Tool`. Read returns one record by id or up to 50 matching a search, in the show page's shape. Write creates a record (no id) or updates one at its `lock_version`, using the form's rules and the Create/Update Actions. Delete is destructive (the kit confirms it) and goes through the Delete Action.
+
+## 0.11.81 - 2026-11-07
+
+### Added
+
+- **`ui.row-action-label`, an advisory rule: row action labels are short verbs.** It flags an action label that interpolates a value: a PHP descriptor such as `Action::make("Revoke {$x->name}")`, `new Action('Remove '.$grant->label, …)` or `new Action($member->name, …)`, and a Vue action object (a `label` beside `url` and `method`) whose label is a `${…}` template literal, a `+` concatenation or a bare expression. It also flags a literal label over 24 characters or 3 words, which tey/kit's RowActions clamps. The record belongs in the action's `ariaLabel` and its confirm (kit 0.15.10). A form field's `label` is not an action and is left alone. It is one of `Layout::RULES`, so it is advisory until listed in `Configuration::$optionalRules`, then fail-on-new against a baseline (`standards:allowlist --baseline`). On the `ui-page.layout-rhythm` leaf.
 
 ## 0.11.80 - 2026-11-07
 

@@ -477,8 +477,8 @@
                     "next": "ui-page.look"
                 },
                 {
-                    "answer": "The signed-in shell: the header, primary nav, account menu or workspace switcher",
-                    "next": "ui-page.shell"
+                    "answer": "The signed-in shell (header, primary nav, account menu, workspace switcher), navigation inside it (breadcrumbs, page tabs), or where a module's pages live (its URLs)",
+                    "next": "ui-page.navigation"
                 },
                 {
                     "answer": "Across the whole app: adopting every kit surface, or a test that guards every route or page",
@@ -487,6 +487,29 @@
                 {
                     "answer": "None of these",
                     "next": "ui-page.shared.byo"
+                }
+            ]
+        },
+        "ui-page.navigation": {
+            "id": "ui-page.navigation",
+            "question": "The signed-in shell, navigation inside it, or where a module's pages live?",
+            "why": "The shell is the chrome every signed-in page renders in; a module's URLs are where its records and settings sit below the workspace.",
+            "options": [
+                {
+                    "answer": "The signed-in shell: the header, primary nav, account menu or workspace switcher",
+                    "next": "ui-page.shell"
+                },
+                {
+                    "answer": "Where a module's pages live: its URL prefix, its records' URLs, their route names and its settings",
+                    "next": "ui-page.module-urls"
+                },
+                {
+                    "answer": "Breadcrumbs, a module's sibling pages or a record's sections (tabs, sub-nav)",
+                    "next": "ui-page.page-tabs"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.navigation.byo"
                 }
             ]
         },
@@ -502,6 +525,14 @@
                 {
                     "answer": "Page layout: spacing between blocks, columns, action groups and row actions",
                     "next": "ui-page.layout-rhythm"
+                },
+                {
+                    "answer": "A tinted page ground: a theme whose ground isn't white, and the cards content sits on",
+                    "next": "ui-page.tinted-ground"
+                },
+                {
+                    "answer": "The app's brand: its name, colours and logo (config/brand.php, not env)",
+                    "next": "ui-page.brand-config"
                 },
                 {
                     "answer": "None of these",
@@ -525,6 +556,10 @@
                 {
                     "answer": "A browser test of a page's layout or look (sizes, spacing, colours, fonts)",
                     "next": "ui-page.layout-tests"
+                },
+                {
+                    "answer": "A browser test that checks a page is accessible (axe, WCAG)",
+                    "next": "ui-page.accessible-pages"
                 },
                 {
                     "answer": "None of these",
@@ -553,7 +588,7 @@
         "ui-page.own": {
             "id": "ui-page.own",
             "question": "What does the page mainly do?",
-            "why": "Each answer has its own controller method, page shape and test.",
+            "why": "Step 1, before choosing components: state the page purpose, who opens it and their first job, in one line on the page ViewModel's class docblock as `@purpose <who>: <main job>` (`@purpose Staff: watch unsigned agreements; send one occasionally.`). The answer below follows from that job; each has its own controller method, page shape and test.",
             "options": [
                 {
                     "answer": "Lists records",
@@ -792,7 +827,8 @@
             "summary": "A CRUDDY index controller passes a typed ViewModel to resources/js/pages/<Area>/Index/Page.vue; its table is a TableQuery (search, declared filters and sorts from the URL, an unknown one a 400) with each row's actions decided on the server.",
             "kit": [
                 "@kit/ui Page",
-                "@kit/ui SectionHeader",
+                "@kit/ui ButtonGroup",
+                "@kit/ui InertiaAction",
                 "@kit/ui DataTable",
                 "@kit/ui IndexToolbar",
                 "@kit/ui RowActions"
@@ -808,7 +844,9 @@
                 "vm.nested-reach",
                 "vue.bare-handler-argument",
                 "inertia.pure",
-                "vm.page-size"
+                "vm.page-size",
+                "ui.page-purpose",
+                "ui.page-view-model"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -827,14 +865,14 @@
                 {
                     "name": "page shell",
                     "kit_component": "Page",
-                    "use": "Wraps the whole page with title and breadcrumbs",
-                    "props_hint": "title"
+                    "use": "Wraps the whole page with title and breadcrumbs; its #actions slot holds the header actions (ui-page.header-actions). No SectionHeader repeating the title above the table",
+                    "props_hint": "title, #actions"
                 },
                 {
-                    "name": "header",
-                    "kit_component": "SectionHeader",
-                    "use": "Title plus the primary add action",
-                    "props_hint": "title, actions slot"
+                    "name": "add action",
+                    "kit_component": "InertiaAction",
+                    "use": "The create action by name in the header's ButtonGroup (null renders nothing)",
+                    "props_hint": "action"
                 },
                 {
                     "name": "rows",
@@ -854,6 +892,9 @@
                     "use": "Per-row actions from the server (DataTable renders it)",
                     "props_hint": "row.actions descriptors"
                 }
+            ],
+            "rules": [
+                "Every rendered page extends PageViewModel; widgets and partials use ViewModel; `$standalone = true` opts a deliberate exception out (rule ui.page-view-model)."
             ]
         },
         "ui-page.show": {
@@ -862,7 +903,6 @@
             "summary": "A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand.",
             "kit": [
                 "@kit/ui Page",
-                "@kit/ui SectionHeader",
                 "@kit/ui Section",
                 "@kit/ui DescriptionList",
                 "@kit/ui ButtonGroup",
@@ -880,7 +920,9 @@
                 "vm.nested-reach",
                 "vue.bare-handler-argument",
                 "inertia.pure",
-                "vm.page-size"
+                "vm.page-size",
+                "ui.page-purpose",
+                "ui.page-view-model"
             ],
             "paths": [
                 "app/**/Http/Controllers/**",
@@ -899,14 +941,8 @@
                 {
                     "name": "page shell",
                     "kit_component": "Page",
-                    "use": "Wraps the record page",
-                    "props_hint": "title"
-                },
-                {
-                    "name": "header",
-                    "kit_component": "SectionHeader",
-                    "use": "Record title and its actions",
-                    "props_hint": "title, actions slot"
+                    "use": "Wraps the record page; its #actions slot holds the record's actions (ui-page.header-actions), with no SectionHeader repeating the title",
+                    "props_hint": "title, #actions"
                 },
                 {
                     "name": "details",
@@ -938,6 +974,9 @@
                     "use": "One named server action as a menu item",
                     "props_hint": "action"
                 }
+            ],
+            "rules": [
+                "Every rendered page extends PageViewModel; widgets and partials use ViewModel; `$standalone = true` opts a deliberate exception out (rule ui.page-view-model)."
             ]
         },
         "ui-page.form": {
@@ -956,7 +995,9 @@
                 "toast",
                 "actions",
                 "descriptors",
-                "tenant.scoped-exists"
+                "tenant.scoped-exists",
+                "ui.page-purpose",
+                "ui.page-view-model"
             ],
             "paths": [
                 "app/**/Http/Requests/**",
@@ -1004,6 +1045,9 @@
                     "use": "Submit and cancel buttons",
                     "props_hint": "processing"
                 }
+            ],
+            "rules": [
+                "Every rendered page extends PageViewModel; widgets and partials use ViewModel; `$standalone = true` opts a deliberate exception out (rule ui.page-view-model)."
             ]
         },
         "ui-page.toast": {
@@ -1122,6 +1166,101 @@
                 "A real exception goes in the allowlist: rule ui.kit-shell, the finding's target and check, a reason and an expires Y-m-d date. An entry without a reason is rejected and one without an expiry fails."
             ]
         },
+        "ui-page.page-tabs": {
+            "id": "ui-page.page-tabs",
+            "recipe": "Breadcrumbs and page tabs",
+            "summary": "Breadcrumbs are the kit's bar under the header, always. A module's sibling pages are PageTabs, registered with Registry::modulePage and sent by the server as the page's layout.navigation, which <Page> draws. A record's sections are PageTabs too, from the record ViewModel's own navigation, inside the record's frame under its header. No hand-rolled sub-nav strips.",
+            "kit": [
+                "shell Layout (pages/Workspace/Layout.vue)",
+                "@kit/ui Page",
+                "@kit/ui PageTabs",
+                "tey/kit Registry::modulePage()"
+            ],
+            "make": null,
+            "checks": [],
+            "paths": [
+                "resources/js/pages/**/Layout.vue",
+                "app/**/Providers/*ServiceProvider.php",
+                "app/**/ViewModels/**"
+            ],
+            "keywords": [
+                "breadcrumbs",
+                "breadcrumb bar",
+                "trail",
+                "tabs",
+                "page tabs",
+                "sub nav",
+                "subnav",
+                "sub-navigation",
+                "module pages",
+                "sibling pages",
+                "record tabs",
+                "section tabs",
+                "modulePage"
+            ],
+            "status": "draft",
+            "components": [
+                {
+                    "name": "page tabs",
+                    "kit_component": "PageTabs",
+                    "use": "A module's sibling pages, or a record's sections: route links with the current one marked",
+                    "props_hint": "tabs, label"
+                },
+                {
+                    "name": "page",
+                    "kit_component": "Page",
+                    "use": "Draws the page's layout.navigation as PageTabs above its heading",
+                    "props_hint": "default slot"
+                }
+            ],
+            "rules": [
+                "Breadcrumbs = bar, always (Jasper, fleet-wide): the shell's Layout draws the whole trail under the header, the current page last, so every page with route breadcrumbs shows one trail in the same place (a page with no trail gets no bar). Don't pass breadcrumbs=\"page\" and don't draw a trail inside a page. The trail comes from the route's breadcrumbs through the page ViewModel's layout().",
+                "A module's sibling pages = PageTabs. Register each with Registry::modulePage($module, $ability, $label, $suffix, order:, active:) in the module's service provider, its suffix nested under the module's prefix (`bookings/calendar`, as ui-page.module-urls says; the kit warns in development otherwise). The server sends the ones the viewer may open as the page's layout.navigation, and a top-level <Page> draws them. Don't hand-write the tab list in a page.",
+                "A record's sections = PageTabs, as AppraisalBench's case pages do: the record ViewModel sets its own layout.navigation, and the record's frame (its folder Layout.vue) renders one <PageTabs> from it under the record's header. That replaces the module's tabs, so a page never has two tab rows.",
+                "No hand-rolled sub-nav strips: no row of links under the header or above the heading built from a page's own array, and no new use of the kit's deprecated SubNav strip (Layout sub-nav=\"strip\")."
+            ]
+        },
+        "ui-page.module-urls": {
+            "id": "ui-page.module-urls",
+            "recipe": "Module URL nesting",
+            "summary": "A module owns one URL prefix, `/@{workspace}/<module>` (kebab case), and every page of it nests below: its records at `/<module>/<records>`, a record's pages at `/<module>/<records>/{id}/<section>`. The record named after the module, or its main record, sits at the prefix itself. Settings sections are the exception: their slug names what the person sets (`/settings/accounting`, `/settings/appearance`), chosen for the reader, not the internal module's name. Route names follow the path, dots for slashes. Existing apps keep their URLs.",
+            "kit": [
+                "tey/kit Registry::navigation",
+                "tey/kit Registry::modulePage",
+                "tey/kit Registry::settingsSection",
+                "tey/kit WorkspaceRoutes::page"
+            ],
+            "make": "standards:make crud --flavor=resource",
+            "checks": [],
+            "paths": [
+                "routes/**",
+                "app/**/routes/**",
+                "app/**/Providers/**ServiceProvider.php"
+            ],
+            "keywords": [
+                "module",
+                "url",
+                "prefix",
+                "nesting",
+                "nested routes",
+                "route names",
+                "module page",
+                "sub nav",
+                "settings section",
+                "url structure"
+            ],
+            "status": "ready",
+            "rules": [
+                "A module owns `/@{workspace}/<module>`, the module's name in kebab case. Its records nest under it: `/<module>/<records>` (`/bookings/resources`), never a top-level `/<records>` of their own.",
+                "The record named after the module (its plural is the module's name), or the module's main record, sits at the prefix itself: `/bookings`, not `/bookings/bookings`.",
+                "A record's own pages nest under the record: `/<module>/<records>/{id}/<section>` (`/bookings/resources/12/availability`).",
+                "Module URL nesting (`<module>/<records>`) applies to module pages. Settings sections are the exception: setup the module needs only occasionally is a settings section, not a page in the module's own navigation, and its slug names what the person sets, chosen for the reader (`/settings/accounting`, `/settings/appearance`), not the internal module's name. Keep such a URL even when the code lives in a differently named module; a module may hold several sections, each at its own slug.",
+                "`standards:make settings-section <Name> --module=<Module>` puts the section at `/settings/<name>` (kebab case, routes `workspaces.settings.<name>`); the module only decides where the code lives. A slug already taken is refused.",
+                "Route names follow the path, dots for slashes: `bookings.resources.index`, `bookings.resources.show`, the main record `bookings.index`. Two modules' records of one name never collide, and a name is read off its URL.",
+                "Navigation: the module registers one link at its prefix (Registry::navigation, suffix `<module>`), and each record is one of its pages (Registry::modulePage, suffix `<module>/<records>`). The main record's page is current on its own routes only (active: its `route:` names), not on its siblings below the prefix.",
+                "`standards:make crud <Record> --module=<Module>` emits this shape; without --module a record keeps its own `/<records>` prefix, names and navigation link. Existing apps keep their URLs: this is the default for new modules, not a migration."
+            ]
+        },
         "ui-page.kit-adoption": {
             "id": "ui-page.kit-adoption",
             "recipe": "Kit adoption",
@@ -1206,7 +1345,7 @@
         "ui-page.layout-rhythm": {
             "id": "ui-page.layout-rhythm",
             "recipe": "Page layout rhythm",
-            "summary": "Rules ui.action-group, ui.row-actions, ui.page-title-dup, ui.no-outer-margins, ui.page-grid and ui.primitive-pointers. Page gaps its children, components carry no outer margins, and spacing, columns, action groups and row actions come from the kit's primitives. Advisory until listed in Configuration::$optionalRules, then fail-on-new against a baseline (standards:allowlist --baseline) that only shrinks.",
+            "summary": "Rules ui.action-group, ui.row-actions, ui.page-title-dup, ui.no-outer-margins, ui.page-grid, ui.primitive-pointers and ui.row-action-label. Page gaps its children, components carry no outer margins, and spacing, columns, action groups and row actions come from the kit's primitives. Advisory until listed in Configuration::$optionalRules, then fail-on-new against a baseline (standards:allowlist --baseline) that only shrinks.",
             "kit": [
                 "@kit/ui Page",
                 "@kit/ui Stack",
@@ -1224,7 +1363,8 @@
                 "ui.page-title-dup",
                 "ui.no-outer-margins",
                 "ui.page-grid",
-                "ui.primitive-pointers"
+                "ui.primitive-pointers",
+                "ui.row-action-label"
             ],
             "paths": [],
             "keywords": [
@@ -1234,6 +1374,8 @@
                 "ui.no-outer-margins",
                 "ui.page-grid",
                 "ui.primitive-pointers",
+                "ui.row-action-label",
+                "row action label",
                 "layout rhythm",
                 "outer margin",
                 "button group",
@@ -1250,8 +1392,54 @@
                 "No mt-*, mb-*, my-* or space-y-* on a Page's direct children or on the root of a component a Page renders directly: the Page's gap owns the spacing; use Stack (BlockStack on a kit before the rename) with a gap-* class, or PageSection. A flush Page holds one full-bleed child (teleports, dialogs and absolute or fixed elements aside).",
                 "Page-level grid-cols-* and col-span-* become PageGrid (preset main-aside, halves or thirds) and PageGridItem :span. Grids inside a card, form or widget body and the dashboard widget grid are not page-level.",
                 "Hand-rolled Stack, PageSection, Aside, Banner, NavGrid, CardSection, Pills and DividerSection shapes point to the primitive; a pointer stays advisory until the kit the app runs exports the primitive.",
+                "Row action labels are short verbs (Remove, Revoke). A label never interpolates a value (Action::make(\"Revoke {$x->name}\"), 'Remove '.$grant, a model field, or a Vue action object's `${…}` label): the record goes in ariaLabel and the confirm. A literal label stays within 24 characters and 3 words, or RowActions clamps it.",
+                "A record in a restricted state (suspended, archived, cancelled, revoked) offers only its restore action (Reinstate, Restore, Reopen, Reactivate). It may also offer at most one final action, such as Delete or Remove, when that state allows it.",
+                "Every other action comes back only after the record is restored.",
+                "The server enforces this in the policy and the action list. Hiding actions in the UI is not enough.",
                 "A real exception goes in the allowlist: the rule, the finding's target and check, a reason and an expires Y-m-d date."
             ]
+        },
+        "ui-page.tinted-ground": {
+            "id": "ui-page.tinted-ground",
+            "recipe": "Tinted page ground",
+            "summary": "Rule ui.surface-on-tinted-ground (warn only). A theme whose page ground is tinted declares it with one token, --kit-ground: tinted, in its own resources/css. On it the content sits on cards and the page chrome stays on the ground; from tey/kit 0.15.27 the kit's DataTable, EmptyState, Workbench and PageSection draw that card themselves, and FormCard is a card on any ground.",
+            "kit": [
+                "@kit/ui Page",
+                "@kit/ui DataTable",
+                "@kit/ui FormCard",
+                "@kit/ui EmptyState",
+                "@kit/ui Card"
+            ],
+            "make": null,
+            "checks": [
+                "ui.surface-on-tinted-ground"
+            ],
+            "paths": [
+                "resources/css/**"
+            ],
+            "keywords": [
+                "ui.surface-on-tinted-ground",
+                "tinted ground",
+                "page ground",
+                "kit-ground",
+                "surface",
+                "card",
+                "background",
+                "theme"
+            ],
+            "status": "draft",
+            "rules": [
+                "Declare a tinted ground with --kit-ground: tinted on :root in the app's own CSS, next to the colours: the ground (--background, or --shell-ground for the shell alone) and a lighter --card. A white ground declares nothing.",
+                "On a tinted ground, content sits on a card (bg-card text-card-foreground border rounded-xl, as a dashboard widget): the kit's DataTable, EmptyState, Workbench and PageSection content draw it from tey/kit 0.15.27, and FormCard and the form Section are cards already. Never a card inside a card.",
+                "Page, PageGrid and the page chrome stay on the ground: the page header, breadcrumbs, SubNav, tabs and section headings. PageSection surface=\"none\" leaves a section's content on the ground.",
+                "A raw <table> or <form> is never a direct child of Page, PageGrid or PageGridItem on a tinted ground: use DataTable or FormCard, or put it in a Card or a PageSection. On a kit before 0.15.27 a DataTable there needs a card too.",
+                "Contrast on a tinted ground: --card against the ground at least 1.1:1 with a --border edge, --border against --card at least 1.5:1, --input against --card at least 3:1, and --foreground and --muted-foreground at least 4.5:1 on the ground and on the card (tey/kit's test:token-contrast)."
+            ],
+            "related": [
+                "ui-page.layout-rhythm",
+                "ui-page.styling"
+            ],
+            "graduate": "To a ready leaf when a second app adopts a tinted ground and the kit's minimums are checked from the app (kit:status)."
         },
         "ui-page.add-button": {
             "id": "ui-page.add-button",
@@ -1390,6 +1578,32 @@
                 "colour",
                 "brittle test",
                 "visual"
+            ],
+            "status": "draft"
+        },
+        "ui-page.accessible-pages": {
+            "id": "ui-page.accessible-pages",
+            "recipe": "Browser tests check accessibility",
+            "summary": "Each page a browser test visits is checked with assertAccessible($page, 'what it shows'): axe against WCAG 2.2 AA (wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa) at every impact level, after animations settle. A violation that cannot be fixed yet takes an AXE_EXCEPTIONS entry with a reason and an expiry date; AXE_SURVEY=1 prints the violations instead of failing, to size the work.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "browser.accessible"
+            ],
+            "paths": [
+                "tests/Pest.php"
+            ],
+            "keywords": [
+                "accessibility",
+                "a11y",
+                "axe",
+                "wcag",
+                "wcag 2.2",
+                "contrast",
+                "assertAccessible",
+                "assertNoAccessibilityIssues",
+                "browser test",
+                "survey"
             ],
             "status": "draft"
         },
@@ -1610,12 +1824,13 @@
         "ui-page.crud-resource": {
             "id": "ui-page.crud-resource",
             "recipe": "CRUD resource screens",
-            "summary": "`standards:make crud <Record>` emits a whole workspace-owned resource: model and migration (with lock_version), a policy gated by the record's capability then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first, stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture. `--bulk` adds selection and a bulk delete, `--mcp` read and write capability tools, `--soft-deletes` soft deletes and a restoration.",
+            "summary": "`standards:make crud <Record>` emits a whole workspace-owned resource: model and migration (with lock_version), a policy gated by the record's capability then its permissions, a provider that registers both with the kit, CRUDDY controllers and routes, form requests, one Action per write (principal first, stale writes refused), typed ViewModels, Index, Form and Show pages, server toasts on save, and feature tests on the app's synthetic fixture. `--bulk` adds selection and a bulk delete, `--mcp` Read, Write (create or update) and Delete capability tools over a List action, `--soft-deletes` soft deletes and a restoration. With `--module=<Module>` the record nests under the module's prefix, `/<module>/<records>` named `<module>.<records>.*` (the main record at `/<module>`), as one of the module's pages (see ui-page.module-urls).",
             "kit": [
                 "@kit/ui DataTable",
                 "@kit/ui FormCard",
-                "@kit/ui SectionHeader",
-                "@kit/ui Dialog"
+                "@kit/ui ButtonGroup",
+                "@kit/ui InertiaAction",
+                "@kit/ui DropdownAction"
             ],
             "make": "standards:make crud --flavor=resource",
             "checks": [
@@ -1723,16 +1938,26 @@
         "ui-page.dashboard-widget": {
             "id": "ui-page.dashboard-widget",
             "recipe": "Dashboard widget",
-            "summary": "Register a widget with its order and placement; never fork the kit dashboard page.",
+            "summary": "Register a widget with `region()` main or aside, plus its order; never fork the page.",
             "kit": [],
             "make": null,
-            "checks": [],
+            "checks": [
+                "ui.dashboard-composition"
+            ],
             "paths": [],
             "keywords": [
                 "dashboard",
                 "widget",
                 "home",
-                "lane"
+                "lane",
+                "main",
+                "aside",
+                "region",
+                "kind",
+                "task",
+                "feed",
+                "status",
+                "setup"
             ],
             "status": "gap",
             "evidence": {
@@ -1749,6 +1974,14 @@
                     "use": "A scrolling widget lane",
                     "props_hint": "items"
                 }
+            ],
+            "rules": [
+                "Register each widget with Registry::widget() and set its region() to main or aside, plus its order; never fork the dashboard page. Main is for the viewer's primary work, such as queues and activity; aside is for context, such as you, people and short status.",
+                "Pick each widget's kind(): task, feed, status or setup.",
+                "Placement follows kind: task and feed in main, status and setup in aside, with setup last. Region is set on its own and never derived from kind.",
+                "The dashboard has exactly one feed. Two activity sources are merged into that one feed.",
+                "Each widget declares what it shows when it is empty.",
+                "\"Things that need you\" is one task widget, listing every actionable item for the viewer's role, with the \"N things need you today\" subline."
             ]
         },
         "ui-page.auth-override": {
@@ -1993,8 +2226,55 @@
             "keywords": [],
             "status": "byo"
         },
+        "ui-page.brand-config": {
+            "id": "ui-page.brand-config",
+            "recipe": "Brand in config",
+            "summary": "Rule brand.no-env-colours (warn only). The app's brand (its name, colours and logo) is a committed config/brand.php, not KIT_BRAND_* env keys: env keeps only secrets and per-environment values. `php artisan kit:brand:migrate` writes config/brand.php from the env keys. The rule becomes an error in the tey/kit 0.16 era.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "brand.no-env-colours"
+            ],
+            "paths": [
+                "config/brand.php",
+                "config/kit.php",
+                ".env.example"
+            ],
+            "keywords": [
+                "brand.no-env-colours",
+                "brand",
+                "brand colours",
+                "accent",
+                "KIT_BRAND",
+                "env",
+                "config/brand.php",
+                "kit:brand:migrate"
+            ],
+            "status": "draft",
+            "rules": [
+                "The brand lives in config/brand.php as committed values. Neither config/brand.php nor config/kit.php reads it with env('KIT_BRAND_…').",
+                ".env.example and every committed .env.* file carry no KIT_BRAND_* keys; .env itself is never committed and is not read.",
+                "To move an app: run `php artisan kit:brand:migrate`, commit config/brand.php, then delete the KIT_BRAND_* lines from the env files.",
+                "Warn only until the tey/kit 0.16 era, when the rule becomes an error."
+            ],
+            "related": [
+                "ui-page.styling"
+            ],
+            "graduate": "To a ready leaf, and the rule to an error, in the tey/kit 0.16 era, once kit:brand:migrate has shipped and the apps have moved."
+        },
         "ui-page.app-wide.byo": {
             "id": "ui-page.app-wide.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.navigation.byo": {
+            "id": "ui-page.navigation.byo",
             "recipe": "Build your own",
             "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
             "kit": [],
@@ -3164,9 +3444,9 @@
         "settings.workspace": {
             "id": "settings.workspace",
             "recipe": "Workspace settings",
-            "summary": "A settings section per workspace group from the settings-section generator, guarded by a permission (rule 32) and audited.",
+            "summary": "A workspace's settings section at /@{workspace}/settings/<slug> (WorkspaceRoutes::page under the settings landing page), each request inside TenantBoundary behind a capability-gated policy (rule 32), a stale-write guarded and audited Action, and a PageViewModel in the workspace settings layout.",
             "kit": [
-                "@kit/ui SettingsFrame",
+                "@kit/ui Page",
                 "@kit/ui FormCard",
                 "@kit/ui Field"
             ],
@@ -3176,7 +3456,8 @@
             ],
             "paths": [
                 "app/**/Http/Controllers/Settings/**",
-                "resources/js/pages/settings/**"
+                "resources/js/pages/settings/**",
+                "app/**/Policies/*SettingsPolicy.php"
             ],
             "keywords": [
                 "workspace",
@@ -3344,11 +3625,15 @@
         },
         "mail-notifications": {
             "id": "mail-notifications",
-            "question": "Is the channel mail, SMS or an agent recipient?",
+            "question": "Is the channel mail, SMS, chat or an agent recipient?",
             "options": [
                 {
                     "answer": "Mail",
                     "next": "mail-notifications.mail"
+                },
+                {
+                    "answer": "A chat app (Slack; Teams and Discord to follow)",
+                    "next": "mail-notifications.chat"
                 },
                 {
                     "answer": "SMS or an agent",
@@ -3452,6 +3737,39 @@
                 "batch email"
             ],
             "status": "gap"
+        },
+        "mail-notifications.chat": {
+            "id": "mail-notifications.chat",
+            "recipe": "Chat notification",
+            "summary": "A message to a chat app is a Notification sent through its channel: toSlack() with laravel/slack-notification-channel. Each tenant's bot token comes from routeNotificationForSlack($notification), which resolves the tenant's connection and fails closed when none is connected; the notifiable's rule or preference picks the channel in via(). Slack now; Teams and Discord follow the same shape.",
+            "kit": [],
+            "make": null,
+            "checks": [
+                "notifications.chat-via-channel"
+            ],
+            "paths": [
+                "app/**/Notifications/**"
+            ],
+            "keywords": [
+                "slack",
+                "chat",
+                "teams",
+                "discord",
+                "chat.postMessage",
+                "webhook",
+                "bot token",
+                "toSlack",
+                "slack notification",
+                "channel message"
+            ],
+            "status": "draft",
+            "rules": [
+                "Send through the Notification channel: via() returns ['slack'] when the notifiable's rule or preference asks for it, and toSlack() builds a SlackMessage.",
+                "The bot token is the tenant's: routeNotificationForSlack($notification) resolves the tenant's connection and returns SlackRoute::make($channel, $token); with no connection it returns null so nothing is sent (fail closed), never a shared or default token.",
+                "Example: public function via(object $notifiable): array { return $notifiable->wantsChat() ? ['slack'] : []; } and public function toSlack(object $notifiable): SlackMessage { return (new SlackMessage)->text('Booking confirmed'); }",
+                "Do not post with Http to chat.postMessage, the /api/chat. endpoints or a hooks.slack.com webhook from a service or provider class: that skips via(), the tenant's routing and Notification failure handling.",
+                "One exception: a digest edited in place (chat.update on a stored ts) stays on a provider client. Mark that class with a `@chat-digest <reason>` docblock tag."
+            ]
         },
         "mail-notifications.custom-channel": {
             "id": "mail-notifications.custom-channel",

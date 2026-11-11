@@ -313,3 +313,99 @@ test('an installed kit from before the Stack rename is neither missing Stack nor
         (new Filesystem)->deleteDirectory($kit);
     }
 });
+
+test('ui.row-action-label flags PHP action labels that interpolate a value or run long', function () {
+    $base = sys_get_temp_dir().'/standards-row-label-'.bin2hex(random_bytes(6));
+    mkdir($base.'/app/Http', 0777, true);
+    file_put_contents($base.'/app/Http/GrantsController.php', <<<'PHP'
+        <?php
+        $a = Action::make("Revoke {$grant->name}", '/g/1');
+        $b = new Action('Remove '.$grant->label, '/g/1', 'delete');
+        $c = new Action($member->name, '/m/1');
+        $d = new Action('Resend the invitation email now', '/i/1');
+        $e = new Action('Remove', '/g/1', 'delete', ariaLabel: 'Remove '.$grant->label);
+        $f = Action::disabled('Revoke', '/g/1', 'delete', 'Owners cannot be revoked');
+        $g = new \Tey\Kit\Features\Core\Data\Action(label: 'Archive', url: '/o/1');
+        $h = new Action(url: '/o/1', label: $member->name);
+        $i = new Action("Charge $5", '/o/1/charge');
+        $j = new Action(__('Remove'), '/g/1');
+        $k = new Action($rule->enabled ? 'Switch off' : 'Switch on', '/r/1', 'post');
+        $l = [new Action($e->isFull() ? 'Join the waitlist' : ($e->isFree() ? 'RSVP' : 'Get a ticket'), '/e/1/rsvp', 'post')];
+        $m = new Action($on ? 'Off' : 'Resend the invitation email now', '/r/1');
+        $n = new Action($on ? 'Off' : 'Remove '.$grant->label, '/r/1');
+        $o = ['submit' => new Action('Book this room for the whole day', '/b', 'post')];
+
+        final class SignViewModel
+        {
+            public function submit(): ?Action
+            {
+                return $this->open ? new Action('I agree and sign', '/sign', 'post', key: 'sign') : null;
+            }
+        }
+
+        $p = new Action('Resend the invitation email again', '/i/1');
+        PHP);
+
+    try {
+        $findings = array_map(fn (array $v): string => $v['target'].':'.$v['line'].' '.$v['check'],
+            (new Conformance(layoutConfiguration($base, ['sourceRoots' => ['app']])))->violations(Layout::ROW_ACTION_LABEL));
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+
+    expect($findings)->toBe([
+        'app/Http/GrantsController.php:2 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'app/Http/GrantsController.php:3 row action label \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'app/Http/GrantsController.php:4 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "app/Http/GrantsController.php:5 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/GrantsController.php:9 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // A ternary of literals is read arm by arm: a long arm is flagged, a short one is not; an arm with a value still interpolates.
+        "app/Http/GrantsController.php:14 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/GrantsController.php:15 row action label $on ? \'Off\' : \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // After a submit() method has closed, an Action is a row action again.
+        "app/Http/GrantsController.php:26 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label flags Vue row action labels that interpolate a value or run long and leaves form labels alone', function () {
+    expect(layoutFindings(Layout::ROW_ACTION_LABEL, ['pages/People.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const fields = [{ label: `Name of ${team}`, name: 'name' }];
+        const actions = (row) => [
+            { key: 'remove', label: `Remove ${row.name}`, url: `/p/${row.id}`, method: 'delete' },
+            { key: 'role', label: 'Change role of ' + row.name, url: '/p/1/role', method: 'put' },
+            { key: 'open', label: row.name, url: '/p/1', method: 'get' },
+            { key: 'resend', label: 'Resend the invitation email', url: '/p/1/resend', method: 'post' },
+            { key: 'archive', label: 'Archive', url: '/p/1/archive', method: 'post' },
+            { key: 'toggle', label: row.on ? 'Switch off' : 'Switch on', url: '/p/1/toggle', method: 'post' },
+            { key: 'join', label: row.full ? 'Join the waitlist now please' : 'Join', url: '/p/1/join', method: 'post' },
+        ];
+        const props = defineProps<{ submit: { label: string; url: string; method: string; key?: string | null } }>();
+        type RowAction = { label: string, url: string, method: string };
+        const form = { submit: { label: 'Book this room for the whole day', url: '/b', method: 'post' } };
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE]))->toBe([
+        'resources/js/pages/People.vue:5 row action label `Remove ${row.name}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "resources/js/pages/People.vue:6 row action label 'Change role of ' interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm",
+        'resources/js/pages/People.vue:7 row action label row.name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "resources/js/pages/People.vue:8 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "resources/js/pages/People.vue:11 row action label 'Join the waitlist now please' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label reads a nested confirm and each script block at its own line', function () {
+    expect(layoutFindings(Layout::ROW_ACTION_LABEL, ['pages/Grants.vue' => <<<'VUE'
+        <template><DataTable :table="table" /></template>
+        <script lang="ts">
+        export default { name: 'Grants' };
+        </script>
+        <script setup lang="ts">
+        const actions = (grant) => [
+            { key: 'remove', label: `Remove ${grant.label}`, confirm: { title: 'Remove it?', description: 'Gone.', label: 'Remove' }, url: '/g/1', method: 'delete' },
+        ];
+        </script>
+        VUE]))->toBe([
+        'resources/js/pages/Grants.vue:7 row action label `Remove ${grant.label}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});

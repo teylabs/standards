@@ -1,13 +1,12 @@
 <!-- standards-pattern: {{ leaf }} -->
 <script setup lang="ts">
-import { Page, Placeholder, SectionHeader } from '{{ kit_ui }}';
+import { Page, Placeholder } from '{{ kit_ui }}';
 
 defineProps<{ rows: Array<Record<string, unknown>> }>();
 </script>
 
 <template>
     <Page title="{{ title }}">
-        <SectionHeader title="{{ title }}" />
         <!-- A plain list: for sorting, filters and row actions, build the table with TableQuery and the kit DataTable (pattern ui-page.data-table). -->
         <ul v-if="rows.length" class="grid gap-2">
             <li v-for="(row, index) in rows" :key="index" class="rounded-md border border-border px-3 py-2 text-sm">{{ String(row.name ?? row.id ?? index) }}</li>

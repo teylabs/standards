@@ -1,0 +1,46 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Http\Controllers\Settings;
+
+use {{ namespace }}\Actions\Update{{ model }};
+use {{ namespace }}\Http\Requests\Update{{ model }}Request;
+use {{ namespace }}\Models\{{ model }};
+use {{ vm_namespace }}\{{ model }}ViewModel;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Inertia\Inertia;
+use Inertia\Response;
+use Tey\Kit\Features\Core\Concerns\Toastable;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Core\Users;
+use Tey\Kit\Features\Workspaces\Models\Workspace;
+use Tey\Kit\Features\Workspaces\TenantBoundary;
+use Tey\Kit\Features\Workspaces\WorkspaceUrl;
+
+/** The {{ section_title }} section of workspace settings. Each method runs inside the workspace's tenant boundary and asks the policy first; the write is Update{{ model }}'s. */
+final class {{ name }}Controller
+{
+    use Toastable;
+
+    public function edit(Request $request, int $workspace): Response
+    {
+        return app(TenantBoundary::class)->run($workspace, function () use ($request, $workspace): Response {
+            Gate::forUser($request->user())->authorize('viewAny', [{{ model }}::class, Workspace::required()]);
+
+            return Inertia::render('settings/{{ name }}/Page', new {{ model }}ViewModel($workspace, $request->user()));
+        });
+    }
+
+    public function update(Update{{ model }}Request $request, int $workspace, Update{{ model }} $update): RedirectResponse
+    {
+        abort_unless(Users::is($request->user()), 401);
+        app(TenantBoundary::class)->run($workspace, fn (): {{ model }} => $update->handle(new Principal((int) $request->user()->getAuthIdentifier()), $workspace, $request->validated()));
+
+        $this->toast('{{ section_title }} settings saved.')->from('save');
+
+        return redirect(WorkspaceUrl::to($workspace, 'settings/{{ settings_slug }}', 'settings'));
+    }
+}

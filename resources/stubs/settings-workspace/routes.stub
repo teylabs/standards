@@ -1,0 +1,15 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+use {{ namespace }}\Http\Controllers\Settings\{{ name }}Controller;
+use Illuminate\Support\Facades\Route;
+use Tey\Kit\Features\Workspaces\WorkspaceRoutes;
+
+// The {{ section_title }} section of workspace settings, under `/@{workspace}/settings/{{ settings_slug }}` (and the short form). Loaded through the kit Registry by {{ model }}ServiceProvider.
+WorkspaceRoutes::define(function (bool $full): void {
+    Route::controller({{ name }}Controller::class)->prefix('settings/{{ settings_slug }}')->group(function () use ($full): void {
+        WorkspaceRoutes::page(Route::get('', 'edit'), $full, 'settings', '{{ route }}', '{{ section_title }}', ['session-ui', 'workspaces.settings.index']);
+        Route::put('', 'update');
+    });
+});

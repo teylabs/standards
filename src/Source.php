@@ -27,6 +27,9 @@ final class Source
     /** The frontend sources the gate's checks read (FrontendSource). */
     public const FRONTEND = '/\\.(vue|ts|js)$/';
 
+    /** The stylesheets the gate's checks read (PureTailwind, SurfaceOnTintedGround). */
+    public const CSS = '*.css';
+
     public function __construct(private readonly Configuration $config) {}
 
     /**
@@ -45,7 +48,7 @@ final class Source
     }
 
     /**
-     * Whether a project-relative path is a file the gate can check: one files() would list under the PHP or the frontend pattern, outside
+     * Whether a project-relative path is a file the gate can check: one files() would list under the PHP, frontend or CSS pattern, outside
      * vendor, node_modules, the generated bootstrap/cache and what Ignored::ALWAYS skips (public/build, public/hot). Docs, changelogs and config data are not, so first pass never counts them.
      */
     public static function gated(string $path): bool
@@ -63,7 +66,7 @@ final class Source
             return false;
         }
 
-        return fnmatch(self::PHP, basename($path)) || preg_match(self::FRONTEND, $path) === 1;
+        return fnmatch(self::PHP, basename($path)) || fnmatch(self::CSS, basename($path)) || preg_match(self::FRONTEND, $path) === 1;
     }
 
     /** @param list<string> $roots

@@ -34,12 +34,20 @@ final class Conformance
         'ui toast' => '[ui toast] notifications use one configured toast path',
         'ui header-actions' => '[ui header-actions] a page header shows at most one primary and three visible actions',
         'styling.pure-tailwind' => '[styling.pure-tailwind] app UI styles with Tailwind classes and @theme tokens, not its own CSS',
+        'ui.row-action-label' => '[ui.row-action-label] row action labels are short verbs; the record goes in the accessible name and the confirm',
         'ui.kit-shell' => '[ui.kit-shell] signed-in pages use kit\'s Workspace Layout, not an app-owned header, once the shell is adopted',
         'operator' => '[operator] commands that write offer a dry run and a production guard',
         'integrations' => '[integrations] webhooks verify their sender and API calls go through a contract',
         'versioned-writes' => '[versioned-writes] query-builder writes on a versioned model bump its version',
         'tenant-aware' => '[tenant-aware] commands and queued jobs that touch tenant-scoped models run per tenant (spatie/laravel-multitenancy)',
         'tenant.scoped-exists' => '[tenant.scoped-exists] an exists rule on workspace records is scoped to the current workspace',
+        'browser.accessible' => '[browser.accessible] a browser test that visits a page checks it with axe (assertAccessible)',
+        'notifications.chat-via-channel' => '[notifications.chat-via-channel] chat messages are Notifications sent through their channel (toSlack), not direct API calls',
+        'ui.page-purpose' => '[ui.page-purpose] each page ViewModel states @purpose <who>: <main job> (warn only)',
+        'ui.page-view-model' => '[ui.page-view-model] every rendered page extends PageViewModel; widgets and partials use ViewModel; $standalone = true opts out',
+        'ui.dashboard-composition' => '[ui.dashboard-composition] dashboard widgets: one feed at most, each kind in its column, every widget declares kind() (warn only)',
+        'ui.surface-on-tinted-ground' => '[ui.surface-on-tinted-ground] on a tinted page ground, tables and forms sit on a card, not straight on the ground (warn only)',
+        'brand.no-env-colours' => '[brand.no-env-colours] brand settings live in a committed config/brand.php, not KIT_BRAND_* env keys (warn only)',
         'destructive-db' => '[destructive-db] a service provider prohibits destructive database commands outside testing',
         'live.broadcast-now' => '[live.broadcast-now] the notice a live prop listens for is ShouldBroadcastNow',
         'vm.typed-pages' => '[vm.typed-pages] a page declares its props as its generated ViewModel type',
@@ -132,12 +140,17 @@ final class Conformance
         }
 
         // Advisory until an app opts in: static write detection can miss a write or flag a non-write.
-        if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists', ...Checks\Layout::RULES], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists', 'browser.accessible', 'notifications.chat-via-channel', ...Checks\Layout::RULES], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             // An allowlisted advisory that stopped firing is stale, as a findings entry is: fail on it, else skip as advisory.
             $stale = $this->quietStale($rule, $this->ratchet->staleAdvisories($rule, $violations));
             expect($stale)->toBe([], implode("\n", $stale));
 
             Assert::markTestSkipped('Rule ['.$rule.'] is advisory until listed in Configuration::optionalRules ('.count($violations).' findings).');
+        }
+
+        // Warn only, whatever optionalRules says: the findings are reported, the test never fails on them.
+        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose', 'ui.surface-on-tinted-ground', 'brand.no-env-colours'], true)) {
+            Assert::markTestSkipped('Rule ['.$rule.'] warns only ('.count($violations).' findings).'.implode('', array_map(fn (array $violation): string => "\n".$violation['check'], $violations)));
         }
 
         // A finding the check marks advisory (a rule that checked nothing) is never a silent pass under Pest either: the test is skipped, saying why.
@@ -202,7 +215,7 @@ final class Conformance
             'vue.bare-handler-argument' => (new Checks\VueBareHandlerArgument)->violations($this->config),
             'inertia.pure' => (new Checks\InertiaPure)->violations($this->config, $this->source),
             'vm.page-size' => (new Checks\ViewModelPageSize)->violations($this->config),
-            'ui.action-group', 'ui.row-actions', 'ui.page-title-dup', 'ui.no-outer-margins', 'ui.page-grid', 'ui.primitive-pointers' => (new Checks\Layout($this->config))->violations($rule),
+            'ui.action-group', 'ui.row-actions', 'ui.page-title-dup', 'ui.no-outer-margins', 'ui.page-grid', 'ui.primitive-pointers', 'ui.row-action-label' => (new Checks\Layout($this->config))->violations($rule),
             default => null,
         };
         if ($frontend !== null) {
@@ -245,6 +258,37 @@ final class Conformance
 
         if ($rule === 'guards.declared') {
             return (new Checks\GuardsDeclared($this->config, $this->source))->violations();
+        }
+
+        // Warn only: every finding is advisory, whatever optionalRules says.
+        if ($rule === 'ui.page-purpose') {
+            return (new Checks\PagePurpose($this->config, $this->source))->violations();
+        }
+
+        if ($rule === 'ui.page-view-model') {
+            return (new Checks\UiPageViewModel($this->config, $this->source))->violations();
+        }
+
+        if ($rule === 'ui.dashboard-composition') {
+            return (new Checks\DashboardComposition($this->config, $this->source))->violations();
+        }
+
+        // Warn only: every finding is advisory, whatever optionalRules says.
+        if ($rule === 'ui.surface-on-tinted-ground') {
+            return (new Checks\SurfaceOnTintedGround($this->config, $this->source))->violations();
+        }
+
+        // Warn only: every finding is advisory, whatever optionalRules says.
+        if ($rule === 'brand.no-env-colours') {
+            return (new Checks\BrandNoEnvColours($this->config))->violations();
+        }
+
+        if ($rule === 'notifications.chat-via-channel') {
+            return (new Checks\ChatViaChannel($this->config, $this->source))->violations();
+        }
+
+        if ($rule === 'browser.accessible') {
+            return (new Checks\BrowserAccessible($this->config))->violations();
         }
 
         if ($rule === 'tenant.scoped-exists') {

@@ -26,6 +26,6 @@ final class {{ name }}RestorationController
 
         $this->toast('{{ title }} restored.');
 
-        return redirect(WorkspaceUrl::to($workspace, '{{ slug }}/'.$id));
+        return redirect(WorkspaceUrl::to($workspace, '{{ prefix }}/'.$id));
     }
 }

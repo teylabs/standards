@@ -278,6 +278,7 @@ test('recompute and the log skip files the gate cannot check', function () {
     ($this->git)('commit', '--quiet', '-m', 'Root');
     ($this->write)('app/A.php', "<?php\n");
     ($this->write)('resources/js/pages/A.vue', "<template />\n");
+    ($this->write)('resources/css/app.css', "@import 'tailwindcss';\n");
     ($this->write)('docs/patterns.md', "# Patterns\n");
     ($this->write)('CHANGELOG.md', "# Changelog\n");
     ($this->write)('vendor/acme/Lib.php', "<?php\n");
@@ -291,12 +292,12 @@ test('recompute and the log skip files the gate cannot check', function () {
 
         return ['violations' => []];
     };
-    $log = [fpRun('2000-01-01T00:00:00+00:00', [fpFile('app/A.php', $hash("<?php\n")), fpFile('resources/js/pages/A.vue', $hash("<template />\n"))])];
+    $log = [fpRun('2000-01-01T00:00:00+00:00', [fpFile('app/A.php', $hash("<?php\n")), fpFile('resources/css/app.css', $hash("@import 'tailwindcss';\n")), fpFile('resources/js/pages/A.vue', $hash("<template />\n"))])];
 
     $result = (new Recompute($this->fpBase, $gate))->run('HEAD~1..HEAD', $log);
 
     expect($result['mismatches'])->toBe([])
-        ->and($gated)->toBe(['app/A.php', 'resources/js/pages/A.vue']);
+        ->and($gated)->toBe(['app/A.php', 'resources/css/app.css', 'resources/js/pages/A.vue']);
 
     ($this->write)('docs/patterns.md', "# Patterns\n\nMore.\n");
     ($this->write)('app/A.php', "<?php\n// more\n");

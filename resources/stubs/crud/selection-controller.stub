@@ -32,6 +32,6 @@ final class {{ name }}SelectionController
 
         $this->toast($count === 1 ? '1 {{ title_lower }} deleted.' : $count.' {{ titles_lower }} deleted.');
 
-        return redirect(WorkspaceUrl::to($workspace, '{{ slug }}'));
+        return redirect(WorkspaceUrl::to($workspace, '{{ prefix }}'));
     }
 }

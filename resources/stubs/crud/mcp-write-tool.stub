@@ -1,0 +1,47 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Mcp\Tools;
+
+use {{ namespace }}\Actions\Create{{ name }};
+use {{ namespace }}\Actions\List{{ plural }};
+use {{ namespace }}\Actions\Update{{ name }};
+use {{ namespace }}\Http\Requests\Store{{ name }}Request;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Mcp\Capability;
+use Tey\Kit\Features\Mcp\CapabilityTool;
+
+/** Creates a {{ title_lower }}, or changes one at its lock_version, through the same Actions the form uses. A stale write is refused, never saved over a newer one. */
+#[Capability('{{ perm }}', scope: '{{ perm }}.write')]
+final class Write{{ name }}Tool extends CapabilityTool
+{
+    public const ABILITY = '{{ perm }}.write';
+
+    protected string $description = 'Create a {{ title_lower }} (no id), or change one (its id and current lock_version).';
+
+    public function schema(JsonSchema $schema): array
+    {
+        return ['name' => $schema->string(), 'id' => $schema->integer(), 'lock_version' => $schema->integer(), 'intent_key' => $schema->string()];
+    }
+
+    /** @return array<string, mixed> the form's rules, plus the id and lock_version of an edit; the kit refuses any other argument */
+    protected function rules(): array
+    {
+        return [...(new Store{{ name }}Request)->rules(), 'id' => ['sometimes', 'integer'], 'lock_version' => ['required_with:id', 'integer', 'min:1'], 'intent_key' => ['sometimes', 'string', 'max:120']];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    protected function call(Principal $principal, int $workspace, array $validated): array
+    {
+        $id = isset($validated['id'])
+            ? (int) app(Update{{ name }}::class)->handle($principal, $workspace, (int) $validated['id'], $validated)->getKey()
+            : (int) app(Create{{ name }}::class)->handle($principal, $workspace, $validated)->getKey();
+
+        return ['item' => app(List{{ plural }}::class)->one($principal, $workspace, $id)];
+    }
+}

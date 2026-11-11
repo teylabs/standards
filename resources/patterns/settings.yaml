@@ -71,11 +71,11 @@ nodes:
     evidence: { apps: 3, count: 3, prs: 3 }
   - id: settings.workspace
     recipe: Workspace settings
-    summary: A settings section per workspace group from the settings-section generator, guarded by a permission (rule 32) and audited.
-    kit: ['@kit/ui SettingsFrame', '@kit/ui FormCard', '@kit/ui Field']
+    summary: A workspace's settings section at /@{workspace}/settings/<slug> (WorkspaceRoutes::page under the settings landing page), each request inside TenantBoundary behind a capability-gated policy (rule 32), a stale-write guarded and audited Action, and a PageViewModel in the workspace settings layout.
+    kit: ['@kit/ui Page', '@kit/ui FormCard', '@kit/ui Field']
     make: standards:make settings-section --flavor=form
     checks: ['32']
-    paths: ['app/**/Http/Controllers/Settings/**', 'resources/js/pages/settings/**']
+    paths: ['app/**/Http/Controllers/Settings/**', 'resources/js/pages/settings/**', 'app/**/Policies/*SettingsPolicy.php']
     keywords: [workspace, team, organisation, tenant settings]
     status: ready
     evidence: { apps: 3, count: 9, prs: 9 }

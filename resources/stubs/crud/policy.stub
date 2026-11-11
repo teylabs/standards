@@ -23,32 +23,32 @@ final class {{ name }}Policy
 
     public function viewAny(Authenticatable $user, Workspace $workspace): Response|bool
     {
-        return $this->allows($user, '{{ perm }}.view', $workspace);
+        return $this->allows($user, '{{ perm_view }}', $workspace);
     }
 
     public function view(Authenticatable $user, {{ name }} ${{ var }}): Response|bool
     {
-        return $this->allows($user, '{{ perm }}.view', ${{ var }}->workspace);
+        return $this->allows($user, '{{ perm_view }}', ${{ var }}->workspace);
     }
 
     public function create(Authenticatable $user, Workspace $workspace): Response|bool
     {
-        return $this->allows($user, '{{ perm }}.create', $workspace);
+        return $this->allows($user, '{{ perm_create }}', $workspace);
     }
 
     public function update(Authenticatable $user, {{ name }} ${{ var }}): Response|bool
     {
-        return $this->allows($user, '{{ perm }}.update', ${{ var }}->workspace);
+        return $this->allows($user, '{{ perm_update }}', ${{ var }}->workspace);
     }
 
     public function delete(Authenticatable $user, {{ name }} ${{ var }}): Response|bool
     {
-        return $this->allows($user, '{{ perm }}.delete', ${{ var }}->workspace);
+        return $this->allows($user, '{{ perm_delete }}', ${{ var }}->workspace);
     }
 
     public function restore(Authenticatable $user, {{ name }} ${{ var }}): Response|bool
     {
-        return $this->allows($user, '{{ perm }}.delete', ${{ var }}->workspace);
+        return $this->allows($user, '{{ perm_delete }}', ${{ var }}->workspace);
     }
 
     private function allows(Authenticatable $user, string $permission, ?Workspace $workspace): Response|bool

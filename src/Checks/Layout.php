@@ -29,7 +29,14 @@ final class Layout
 
     public const PRIMITIVES = 'ui.primitive-pointers';
 
-    public const RULES = [self::ACTION_GROUP, self::ROW_ACTIONS, self::PAGE_TITLE, self::OUTER_MARGINS, self::PAGE_GRID, self::PRIMITIVES];
+    public const ROW_ACTION_LABEL = 'ui.row-action-label';
+
+    public const RULES = [self::ACTION_GROUP, self::ROW_ACTIONS, self::PAGE_TITLE, self::OUTER_MARGINS, self::PAGE_GRID, self::PRIMITIVES, self::ROW_ACTION_LABEL];
+
+    /** A row action label longer than this (characters or words) is clamped by the kit's RowActions. */
+    public const LABEL_MAX_CHARACTERS = 24;
+
+    public const LABEL_MAX_WORDS = 3;
 
     public const STACKS = ['Stack', 'BlockStack'];
 
@@ -49,6 +56,9 @@ final class Layout
     /** @return list<array{target: string, check: string, line?: int, advisory?: bool}> */
     public function violations(string $rule): array
     {
+        if ($rule === self::ROW_ACTION_LABEL) {
+            return $this->rowActionLabels();
+        }
         $violations = [];
         foreach ($this->files() as $path => $source) {
             $template = VueTemplate::parse($source);
@@ -62,6 +72,7 @@ final class Layout
                 self::OUTER_MARGINS => $this->outerMargins($path, $source, $template),
                 self::PAGE_GRID => $this->pageGrids($path, $template),
                 self::PRIMITIVES => $this->primitives($path, $template),
+                default => [],
             });
         }
 
@@ -169,6 +180,285 @@ final class Layout
         }
 
         return $found;
+    }
+
+    // ui.row-action-label
+
+    /**
+     * Row action labels are verbs ("Remove", "Revoke"): the record goes in the accessible name (`ariaLabel`) and the confirmation. Flags a label that
+     * interpolates a value, in a PHP Action descriptor (`new Action("Revoke {$x->name}", …)`, `Action::make('Remove '.$grant)`, `new Action($model->name, …)`)
+     * or a Vue action object (`label` beside `url` and `method`, as a template literal with `${…}`, a `+` concatenation or a bare expression), and a literal
+     * label over 24 characters or 3 words, which the kit's RowActions clamps.
+     *
+     * @return list<array{target: string, check: string, line: int}>
+     */
+    private function rowActionLabels(): array
+    {
+        $found = [];
+        foreach ((new \Tey\Standards\Source($this->config))->files($this->config->sourceRoots) as $path => $source) {
+            preg_match_all('~(?:\bnew\s+\\\\?(?:[\w\\\\]+\\\\)?Action|\bAction::(?:make|disabled))\s*\(~', $source, $calls, PREG_OFFSET_CAPTURE);
+            foreach ($calls[0] as [$call, $at]) {
+                $arguments = self::arguments($source, $at + strlen($call));
+                // The label is the `label:` argument wherever it sits, else the first positional one.
+                $named = array_values(array_filter($arguments, fn (array $argument): bool => preg_match('~^label\s*:~', $argument[0]) === 1));
+                [$arg, $offset] = $named[0] ?? (isset($arguments[0]) && preg_match('~^\w+\s*:(?!:)~', $arguments[0][0]) !== 1 ? $arguments[0] : ['', $at]);
+                $arg = trim((string) preg_replace('~^label\s*:\s*~', '', $arg));
+                if ($arg === '') {
+                    continue;
+                }
+                if (self::formSubmit($source, $at)) {
+                    continue; // a form's submit button, not a row action
+                }
+                // A ternary whose arms are all literals picks a label: each arm is read as its own.
+                foreach (self::arms($arg) ?? [$arg] as $label) {
+                    $literal = self::phpLiteral($label);
+                    if (! $literal && ! self::interpolates($label)) {
+                        continue; // a translation call or a constant: nothing to read
+                    }
+                    $found[] = $this->labelFinding($path, $source, $offset, $label, ! $literal);
+                }
+            }
+        }
+        foreach ($this->files() as $path => $source) {
+            preg_match_all('~<script\b[^>]*>(.*?)</script\s*>~si', $source, $blocks, PREG_OFFSET_CAPTURE);
+            foreach ($blocks[1] as [$script, $offset]) {
+                // `${…}` masked so its braces don't count when finding the object literal a label sits in.
+                $masked = preg_replace_callback('~\$\{[^}]*\}~', fn (array $m): string => str_repeat('_', strlen($m[0])), $script) ?? $script;
+                preg_match_all('~\blabel\s*:\s*(?<arg>`(?:[^`\\\\]|\\\\.)*`|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^,}\n]+)(?<tail>\s*\+)?~', $script, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+                foreach ($matches as $match) {
+                    $at = $match[0][1];
+                    // Only an action object (url and method beside the label) counts: a form field's label is not an action.
+                    $window = self::enclosingObject($masked, $at);
+                    if (preg_match('~\burl\s*:~', $window) !== 1 || preg_match('~\bmethod\s*:~', $window) !== 1) {
+                        continue;
+                    }
+                    // A TypeScript type literal (`{ label: string; url: string }`) describes an action; it has no label to read.
+                    if (preg_match('~\blabel\s*\??\s*:\s*[^,;}]*;~', $window) === 1 || preg_match('~\blabel\s*\??\s*:\s*(?:string|number|boolean|any|unknown|null|undefined)(?:\s*\|\s*(?:string|number|boolean|any|unknown|null|undefined))*\s*[,}]~', $window) === 1) {
+                        continue;
+                    }
+                    // A form's submit object (`submit: { label, url, method }`) is not a row action.
+                    if (preg_match('~\b(?:submit|save)\s*:\s*$~', substr($masked, 0, max(0, strrpos(substr($masked, 0, $at), '{') ?: 0))) === 1) {
+                        continue;
+                    }
+                    $arg = trim($match['arg'][0]);
+                    if (($arms = self::arms(self::enclosingValue($script, $at))) !== null && count($arms) > 1) {
+                        foreach ($arms as $arm) {
+                            $found[] = $this->labelFinding($path, $source, $offset + $at, $arm, false);
+                        }
+
+                        continue;
+                    }
+                    $quoted = in_array($arg[0] ?? '', ['"', "'", '`'], true);
+                    $interpolated = ! $quoted || ($match['tail'][0] ?? '') !== '' || ($arg[0] === '`' && str_contains($arg, '${'));
+                    $found[] = $this->labelFinding($path, $source, $offset + $at, $arg, $interpolated);
+                }
+            }
+        }
+
+        return array_values(array_filter($found));
+    }
+
+    /** Whether a PHP argument is one plain string literal. */
+    private static function phpLiteral(string $arg): bool
+    {
+        return preg_match('~^\'(?:[^\'\\\\]|\\\\.)*\'$~s', $arg) === 1 || (preg_match('~^"(?:[^"\\\\]|\\\\.)*"$~s', $arg) === 1 && ! self::interpolates($arg));
+    }
+
+    /**
+     * The arms of a ternary whose every arm is a plain string literal (`$on ? 'Switch off' : 'Switch on'`, nested and parenthesised arms too), or null.
+     *
+     * @return list<string>|null
+     */
+    private static function arms(string $expression): ?array
+    {
+        $expression = trim($expression);
+        while (str_starts_with($expression, '(') && self::closing($expression, 0) === strlen($expression) - 1) {
+            $expression = trim(substr($expression, 1, -1));
+        }
+        if (self::phpLiteral($expression) || preg_match('~^`[^`$]*`$~', $expression) === 1) {
+            return [$expression];
+        }
+        // The first top-level `?` (not `?->`, `??` or `?.`) and its matching `:`.
+        $depth = 0;
+        $question = null;
+        $nested = 0;
+        $length = strlen($expression);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $expression[$i];
+            if ($char === '"' || $char === "'" || $char === '`') {
+                for ($i++; $i < $length && $expression[$i] !== $char; $i++) {
+                    $i += $expression[$i] === '\\' ? 1 : 0;
+                }
+            } elseif (in_array($char, ['(', '[', '{'], true)) {
+                $depth++;
+            } elseif (in_array($char, [')', ']', '}'], true)) {
+                $depth--;
+            } elseif ($depth === 0 && $char === '?' && ! in_array($expression[$i + 1] ?? '', ['-', '?', '.', ':'], true) && ($expression[$i - 1] ?? '') !== '?') {
+                if ($question === null) {
+                    $question = $i;
+                } else {
+                    $nested++;
+                }
+            } elseif ($depth === 0 && $char === ':' && $question !== null && ($expression[$i + 1] ?? '') !== ':' && ($expression[$i - 1] ?? '') !== ':') {
+                if ($nested > 0) {
+                    $nested--;
+
+                    continue;
+                }
+                $then = self::arms(substr($expression, $question + 1, $i - $question - 1));
+                $else = self::arms(substr($expression, $i + 1));
+
+                return $then === null || $else === null ? null : [...$then, ...$else];
+            }
+        }
+
+        return null;
+    }
+
+    /** The offset of the bracket closing the one at $open, or -1. */
+    private static function closing(string $text, int $open): int
+    {
+        for ($i = $open, $depth = 0, $length = strlen($text); $i < $length; $i++) {
+            $char = $text[$i];
+            if ($char === '"' || $char === "'" || $char === '`') {
+                for ($i++; $i < $length && $text[$i] !== $char; $i++) {
+                    $i += $text[$i] === '\\' ? 1 : 0;
+                }
+            } elseif ($char === '(') {
+                $depth++;
+            } elseif ($char === ')' && --$depth === 0) {
+                return $i;
+            }
+        }
+
+        return -1;
+    }
+
+    /** The value of the `label:` property at $at, up to the comma or brace that ends it at its own depth. */
+    private static function enclosingValue(string $script, int $at): string
+    {
+        $colon = strpos($script, ':', $at);
+        if ($colon === false) {
+            return '';
+        }
+        $arguments = self::arguments(str_replace('}', ')', substr($script, $colon + 1)), 0);
+
+        return $arguments[0][0] ?? '';
+    }
+
+    /** Whether the Action at $at is a form's submit: returned by a `submit()`/`save()` method, or the value of a `submit`/`save` key or argument. */
+    private static function formSubmit(string $source, int $at): bool
+    {
+        $before = substr($source, 0, $at);
+        if (preg_match('~[\'"]?\b(?:submit|save)\b[\'"]?\s*(?:=>|:)\s*(?:[^,\[\](){};]*\?\s*)?$~', $before) === 1) {
+            return true;
+        }
+
+        // Inside the body of a submit() or save() method: its opening brace is before the Action and its closing brace after it.
+        preg_match_all('~\bfunction\s+(?:submit|save)\s*\([^)]*\)[^{;]*\{~i', $before, $methods, PREG_OFFSET_CAPTURE);
+        foreach ($methods[0] as [$head, $start]) {
+            $depth = 0;
+            for ($i = $start + strlen($head) - 1, $length = strlen($source); $i < $length; $i++) {
+                $char = $source[$i];
+                if ($char === '"' || $char === "'") {
+                    for ($i++; $i < $length && $source[$i] !== $char; $i++) {
+                        $i += $source[$i] === '\\' ? 1 : 0;
+                    }
+                } elseif ($char === '{') {
+                    $depth++;
+                } elseif ($char === '}' && --$depth === 0) {
+                    if ($i > $at) {
+                        return true;
+                    }
+                    break;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** A variable in PHP source outside single quotes: `$name`, `{$…}` or `${…}`; a literal `$5` is not one. */
+    private static function interpolates(string $arg): bool
+    {
+        $unquoted = (string) preg_replace('~\'(?:[^\'\\\\]|\\\\.)*\'~s', "''", $arg);
+
+        return preg_match('~(?<!\\\\)\$(?:[A-Za-z_\x80-\xff]|\{)~', $unquoted) === 1;
+    }
+
+    /**
+     * The top-level arguments of a call, from just after its `(`: each argument's text and offset, quotes and nested brackets respected.
+     *
+     * @return list<array{0: string, 1: int}>
+     */
+    private static function arguments(string $source, int $from): array
+    {
+        $arguments = [];
+        $depth = 0;
+        $start = $from;
+        $length = strlen($source);
+        for ($i = $from; $i < $length; $i++) {
+            $char = $source[$i];
+            if ($char === '"' || $char === "'") {
+                for ($i++; $i < $length && $source[$i] !== $char; $i++) {
+                    $i += $source[$i] === '\\' ? 1 : 0;
+                }
+            } elseif (in_array($char, ['(', '[', '{'], true)) {
+                $depth++;
+            } elseif (in_array($char, [')', ']', '}'], true) && $depth > 0) {
+                $depth--;
+            } elseif ($depth === 0 && ($char === ',' || $char === ')')) {
+                $text = substr($source, $start, $i - $start);
+                if (trim($text) !== '') {
+                    $arguments[] = [trim($text), $start + strlen($text) - strlen(ltrim($text))];
+                }
+                if ($char === ')') {
+                    break;
+                }
+                $start = $i + 1;
+            }
+        }
+
+        return $arguments;
+    }
+
+    /** The object literal around an offset, by brace depth, so a nested `confirm: { … }` does not end it early. */
+    private static function enclosingObject(string $script, int $at): string
+    {
+        $open = null;
+        for ($i = $at - 1, $depth = 0; $i >= 0; $i--) {
+            if ($script[$i] === '}') {
+                $depth++;
+            } elseif ($script[$i] === '{' && $depth-- === 0) {
+                $open = $i;
+                break;
+            }
+        }
+        for ($i = $at, $depth = 0, $length = strlen($script); $open !== null && $i < $length; $i++) {
+            if ($script[$i] === '{') {
+                $depth++;
+            } elseif ($script[$i] === '}' && $depth-- === 0) {
+                return substr($script, $open, $i - $open + 1);
+            }
+        }
+
+        return '';
+    }
+
+    /** @return array{target: string, check: string, line: int}|null */
+    private function labelFinding(string $path, string $source, int $offset, string $arg, bool $interpolated): ?array
+    {
+        $line = substr_count(substr($source, 0, $offset), "\n") + 1;
+        if ($interpolated) {
+            return ['target' => $path, 'check' => "row action label {$arg} interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm", 'line' => $line];
+        }
+        $text = stripcslashes(substr($arg, 1, -1));
+        $words = preg_split('~\s+~', trim($text), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (mb_strlen(trim($text)) > self::LABEL_MAX_CHARACTERS || count($words) > self::LABEL_MAX_WORDS) {
+            return ['target' => $path, 'check' => "row action label {$arg} is over ".self::LABEL_MAX_CHARACTERS.' characters or '.self::LABEL_MAX_WORDS.' words: RowActions clamps it; keep the label a verb and put the record in the confirm', 'line' => $line];
+        }
+
+        return null;
     }
 
     // ui.page-title-dup

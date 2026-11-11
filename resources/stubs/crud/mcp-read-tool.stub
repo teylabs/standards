@@ -1,0 +1,45 @@
+<?php
+
+// standards-pattern: {{ leaf }}
+
+namespace {{ namespace }}\Mcp\Tools;
+
+use {{ namespace }}\Actions\List{{ plural }};
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Tey\Kit\Features\Core\Principal;
+use Tey\Kit\Features\Mcp\Capability;
+use Tey\Kit\Features\Mcp\CapabilityTool;
+
+/** Reads {{ titles_lower }}: one by id, or a page of them, as the index and show pages do. The capability gates presence; List{{ plural }} authorizes. */
+#[Capability('{{ perm }}', scope: '{{ perm }}.read')]
+final class Read{{ plural }}Tool extends CapabilityTool
+{
+    public const ABILITY = '{{ perm }}.read';
+
+    protected string $description = 'Read {{ titles_lower }}: one by id, or up to 50 matching an optional search.';
+
+    public function schema(JsonSchema $schema): array
+    {
+        return ['id' => $schema->integer(), 'search' => $schema->string()];
+    }
+
+    /** @return array<string, mixed> the accepted arguments' rules; the kit refuses any other argument */
+    protected function rules(): array
+    {
+        return ['id' => ['sometimes', 'integer'], 'search' => ['sometimes', 'string', 'max:100']];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    protected function call(Principal $principal, int $workspace, array $validated): array
+    {
+        $list = app(List{{ plural }}::class);
+        if (isset($validated['id'])) {
+            return ['item' => $list->one($principal, $workspace, (int) $validated['id'])];
+        }
+
+        return ['items' => $list->handle($principal, $workspace, $validated['search'] ?? null)];
+    }
+}

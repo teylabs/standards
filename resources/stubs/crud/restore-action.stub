@@ -21,7 +21,7 @@ final class Restore{{ name }}
 
         return DB::transaction(function () use ($principal, $workspace, ${{ var }}): {{ name }} {
             ${{ var }}->restore();
-            app(Audit::class)->write($principal->actorId, $workspace, '{{ perm }}.restore', ['id' => ${{ var }}->getKey()]);
+            app(Audit::class)->write($principal->actorId, $workspace, '{{ event }}.restore', ['id' => ${{ var }}->getKey()]);
 
             return ${{ var }};
         });
