@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.11.92 - 2026-11-11
+
 ### Fixed
 
 - **First pass counts only files the gate can check.** `standards:first-pass --recompute` no longer flags a committed docs or changelog file as "committed but never gated in the log", and the run log no longer records such files as clean episodes. Both use `Source::gated()`, which derives from the gate's own source patterns (`Source::PHP`, the frontend pattern `FrontendSource` reads, and `Source::CSS` for the stylesheets `PureTailwind` checks) and skips vendor, node_modules and bootstrap/cache. Found in the Hubcommons milestone 7 cross-check (`CHANGELOG.md` and `docs/patterns.md`).
