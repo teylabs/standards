@@ -93,7 +93,7 @@ final readonly class SurfaceOnTintedGround
         if (! is_dir($this->config->base.'/resources/css')) {
             return false;
         }
-        foreach ($this->source->files(['resources/css'], '*.css') as $css) {
+        foreach ($this->source->files(['resources/css'], Source::CSS) as $css) {
             // Comments and quoted strings never declare anything; the token counts only in a :root block.
             $css = preg_replace('~/\*.*?\*/|"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'~s', '', $css) ?? '';
             preg_match_all('~(?:^|[},;\s]):root\s*\{([^{}]*)\}~', $css, $blocks);

@@ -20,7 +20,7 @@ final class FrontendSource
             $roots = array_values(array_filter(['resources/js', ...$this->config->uiRoots], fn (string $root): bool => (glob($this->config->base.'/'.$root, GLOB_ONLYDIR) ?: []) !== []));
         }
 
-        return (new Source($this->config))->files($roots, '/\.(vue|ts|js)$/');
+        return (new Source($this->config))->files($roots, Source::FRONTEND);
     }
 
     /**

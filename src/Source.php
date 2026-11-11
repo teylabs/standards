@@ -21,6 +21,15 @@ final class Source
     /** Laravel's generated cache, never scanned. */
     public const GENERATED = 'bootstrap/cache/';
 
+    /** The PHP sources the gate's checks read (the default pattern of files()). */
+    public const PHP = '*.php';
+
+    /** The frontend sources the gate's checks read (FrontendSource). */
+    public const FRONTEND = '/\\.(vue|ts|js)$/';
+
+    /** The stylesheets the gate's checks read (PureTailwind, SurfaceOnTintedGround). */
+    public const CSS = '*.css';
+
     public function __construct(private readonly Configuration $config) {}
 
     /**
@@ -38,10 +47,32 @@ final class Source
         return array_values($missing);
     }
 
+    /**
+     * Whether a project-relative path is a file the gate can check: one files() would list under the PHP, frontend or CSS pattern, outside
+     * vendor, node_modules, the generated bootstrap/cache and what Ignored::ALWAYS skips (public/build, public/hot). Docs, changelogs and config data are not, so first pass never counts them.
+     */
+    public static function gated(string $path): bool
+    {
+        $path = str_replace('\\', '/', $path);
+        $segments = explode('/', $path);
+
+        foreach (Ignored::ALWAYS as $ignored) {
+            if ($path === $ignored || str_starts_with($path, $ignored.'/')) {
+                return false;
+            }
+        }
+
+        if (str_starts_with($path, self::GENERATED) || in_array('vendor', $segments, true) || in_array('node_modules', $segments, true)) {
+            return false;
+        }
+
+        return fnmatch(self::PHP, basename($path)) || fnmatch(self::CSS, basename($path)) || preg_match(self::FRONTEND, $path) === 1;
+    }
+
     /** @param list<string> $roots
      * @return array<string, string>
      */
-    public function files(array $roots, string $pattern = '*.php'): array
+    public function files(array $roots, string $pattern = self::PHP): array
     {
         $files = [];
 
