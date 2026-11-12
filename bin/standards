@@ -12,6 +12,7 @@ Usage: standards ci [--strict] [--json] [--base=<dir>]
        standards report <report.json|dir>... [--previous=<aggregate.json>] [--json] [--strict]
        standards hook <stop|pre-commit|pre-write|post-edit>
        standards patterns:compile [--check]
+       standards principles:compile [--check]
        standards kit-exports --refresh --from=<tey/kit checkout>
        standards adoption [--base=<dir>] [--inventory=<file>]... [--json] [--ci|--compliance]
        standards [--help]
@@ -55,7 +56,7 @@ $locate = function (): void {
     require_once $autoload;
 };
 
-if (in_array($arguments[0], ['hook', 'report', 'patterns:compile', 'kit-exports', 'adoption'], true)) {
+if (in_array($arguments[0], ['hook', 'report', 'patterns:compile', 'principles:compile', 'kit-exports', 'adoption'], true)) {
     $command = array_shift($arguments);
 
     if ($command === 'hook') {
@@ -110,6 +111,27 @@ if (in_array($arguments[0], ['hook', 'report', 'patterns:compile', 'kit-exports'
             exit(2);
         }
 
+        exit(0);
+    }
+
+    if ($command === 'principles:compile') {
+        $directory = dirname(__DIR__).'/resources/patterns';
+
+        try {
+            $json = Tey\Standards\Patterns\Principles::json($directory);
+        } catch (InvalidArgumentException $error) {
+            fwrite(STDERR, 'standards principles:compile: '.$error->getMessage().PHP_EOL);
+            exit(1);
+        }
+
+        if (in_array('--check', $arguments, true)) {
+            $current = @file_get_contents($directory.'/principles.json');
+            echo $current === $json ? 'principles.json is current.'.PHP_EOL : 'principles.json is stale; run standards principles:compile.'.PHP_EOL;
+            exit($current === $json ? 0 : 1);
+        }
+
+        file_put_contents($directory.'/principles.json', $json);
+        echo 'Wrote resources/patterns/principles.json.'.PHP_EOL;
         exit(0);
     }
 
