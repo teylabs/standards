@@ -43,6 +43,7 @@ final class Conformance
         'tenant.scoped-exists' => '[tenant.scoped-exists] an exists rule on workspace records is scoped to the current workspace',
         'browser.accessible' => '[browser.accessible] a browser test that visits a page checks it with axe (assertAccessible)',
         'notifications.chat-via-channel' => '[notifications.chat-via-channel] chat messages are Notifications sent through their channel (toSlack), not direct API calls',
+        'media.image-api' => '[media.image-api] userland image code uses Laravel\'s first-party image API; raw Imagick or GD only reads pixels, with a @raw-image reason',
         'ui.page-purpose' => '[ui.page-purpose] each page ViewModel states @purpose <who>: <main job> (warn only)',
         'ui.page-view-model' => '[ui.page-view-model] every rendered page extends PageViewModel; widgets and partials use ViewModel; $standalone = true opts out',
         'ui.dashboard-composition' => '[ui.dashboard-composition] dashboard widgets: one feed at most, each kind in its column, every widget declares kind() (warn only)',
@@ -140,7 +141,7 @@ final class Conformance
         }
 
         // Advisory until an app opts in: static write detection can miss a write or flag a non-write.
-        if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists', 'browser.accessible', 'notifications.chat-via-channel', ...Checks\Layout::RULES], true) && ! in_array($rule, $this->config->optionalRules, true)) {
+        if (in_array($rule, ['operator', 'integrations', 'vm.typed-pages', 'vm.shaped-arrays', 'vm.nested-reach', 'vue.bare-handler-argument', 'inertia.pure', 'vm.page-size', 'tenant.scoped-exists', 'browser.accessible', 'notifications.chat-via-channel', 'media.image-api', ...Checks\Layout::RULES], true) && ! in_array($rule, $this->config->optionalRules, true)) {
             // An allowlisted advisory that stopped firing is stale, as a findings entry is: fail on it, else skip as advisory.
             $stale = $this->quietStale($rule, $this->ratchet->staleAdvisories($rule, $violations));
             expect($stale)->toBe([], implode("\n", $stale));
@@ -285,6 +286,10 @@ final class Conformance
 
         if ($rule === 'notifications.chat-via-channel') {
             return (new Checks\ChatViaChannel($this->config, $this->source))->violations();
+        }
+
+        if ($rule === 'media.image-api') {
+            return (new Checks\ImageApi($this->config, $this->source))->violations();
         }
 
         if ($rule === 'browser.accessible') {

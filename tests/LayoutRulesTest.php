@@ -204,7 +204,7 @@ test('ui.primitive-pointers points hand-rolled shapes to the primitive and stays
 
     expect($findings)->toContain(
         "resources/js/pages/Settings.vue:3 hand-rolled Stack (a flex-col gap or space-y div stacking blocks): use the kit's Stack",
-        "resources/js/pages/Settings.vue:4 hand-rolled PageSection (a section with an h2 directly in Page): use the kit's PageSection [advisory]",
+        "resources/js/pages/Settings.vue:4 hand-rolled PageSection (a section with an h2 directly in Page): use the kit's PageSection",
         "resources/js/pages/Settings.vue:5 hand-rolled NavGrid (a grid of Link cards): use the kit's NavGrid [advisory]",
         "resources/js/pages/Settings.vue:6 hand-rolled CardSection (a md:grid-cols-3 settings section with a md:col-span-2 card): use the kit's CardSection [advisory]",
         "resources/js/pages/Settings.vue:7 hand-rolled DividerSection (a heading centred between rules): use the kit's DividerSection [advisory]",

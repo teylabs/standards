@@ -2975,7 +2975,8 @@
             "make": null,
             "checks": [
                 "19",
-                "ui dropzone"
+                "ui dropzone",
+                "media.image-api"
             ],
             "paths": [],
             "keywords": [
