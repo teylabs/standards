@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.11.94 - 2026-11-12
+
 ### Changed
 
 - **Advisory conformance rows say why they skip.** A Pest conformance row for an advisory rule (for example `[media.image-api]`) now skips with "advisory rule; see standards:check (opt in with Configuration::$optionalRules; N findings).", leading with the reason so Pest's truncated row shows it.
