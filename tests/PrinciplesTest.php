@@ -78,5 +78,14 @@ test('rows map from their ids and text, never from a bare word', function () {
         ->and($rows['VM-31']['enforced_by'])->toBe('vm.page-size')->and($rows['VM-31']['mode'])->toBe('advisory')
         ->and($rows['VM-32']['enforced_by'])->toBeNull()->and($rows['VM-32']['mode'])->toBe('review')
         ->and($rows['STD-ui-page.index']['tree_leaf'])->toBe('ui-page.index')->and($rows['STD-ui-page.index']['mode'])->toBe('enforced')
-        ->and($rows['VM-31']['applies_to'])->toBe(['page']);
+        ->and($rows['VM-31']['applies_to'])->toBe(['page'])
+        ->and($rows['VM-31']['tree_leaf'])->toBe('ui-page.show')->and($rows['CONF-20']['tree_leaf'])->toBeNull();
+});
+
+test('VM rows map to the form, index or show leaf', function () {
+    $rows = array_column(json_decode((string) file_get_contents(principlesDirectory().'/principles.json'), true, flags: JSON_THROW_ON_ERROR)['patterns'], null, 'id');
+    $vm = array_filter($rows, fn (array $row): bool => str_starts_with($row['id'], 'VM-'));
+
+    expect($rows['VM-04']['tree_leaf'])->toBe('ui-page.form')->and($rows['VM-08']['tree_leaf'])->toBe('ui-page.index')
+        ->and(array_unique(array_column(array_diff_key($vm, ['VM-04' => 1, 'VM-08' => 1]), 'tree_leaf')))->toBe(['ui-page.show']);
 });

@@ -13,7 +13,8 @@ use Tey\Standards\Enforcement\Gate;
  * The markdown is the source of truth. Each row gets three derived fields, read from this package's own code, never guessed:
  *
  * - tree_leaf: the decision-tree leaf the row describes. An STD-<leaf> row names it; a KIT-<Component> row maps to the one leaf
- *   that lists `@kit/ui <Component>` (none or several: null). Any other row: null.
+ *   that lists `@kit/ui <Component>` (none or several: null). A VM-* row (the tree has no ViewModel leaf) maps by VM_LEAVES: the form leaf
+ *   for the shared create/edit form ViewModel, the index leaf for lazy props, the show leaf for every other one. Any other row: null.
  * - enforced_by: the standards rule that checks the row. The candidates are a CONF-<n> row's numbered rule, an STD row's leaf checks,
  *   resources/patterns/check-ids.json, a rule the row names in brackets (`[ui toast]`) and a dotted or dashed id in backticks (`vm.page-size`).
  *   Only ids in Conformance::TESTS count. The first error-level candidate wins, else the first advisory one.
@@ -24,6 +25,11 @@ final class Principles
     public const SOURCE = 'principles.md';
 
     public const COMPILED = 'principles.json';
+
+    /** VM-* rows: the leaf whose page each ViewModel rule is written for; any VM row not listed here maps to VM_DEFAULT_LEAF. */
+    public const VM_LEAVES = ['VM-04' => 'ui-page.form', 'VM-08' => 'ui-page.index'];
+
+    public const VM_DEFAULT_LEAF = 'ui-page.show';
 
     private const COLUMNS = ['id', 'source', 'rule', 'how to check', 'applies-to'];
 
@@ -88,6 +94,11 @@ final class Principles
                     $leaf = substr($id, 4);
                 } elseif (str_starts_with($id, 'KIT-') && count($byComponent[substr($id, 4)] ?? []) === 1) {
                     $leaf = array_key_first($byComponent[substr($id, 4)]);
+                } elseif (str_starts_with($id, 'VM-')) {
+                    $leaf = self::VM_LEAVES[$id] ?? self::VM_DEFAULT_LEAF;
+                    if (! isset($leaves[$leaf])) {
+                        throw new InvalidArgumentException($at.' maps '.$id.' to '.$leaf.', which is not a leaf of the tree.');
+                    }
                 }
 
                 $candidates = [];

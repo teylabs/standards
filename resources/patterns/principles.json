@@ -17,7 +17,7 @@
                 "controller",
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -30,7 +30,7 @@
             "applies_to": [
                 "data (VM)"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -43,7 +43,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -56,7 +56,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.form",
             "enforced_by": null,
             "mode": "review"
         },
@@ -69,7 +69,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -83,7 +83,7 @@
                 "VM",
                 "controller"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -97,7 +97,7 @@
                 "VM",
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -110,7 +110,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.index",
             "enforced_by": null,
             "mode": "review"
         },
@@ -123,7 +123,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -136,7 +136,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -149,7 +149,7 @@
             "applies_to": [
                 "controller"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -162,7 +162,7 @@
             "applies_to": [
                 "controller"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -175,7 +175,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -188,7 +188,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": "vm.typed-pages",
             "mode": "advisory"
         },
@@ -201,7 +201,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -214,7 +214,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -227,7 +227,7 @@
             "applies_to": [
                 "test"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -240,7 +240,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -254,7 +254,7 @@
                 "VM",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -267,7 +267,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -280,7 +280,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -294,7 +294,7 @@
                 "VM",
                 "data"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -307,7 +307,7 @@
             "applies_to": [
                 "controller"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -321,7 +321,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": "vm.nested-reach",
             "mode": "advisory"
         },
@@ -334,7 +334,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -348,7 +348,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -361,7 +361,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": "vm.nested-reach",
             "mode": "advisory"
         },
@@ -374,7 +374,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -388,7 +388,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -402,7 +402,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -416,7 +416,7 @@
                 "config",
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -429,7 +429,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -443,7 +443,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -456,7 +456,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -469,7 +469,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -482,7 +482,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -495,7 +495,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -509,7 +509,7 @@
                 "VM",
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -523,7 +523,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -536,7 +536,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -550,7 +550,7 @@
                 "controller",
                 "action"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -564,7 +564,7 @@
                 "config",
                 "test"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -577,7 +577,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -590,7 +590,7 @@
             "applies_to": [
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -603,7 +603,7 @@
             "applies_to": [
                 "test"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -616,7 +616,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -629,7 +629,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -642,7 +642,7 @@
             "applies_to": [
                 "data"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -655,7 +655,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -669,7 +669,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -682,7 +682,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -696,7 +696,7 @@
                 "page",
                 "controller"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -709,7 +709,7 @@
             "applies_to": [
                 "controller"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -722,7 +722,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -736,7 +736,7 @@
                 "test",
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -749,7 +749,7 @@
             "applies_to": [
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -762,7 +762,7 @@
             "applies_to": [
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
@@ -775,7 +775,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.show",
             "enforced_by": null,
             "mode": "review"
         },
