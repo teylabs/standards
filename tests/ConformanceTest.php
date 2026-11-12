@@ -293,3 +293,9 @@ test('MCP declarations can use a configured manifest without loading application
         $files->deleteDirectory($base);
     }
 });
+
+test('an advisory rule skips with a message naming standards:check and the opt-in', function () {
+    $preset = new Conformance(fixtureConfiguration('Good'));
+
+    expect(fn () => $preset->assert('media.image-api'))->toThrow(SkippedWithMessageException::class, 'advisory rule; see standards:check (opt in with Configuration::$optionalRules; ');
+});
