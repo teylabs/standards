@@ -146,7 +146,8 @@ final class Conformance
             $stale = $this->quietStale($rule, $this->ratchet->staleAdvisories($rule, $violations));
             expect($stale)->toBe([], implode("\n", $stale));
 
-            Assert::markTestSkipped('Rule ['.$rule.'] is advisory until listed in Configuration::optionalRules ('.count($violations).' findings).');
+            // Lead with the fixed phrase: Pest truncates a skip message to the row's width.
+            Assert::markTestSkipped('advisory rule; see standards:check (opt in with Configuration::$optionalRules; '.count($violations).' findings).');
         }
 
         // Warn only, whatever optionalRules says: the findings are reported, the test never fails on them.
