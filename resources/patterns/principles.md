@@ -383,7 +383,7 @@ One row per checkable principle. Regex "how to check" entries find candidates, n
 | HR-13 | 60-delivery-modes | Keep a test only if it names a defect; no framework-behaviour tests | inspection | test |
 | HR-14 | 60-delivery-modes | Composer allow-plugins only as the rollout lists | composer.json | config |
 | HR-15 | 00-core / Roadmaps (50-roadmaps) | ROADMAP.md at root; no personal north-star text | test -f, read | config |
-| HR-16 | 65-production-errors | Nighthub issues handled | gh, out of a static code audit | config |
+| HR-16 | 65-production-errors | Production errors reported by the app's error monitor are handled | gh, out of a static code audit | config |
 | HR-17 | notes (Nov 3) | Inbound mail ignores non-own-domain recipients before logging | inbound handler | action |
 | HR-18 | notes (Oct 23) | Every mail is a Notification, never a Mailable | grep `extends Mailable`, Mail::to | mail |
 | HR-19 | 00-core / Lab | No local-only fix to a graduated pattern; drift check green | app copies of kit parts | component |
@@ -579,11 +579,12 @@ One row per checkable principle. Regex "how to check" entries find candidates, n
 | STD-integrations.api.byo | standards patterns, status byo | Build your own: No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded. Uses no kit parts. | `no generator`; standards checks: none; paths: none | integrations |
 | STD-byo | standards patterns, status byo | Build your own: Nothing in the tree fits. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded. Uses no kit parts. | `no generator`; standards checks: none; paths: none | byo |
 
-## tey/kit components (120, every export of @kit/ui)
+## tey/kit components (every export of @kit/ui, from kit-exports.json)
 
 | id | source | rule | how to check | applies-to |
 |---|---|---|---|---|
 | KIT-ActionBar | kit-exports.json | Use kit ActionBar for Descriptor buttons carry data-action, which ->from('<action id>') anchors the pulse or bubble to; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-ActionCard | kit-exports.json | Use kit ActionCard for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-ActionLabel | kit-exports.json | Use kit ActionLabel for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-ActivityStream | kit-exports.json | Use kit ActivityStream for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-AddressFieldset | kit-exports.json | Use kit AddressFieldset for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
@@ -601,6 +602,11 @@ One row per checkable principle. Regex "how to check" entries find candidates, n
 | KIT-Button | kit-exports.json | Use kit Button for Add, New or Create with the Plus icon; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-ButtonDropdown | kit-exports.json | Use kit ButtonDropdown for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-ButtonGroup | kit-exports.json | Use kit ButtonGroup for The record's actions written out by name: buttons in the default slot, the rest in the #menu (chevron); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-Card | kit-exports.json | Use kit Card for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-CardBanner | kit-exports.json | Use kit CardBanner for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-CardBody | kit-exports.json | Use kit CardBody for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-CardFooter | kit-exports.json | Use kit CardFooter for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-CardHeader | kit-exports.json | Use kit CardHeader for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-Checkbox | kit-exports.json | Use kit Checkbox for An on/off preference that saves on change; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-Checklist | kit-exports.json | Use kit Checklist for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-Collapsible | kit-exports.json | Use kit Collapsible for One side panel in the stack; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
@@ -608,6 +614,7 @@ One row per checkable principle. Regex "how to check" entries find candidates, n
 | KIT-ComputedValueRoot | kit-exports.json | Use kit ComputedValueRoot for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-ComputedValueScope | kit-exports.json | Use kit ComputedValueScope for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-ComputedValueToggle | kit-exports.json | Use kit ComputedValueToggle for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-CopyButton | kit-exports.json | Use kit CopyButton for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-DataTable | kit-exports.json | Use kit DataTable for The record list, server-driven: rows, URL state, empty states; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-DateTime | kit-exports.json | Use kit DateTime for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-DescriptionList | kit-exports.json | Use kit DescriptionList for The record's fields as term and description pairs (a real dl), with copy for an id or key; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
@@ -631,8 +638,12 @@ One row per checkable principle. Regex "how to check" entries find candidates, n
 | KIT-EditOnly | kit-exports.json | Use kit EditOnly for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-EmojiTray | kit-exports.json | Use kit EmojiTray for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-EmptyState | kit-exports.json | Use kit EmptyState for The page while nothing is linked, offering Link; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-FaintBackdrop | kit-exports.json | Use kit FaintBackdrop for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-Field | kit-exports.json | Use kit Field for Label, input slot and error; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-FileInput | kit-exports.json | Use kit FileInput for The only file input; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-FileList | kit-exports.json | Use kit FileList for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-FinalizeControl | kit-exports.json | Use kit FinalizeControl for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-FinalizedBanner | kit-exports.json | Use kit FinalizedBanner for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-FloatingToolbar | kit-exports.json | Use kit FloatingToolbar for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-FloatingToolbarDot | kit-exports.json | Use kit FloatingToolbarDot for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-FormActions | kit-exports.json | Use kit FormActions for Submit and cancel buttons; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
@@ -650,6 +661,7 @@ One row per checkable principle. Regex "how to check" entries find candidates, n
 | KIT-InputNumber | kit-exports.json | Use kit InputNumber for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-InputRichText | kit-exports.json | Use kit InputRichText for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-InputSelect | kit-exports.json | Use kit InputSelect for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-InputSwitch | kit-exports.json | Use kit InputSwitch for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-InputTags | kit-exports.json | Use kit InputTags for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-InputTime | kit-exports.json | Use kit InputTime for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-InputTimeRange | kit-exports.json | Use kit InputTimeRange for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
@@ -659,7 +671,12 @@ One row per checkable principle. Regex "how to check" entries find candidates, n
 | KIT-Modal | kit-exports.json | Use kit Modal for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-NumberInput | kit-exports.json | Use kit NumberInput for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-Page | kit-exports.json | Use kit Page for Wraps the whole page with title and breadcrumbs; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-PageAside | kit-exports.json | Use kit PageAside for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-PageEnd | kit-exports.json | Use kit PageEnd for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-PageGrid | kit-exports.json | Use kit PageGrid for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-PageGridItem | kit-exports.json | Use kit PageGridItem for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-PageSection | kit-exports.json | Use kit PageSection for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-PageTabs | kit-exports.json | Use kit PageTabs for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-PaneScroll | kit-exports.json | Use kit PaneScroll for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-PaneTabs | kit-exports.json | Use kit PaneTabs for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-PaneToggle | kit-exports.json | Use kit PaneToggle for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
@@ -669,10 +686,12 @@ One row per checkable principle. Regex "how to check" entries find candidates, n
 | KIT-Placeholder | kit-exports.json | Use kit Placeholder for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-Popover | kit-exports.json | Use kit Popover for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-RadioCardGroup | kit-exports.json | Use kit RadioCardGroup for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-RecordCard | kit-exports.json | Use kit RecordCard for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-RegionSelect | kit-exports.json | Use kit RegionSelect for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-Repeater | kit-exports.json | Use kit Repeater for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-RowActions | kit-exports.json | Use kit RowActions for Per-row actions from the server (DataTable renders it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-RowSaveStatus | kit-exports.json | Use kit RowSaveStatus for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-ScriptForm | kit-exports.json | Use kit ScriptForm for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-ScrollList | kit-exports.json | Use kit ScrollList for A scrolling widget lane; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-SearchBox | kit-exports.json | Use kit SearchBox for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-Section | kit-exports.json | Use kit Section for Groups the record fields; never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
@@ -690,9 +709,11 @@ One row per checkable principle. Regex "how to check" entries find candidates, n
 | KIT-SortableHandle | kit-exports.json | Use kit SortableHandle for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-SortableList | kit-exports.json | Use kit SortableList for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-SplitPane | kit-exports.json | Use kit SplitPane for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-Stack | kit-exports.json | Use kit Stack for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-StageNotice | kit-exports.json | Use kit StageNotice for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-StickyBar | kit-exports.json | Use kit StickyBar for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-SubmitError | kit-exports.json | Use kit SubmitError for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
+| KIT-SummaryCard | kit-exports.json | Use kit SummaryCard for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-Surface | kit-exports.json | Use kit Surface for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-SwatchPicker | kit-exports.json | Use kit SwatchPicker for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |
 | KIT-Textarea | kit-exports.json | Use kit Textarea for its job (no standards leaf describes it); never a second copy | import from @kit/ui; app component with the same name or job = hand-rolled | page, component |

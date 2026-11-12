@@ -4636,7 +4636,7 @@
             "id": "HR-16",
             "section": "House rules",
             "source": "65-production-errors",
-            "rule": "Nighthub issues handled",
+            "rule": "Production errors reported by the app's error monitor are handled",
             "check": "gh, out of a static code audit",
             "applies_to": [
                 "config"
@@ -7052,6 +7052,20 @@
             "mode": "review"
         },
         {
+            "id": "KIT-ActionCard",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit ActionCard for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
             "id": "KIT-ActionLabel",
             "section": "tey/kit components",
             "source": "kit-exports.json",
@@ -7290,6 +7304,76 @@
             "mode": "review"
         },
         {
+            "id": "KIT-Card",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit Card for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": "ui-page.tinted-ground",
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-CardBanner",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit CardBanner for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-CardBody",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit CardBody for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-CardFooter",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit CardFooter for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-CardHeader",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit CardHeader for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
             "id": "KIT-Checkbox",
             "section": "tey/kit components",
             "source": "kit-exports.json",
@@ -7378,6 +7462,20 @@
             "section": "tey/kit components",
             "source": "kit-exports.json",
             "rule": "Use kit ComputedValueToggle for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-CopyButton",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit CopyButton for its job (no standards leaf describes it); never a second copy",
             "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
             "applies_to": [
                 "page",
@@ -7710,6 +7808,20 @@
             "mode": "review"
         },
         {
+            "id": "KIT-FaintBackdrop",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit FaintBackdrop for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
             "id": "KIT-Field",
             "section": "tey/kit components",
             "source": "kit-exports.json",
@@ -7728,6 +7840,48 @@
             "section": "tey/kit components",
             "source": "kit-exports.json",
             "rule": "Use kit FileInput for The only file input; never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-FileList",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit FileList for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-FinalizeControl",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit FinalizeControl for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-FinalizedBanner",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit FinalizedBanner for its job (no standards leaf describes it); never a second copy",
             "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
             "applies_to": [
                 "page",
@@ -7976,6 +8130,20 @@
             "mode": "review"
         },
         {
+            "id": "KIT-InputSwitch",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit InputSwitch for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
             "id": "KIT-InputTags",
             "section": "tey/kit components",
             "source": "kit-exports.json",
@@ -8102,6 +8270,20 @@
             "mode": "review"
         },
         {
+            "id": "KIT-PageAside",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit PageAside for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
             "id": "KIT-PageEnd",
             "section": "tey/kit components",
             "source": "kit-exports.json",
@@ -8112,6 +8294,62 @@
                 "component"
             ],
             "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-PageGrid",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit PageGrid for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-PageGridItem",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit PageGridItem for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-PageSection",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit PageSection for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-PageTabs",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit PageTabs for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": "ui-page.page-tabs",
             "enforced_by": null,
             "mode": "review"
         },
@@ -8242,6 +8480,20 @@
             "mode": "review"
         },
         {
+            "id": "KIT-RecordCard",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit RecordCard for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
             "id": "KIT-RegionSelect",
             "section": "tey/kit components",
             "source": "kit-exports.json",
@@ -8288,6 +8540,20 @@
             "section": "tey/kit components",
             "source": "kit-exports.json",
             "rule": "Use kit RowSaveStatus for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-ScriptForm",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit ScriptForm for its job (no standards leaf describes it); never a second copy",
             "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
             "applies_to": [
                 "page",
@@ -8536,6 +8802,20 @@
             "mode": "review"
         },
         {
+            "id": "KIT-Stack",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit Stack for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": "ui-page.layout-rhythm",
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
             "id": "KIT-StageNotice",
             "section": "tey/kit components",
             "source": "kit-exports.json",
@@ -8568,6 +8848,20 @@
             "section": "tey/kit components",
             "source": "kit-exports.json",
             "rule": "Use kit SubmitError for its job (no standards leaf describes it); never a second copy",
+            "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
+            "applies_to": [
+                "page",
+                "component"
+            ],
+            "tree_leaf": null,
+            "enforced_by": null,
+            "mode": "review"
+        },
+        {
+            "id": "KIT-SummaryCard",
+            "section": "tey/kit components",
+            "source": "kit-exports.json",
+            "rule": "Use kit SummaryCard for its job (no standards leaf describes it); never a second copy",
             "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
             "applies_to": [
                 "page",

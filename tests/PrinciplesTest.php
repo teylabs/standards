@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Tey\Standards\Conformance;
+use Tey\Standards\Patterns\KitExports;
 use Tey\Standards\Patterns\Principles;
 use Tey\Standards\Patterns\TreeCatalog;
 
@@ -88,4 +89,14 @@ test('VM rows map to the form, index or show leaf', function () {
 
     expect($rows['VM-04']['tree_leaf'])->toBe('ui-page.form')->and($rows['VM-08']['tree_leaf'])->toBe('ui-page.index')
         ->and(array_unique(array_column(array_diff_key($vm, ['VM-04' => 1, 'VM-08' => 1]), 'tree_leaf')))->toBe(['ui-page.show']);
+});
+
+test('there is one KIT row per @kit/ui export in kit-exports.json, and none for a name it does not export', function () {
+    $ids = array_column(json_decode((string) file_get_contents(principlesDirectory().'/principles.json'), true, flags: JSON_THROW_ON_ERROR)['patterns'], 'id');
+    // KIT-R<n> rows are the kit's general rules, not components.
+    $components = array_values(array_map(fn (string $id): string => substr($id, 4), array_filter($ids, fn (string $id): bool => preg_match('/\AKIT-(?!R\d+\z)/', $id) === 1)));
+    $exports = KitExports::snapshot();
+
+    expect(array_values(array_diff($exports, $components)))->toBe([], 'add a KIT row for each export')
+        ->and(array_values(array_diff($components, $exports)))->toBe([], 'drop the KIT row of a name @kit/ui no longer exports');
 });

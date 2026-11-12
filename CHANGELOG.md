@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Principles catalog at `resources/patterns/principles.json`.** It holds 656 checkable principles: recipes, house rules, conformance rules, every decision-tree leaf and every `@kit/ui` component. Each row carries `tree_leaf`, `enforced_by` and `mode` (`enforced`, `advisory` or `review`), derived from the shipped tree and `Conformance::TESTS`, never hand-set. `resources/patterns/principles.md` is the source, and `php bin/standards principles:compile [--check]` writes or checks the JSON. Read it at `vendor/tey/standards/resources/patterns/principles.json`. VM rows map to the form leaf (VM-04), the index leaf (VM-08) or the show leaf (the rest), since the tree has no ViewModel leaf. This release: 201 rows map to a leaf; 41 are enforced, 12 advisory and 603 review. `catalog.json` (the decision tree) is unchanged.
+- **Principles catalog at `resources/patterns/principles.json`.** It holds 677 checkable principles: recipes, house rules, conformance rules, every decision-tree leaf and every `@kit/ui` component. Each row carries `tree_leaf`, `enforced_by` and `mode` (`enforced`, `advisory` or `review`), derived from the shipped tree and `Conformance::TESTS`, never hand-set. `resources/patterns/principles.md` is the source, and `php bin/standards principles:compile [--check]` writes or checks the JSON. Read it at `vendor/tey/standards/resources/patterns/principles.json`. VM rows map to the form leaf (VM-04), the index leaf (VM-08) or the show leaf (the rest), since the tree has no ViewModel leaf. This release: 204 rows map to a leaf; 41 are enforced, 12 advisory and 624 review. The suite checks that there is one KIT row per export in `kit-exports.json`. `catalog.json` (the decision tree) is unchanged.
 
 ## 0.11.94 - 2026-11-12
 
