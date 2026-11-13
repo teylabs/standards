@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Kit ownership works after kit 0.18, which removes the `.mod-maintenance` install records.** Without them, `styling.pure-tailwind` flagged the kit's own `resources/css/kit.css` (10 findings in the first app to upgrade). `resources/css/kit.css` is now kit-owned while its bytes equal the core stub in the installed package, `vendor/tey/kit/resources/features/core/css/kit.css.stub`; an edited copy is the app's CSS and is checked. The package's components, `vendor/tey/kit/resources/js/components/Kit/` (aliased as `@/components/Kit`), are never read as app code, even under a configured frontend root. Apps still on kit 0.17 keep the record-based check unchanged.
+
 ## v0.11.98 - 2026-11-13
 
 ### Fixed

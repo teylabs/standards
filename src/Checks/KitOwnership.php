@@ -10,9 +10,13 @@ use Tey\Standards\Configuration;
  * Frontend files tey/kit owns, which the frontend rules (`descriptors`, `ui plus`, `ui new-tab`, `ui dropzone`, `ui toast`) do not scan:
  *
  * - the kit's copy under `resources/js/components/Kit/`, which `kit:update` replaces;
+ * - the kit's components in the package, `vendor/tey/kit/resources/js/components/Kit/`, which kit 0.18 aliases as `@/components/Kit`
+ *   instead of copying them into the app;
  * - a file tey/mod records as generated in the app's installed lineage records (`.mod-maintenance/installed/<sha256>.json`, or the
  *   0.8 `.mod-maintenance/installed.json`), such as a kit page under `resources/js/pages/`, while its bytes still equal the recorded
- *   bytes. An edited copy is the app's code and is checked. A record that does not read as tey/mod's installed format names nothing.
+ *   bytes. An edited copy is the app's code and is checked. A record that does not read as tey/mod's installed format names nothing;
+ * - `resources/css/kit.css` while its bytes equal the core stub in the installed package (`vendor/tey/kit/resources/features/core/css/kit.css.stub`),
+ *   for kit 0.18, which writes no records. An edited copy is the app's code and is checked.
  *
  * The record is read, not verified: it only narrows which files are scanned, and an app could as well allowlist the same file.
  */
@@ -20,12 +24,18 @@ final class KitOwnership
 {
     public const KIT_TREE = 'resources/js/components/Kit/';
 
+    public const PACKAGE_KIT_TREE = 'vendor/tey/kit/resources/js/components/Kit/';
+
     public const RECORDS = '.mod-maintenance/installed';
 
     public const LEGACY_RECORD = '.mod-maintenance/installed.json';
 
+    public const KIT_CSS = 'resources/css/kit.css';
+
+    public const KIT_CSS_STUB = 'vendor/tey/kit/resources/features/core/css/kit.css.stub';
+
     /** @param array<string, string> $generated project-relative path => recorded bytes */
-    private function __construct(private readonly array $generated) {}
+    private function __construct(private readonly array $generated, private readonly ?string $kitCss) {}
 
     public static function of(Configuration $config): self
     {
@@ -47,8 +57,10 @@ final class KitOwnership
                 }
             }
         }
+        $stub = $config->base.'/'.self::KIT_CSS_STUB;
+        $kitCss = is_file($stub) && is_readable($stub) ? @file_get_contents($stub) : false;
 
-        return new self($generated);
+        return new self($generated, $kitCss === false ? null : $kitCss);
     }
 
     /** Whether an installed lineage record lists the path among the files it generated, whatever its bytes are now. */
@@ -59,6 +71,9 @@ final class KitOwnership
 
     public function owns(string $path, string $source): bool
     {
-        return str_starts_with($path, self::KIT_TREE) || (isset($this->generated[$path]) && $this->generated[$path] === $source);
+        return str_starts_with($path, self::KIT_TREE)
+            || str_starts_with($path, self::PACKAGE_KIT_TREE)
+            || (isset($this->generated[$path]) && $this->generated[$path] === $source)
+            || ($path === self::KIT_CSS && $this->kitCss === $source);
     }
 }

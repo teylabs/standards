@@ -90,6 +90,36 @@ test('[styling.pure-tailwind] an edited kit-generated file is checked again', fu
     ]);
 });
 
+test('[styling.pure-tailwind] kit 0.18 (no lineage records): resources/css/kit.css is skipped while it equals vendor/tey/kit\'s core stub, and checked once edited', function () {
+    $base = dirname(__DIR__).'/.phpunit.cache/kit-css-'.bin2hex(random_bytes(5));
+    $stub = ":root {\n    --z-dialog: 50;\n}\n\n.kit-scroll-none {\n    scrollbar-width: none;\n}\n";
+    $files = [
+        'vendor/tey/kit/resources/features/core/css/kit.css.stub' => $stub,
+        'resources/css/kit.css' => $stub,
+        'resources/css/app.css' => $stub,
+    ];
+    foreach ($files as $path => $contents) {
+        is_dir(dirname($base.'/'.$path)) || mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $contents);
+    }
+    $targets = fn (): array => array_values(array_unique(array_column((new PureTailwind)->violations(tailwindConfiguration($base)), 'target')));
+    try {
+        // The same bytes under another name are the app's CSS.
+        expect($targets())->toBe(['resources/css/app.css']);
+
+        // One changed byte makes it the app's copy.
+        file_put_contents($base.'/resources/css/kit.css', str_replace('50', '51', $stub));
+        expect($targets())->toBe(['resources/css/app.css', 'resources/css/kit.css']);
+
+        // Without the package's stub there is nothing to compare against.
+        file_put_contents($base.'/resources/css/kit.css', $stub);
+        unlink($base.'/vendor/tey/kit/resources/features/core/css/kit.css.stub');
+        expect($targets())->toBe(['resources/css/app.css', 'resources/css/kit.css']);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
+
 test('[styling.pure-tailwind] @font-face passes', function () {
     expect(tailwindFindings('font-face'))->toBe([]);
 });
