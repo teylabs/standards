@@ -51,6 +51,12 @@ final class Principles
         'KIT-InputYear' => 'ui-page.form', 'KIT-PasswordInput' => 'ui-page.form', 'KIT-PasswordRules' => 'ui-page.form', 'KIT-RadioCardGroup' => 'ui-page.form',
         'KIT-Select' => 'ui-page.form', 'KIT-Textarea' => 'ui-page.form',
         'KIT-FileInput' => 'ui-page.upload',
+        'MCP-05' => 'mcp.read',
+        'MCP-01' => 'mcp.write', 'MCP-02' => 'mcp.write', 'MCP-03' => 'mcp.write', 'MCP-04' => 'mcp.write',
+        'MCP-06' => 'mcp.write', 'MCP-08' => 'mcp.write', 'MCP-09' => 'mcp.write', 'MCP-10' => 'mcp.write',
+        'SAAS-06' => 'mcp.write', 'CONF-55' => 'mcp.write',
+        'MCP-07' => 'mcp.queued',
+        'HR-06' => 'mcp.agent-docs', 'AGT-01' => 'mcp.agent-docs', 'AGT-02' => 'mcp.agent-docs', 'CONF-35' => 'mcp.agent-docs',
     ];
 
     public const VM_DEFAULT_LEAF = 'ui-page.show';
