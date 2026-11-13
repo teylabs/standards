@@ -12,7 +12,7 @@ use Tey\Standards\Ratchet;
 function tailwindConfiguration(string $base, array $allowlist = []): Configuration
 {
     return new Configuration(
-        base: str_starts_with($base, '/') ? $base : dirname(__DIR__).'/fixtures/PureTailwind/'.$base,
+        base: preg_match('~\A(?:/|[A-Za-z]:[\\\\/])~', $base) === 1 ? $base : dirname(__DIR__).'/fixtures/PureTailwind/'.$base,
         classRoots: ['src' => 'FixtureTailwind'],
         sourceRoots: ['src'],
         uiRoots: ['src/UI'],
@@ -88,6 +88,46 @@ test('[styling.pure-tailwind] an edited kit-generated file is checked again', fu
     expect(tailwindFindings('kit-edited'))->toBe([
         ['target' => 'resources/js/pages/Workspace/Page.vue', 'check' => 'inline style attribute', 'line' => 2],
     ]);
+});
+
+test('[styling.pure-tailwind] kit 0.18 (no lineage records): resources/css/kit.css is skipped while it equals vendor/tey/kit\'s core stub, and checked once edited', function () {
+    $base = dirname(__DIR__).'/.phpunit.cache/kit-css-'.bin2hex(random_bytes(5));
+    $stub = ":root {\n    --z-dialog: 50;\n}\n\n.kit-scroll-none {\n    scrollbar-width: none;\n}\n";
+    $files = [
+        'vendor/tey/kit/resources/features/core/css/kit.css.stub' => $stub,
+        'resources/css/kit.css' => $stub,
+        'resources/css/app.css' => $stub,
+    ];
+    foreach ($files as $path => $contents) {
+        is_dir(dirname($base.'/'.$path)) || mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $contents);
+    }
+    $targets = fn (): array => array_values(array_unique(array_column((new PureTailwind)->violations(tailwindConfiguration($base)), 'target')));
+    try {
+        // The same bytes under another name are the app's CSS.
+        expect($targets())->toBe(['resources/css/app.css']);
+
+        // One changed byte makes it the app's copy.
+        file_put_contents($base.'/resources/css/kit.css', str_replace('50', '51', $stub));
+        expect($targets())->toBe(['resources/css/app.css', 'resources/css/kit.css']);
+
+        // Line endings are not an edit: a CRLF checkout of either side still matches, and a changed byte under CRLF is still an edit.
+        $crlf = str_replace("\n", "\r\n", $stub);
+        file_put_contents($base.'/resources/css/kit.css', $crlf);
+        expect($targets())->toBe(['resources/css/app.css']);
+        file_put_contents($base.'/vendor/tey/kit/resources/features/core/css/kit.css.stub', $crlf);
+        file_put_contents($base.'/resources/css/kit.css', $stub);
+        expect($targets())->toBe(['resources/css/app.css']);
+        file_put_contents($base.'/resources/css/kit.css', str_replace('50', '51', $crlf));
+        expect($targets())->toBe(['resources/css/app.css', 'resources/css/kit.css']);
+
+        // Without the package's stub there is nothing to compare against.
+        file_put_contents($base.'/resources/css/kit.css', $stub);
+        unlink($base.'/vendor/tey/kit/resources/features/core/css/kit.css.stub');
+        expect($targets())->toBe(['resources/css/app.css', 'resources/css/kit.css']);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
 });
 
 test('[styling.pure-tailwind] @font-face passes', function () {

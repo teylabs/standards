@@ -392,12 +392,24 @@ dataset('kit-owned violations', [
     'ui dropzone' => ['ui dropzone', '<template><input type="file"></template>'],
     'ui toast' => ['ui toast', '<template><p>{{ flash.success }}</p></template>'],
     'descriptors' => ['descriptors', "<script setup>const admin = hasRole('admin');</script><template><p /></template>"],
+    'styling.pure-tailwind' => ['styling.pure-tailwind', '<template><p style="color: red">Posts</p></template>'],
 ]);
 
 test('the frontend rules skip the kit tree and still check the same code beside it', function (string $rule, string $source) {
     $base = kitOwnershipApp(['resources/js/components/Kit/Form/FileInput.vue' => $source, 'resources/js/pages/Posts.vue' => $source]);
     try {
         $targets = array_column((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['resources/js']])))->violations($rule), 'target');
+
+        expect(array_values(array_unique($targets)))->toBe(['resources/js/pages/Posts.vue']);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+})->with('kit-owned violations');
+
+test('the frontend rules never scan kit 0.18\'s components in vendor/tey/kit, even under a configured root, and still check the same code in the app', function (string $rule, string $source) {
+    $base = kitOwnershipApp(['vendor/tey/kit/resources/js/components/Kit/Form/FileInput.vue' => $source, 'resources/js/pages/Posts.vue' => $source]);
+    try {
+        $targets = array_column((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['resources/js', 'vendor/tey/kit/resources/js']])))->violations($rule), 'target');
 
         expect(array_values(array_unique($targets)))->toBe(['resources/js/pages/Posts.vue']);
     } finally {
@@ -416,6 +428,12 @@ test('the frontend rules skip a page tey/mod records as kit-generated while it i
     $run = fn (): array => array_values(array_unique(array_column((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['resources/js']])))->violations($rule), 'target')));
     try {
         expect($run())->toBe(['resources/js/pages/Posts.vue', 'resources/js/pages/Workspace/Settings/Billing/Page.vue']);
+
+        // A CRLF checkout of an unedited page is still the kit's.
+        file_put_contents($base.'/'.$page, str_replace("\n", "\r\n", $source."\n"));
+        file_put_contents($base.'/.mod-maintenance/installed/'.hash('sha256', 'tey/kit').'.json', kitInstalledRecord([$page => $source."\n", 'resources/js/pages/Workspace/Settings/Billing/Page.vue' => $source]));
+        expect($run())->toBe(['resources/js/pages/Posts.vue', 'resources/js/pages/Workspace/Settings/Billing/Page.vue']);
+        file_put_contents($base.'/'.$page, $source);
 
         // A record that is not tey/mod's installed format names nothing.
         file_put_contents($base.'/.mod-maintenance/installed/'.hash('sha256', 'tey/kit').'.json', kitInstalledRecord([$page => $source], owner: 'someone/else'));
