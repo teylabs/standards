@@ -12,7 +12,7 @@ use Tey\Standards\Ratchet;
 function tailwindConfiguration(string $base, array $allowlist = []): Configuration
 {
     return new Configuration(
-        base: str_starts_with($base, '/') ? $base : dirname(__DIR__).'/fixtures/PureTailwind/'.$base,
+        base: preg_match('~\A(?:/|[A-Za-z]:[\\\\/])~', $base) === 1 ? $base : dirname(__DIR__).'/fixtures/PureTailwind/'.$base,
         classRoots: ['src' => 'FixtureTailwind'],
         sourceRoots: ['src'],
         uiRoots: ['src/UI'],
