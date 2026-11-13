@@ -83,12 +83,24 @@ test('rows map from their ids and text, never from a bare word', function () {
         ->and($rows['VM-31']['tree_leaf'])->toBe('ui-page.show')->and($rows['CONF-20']['tree_leaf'])->toBeNull();
 });
 
-test('VM rows map to the form, index or show leaf', function () {
+test('VM rows map to their listed leaf, or the show leaf', function () {
     $rows = array_column(json_decode((string) file_get_contents(principlesDirectory().'/principles.json'), true, flags: JSON_THROW_ON_ERROR)['patterns'], null, 'id');
     $vm = array_filter($rows, fn (array $row): bool => str_starts_with($row['id'], 'VM-'));
 
-    expect($rows['VM-04']['tree_leaf'])->toBe('ui-page.form')->and($rows['VM-08']['tree_leaf'])->toBe('ui-page.index')
-        ->and(array_unique(array_column(array_diff_key($vm, ['VM-04' => 1, 'VM-08' => 1]), 'tree_leaf')))->toBe(['ui-page.show']);
+    foreach (Principles::VM_LEAVES as $id => $leaf) {
+        expect($rows[$id]['tree_leaf'])->toBe($leaf, $id);
+    }
+    expect(array_values(array_unique(array_column(array_diff_key($vm, Principles::VM_LEAVES), 'tree_leaf'))))->toBe(['ui-page.show'])
+        ->and($rows['VM-28']['tree_leaf'])->toBe('ui-page.header-actions')->and($rows['VM-40']['tree_leaf'])->toBe('ui-page.action-menu');
+});
+
+test('rows listed in ROW_LEAVES map to their leaf', function () {
+    $rows = array_column(json_decode((string) file_get_contents(principlesDirectory().'/principles.json'), true, flags: JSON_THROW_ON_ERROR)['patterns'], null, 'id');
+
+    foreach (Principles::ROW_LEAVES as $id => $leaf) {
+        expect($rows)->toHaveKey($id)->and($rows[$id]['tree_leaf'])->toBe($leaf, $id);
+    }
+    expect(Principles::ROW_LEAVES)->toHaveCount(21);
 });
 
 test('there is one KIT row per @kit/ui export in kit-exports.json, and none for a name it does not export', function () {

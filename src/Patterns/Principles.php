@@ -27,7 +27,17 @@ final class Principles
     public const COMPILED = 'principles.json';
 
     /** VM-* rows: the leaf whose page each ViewModel rule is written for; any VM row not listed here maps to VM_DEFAULT_LEAF. */
-    public const VM_LEAVES = ['VM-04' => 'ui-page.form', 'VM-08' => 'ui-page.index'];
+    public const VM_LEAVES = ['VM-04' => 'ui-page.form', 'VM-08' => 'ui-page.index', 'VM-28' => 'ui-page.header-actions', 'VM-40' => 'ui-page.action-menu'];
+
+    /** Other rows whose rule is written for one leaf's page, by id (from FSB's pattern pages). Every leaf must exist in the tree. */
+    public const ROW_LEAVES = [
+        'IDX-01' => 'ui-page.index', 'IDX-02' => 'ui-page.index', 'IDX-03' => 'ui-page.index', 'IDX-04' => 'ui-page.index', 'RUN-06' => 'ui-page.index',
+        'TBL-01' => 'ui-page.data-table', 'TBL-02' => 'ui-page.data-table', 'TBL-03' => 'ui-page.data-table', 'TBL-04' => 'ui-page.data-table',
+        'TBL-05' => 'ui-page.data-table', 'TBL-06' => 'ui-page.data-table', 'LNK-03' => 'ui-page.data-table',
+        'BTN-05' => 'ui-page.header-actions', 'BTN-08' => 'ui-page.header-actions', 'LAY-01' => 'ui-page.header-actions', 'HR-03' => 'ui-page.header-actions',
+        'BTN-06' => 'ui-page.action-menu', 'BTN-07' => 'ui-page.action-menu', 'LAY-04' => 'ui-page.action-menu',
+        'BTN-01' => 'ui-page.add-button', 'BTN-03' => 'ui-page.add-button',
+    ];
 
     public const VM_DEFAULT_LEAF = 'ui-page.show';
 
@@ -94,6 +104,11 @@ final class Principles
                     $leaf = substr($id, 4);
                 } elseif (str_starts_with($id, 'KIT-') && count($byComponent[substr($id, 4)] ?? []) === 1) {
                     $leaf = array_key_first($byComponent[substr($id, 4)]);
+                } elseif (isset(self::ROW_LEAVES[$id])) {
+                    $leaf = self::ROW_LEAVES[$id];
+                    if (! isset($leaves[$leaf])) {
+                        throw new InvalidArgumentException($at.' maps '.$id.' to '.$leaf.', which is not a leaf of the tree.');
+                    }
                 } elseif (str_starts_with($id, 'VM-')) {
                     $leaf = self::VM_LEAVES[$id] ?? self::VM_DEFAULT_LEAF;
                     if (! isset($leaves[$leaf])) {
