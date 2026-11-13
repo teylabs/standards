@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- **The mcp.read and mcp.write summaries are no longer cut off.** Both contained an unquoted `#[Capability]`, which YAML read as a comment, so the summaries ended mid-sentence. They're quoted now, and the STD-mcp.read and STD-mcp.write rows in principles.md carry the full text.
+- **principles.json maps FSB's MCP rows to the MCP leaves.** MCP-05 goes to `mcp.read`. MCP-01..04, MCP-06, MCP-08..10, SAAS-06 and CONF-55 go to `mcp.write`, MCP-07 to `mcp.queued`, and HR-06, AGT-01, AGT-02 and CONF-35 to `mcp.agent-docs`.
+
 ## v0.11.97 - 2026-11-13
 
 ### Fixed

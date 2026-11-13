@@ -1354,7 +1354,7 @@
             "applies_to": [
                 "MCP"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.write",
             "enforced_by": null,
             "mode": "review"
         },
@@ -1367,7 +1367,7 @@
             "applies_to": [
                 "MCP"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.write",
             "enforced_by": null,
             "mode": "review"
         },
@@ -1381,7 +1381,7 @@
                 "MCP",
                 "action"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.write",
             "enforced_by": null,
             "mode": "review"
         },
@@ -1394,7 +1394,7 @@
             "applies_to": [
                 "MCP"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.write",
             "enforced_by": null,
             "mode": "review"
         },
@@ -1407,7 +1407,7 @@
             "applies_to": [
                 "MCP"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.read",
             "enforced_by": null,
             "mode": "review"
         },
@@ -1420,7 +1420,7 @@
             "applies_to": [
                 "MCP"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.write",
             "enforced_by": null,
             "mode": "review"
         },
@@ -1433,7 +1433,7 @@
             "applies_to": [
                 "MCP"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.queued",
             "enforced_by": null,
             "mode": "review"
         },
@@ -1446,7 +1446,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.write",
             "enforced_by": null,
             "mode": "review"
         },
@@ -1459,7 +1459,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.write",
             "enforced_by": null,
             "mode": "review"
         },
@@ -1472,7 +1472,7 @@
             "applies_to": [
                 "test"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.write",
             "enforced_by": null,
             "mode": "review"
         },
@@ -2074,7 +2074,7 @@
                 "config",
                 "MCP"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.write",
             "enforced_by": null,
             "mode": "review"
         },
@@ -2386,7 +2386,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.agent-docs",
             "enforced_by": null,
             "mode": "review"
         },
@@ -2399,7 +2399,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.agent-docs",
             "enforced_by": null,
             "mode": "review"
         },
@@ -4511,7 +4511,7 @@
             "applies_to": [
                 "config"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.agent-docs",
             "enforced_by": null,
             "mode": "review"
         },
@@ -5369,7 +5369,7 @@
             "applies_to": [
                 "see rule"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.write",
             "enforced_by": "55",
             "mode": "enforced"
         },
@@ -5434,7 +5434,7 @@
             "applies_to": [
                 "see rule"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "mcp.agent-docs",
             "enforced_by": null,
             "mode": "review"
         },
@@ -6274,7 +6274,7 @@
             "id": "STD-mcp.read",
             "section": "tey/standards decision-tree leaves",
             "source": "standards patterns, status ready",
-            "rule": "Read capability tool: A kit CapabilityTool with a Uses Tey\\Kit\\Features\\Mcp\\CapabilityTool, Tey\\Kit\\Features\\Mcp\\Capability.",
+            "rule": "Read capability tool: A kit CapabilityTool with a #[Capability] attribute, rules() for its arguments and call() that reuses the page's shared operation. Uses Tey\\Kit\\Features\\Mcp\\CapabilityTool, Tey\\Kit\\Features\\Mcp\\Capability.",
             "check": "`standards:make capability-tool --flavor=read`; standards checks: 55; paths: app/Mcp/Tools/**",
             "applies_to": [
                 "mcp"
@@ -6287,7 +6287,7 @@
             "id": "STD-mcp.write",
             "section": "tey/standards decision-tree leaves",
             "source": "standards patterns, status ready",
-            "rule": "mcp-parity: A CapabilityTool whose call() runs the same Action as the UI (destructive in its Uses Tey\\Kit\\Features\\Mcp\\CapabilityTool, Tey\\Kit\\Features\\Mcp\\Capability.",
+            "rule": "mcp-parity: A CapabilityTool whose call() runs the same Action as the UI (destructive in its #[Capability] attribute when the person must confirm), declared in the MCP capability manifest with its parity test. Uses Tey\\Kit\\Features\\Mcp\\CapabilityTool, Tey\\Kit\\Features\\Mcp\\Capability.",
             "check": "`standards:make capability-tool --flavor=write`; standards checks: 55, actions; paths: app/Mcp/Tools/**",
             "applies_to": [
                 "mcp"
