@@ -30,7 +30,7 @@ final class Principles
     /** VM-* rows: the leaf whose page each ViewModel rule is written for; any VM row not listed here maps to VM_DEFAULT_LEAF. */
     public const VM_LEAVES = ['VM-04' => 'ui-page.form', 'VM-08' => 'ui-page.index', 'VM-28' => 'ui-page.header-actions', 'VM-40' => 'ui-page.action-menu'];
 
-    /** Other rows whose rule is written for one leaf's page, by id (from FSB's pattern pages). Every leaf must exist in the tree. */
+    /** Rows whose rule is written for one leaf's page, by id (from FSB's pattern pages). It wins over the STD, KIT and VM rules; every leaf must exist in the tree. */
     public const ROW_LEAVES = [
         'IDX-01' => 'ui-page.index', 'IDX-02' => 'ui-page.index', 'IDX-03' => 'ui-page.index', 'IDX-04' => 'ui-page.index', 'RUN-06' => 'ui-page.index',
         'TBL-01' => 'ui-page.data-table', 'TBL-02' => 'ui-page.data-table', 'TBL-03' => 'ui-page.data-table', 'TBL-04' => 'ui-page.data-table',
@@ -38,6 +38,19 @@ final class Principles
         'BTN-05' => 'ui-page.header-actions', 'BTN-08' => 'ui-page.header-actions', 'LAY-01' => 'ui-page.header-actions', 'HR-03' => 'ui-page.header-actions',
         'BTN-06' => 'ui-page.action-menu', 'BTN-07' => 'ui-page.action-menu', 'LAY-04' => 'ui-page.action-menu',
         'BTN-01' => 'ui-page.add-button', 'BTN-03' => 'ui-page.add-button',
+        'FRM-01' => 'ui-page.form', 'FRM-02' => 'ui-page.form', 'FRM-03' => 'ui-page.form', 'FRM-04' => 'ui-page.form',
+        'FRM-05' => 'ui-page.form', 'FRM-06' => 'ui-page.form', 'FRM-07' => 'ui-page.form', 'FRM-08' => 'ui-page.form',
+        'FRM-09' => 'ui-page.form', 'FRM-10' => 'ui-page.form', 'FRM-11' => 'ui-page.form', 'FRM-12' => 'ui-page.form',
+        'FRM-13' => 'ui-page.form', 'FRM-14' => 'ui-page.form', 'FRM-15' => 'ui-page.form', 'FRM-16' => 'ui-page.form',
+        'FRM-17' => 'ui-page.form', 'FRM-18' => 'ui-page.form', 'FRM-19' => 'ui-page.form', 'FRM-20' => 'ui-page.form',
+        'FRM-21' => 'ui-page.form', 'MDL-05' => 'ui-page.form', 'MDL-06' => 'ui-page.form', 'CTL-03' => 'ui-page.form',
+        'SET-03' => 'ui-page.form', 'KIT-Field' => 'ui-page.form', 'KIT-FormCard' => 'ui-page.form', 'KIT-FormFieldset' => 'ui-page.form',
+        'KIT-FormLink' => 'ui-page.form', 'KIT-LockedForm' => 'ui-page.form', 'KIT-AddressFieldset' => 'ui-page.form', 'KIT-InputCheckbox' => 'ui-page.form',
+        'KIT-InputDate' => 'ui-page.form', 'KIT-InputDateRange' => 'ui-page.form', 'KIT-InputMonth' => 'ui-page.form', 'KIT-InputNumber' => 'ui-page.form',
+        'KIT-InputSwitch' => 'ui-page.form', 'KIT-InputTags' => 'ui-page.form', 'KIT-InputTime' => 'ui-page.form', 'KIT-InputTimeRange' => 'ui-page.form',
+        'KIT-InputYear' => 'ui-page.form', 'KIT-PasswordInput' => 'ui-page.form', 'KIT-PasswordRules' => 'ui-page.form', 'KIT-RadioCardGroup' => 'ui-page.form',
+        'KIT-Select' => 'ui-page.form', 'KIT-Textarea' => 'ui-page.form',
+        'KIT-FileInput' => 'ui-page.upload',
     ];
 
     public const VM_DEFAULT_LEAF = 'ui-page.show';
@@ -101,15 +114,15 @@ final class Principles
                 $seen[$id] = $number + 1;
 
                 $leaf = null;
-                if (str_starts_with($id, 'STD-') && isset($leaves[substr($id, 4)])) {
-                    $leaf = substr($id, 4);
-                } elseif (str_starts_with($id, 'KIT-') && count($byComponent[substr($id, 4)] ?? []) === 1) {
-                    $leaf = array_key_first($byComponent[substr($id, 4)]);
-                } elseif (isset(self::ROW_LEAVES[$id])) {
+                if (isset(self::ROW_LEAVES[$id])) {
                     $leaf = self::ROW_LEAVES[$id];
                     if (! isset($leaves[$leaf])) {
                         throw new InvalidArgumentException($at.' maps '.$id.' to '.$leaf.', which is not a leaf of the tree.');
                     }
+                } elseif (str_starts_with($id, 'STD-') && isset($leaves[substr($id, 4)])) {
+                    $leaf = substr($id, 4);
+                } elseif (str_starts_with($id, 'KIT-') && count($byComponent[substr($id, 4)] ?? []) === 1) {
+                    $leaf = array_key_first($byComponent[substr($id, 4)]);
                 } elseif (str_starts_with($id, 'VM-')) {
                     $leaf = self::VM_LEAVES[$id] ?? self::VM_DEFAULT_LEAF;
                     if (! isset($leaves[$leaf])) {

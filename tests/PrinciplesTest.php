@@ -100,7 +100,7 @@ test('rows listed in ROW_LEAVES map to their leaf', function () {
     foreach (Principles::ROW_LEAVES as $id => $leaf) {
         expect($rows)->toHaveKey($id)->and($rows[$id]['tree_leaf'])->toBe($leaf, $id);
     }
-    expect(Principles::ROW_LEAVES)->toHaveCount(21);
+    expect(Principles::ROW_LEAVES)->toHaveCount(68);
 });
 
 test('there is one KIT row per @kit/ui export in kit-exports.json, and none for a name it does not export', function () {

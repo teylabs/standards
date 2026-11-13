@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **principles.json maps FSB's form rows to the form and upload leaves.** 47 rows that had no leaf now have one. FRM-01..21, MDL-05, MDL-06, CTL-03, SET-03 and the form KIT components (Field, FormCard, FormFieldset, FormLink, LockedForm, AddressFieldset, the Input* fields, PasswordInput, PasswordRules, RadioCardGroup, Select, Textarea) go to `ui-page.form`, and KIT-FileInput to `ui-page.upload`. MDL-01..04 and MDL-07 (dialogs and overlays in general) and CTL-06 (one test file per controller) stay unmapped. A `ROW_LEAVES` entry now wins over the STD, KIT and VM rules.
+
 ## v0.11.96 - 2026-11-13
 
 ### Fixed
