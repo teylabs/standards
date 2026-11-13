@@ -14,7 +14,8 @@ use Tey\Standards\Enforcement\Gate;
  *
  * - tree_leaf: the decision-tree leaf the row describes. An STD-<leaf> row names it; a KIT-<Component> row maps to the one leaf
  *   that lists `@kit/ui <Component>` (none or several: null). A VM-* row (the tree has no ViewModel leaf) maps by VM_LEAVES: the form leaf
- *   for the shared create/edit form ViewModel, the index leaf for lazy props, the show leaf for every other one. Any other row: null.
+ *   for the shared create/edit form ViewModel, the index leaf for lazy props, the show leaf for every other one. A row listed in ROW_LEAVES
+ *   maps to its leaf there (checked against the tree). Any other row: null.
  * - enforced_by: the standards rule that checks the row. The candidates are a CONF-<n> row's numbered rule, an STD row's leaf checks,
  *   resources/patterns/check-ids.json, a rule the row names in brackets (`[ui toast]`) and a dotted or dashed id in backticks (`vm.page-size`).
  *   Only ids in Conformance::TESTS count. The first error-level candidate wins, else the first advisory one.
