@@ -111,6 +111,16 @@ test('[styling.pure-tailwind] kit 0.18 (no lineage records): resources/css/kit.c
         file_put_contents($base.'/resources/css/kit.css', str_replace('50', '51', $stub));
         expect($targets())->toBe(['resources/css/app.css', 'resources/css/kit.css']);
 
+        // Line endings are not an edit: a CRLF checkout of either side still matches, and a changed byte under CRLF is still an edit.
+        $crlf = str_replace("\n", "\r\n", $stub);
+        file_put_contents($base.'/resources/css/kit.css', $crlf);
+        expect($targets())->toBe(['resources/css/app.css']);
+        file_put_contents($base.'/vendor/tey/kit/resources/features/core/css/kit.css.stub', $crlf);
+        file_put_contents($base.'/resources/css/kit.css', $stub);
+        expect($targets())->toBe(['resources/css/app.css']);
+        file_put_contents($base.'/resources/css/kit.css', str_replace('50', '51', $crlf));
+        expect($targets())->toBe(['resources/css/app.css', 'resources/css/kit.css']);
+
         // Without the package's stub there is nothing to compare against.
         file_put_contents($base.'/resources/css/kit.css', $stub);
         unlink($base.'/vendor/tey/kit/resources/features/core/css/kit.css.stub');

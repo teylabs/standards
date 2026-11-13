@@ -18,6 +18,8 @@ use Tey\Standards\Configuration;
  * - `resources/css/kit.css` while its bytes equal the core stub in the installed package (`vendor/tey/kit/resources/features/core/css/kit.css.stub`),
  *   for kit 0.18, which writes no records. An edited copy is the app's code and is checked.
  *
+ * Both comparisons ignore CRLF versus LF, so they read the same on every OS; any other change is an edit.
+ *
  * The record is read, not verified: it only narrows which files are scanned, and an app could as well allowlist the same file.
  */
 final class KitOwnership
@@ -73,7 +75,13 @@ final class KitOwnership
     {
         return str_starts_with($path, self::KIT_TREE)
             || str_starts_with($path, self::PACKAGE_KIT_TREE)
-            || (isset($this->generated[$path]) && $this->generated[$path] === $source)
-            || ($path === self::KIT_CSS && $this->kitCss === $source);
+            || (isset($this->generated[$path]) && self::same($this->generated[$path], $source))
+            || ($path === self::KIT_CSS && $this->kitCss !== null && self::same($this->kitCss, $source));
+    }
+
+    /** The same bytes up to line endings, so a CRLF checkout (git's `core.autocrlf` on Windows) of an unedited file is still the kit's. */
+    private static function same(string $kit, string $source): bool
+    {
+        return $kit === $source || str_replace("\r\n", "\n", $kit) === str_replace("\r\n", "\n", $source);
     }
 }

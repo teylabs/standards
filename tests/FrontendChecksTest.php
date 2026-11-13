@@ -429,6 +429,12 @@ test('the frontend rules skip a page tey/mod records as kit-generated while it i
     try {
         expect($run())->toBe(['resources/js/pages/Posts.vue', 'resources/js/pages/Workspace/Settings/Billing/Page.vue']);
 
+        // A CRLF checkout of an unedited page is still the kit's.
+        file_put_contents($base.'/'.$page, str_replace("\n", "\r\n", $source."\n"));
+        file_put_contents($base.'/.mod-maintenance/installed/'.hash('sha256', 'tey/kit').'.json', kitInstalledRecord([$page => $source."\n", 'resources/js/pages/Workspace/Settings/Billing/Page.vue' => $source]));
+        expect($run())->toBe(['resources/js/pages/Posts.vue', 'resources/js/pages/Workspace/Settings/Billing/Page.vue']);
+        file_put_contents($base.'/'.$page, $source);
+
         // A record that is not tey/mod's installed format names nothing.
         file_put_contents($base.'/.mod-maintenance/installed/'.hash('sha256', 'tey/kit').'.json', kitInstalledRecord([$page => $source], owner: 'someone/else'));
         expect($run())->toContain($page);
