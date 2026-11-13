@@ -374,7 +374,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": "ui-page.show",
+            "tree_leaf": "ui-page.header-actions",
             "enforced_by": null,
             "mode": "review"
         },
@@ -536,7 +536,7 @@
             "applies_to": [
                 "VM"
             ],
-            "tree_leaf": "ui-page.show",
+            "tree_leaf": "ui-page.action-menu",
             "enforced_by": null,
             "mode": "review"
         },
@@ -815,7 +815,7 @@
             "applies_to": [
                 "data"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.data-table",
             "enforced_by": null,
             "mode": "review"
         },
@@ -1798,7 +1798,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.index",
             "enforced_by": null,
             "mode": "review"
         },
@@ -2951,7 +2951,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.add-button",
             "enforced_by": null,
             "mode": "review"
         },
@@ -2978,7 +2978,7 @@
             "applies_to": [
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.add-button",
             "enforced_by": null,
             "mode": "review"
         },
@@ -3005,7 +3005,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.header-actions",
             "enforced_by": null,
             "mode": "review"
         },
@@ -3019,7 +3019,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.action-menu",
             "enforced_by": null,
             "mode": "review"
         },
@@ -3033,7 +3033,7 @@
                 "VM",
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.action-menu",
             "enforced_by": null,
             "mode": "review"
         },
@@ -3046,7 +3046,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.header-actions",
             "enforced_by": null,
             "mode": "review"
         },
@@ -3530,7 +3530,7 @@
             "applies_to": [
                 "controller"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.index",
             "enforced_by": null,
             "mode": "review"
         },
@@ -3544,7 +3544,7 @@
                 "controller",
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.index",
             "enforced_by": null,
             "mode": "review"
         },
@@ -3557,7 +3557,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.index",
             "enforced_by": null,
             "mode": "review"
         },
@@ -3571,7 +3571,7 @@
                 "page",
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.index",
             "enforced_by": null,
             "mode": "review"
         },
@@ -3610,7 +3610,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.header-actions",
             "enforced_by": null,
             "mode": "review"
         },
@@ -3649,7 +3649,7 @@
             "applies_to": [
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.action-menu",
             "enforced_by": null,
             "mode": "review"
         },
@@ -4116,7 +4116,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.data-table",
             "enforced_by": null,
             "mode": "review"
         },
@@ -4129,7 +4129,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.data-table",
             "enforced_by": null,
             "mode": "review"
         },
@@ -4142,7 +4142,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.data-table",
             "enforced_by": null,
             "mode": "review"
         },
@@ -4155,7 +4155,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.data-table",
             "enforced_by": null,
             "mode": "review"
         },
@@ -4168,7 +4168,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.data-table",
             "enforced_by": null,
             "mode": "review"
         },
@@ -4181,7 +4181,7 @@
             "applies_to": [
                 "page"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.data-table",
             "enforced_by": null,
             "mode": "review"
         },
@@ -4471,7 +4471,7 @@
                 "page",
                 "VM"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.header-actions",
             "enforced_by": null,
             "mode": "review"
         },
