@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.11.96 - 2026-11-13
+
 ### Fixed
 
 - **principles.json maps FSB's pattern rows to their tree leaves.** 21 rows that had no leaf now have one: IDX-01..04 and RUN-06 → `ui-page.index`; TBL-01..06 and LNK-03 → `ui-page.data-table`; BTN-05, BTN-08, LAY-01 and HR-03 → `ui-page.header-actions`; BTN-06, BTN-07 and LAY-04 → `ui-page.action-menu`; BTN-01 and BTN-03 → `ui-page.add-button`. VM-28 → `ui-page.header-actions` and VM-40 → `ui-page.action-menu` (were `ui-page.show`). `Principles::ROW_LEAVES` (new, additive) holds the per-row map. A row mapped to a leaf the tree doesn't have fails the compile, as VM rows already did. Other VM rows keep `ui-page.show`.
