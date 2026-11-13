@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.11.98 - 2026-11-13
+
 ### Fixed
 
 - **The mcp.read and mcp.write summaries are no longer cut off.** Both contained an unquoted `#[Capability]`, which YAML read as a comment, so the summaries ended mid-sentence. They're quoted now, and the STD-mcp.read and STD-mcp.write rows in principles.md carry the full text.
