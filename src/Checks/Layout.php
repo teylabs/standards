@@ -40,7 +40,10 @@ final class Layout
 
     public const STACKS = ['Stack', 'BlockStack'];
 
-    /** Where adjacent action controls are already grouped. `Toolbar` holds mixed controls (a search box and buttons) and counts, as do the kit's *Toolbar variants. */
+    /**
+     * Where adjacent action controls are already grouped. `Toolbar` holds mixed controls (a search box and buttons) and counts, as do the kit's *Toolbar
+     * variants. The kit's `ActionGroup` counts too, where the file imports it from the kit (kitActionGroups).
+     */
     private const ACTION_CONTAINERS = ['ButtonGroup', 'ActionBar', 'HeaderActions', 'Toolbar', 'FormActions'];
 
     /** Elements a Page lays out of flow: they take no gap and don't count against `flush`. */
@@ -66,7 +69,7 @@ final class Layout
                 continue;
             }
             array_push($violations, ...match ($rule) {
-                self::ACTION_GROUP => $this->actionGroups($path, $template),
+                self::ACTION_GROUP => $this->actionGroups($path, $source, $template),
                 self::ROW_ACTIONS => $this->rowActions($path, $template),
                 self::PAGE_TITLE => $this->pageTitles($path, $template),
                 self::OUTER_MARGINS => $this->outerMargins($path, $source, $template),
@@ -104,15 +107,38 @@ final class Layout
             || ($node->tag === 'Link' && ($node->attribute('as') === 'button' || $node->has('variant') || $node->has(':variant')));
     }
 
-    /** In (or under) an action container, a *Toolbar, or a Page or SectionHeader #actions slot. */
-    private static function grouped(VueTemplate $node): bool
+    /**
+     * The tags the file binds to tey/kit's `ActionGroup` (0.21): a named import from `@kit/ui` or `@/components/Kit` (the barrel or any module
+     * under them), renamed or not, or a default import of its `ActionGroup.vue`.
+     *
+     * @return list<string>
+     */
+    private static function kitActionGroups(string $source): array
+    {
+        $tags = [];
+        foreach (VueImports::imports(VueImports::code(VueImports::scripts($source))) as $local => [$from, $imported]) {
+            $kit = preg_match('~^(?:@kit/ui|@/components/Kit)(?:/|$)~', $from) === 1;
+            if ($kit && ($imported === 'ActionGroup' || ($imported === 'default' && preg_match('~/ActionGroup(?:\.vue)?$~', $from) === 1))) {
+                $tags[] = $local;
+            }
+        }
+
+        return $tags;
+    }
+
+    /**
+     * In (or under) an action container, a *Toolbar, the kit's ActionGroup (either direction, any class), or a Page or SectionHeader #actions slot.
+     *
+     * @param  list<string>  $actionGroups  the tags the file binds to the kit's ActionGroup
+     */
+    private static function grouped(VueTemplate $node, array $actionGroups): bool
     {
         for (; $node !== null; $node = $node->parent) {
             $slot = $node->slot();
             if ($slot === 'actions' && in_array($node->parent?->tag, ['Page', 'SectionHeader'], true)) {
                 return true;
             }
-            if ($node->tag !== 'template' && (in_array($node->tag, self::ACTION_CONTAINERS, true) || str_ends_with($node->tag, 'Toolbar'))) {
+            if ($node->tag !== 'template' && (in_array($node->tag, [...self::ACTION_CONTAINERS, ...$actionGroups], true) || str_ends_with($node->tag, 'Toolbar'))) {
                 return true;
             }
         }
@@ -120,8 +146,9 @@ final class Layout
         return false;
     }
 
-    private function actionGroups(string $path, VueTemplate $template): array
+    private function actionGroups(string $path, string $source, VueTemplate $template): array
     {
+        $actionGroups = self::kitActionGroups($source);
         $found = [];
         foreach ([$template, ...$template->descendants()] as $container) {
             $slot = $container->slot();
@@ -133,7 +160,7 @@ final class Layout
             if ($slot === 'default' && $container->tag === 'template') {
                 continue; // read through the owner's flow
             }
-            if (self::grouped($container)) {
+            if (self::grouped($container, $actionGroups)) {
                 continue;
             }
             $run = [];
@@ -146,7 +173,10 @@ final class Layout
 
                     continue;
                 }
-                if (count($run) >= 2) {
+                // Every control w-full is a hand-rolled stack, as an auth card's actions were before the kit's ActionGroup column.
+                if (count($run) >= 2 && array_filter($run, fn (VueTemplate $control): bool => ! in_array('w-full', $control->classes(), true)) === []) {
+                    $found[] = $this->finding($path, $run[0], "stacked full-width action controls in <{$owner}> are not grouped: put them in <ActionGroup direction=\"column\">, primary first, and drop their w-full");
+                } elseif (count($run) >= 2) {
                     $found[] = $this->finding($path, $run[0], "adjacent action controls in <{$owner}> are not grouped: put them in a ButtonGroup, or render descriptors through ActionBar");
                 }
                 $run = [];
