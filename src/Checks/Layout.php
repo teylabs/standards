@@ -430,8 +430,8 @@ final class Layout
     }
 
     /**
-     * PHP source read for its structure: `masked` is the source with string contents (heredoc and nowdoc bodies too) and comments blanked to spaces (same
-     * offsets), `pairs` maps each bracket's open offset to its close and `closes` the other way.
+     * PHP source read for its structure: `masked` is the source with string contents (backtick shell strings, heredoc and nowdoc bodies too) and
+     * comments blanked to spaces (same offsets), `pairs` maps each bracket's open offset to its close and `closes` the other way.
      *
      * @return array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}
      */
@@ -443,7 +443,7 @@ final class Layout
         for ($i = 0, $length = strlen($source); $i < $length; $i++) {
             $char = $source[$i];
             $next = $source[$i + 1] ?? '';
-            if ($char === '"' || $char === "'") {
+            if ($char === '"' || $char === "'" || $char === '`') {
                 for ($i++; $i < $length && $source[$i] !== $char; $i++) {
                     if ($source[$i] === '\\') {
                         $masked[$i++] = ' ';

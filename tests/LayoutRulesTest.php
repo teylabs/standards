@@ -599,6 +599,16 @@ test('ui.row-action-label reads no Action in a heredoc or nowdoc body', function
     ]);
 });
 
+test('ui.row-action-label reads no Action in a backtick shell string', function () {
+    expect(rowLabelFindings(['app/Console/ExportRows.php' => <<<'PHP'
+        <?php
+        $out = `echo ['id' => 1, 'actions' => [new Action('Resend the invitation email now', '/i/1')]]`;
+        $rows = [['id' => 3, 'log' => `grep -c \] rows.log`, 'actions' => [new Action('Resend the invitation email again', '/i/1')]]];
+        PHP]))->toBe([
+        "app/Console/ExportRows.php:3 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
 test('ui.row-action-label flags Vue row action labels that interpolate a value or run long and leaves form labels alone', function () {
     expect(layoutFindings(Layout::ROW_ACTION_LABEL, ['pages/People.vue' => <<<'VUE'
         <script setup lang="ts">
