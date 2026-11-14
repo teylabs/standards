@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.11.100 - 2026-11-14
 
 ### Added
 
-- **Minor: `inertia.pure` allows two more marker categories, `autosave` and `upload`.** `// inertia.pure: autosave <reason>` marks per-field saves as you type, sent as JSON (fetch or axios) rather than Inertia visits, because a visit would trigger the toast rule on every save. `// inertia.pure: upload <reason>` marks a direct file upload with a progress bar; `upload-signing` still covers presigning only. Both need a non-empty reason, like the other categories, and a marker without one is still a finding. A new allowance is a minor release: code that passed before still passes, and markers using the new categories are no longer reported as unknown.
+- **`inertia.pure` allows two more marker categories, `autosave` and `upload`.** `// inertia.pure: autosave <reason>` marks per-field saves as you type, sent as JSON (fetch or axios) rather than Inertia visits, because a visit would trigger the toast rule on every save. `// inertia.pure: upload <reason>` marks a direct file upload with a progress bar; `upload-signing` still covers presigning only. Both need a non-empty reason, like the other categories, and a marker without one is still a finding. Code that passed before still passes, and markers using the new categories are no longer reported as unknown.
 
 ## v0.11.99 - 2026-11-13
 
