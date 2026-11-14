@@ -20,7 +20,7 @@ final class UiPlus
                 continue;
             }
             foreach (FrontendSource::actions($source, $config) as $action) {
-                if (in_array($action['tag'], self::LINKS, true) && ! preg_match('~(?:^|\s)(?::|v-bind:)?variant\s*=|\bbuttonVariants\s*\(~', $action['attributes'])) {
+                if (in_array($action['tag'], self::LINKS, true) && ! self::buttonStyled($action['attributes'])) {
                     continue;
                 }
                 $label = FrontendSource::attribute($action['attributes'], 'label') ?? trim(strip_tags(preg_replace('~\{\{.*?\}\}~s', '', $action['inner']) ?? ''));
@@ -31,5 +31,19 @@ final class UiPlus
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    /** A `variant` attribute (bound or not) or a `buttonVariants(...)` class; read attribute by attribute, so text inside another value never counts. */
+    private static function buttonStyled(string $attributes): bool
+    {
+        preg_match_all('~([^\s=/>]+)(?:\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+))?~', $attributes, $matches, PREG_SET_ORDER);
+        foreach ($matches as $match) {
+            $name = preg_replace('~^(?::|v-bind:)~', '', $match[1]);
+            if ($name === 'variant' || ($name === 'class' && preg_match('~\bbuttonVariants\s*\(~', $match[2] ?? ''))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

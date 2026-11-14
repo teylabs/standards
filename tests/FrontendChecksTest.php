@@ -160,6 +160,7 @@ test('frontend static UI checks cover self-closing actions, rel tokens, raw inpu
     'add button with plus' => ['ui plus', '<template><Button :href="register"><Plus />Create an account</Button></template>', false],
     'link styled by a variant' => ['ui plus', '<template><Link href="/posts/create" variant="outline">New post</Link></template>', true],
     'link styled by buttonVariants' => ['ui plus', '<template><Link href="/posts/create" :class="buttonVariants({ size: \'sm\' })">New post</Link></template>', true],
+    'plain link whose other attributes mention a variant' => ['ui plus', '<template><Link href="/posts/create" title="same variant=default as the header" :aria-label="\'buttonVariants(\'">New post</Link></template>', false],
     'link styled by a variant with plus' => ['ui plus', '<template><ModalLink href="/posts/create" :variant="kind"><Plus />New post</ModalLink></template>', false],
     'link rendered by an as-child button' => ['ui plus', '<template><Button as-child><Link href="/posts/create">New post</Link></Button></template>', true],
     'link rendered by an as-child button with plus' => ['ui plus', '<template><Button as-child><Link href="/posts/create"><Plus />New post</Link></Button></template>', false],
