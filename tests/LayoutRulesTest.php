@@ -769,6 +769,75 @@ test('ui.row-action-label reads past a comment or heredoc around a row action, i
     ]);
 });
 
+test('ui.row-action-label reads a form submit from its key in code, not from a comment or string before a row action', function () {
+    expect(rowLabelFindings(['app/Http/InvitesController.php' => <<<'PHP'
+        <?php
+        $rows = [['id' => 1, 'actions' => [
+            // submit:
+            new Action('Resend the invitation email now', '/i/1'),
+            /* save => */ new Action('Resend the invitation email again', '/i/1'),
+            $mode === 'save: draft' ? new Action('Resend the invitation email later', '/i/1') : null,
+            // Still form submits: a quoted key past a comment, and a condition holding a comma in a string.
+            "submit" /* the form's */ => new Action('Send the invitation to everyone', '/i', 'post'),
+            'save' => $mode === 'a, b' ? new Action('Save the invitation for everyone', '/i', 'post') : null,
+        ]]];
+        PHP]))->toBe([
+        "app/Http/InvitesController.php:4 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:5 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:6 row action label 'Resend the invitation email later' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label reads a row key, an id, an Action call, an argument name and a label past a comment', function () {
+    expect(rowLabelFindings([
+        'app/Http/InvitesController.php' => <<<'PHP'
+        <?php
+        $rows = [['id' /* the key */ => 1, 'actions' => [new Action('Resend the invitation email now', '/i/1')]]];
+        $more = [['id' => 2, 'actions' // the row menu
+            => [new Action('Resend the invitation email again', '/i/1')]]];
+        $others = [['id' => 3, 'actions' => [new /* the kit's */ Action('Resend the invitation email later', '/i/1')]]];
+        $named = [['id' => 4, 'actions' => [new Action(url: '/i/1', label /* the verb */ : 'Resend the invitation email today')]]];
+
+        function grantRow(Grant $grant): array
+        {
+            $label = // the verb
+                'Resend the invitation email first';
+
+            return ['id' => $grant->id, 'actions' => [new Action($label, '/g/1')]];
+        }
+        PHP,
+        'resources/js/pages/People.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const actions = (row) => [
+            { key: 'resend', label: // the verb
+                'Resend the invitation email', url: '/p/1/resend', method: 'post' },
+            { key: 'toggle', label: row.on ? `Off, now` : 'On', url: '/p/1/toggle', method: 'post' },
+        ];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+        'resources/js/pages/Grants.vue' => <<<'VUE'
+        <template>
+            <!-- The <script> below builds each row's actions. -->
+            <DataTable :table="table" />
+        </template>
+        <script setup lang="ts">
+        const actions = (grant) => [{ label: `Revoke ${grant.name}`, url: '/g/1', method: 'delete' }];
+        </script>
+        VUE,
+    ]))->toBe([
+        "app/Http/InvitesController.php:2 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:4 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:5 row action label 'Resend the invitation email later' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:6 row action label 'Resend the invitation email today' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:13 row action label 'Resend the invitation email first' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        // A template comment naming `<script>` doesn't start a script block, so its apostrophe doesn't hide the real block's action.
+        'resources/js/pages/Grants.vue:6 row action label `Revoke ${grant.name}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // A comment after `label:` is not the label; a comma in a template literal doesn't split a ternary of two short verbs.
+        "resources/js/pages/People.vue:3 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
 test('ui.row-action-label follows a variable only in its own scope and reads a label built with .= and ??=', function () {
     expect(rowLabelFindings(['app/Http/OrdersController.php' => <<<'PHP'
         <?php
