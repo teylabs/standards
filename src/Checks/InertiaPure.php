@@ -20,8 +20,12 @@ use Tey\Standards\Source;
  */
 final class InertiaPure
 {
-    /** The allowed non-Inertia surfaces (house rule, 2026-11-06). Anything else needs an explicit yes. */
-    public const CATEGORIES = ['webhook', 'third-party', 'mcp', 'public-api', 'binary', 'signed-link', 'upload-signing', 'stream', 'package', 'typeahead'];
+    /**
+     * The allowed non-Inertia surfaces (house rule, 2026-11-06; `autosave` and `upload` added 2026-11-14). Anything else needs an explicit yes.
+     * `autosave` is a per-field save as you type, sent as JSON because a visit would toast on every save. `upload` is a direct file upload with a
+     * progress bar; `upload-signing` covers presigning only.
+     */
+    public const CATEGORIES = ['webhook', 'third-party', 'mcp', 'public-api', 'binary', 'signed-link', 'upload-signing', 'upload', 'autosave', 'stream', 'package', 'typeahead'];
 
     private const PHP = [
         'response()->json(' => '~\bresponse\(\)\s*->\s*json\s*\(~',

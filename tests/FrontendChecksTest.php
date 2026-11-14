@@ -642,4 +642,20 @@ describe('inertia.pure', function () {
             'fetch(: `inertia.pure: typeahead` needs a one-line reason',
         ]);
     });
+
+    test('autosave and upload are allowed with a reason and a finding without one', function (string $category) {
+        $vue = "<script setup lang=\"ts\">\n// inertia.pure: {$category} the request is not a visit\nawait axios.patch('/drafts/1', { title });\nawait fetch('/drafts/1'); // inertia.pure: {$category}\n</script>\n";
+
+        expect(array_column(($this->pure)(['resources/js/pages/X.vue' => $vue]), 'check'))->toBe([
+            "fetch(: `inertia.pure: {$category}` needs a one-line reason",
+        ]);
+    })->with(['autosave', 'upload']);
+
+    test('a category close to an allowed one is still unknown', function (string $category) {
+        $vue = "<script setup lang=\"ts\">\n// inertia.pure: {$category} the request is not a visit\nawait fetch('/drafts/1');\n</script>\n";
+
+        expect(array_column(($this->pure)(['resources/js/pages/X.vue' => $vue]), 'check'))->toBe([
+            "fetch(: `inertia.pure: {$category}` is not an allowed category (".implode(', ', Tey\Standards\Checks\InertiaPure::CATEGORIES).')',
+        ]);
+    })->with(['uploads', 'auto-save', 'upload-direct']);
 });
