@@ -485,6 +485,21 @@ test('ui.row-action-label follows a row action through its variable, method and 
     ]);
 });
 
+test('ui.row-action-label reads no Action in a heredoc or nowdoc body', function () {
+    expect(rowLabelFindings(['app/Http/HelpController.php' => <<<'PHP'
+        <?php
+        $help = <<<'TXT'
+            Don't build rows by hand: ['id' => 1, 'actions' => [new Action('Resend the invitation email now', '/i/1')]]
+            TXT;
+        $sample = <<<HTML
+            <p>{$name}'s row (</p> ['id' => 2, 'actions' => [new Action("Revoke {$grant->name}", '/g/1')]]
+            HTML;
+        $rows = [['id' => 3, 'actions' => [new Action('Resend the invitation email again', '/i/1')]]];
+        PHP]))->toBe([
+        "app/Http/HelpController.php:8 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
 test('ui.row-action-label flags Vue row action labels that interpolate a value or run long and leaves form labels alone', function () {
     expect(layoutFindings(Layout::ROW_ACTION_LABEL, ['pages/People.vue' => <<<'VUE'
         <script setup lang="ts">

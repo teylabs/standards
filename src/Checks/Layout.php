@@ -400,8 +400,8 @@ final class Layout
     }
 
     /**
-     * PHP source read for its structure: `masked` is the source with string contents and comments blanked to spaces (same offsets), `pairs` maps each
-     * bracket's open offset to its close and `closes` the other way.
+     * PHP source read for its structure: `masked` is the source with string contents (heredoc and nowdoc bodies too) and comments blanked to spaces (same
+     * offsets), `pairs` maps each bracket's open offset to its close and `closes` the other way.
      *
      * @return array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}
      */
@@ -422,6 +422,14 @@ final class Layout
                         $masked[$i] = ' ';
                     }
                 }
+            } elseif ($char === '<' && preg_match('~\G<<<\h*(["\']?)([A-Za-z_\x80-\xff][\w\x80-\xff]*)\1\r?\n~', $source, $open, 0, $i) === 1) {
+                // A heredoc or nowdoc: its body runs to the line that starts with its identifier.
+                $body = $i + strlen($open[0]);
+                $end = preg_match('~^\h*'.$open[2].'(?![\w\x80-\xff])~m', $source, $close, PREG_OFFSET_CAPTURE, $body) === 1 ? $close[0][1] : $length;
+                for ($i = $body; $i < $end; $i++) {
+                    $masked[$i] = ' ';
+                }
+                $i--;
             } elseif (($char === '/' && $next === '/') || ($char === '#' && $next !== '[')) {
                 for (; $i < $length && $source[$i] !== "\n"; $i++) {
                     $masked[$i] = ' ';
