@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Minor: `ui.action-group` accepts tey/kit 0.21's `ActionGroup`.** Adjacent action controls in an `<ActionGroup>` are grouped, with `direction="row"` (the default) or `direction="column"`, and with a class of their own such as `gap-4`. That covers a form's own actions, including the stacked full-width actions of an auth-style card (Login, TwoFactor, VerifyEmail, an invitation). It counts where the file imports `ActionGroup` from `@kit/ui` or `@/components/Kit` (the barrel or a module under it, renamed or not); a same-named component imported from anywhere else is not the kit's and does not count. `ButtonGroup`, `ActionBar`, `HeaderActions`, any `*Toolbar`, `FormActions` and the `Page` and `SectionHeader` `#actions` slots count as before.
+
+### Changed
+
+- **Hand-rolled stacked full-width actions point to `<ActionGroup direction="column">`.** Two or more adjacent action controls outside a group that each carry `w-full` (the auth pages' shape before kit 0.21) are still a finding, now `stacked full-width action controls in <…> are not grouped: put them in <ActionGroup direction="column">, primary first, and drop their w-full`. Other ungrouped runs keep their message. An allowlist entry for such a run under the old message goes stale; re-baseline it, or adopt the column.
+
 ## v0.11.100 - 2026-11-14
 
 ### Added
