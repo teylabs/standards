@@ -381,7 +381,7 @@ test('an installed kit from before the Stack rename is neither missing Stack nor
     }
 });
 
-/** @param array<string, string> $files path under the app => source; PHP is read from app/, Vue from resources/js */
+/** @param array<string, string> $files path under the app => source; PHP is read from app/, Vue from resources/js; advisory findings are marked */
 function rowLabelFindings(array $files): array
 {
     $base = sys_get_temp_dir().'/standards-row-label-'.bin2hex(random_bytes(6));
@@ -391,7 +391,7 @@ function rowLabelFindings(array $files): array
     }
 
     try {
-        return array_map(fn (array $v): string => $v['target'].':'.$v['line'].' '.$v['check'],
+        return array_map(fn (array $v): string => $v['target'].':'.$v['line'].' '.$v['check'].(($v['advisory'] ?? false) ? ' [advisory]' : ''),
             (new Conformance(layoutConfiguration($base, ['sourceRoots' => ['app']])))->violations(Layout::ROW_ACTION_LABEL));
     } finally {
         (new Filesystem)->deleteDirectory($base);
@@ -953,5 +953,71 @@ test('ui.row-action-label reads no Vue action object in a script comment, string
         <template><DataTable :table="table" /></template>
         VUE]))->toBe([
         'resources/js/pages/People.vue:6 row action label `Archive ${row.name}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});
+
+test('ui.row-action-label warns on a Vue action past a / the scan can only guess at, rather than skipping it', function () {
+    $interpolates = 'interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm';
+    expect(rowLabelFindings([
+        'resources/js/pages/People.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const before = [{ label: `Remove ${row.name}`, url: '/p/1', method: 'delete' }];
+        const half = width / 2;
+        // const old = [{ label: `Revoke ${row.name}`, url: '/p/1', method: 'delete' }];
+        function quotes() {
+            return /['"`]/g;
+        }
+        const actions = [
+            { label: `Archive ${row.name}`, url: '/p/1', method: 'post' },
+            { label: 'Archive', url: '/p/1', method: 'post' },
+        ];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+        'resources/js/pages/Teams.vue' => <<<'VUE'
+        <script setup lang="ts">
+        if (ready) /['"]/.test(name);
+        const actions = [{ label: `Leave ${team.name}`, url: '/t/1', method: 'delete' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+    ]))->toBe([
+        "resources/js/pages/People.vue:2 row action label `Remove \${row.name}` {$interpolates}",
+        "resources/js/pages/People.vue:9 row action label `Archive \${row.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 6, so this only warns) [advisory]",
+        "resources/js/pages/Teams.vue:3 row action label `Leave \${team.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 2, so this only warns) [advisory]",
+    ]);
+    expect((new Layout(layoutConfiguration(sys_get_temp_dir())))->quiet("row action label `Leave \${team.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 2, so this only warns)"))->toBeTrue();
+});
+
+test('ui.row-action-label warns on a Vue action past an interpolation holding a literal or a string read past its line, and reads on where the mask is certain', function () {
+    $interpolates = 'interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm';
+    expect(rowLabelFindings([
+        'resources/js/pages/Plain.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const title = `${count} of ${total}`;
+        const ratio = done / total;
+        // const old = [{ label: `Revoke ${row.name}`, url: '/p/1', method: 'delete' }];
+        const actions = [{ label: `Remove ${row.name}`, url: '/p/1', method: 'delete' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+        'resources/js/pages/Braces.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const brace = `${open ? '{' : ''}`;
+        const actions = [{ label: `Revoke ${row.name}`, url: '/p/1', method: 'delete' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+        'resources/js/pages/Render.vue' => <<<'VUE'
+        <script setup lang="tsx">
+        const Hint = () => <p>Don't reload</p>;
+        const actions = [{ label: `Retry ${row.name}`, url: '/p/1', method: 'post' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+    ]))->toBe([
+        "resources/js/pages/Braces.vue:3 row action label `Revoke \${row.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 2, so this only warns) [advisory]",
+        "resources/js/pages/Plain.vue:5 row action label `Remove \${row.name}` {$interpolates}",
+        "resources/js/pages/Render.vue:3 row action label `Retry \${row.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 2, so this only warns) [advisory]",
     ]);
 });

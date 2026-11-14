@@ -224,9 +224,10 @@ final class Layout
      * `rowActions` key, or among the arguments of an item or row object (`new WorkbenchItem(…)`, whose actions are its row menu), directly or through the
      * local variable, method or closure that holds it. A form submit, a page or header button and a link are not. A Vue action object is read in a file whose
      * template renders rows (RowActions, DataTable, ScrollList, Workbench). A label held in a local variable is read from its assignments, through a
-     * closure's `use` and an arrow fn into the scope around them.
+     * closure's `use` and an arrow fn into the scope around them. Where a script's mask may be wrong (jsMask), its action objects are also read
+     * unmasked, and one the masked read missed is an advisory finding: a scan that loses its place warns rather than hides it.
      *
-     * @return list<array{target: string, check: string, line: int}>
+     * @return list<array{target: string, check: string, line: int, advisory?: bool}>
      */
     private function rowActionLabels(): array
     {
@@ -280,39 +281,67 @@ final class Layout
             preg_match_all('~<!--.*?(?:-->|$)|<script\b[^>]*>(.*?)</script\s*>~si', $source, $blocks, PREG_SET_ORDER | PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL);
             foreach (array_filter(array_column($blocks, 1), fn (array $block): bool => $block[0] !== null) as [$script, $offset]) {
                 // Comments and literal contents masked, so a label in either is not read and their braces don't count when finding the object literal a label sits in.
-                $masked = self::jsMask($script);
-                // Found on the masked script, so a label in a comment or a string is not one and a comment after `label:` is not its value; the
-                // label's text is the script's.
-                preg_match_all('~\blabel\s*:\s*(?<arg>`(?:[^`\\\\]|\\\\.)*`|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^,}\n]+)(?<tail>\s*\+)?~', $masked, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
-                foreach ($matches as $match) {
-                    $at = $match[0][1];
-                    // Only an action object (url and method beside the label) counts: a form field's label is not an action.
-                    $window = self::enclosingObject($masked, $at);
-                    if (preg_match('~\burl\s*:~', $window) !== 1 || preg_match('~\bmethod\s*:~', $window) !== 1) {
-                        continue;
+                $read = $this->vueLabels($path, $source, $offset, $script, self::jsMask($script, $uncertain));
+                array_push($found, ...$read);
+                if ($uncertain === null) {
+                    continue;
+                }
+                // Fail open: from where the mask may be wrong the script is also read unmasked, and an action the masked read missed is warned on, not
+                // skipped, so a mask that lost its place can't hide a finding. A label in a comment or string past that point warns too.
+                $line = substr_count(substr($source, 0, $offset + $uncertain), "\n") + 1;
+                foreach ($this->vueLabels($path, $source, $offset, $script, $script, $uncertain) as $finding) {
+                    if (! in_array($finding, $read, true)) {
+                        $found[] = [...$finding, 'check' => $finding['check']." (read unmasked: the script can't be masked with certainty from line {$line}, so this only warns)", 'advisory' => true];
                     }
-                    // A TypeScript type literal (`{ label: string; url: string }`) describes an action; it has no label to read.
-                    if (preg_match('~\blabel\s*\??\s*:\s*[^,;}]*;~', $window) === 1 || preg_match('~\blabel\s*\??\s*:\s*(?:string|number|boolean|any|unknown|null|undefined)(?:\s*\|\s*(?:string|number|boolean|any|unknown|null|undefined))*\s*[,}]~', $window) === 1) {
-                        continue;
-                    }
-                    // A form's submit object (`submit: { label, url, method }`) is not a row action.
-                    if (preg_match('~\b(?:submit|save)\s*:\s*$~', substr($masked, 0, max(0, strrpos(substr($masked, 0, $at), '{') ?: 0))) === 1) {
-                        continue;
-                    }
-                    $arg = substr($script, $match['arg'][1], strlen(rtrim($match['arg'][0])));
-                    if (($arms = self::arms(self::enclosingValue($script, $masked, $at))) !== null && count($arms) > 1) {
-                        foreach ($arms as $arm) {
-                            $found[] = $this->labelFinding($path, $source, $offset + $at, $arm, stripcslashes(substr($arm, 1, -1)));
-                        }
-
-                        continue;
-                    }
-                    $quoted = in_array($arg[0] ?? '', ['"', "'", '`'], true);
-                    $concatenated = ($match['tail'][0] ?? '') !== '';
-                    $interpolated = ! $quoted || $concatenated || ($arg[0] === '`' && str_contains($arg, '${'));
-                    $found[] = $this->labelFinding($path, $source, $offset + $at, $arg, ! $interpolated ? stripcslashes(substr($arg, 1, -1)) : ($concatenated ? null : self::withTerms($arg)));
                 }
             }
+        }
+
+        return array_values(array_filter($found));
+    }
+
+    /**
+     * The findings for a script block's Vue action objects at or after $from, found on $masked (the script itself when it is read unmasked). A
+     * label's text is the script's.
+     *
+     * @return list<array{target: string, check: string, line: int}>
+     */
+    private function vueLabels(string $path, string $source, int $offset, string $script, string $masked, int $from = 0): array
+    {
+        $found = [];
+        // Found on the masked script, so a label in a comment or a string is not one and a comment after `label:` is not its value; the
+        // label's text is the script's.
+        preg_match_all('~\blabel\s*:\s*(?<arg>`(?:[^`\\\\]|\\\\.)*`|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^,}\n]+)(?<tail>\s*\+)?~', $masked, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+        foreach ($matches as $match) {
+            $at = $match[0][1];
+            if ($at < $from) {
+                continue;
+            }
+            // Only an action object (url and method beside the label) counts: a form field's label is not an action.
+            $window = self::enclosingObject($masked, $at);
+            if (preg_match('~\burl\s*:~', $window) !== 1 || preg_match('~\bmethod\s*:~', $window) !== 1) {
+                continue;
+            }
+            // A TypeScript type literal (`{ label: string; url: string }`) describes an action; it has no label to read.
+            if (preg_match('~\blabel\s*\??\s*:\s*[^,;}]*;~', $window) === 1 || preg_match('~\blabel\s*\??\s*:\s*(?:string|number|boolean|any|unknown|null|undefined)(?:\s*\|\s*(?:string|number|boolean|any|unknown|null|undefined))*\s*[,}]~', $window) === 1) {
+                continue;
+            }
+            // A form's submit object (`submit: { label, url, method }`) is not a row action.
+            if (preg_match('~\b(?:submit|save)\s*:\s*$~', substr($masked, 0, max(0, strrpos(substr($masked, 0, $at), '{') ?: 0))) === 1) {
+                continue;
+            }
+            $arg = substr($script, $match['arg'][1], strlen(rtrim($match['arg'][0])));
+            if (($arms = self::arms(self::enclosingValue($script, $masked, $at))) !== null && count($arms) > 1) {
+                foreach ($arms as $arm) {
+                    $found[] = $this->labelFinding($path, $source, $offset + $at, $arm, stripcslashes(substr($arm, 1, -1)));
+                }
+
+                continue;
+            }
+            $quoted = in_array($arg[0] ?? '', ['"', "'", '`'], true);
+            $concatenated = ($match['tail'][0] ?? '') !== '';
+            $interpolated = ! $quoted || $concatenated || ($arg[0] === '`' && str_contains($arg, '${'));
+            $found[] = $this->labelFinding($path, $source, $offset + $at, $arg, ! $interpolated ? stripcslashes(substr($arg, 1, -1)) : ($concatenated ? null : self::withTerms($arg)));
         }
 
         return array_values(array_filter($found));
@@ -1005,9 +1034,18 @@ final class Layout
     /**
      * A script with its comments and the contents of its string, template and regex literals blanked to spaces (same offsets, delimiters kept). A `/`
      * after an operator, an opening bracket or a separator starts a regex literal, so a quote in `/['"]/` doesn't open a string.
+     *
+     * This is a scan, not a JavaScript tokenizer, and it guesses in two places. Whether a `/` starts a regex or divides depends on the grammar after a
+     * word (`return /re/` against `total / 2`), a `)` (`if (x) /re/` against `(a + b) / 2`), a `}`, a `+` or a `-` (`i++ / 2`). And a template
+     * literal's `${…}` ends at the brace that balances its own, counted without reading the strings, templates or regexes the expression holds. A wrong
+     * guess can read a literal's quote as one that opens a string and blanks the code after it. So $uncertain is set to the first offset the mask may
+     * be wrong from: such a `/` where a regex could start, an interpolation that holds a quote, a backtick or a `/`, and, as signs that the scan lost
+     * its place anyway, a quoted string read past a line break (JavaScript allows none) or a literal or block comment still open at the end of the
+     * script. It is null when none occurs.
      */
-    private static function jsMask(string $script): string
+    private static function jsMask(string $script, ?int &$uncertain = null): string
     {
+        $uncertain = null;
         $masked = $script;
         $previous = '';
         for ($i = 0, $length = strlen($script); $i < $length; $i++) {
@@ -1015,13 +1053,19 @@ final class Layout
             $next = $script[$i + 1] ?? '';
             if ($char === '/' && ($next === '/' || $next === '*')) {
                 $close = $next === '/' ? strpos($script, "\n", $i) : strpos($script, '*/', $i + 2);
+                if ($close === false && $next === '*') {
+                    $uncertain ??= $i;
+                }
                 for ($end = $close === false ? $length : $close + ($next === '/' ? 0 : 2); $i < $end; $i++) {
                     $masked[$i] = ' ';
                 }
                 $i--;
             } elseif ($char === '"' || $char === "'" || $char === '`') {
                 // To the closing quote; a template literal's `${…}` runs to its own closing brace.
-                for ($i++, $depth = 0; $i < $length && ($depth > 0 || $script[$i] !== $char); $i++) {
+                for ($open = $i, $i++, $depth = 0; $i < $length && ($depth > 0 || $script[$i] !== $char); $i++) {
+                    if (($char !== '`' && $script[$i] === "\n") || ($depth > 0 && str_contains('\'"`/', $script[$i]))) {
+                        $uncertain ??= $open; // a line break in a quoted string (an escaped one is skipped below), or a literal in an interpolation
+                    }
                     if ($script[$i] === '\\' || ($char === '`' && $script[$i] === '$' && ($script[$i + 1] ?? '') === '{')) {
                         $depth += $script[$i] === '$' ? 1 : 0;
                         $masked[$i++] = ' ';
@@ -1032,11 +1076,19 @@ final class Layout
                         $masked[$i] = ' ';
                     }
                 }
+                if ($i >= $length) {
+                    $uncertain ??= $open;
+                }
                 $previous = $char;
-            } elseif ($char === '/' && ($previous === '' || str_contains('(,=:[!&|?{};+-*%<>~^', $previous))
-                && preg_match('~\G/(?:[^/\\\\\[\n]|\\\\.|\[(?:[^\]\\\\\n]|\\\\.)*\])+/~', $script, $regex, 0, $i) === 1) {
-                for ($end = $i + strlen($regex[0]) - 1, $i++; $i < $end; $i++) {
-                    $masked[$i] = ' ';
+            } elseif ($char === '/' && preg_match('~\G/(?:[^/\\\\\[\n]|\\\\.|\[(?:[^\]\\\\\n]|\\\\.)*\])+/~', $script, $regex, 0, $i) === 1) {
+                // A regex could start here. After a word, `)`, `}`, `+` or `-` only the grammar can tell, so the reading below is a guess.
+                if (preg_match('~^[\w$\x80-\xff)}+-]$~', $previous) === 1) {
+                    $uncertain ??= $i;
+                }
+                if ($previous === '' || str_contains('(,=:[!&|?{};+-*%<>~^', $previous)) {
+                    for ($end = $i + strlen($regex[0]) - 1, $i++; $i < $end; $i++) {
+                        $masked[$i] = ' ';
+                    }
                 }
                 $previous = '/';
             } elseif (! ctype_space($char)) {
@@ -1239,12 +1291,17 @@ final class Layout
     }
 
     /**
-     * A check that is advisory by kind (the English label test, or a pointer to a primitive the kit has not shipped): its allowlist entry never
-     * fails as stale, even once its finding is gone, because such a finding never failed in the first place.
+     * A check that is advisory by kind (the English label test, a pointer to a primitive the kit has not shipped, or a row action label read from a
+     * script the scan can't mask with certainty): its allowlist entry never fails as stale, even once its finding is gone, because such a finding
+     * never failed in the first place.
      */
     public function quiet(string $check): bool
     {
         if (preg_match('~^a ".*" action sits outside the Page header: if it creates~s', $check) === 1) {
+            return true;
+        }
+        // A row action label read past where a script's mask may be wrong only warns.
+        if (preg_match('~^row action label .* \\(read unmasked: the script can\'t be masked with certainty from line \\d+, so this only warns\\)$~s', $check) === 1) {
             return true;
         }
 
