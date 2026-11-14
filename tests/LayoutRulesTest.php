@@ -651,3 +651,29 @@ test('ui.row-action-label reads a nested confirm and each script block at its ow
         'resources/js/pages/Grants.vue:7 row action label `Remove ${grant.label}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
     ]);
 });
+
+test('ui.row-action-label reads Vue action objects only where the template renders rows, not where a comment or string names a row component', function () {
+    expect(rowLabelFindings([
+        'resources/js/pages/Settings.vue' => <<<'VUE'
+        <script setup lang="ts">
+        // Unlike a <DataTable>, this page lists no rows.
+        const hint = '<Workbench> pages list their items';
+        const back = { label: `Back to ${props.team.name}`, url: '/t', method: 'get' };
+        </script>
+        <template>
+            <!-- <RowActions :actions="actions" /> -->
+            <Page title="Settings" />
+        </template>
+        VUE,
+        'resources/js/pages/Members.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const actions = [{ label: `Remove ${member.name}`, url: '/m/1', method: 'delete' }];
+        </script>
+        <template>
+            <Page title="Members"><Card><RowActions :actions="actions" /></Card></Page>
+        </template>
+        VUE,
+    ]))->toBe([
+        'resources/js/pages/Members.vue:2 row action label `Remove ${member.name}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});

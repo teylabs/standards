@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`ui.row-action-label` only reads row actions.** It used to flag every `new Action` / `Action::make` label in an app's PHP. In one app, 11 of its 12 hits were form submits built outside the form, page and header buttons, menu items and navigation links. Now a PHP Action is checked only when it ends up in a row: under the `actions` key of an array with an `id` (a DataTable row), under a `rowActions` key, or among the arguments of an item or row object such as `new WorkbenchItem(…)`, whose actions are its row menu. It is followed through the local variable that collects it (`$actions[] = new Action(…)`), the method that returns it (`'actions' => $this->rowActions($order)`, `array_map(self::action(...), …)`) and the closure that builds the row. An Action in a comment, a string (backtick shell strings included) or a heredoc or nowdoc body is not read. A Vue action object is read only in a file whose template renders rows (RowActions, DataTable, ScrollList or Workbench); a row component named only in a comment or a script string does not count. A label held in a local variable is read from its assignments, so `$verb = 'Post'` or `$label = $paid ? 'Mark unpaid' : 'Mark paid'` is measured as those verbs, not reported as interpolation. A parameter with no assignment is still a value. A tenant term counts as one word: `"New {$term}"`, `'All '.$terms`, `` `Copy ${terms.singular}` `` and a literal `{term}` placeholder. Interpolated and over-long row action labels still fail, including through a variable (`$label = 'Remove '.$grant->label`).
+
 ## v0.11.101 - 2026-11-14
 
 ### Added
@@ -9,10 +15,6 @@
 ### Changed
 
 - **Hand-rolled stacked full-width actions point to `<ActionGroup direction="column">`.** Two or more adjacent action controls outside a group that each carry `w-full` (the auth pages' shape before kit 0.21) are still a finding, now `stacked full-width action controls in <…> are not grouped: put them in <ActionGroup direction="column">, primary first, and drop their w-full`. Other ungrouped runs keep their message. An allowlist entry for such a run under the old message goes stale; re-baseline it, or adopt the column.
-
-### Fixed
-
-- **`ui.row-action-label` only reads row actions.** It used to flag every `new Action` / `Action::make` label in an app's PHP. In one app, 11 of its 12 hits were form submits built outside the form, page and header buttons, menu items and navigation links. Now a PHP Action is checked only when it ends up in a row: under the `actions` key of an array with an `id` (a DataTable row), under a `rowActions` key, or among the arguments of an item or row object such as `new WorkbenchItem(…)`, whose actions are its row menu. It is followed through the local variable that collects it (`$actions[] = new Action(…)`), the method that returns it (`'actions' => $this->rowActions($order)`, `array_map(self::action(...), …)`) and the closure that builds the row. An Action in a comment, a string (backtick shell strings included) or a heredoc or nowdoc body is not read. A Vue action object is read only in a file that renders rows (RowActions, DataTable, ScrollList or Workbench). A label held in a local variable is read from its assignments, so `$verb = 'Post'` or `$label = $paid ? 'Mark unpaid' : 'Mark paid'` is measured as those verbs, not reported as interpolation. A parameter with no assignment is still a value. A tenant term counts as one word: `"New {$term}"`, `'All '.$terms`, `` `Copy ${terms.singular}` `` and a literal `{term}` placeholder. Interpolated and over-long row action labels still fail, including through a variable (`$label = 'Remove '.$grant->label`).
 
 ## v0.11.100 - 2026-11-14
 

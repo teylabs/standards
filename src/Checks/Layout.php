@@ -267,7 +267,9 @@ final class Layout
             }
         }
         foreach ($this->files() as $path => $source) {
-            if (preg_match('~<(?:RowActions|DataTable|ScrollList(?:Row)?|Workbench(?:Navigator)?)\b~', $source) !== 1) {
+            // The tags the template renders, so a mention in a comment or a script string is not one.
+            $rendered = array_filter(VueTemplate::parse($source)?->descendants() ?? [], fn (VueTemplate $node): bool => preg_match('~^(?:RowActions|DataTable|ScrollList(?:Row)?|Workbench(?:Navigator)?)\b~', $node->tag) === 1);
+            if ($rendered === []) {
                 continue; // renders no rows: its action objects are page or header actions
             }
             preg_match_all('~<script\b[^>]*>(.*?)</script\s*>~si', $source, $blocks, PREG_OFFSET_CAPTURE);
