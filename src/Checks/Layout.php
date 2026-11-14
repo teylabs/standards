@@ -616,8 +616,9 @@ final class Layout
                 $text .= stripcslashes(substr($part, 1, -1));
             } elseif (preg_match('~^(["`])(.*)\1$~s', $part, $quoted) === 1) {
                 $other = false;
-                $inner = preg_replace_callback('~\$\{([^}]*)\}|\{(\$[^}]*)\}|(\$[A-Za-z_]\w*(?:->\w+)*)~', function (array $value) use (&$other): string {
-                    $other = $other || ! self::isTerm(trim((string) end($value)));
+                // `(?|…)` numbers each form's expression 1: `${term}`, `{$term}` or `$term`.
+                $inner = preg_replace_callback('~(?|\$\{([^}]*)\}|\{(\$[^}]*)\}|(\$[A-Za-z_]\w*(?:->\w+)*))~', function (array $value) use (&$other): string {
+                    $other = $other || ! self::isTerm(trim($value[1]));
 
                     return '{term}';
                 }, $quoted[2]);

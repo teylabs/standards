@@ -485,6 +485,38 @@ test('ui.row-action-label follows a row action through its variable, method and 
     ]);
 });
 
+test('ui.row-action-label reads a braced tenant term as one word and any other braced value as a value', function () {
+    expect(rowLabelFindings(['app/Http/GrantsController.php' => <<<'PHP'
+        <?php
+        $rows = [['id' => 1, 'actions' => [
+            new Action("Copy {$term}", '/g/1/copy', 'post'),
+            new Action("Move {$this->terms->singular}", '/g/1/move', 'post'),
+            new Action("Assign ${term}", '/g/1/assign', 'post'),
+            new Action("Archive this {$terms->plural} now", '/g/1/archive', 'post'),
+            new Action("Archive this ${term} now", '/g/1/archive', 'post'),
+            new Action("Revoke {$grant->name}", '/g/1', 'delete'),
+            new Action("Revoke ${grant}", '/g/1', 'delete'),
+        ]]];
+        PHP,
+        'resources/js/pages/Grants/Index.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const actions = (row) => [
+            { key: 'copy', label: `Copy ${terms.singular}`, url: `/g/${row.id}/copy`, method: 'post' },
+            { key: 'archive', label: `Archive every ${terms.plural} now`, url: `/g/${row.id}/archive`, method: 'post' },
+            { key: 'revoke', label: `Revoke ${row.name}`, url: `/g/${row.id}`, method: 'delete' },
+        ];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE]))->toBe([
+        'app/Http/GrantsController.php:6 row action label "Archive this {$terms->plural} now" is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm',
+        'app/Http/GrantsController.php:7 row action label "Archive this ${term} now" is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm',
+        'app/Http/GrantsController.php:8 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'app/Http/GrantsController.php:9 row action label "Revoke ${grant}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'resources/js/pages/Grants/Index.vue:4 row action label `Archive every ${terms.plural} now` is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm',
+        'resources/js/pages/Grants/Index.vue:5 row action label `Revoke ${row.name}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});
+
 test('ui.row-action-label reads no Action in a heredoc or nowdoc body', function () {
     expect(rowLabelFindings(['app/Http/HelpController.php' => <<<'PHP'
         <?php
