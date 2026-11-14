@@ -238,7 +238,8 @@ final class Layout
                 if ($tree['masked'][$at] === ' ') {
                     continue; // in a string or a comment
                 }
-                $arguments = self::arguments($source, $at + strlen($call));
+                // Split on the masked source, so a comment or heredoc among the arguments can't move their bounds; each argument's text is the source's.
+                $arguments = array_map(fn (array $argument): array => [substr($source, $argument[1], strlen($argument[0])), $argument[1]], self::arguments($tree['masked'], $at + strlen($call)));
                 // The label is the `label:` argument wherever it sits, else the first positional one.
                 $named = array_values(array_filter($arguments, fn (array $argument): bool => preg_match('~^label\s*:~', $argument[0]) === 1));
                 [$arg, $offset] = $named[0] ?? (isset($arguments[0]) && preg_match('~^\w+\s*:(?!:)~', $arguments[0][0]) !== 1 ? $arguments[0] : ['', $at]);
@@ -246,7 +247,7 @@ final class Layout
                 if ($arg === '') {
                     continue;
                 }
-                if (self::formSubmit($source, $at)) {
+                if (self::formSubmit($tree, $at)) {
                     continue; // a form's submit button, not a row action
                 }
                 $seen = [];
@@ -275,11 +276,14 @@ final class Layout
             }
             preg_match_all('~<script\b[^>]*>(.*?)</script\s*>~si', $source, $blocks, PREG_OFFSET_CAPTURE);
             foreach ($blocks[1] as [$script, $offset]) {
-                // `${…}` masked so its braces don't count when finding the object literal a label sits in.
-                $masked = preg_replace_callback('~\$\{[^}]*\}~', fn (array $m): string => str_repeat('_', strlen($m[0])), $script) ?? $script;
+                // Comments and literal contents masked, so a label in either is not read and their braces don't count when finding the object literal a label sits in.
+                $masked = self::jsMask($script);
                 preg_match_all('~\blabel\s*:\s*(?<arg>`(?:[^`\\\\]|\\\\.)*`|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^,}\n]+)(?<tail>\s*\+)?~', $script, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
                 foreach ($matches as $match) {
                     $at = $match[0][1];
+                    if ($masked[$at] === ' ') {
+                        continue; // in a comment or a string
+                    }
                     // Only an action object (url and method beside the label) counts: a form field's label is not an action.
                     $window = self::enclosingObject($masked, $at);
                     if (preg_match('~\burl\s*:~', $window) !== 1 || preg_match('~\bmethod\s*:~', $window) !== 1) {
@@ -400,32 +404,20 @@ final class Layout
         return $arguments[0][0] ?? '';
     }
 
-    /** Whether the Action at $at is a form's submit: returned by a `submit()`/`save()` method, or the value of a `submit`/`save` key or argument. */
-    private static function formSubmit(string $source, int $at): bool
+    /**
+     * Whether the Action at $at is a form's submit: returned by a `submit()`/`save()` method, or the value of a `submit`/`save` key or argument.
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
+     */
+    private static function formSubmit(array $tree, int $at): bool
     {
-        $before = substr($source, 0, $at);
-        if (preg_match('~[\'"]?\b(?:submit|save)\b[\'"]?\s*(?:=>|:)\s*(?:[^,\[\](){};]*\?\s*)?$~', $before) === 1) {
+        if (preg_match('~[\'"]?\b(?:submit|save)\b[\'"]?\s*(?:=>|:)\s*(?:[^,\[\](){};]*\?\s*)?$~', substr($tree['source'], 0, $at)) === 1) {
             return true;
         }
-
-        // Inside the body of a submit() or save() method: its opening brace is before the Action and its closing brace after it.
-        preg_match_all('~\bfunction\s+(?:submit|save)\s*\([^)]*\)[^{;]*\{~i', $before, $methods, PREG_OFFSET_CAPTURE);
-        foreach ($methods[0] as [$head, $start]) {
-            $depth = 0;
-            for ($i = $start + strlen($head) - 1, $length = strlen($source); $i < $length; $i++) {
-                $char = $source[$i];
-                if ($char === '"' || $char === "'") {
-                    for ($i++; $i < $length && $source[$i] !== $char; $i++) {
-                        $i += $source[$i] === '\\' ? 1 : 0;
-                    }
-                } elseif ($char === '{') {
-                    $depth++;
-                } elseif ($char === '}' && --$depth === 0) {
-                    if ($i > $at) {
-                        return true;
-                    }
-                    break;
-                }
+        // Inside the body of a submit() or save() method, by the bracket pairs, so a brace in a comment, string or heredoc doesn't move its end.
+        foreach (self::openers($tree, $at) as $brace) {
+            if ($brace >= 0 && $tree['masked'][$brace] === '{' && preg_match('~\bfunction\s*&?\s*(?:submit|save)\s*\([^;{}]*$~i', substr($tree['masked'], 0, $brace)) === 1) {
+                return true;
             }
         }
 
@@ -434,14 +426,16 @@ final class Layout
 
     /**
      * PHP source read for its structure: `masked` is the source with string contents (backtick shell strings, heredoc and nowdoc bodies too) and
-     * comments blanked to spaces (same offsets), `pairs` maps each bracket's open offset to its close and `closes` the other way.
+     * comments blanked to spaces (same offsets), `pairs` maps each bracket's open offset to its close and `closes` the other way, `opens` lists the
+     * open offsets in order and `parents` maps each open offset to the bracket it sits in (-1 for the file).
      *
-     * @return array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}
+     * @return array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}
      */
     private static function phpTree(string $source): array
     {
         $masked = $source;
         $pairs = [];
+        $parents = [];
         $stack = [];
         for ($i = 0, $length = strlen($source); $i < $length; $i++) {
             $char = $source[$i];
@@ -473,35 +467,49 @@ final class Layout
                 }
                 $i--;
             } elseif (in_array($char, ['(', '[', '{'], true)) {
+                $parents[$i] = $stack === [] ? -1 : $stack[array_key_last($stack)];
                 $stack[] = $i;
             } elseif (in_array($char, [')', ']', '}'], true) && $stack !== []) {
                 $pairs[array_pop($stack)] = $i;
             }
         }
+        $opens = array_keys($pairs);
+        sort($opens);
 
-        return ['source' => $source, 'masked' => $masked, 'pairs' => $pairs, 'closes' => array_flip($pairs)];
+        return ['source' => $source, 'masked' => $masked, 'pairs' => $pairs, 'closes' => array_flip($pairs), 'opens' => $opens, 'parents' => $parents];
     }
 
     /**
-     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
      * @return list<int> the open offsets of the brackets around $at, innermost first, then -1 for the file
      */
     private static function openers(array $tree, int $at): array
     {
-        $around = array_keys(array_filter($tree['pairs'], fn (int $close, int $open): bool => $open < $at && $at < $close, ARRAY_FILTER_USE_BOTH));
-        rsort($around);
+        // The last bracket opened before $at, by binary search; the brackets around $at are it or its ancestors, as brackets nest.
+        [$low, $high] = [0, count($tree['opens']) - 1];
+        while ($low <= $high) {
+            $middle = intdiv($low + $high, 2);
+            [$low, $high] = $tree['opens'][$middle] < $at ? [$middle + 1, $high] : [$low, $middle - 1];
+        }
+        $around = [];
+        for ($open = $tree['opens'][$high] ?? -1; $open >= 0; $open = $tree['parents'][$open]) {
+            if ($at < ($tree['pairs'][$open] ?? -1)) {
+                $around[] = $open;
+            }
+        }
 
         return [...$around, -1];
     }
 
     /**
-     * Where the element holding $at starts in the bracket at $open: an argument or array item in `(` and `[`, a statement in `{` and the file (-1).
+     * Where the element holding $at starts in the bracket at $open: an argument or array item in `(` and `[`, an arm in a `match` body, a statement
+     * in any other `{` and the file (-1).
      *
-     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
      */
     private static function elementStart(array $tree, int $open, int $at): int
     {
-        $statement = $open < 0 || $tree['masked'][$open] === '{';
+        $statement = $open < 0 || ($tree['masked'][$open] === '{' && ! self::matchBody($tree, $open));
         for ($i = $at - 1; $i > $open; $i--) {
             $char = $tree['masked'][$i];
             if (isset($tree['closes'][$i])) {
@@ -518,11 +526,28 @@ final class Layout
     }
 
     /**
+     * Whether the brace at $open opens a `match` body, whose arms are expressions, not statements.
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
+     */
+    private static function matchBody(array $tree, int $open): bool
+    {
+        $close = $open - 1;
+        while ($close >= 0 && ctype_space($tree['masked'][$close])) {
+            $close--;
+        }
+        $paren = $tree['closes'][$close] ?? -1;
+
+        return $paren > 0 && $tree['masked'][$close] === ')' && preg_match('~(?<![\w$>:])match\s*$~i', substr($tree['masked'], max(0, $paren - 20), min($paren, 20))) === 1;
+    }
+
+    /**
      * Whether the Action at $at ends up in a row, read outward through the brackets around it: under the `actions` key of an array with an `id` (a
      * DataTable row), under a `rowActions` key, or among the arguments of an item or row object (`new WorkbenchItem(…)`). Assigned to a variable, it follows
-     * the variable's uses in its function; returned, the calls of the method or where the closure goes.
+     * the variable's uses in its scope (scope()); returned, the calls that reach the function or method (callers()) or where the closure goes. A
+     * `match` arm is read through to the match.
      *
-     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
      * @param  array<int, true>  $seen  offsets already followed
      */
     private static function inRow(array $tree, int $at, array &$seen): bool
@@ -534,8 +559,14 @@ final class Layout
         $inner = $at;
         foreach (self::openers($tree, $at) as $open) {
             $bracket = $open < 0 ? '{' : $tree['masked'][$open];
+            $bracket = $bracket === '{' && $open >= 0 && self::matchBody($tree, $open) ? 'match' : $bracket;
+            // The element from its first code: a comment before a key or a statement is blank in the masked source.
             $start = self::elementStart($tree, $open, $inner);
-            $element = (string) preg_replace('~^\s*(?:<\?php\b\s*)?~', '', substr($tree['source'], $start, $inner - $start));
+            $start += strspn($tree['masked'], " \t\r\n", $start);
+            if (substr($tree['masked'], $start, 5) === '<?php') {
+                $start += 5 + strspn($tree['masked'], " \t\r\n", $start + 5);
+            }
+            $element = substr($tree['source'], $start, max(0, $inner - $start));
             $inner = $open;
             if ($bracket === '(' && preg_match('~\bnew\s+\\\\?(?:[\w\\\\]+\\\\)?\w*(?:Item|Row)(?:Data)?\s*$~', substr($tree['masked'], max(0, $open - 200), min($open, 200))) === 1) {
                 return true; // an item or row object: a WorkbenchItem's actions are its row menu
@@ -552,8 +583,7 @@ final class Layout
                 if ($name === '') {
                     return $keyword >= 0 && self::inRow($tree, $keyword, $seen); // a closure: where it goes
                 }
-                preg_match_all('~(?:->|::)\s*'.preg_quote($name, '~').'\s*\(~', $tree['masked'], $calls, PREG_OFFSET_CAPTURE);
-                foreach ($calls[0] as [, $call]) {
+                foreach (self::callers($tree, $name, $keyword) as $call) {
                     if (self::inRow($tree, $call, $seen)) {
                         return true;
                     }
@@ -562,12 +592,12 @@ final class Layout
                 return false;
             }
             if (preg_match('~^\$(\w+)\s*(?:\[[^\]]*\]\s*)*(?:\?\?)?=(?![=>])~', $element, $variable) === 1) {
-                $body = self::owner($tree, $at)[2] ?? -1;
-                [$from, $to] = $body < 0 ? [0, strlen($tree['masked'])] : [$body, $tree['pairs'][$body]];
-                // Its uses, not the assignments to it.
+                $scope = self::scope($tree, $variable[1], $start);
+                // Its uses in the same scope, not the assignments to it, nor a variable of the same name in a closure of its own.
+                [$from, $to] = self::span($tree, $scope);
                 preg_match_all('~\$'.preg_quote($variable[1], '~').'\b(?!\s*(?:\[[^\]]*\]\s*)*(?:\?\?)?=(?![=>]))~', substr($tree['masked'], $from, $to - $from), $uses, PREG_OFFSET_CAPTURE);
                 foreach ($uses[0] as [, $use]) {
-                    if (self::inRow($tree, $from + $use, $seen)) {
+                    if (self::scope($tree, $variable[1], $from + $use) === $scope && self::inRow($tree, $from + $use, $seen)) {
                         return true;
                     }
                 }
@@ -582,7 +612,7 @@ final class Layout
     /**
      * Whether the array at $open is a DataTable row: it has its own `id` key.
      *
-     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
      */
     private static function rowArray(array $tree, int $open): bool
     {
@@ -599,7 +629,7 @@ final class Layout
     /**
      * The function whose body holds $at: its name ('' for a closure), its `function` keyword's offset and its body's opening brace; null outside any.
      *
-     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
      * @return array{0: string, 1: int, 2: int}|null
      */
     private static function owner(array $tree, int $at): ?array
@@ -614,46 +644,210 @@ final class Layout
     }
 
     /**
-     * The values assigned to `$name` before $at in the function that holds it (the file outside one), not in a closure inside it. A closure that
-     * captures `$name` with `use` adds the values assigned before it in the scope around it; an arrow fn sees that scope unless a parameter of its
-     * own shadows `$name`, which leaves it a value with no assignment.
+     * The scope `$name` at $at belongs to: the body brace of the function that holds it, or of the scope around a closure that captures it with `use`;
+     * the parameter list of an arrow fn whose own parameter it is; -1 for the file. An arrow fn otherwise shares the scope around it.
      *
-     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
-     * @return list<string>
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
      */
-    private static function assigned(array $tree, string $name, int $at): array
+    private static function scope(array $tree, string $name, int $at): int
     {
-        [, $keyword, $from] = self::owner($tree, $at) ?? ['', -1, 0];
+        [, $keyword, $body] = self::owner($tree, $at) ?? ['', -1, -1];
         $variable = '\$'.preg_quote($name, '~').'\b';
+        $from = max(0, $body);
+        $shadow = null;
         preg_match_all('~(?<![\w$])(?<!->)(?<!::)fn\s*&?\s*\(~', substr($tree['masked'], $from, $at - $from), $arrows, PREG_OFFSET_CAPTURE);
         foreach ($arrows[0] as [$arrow, $offset]) {
             $paren = $from + $offset + strlen($arrow) - 1;
             $around = self::openers($tree, $at);
             $depth = array_search(self::openers($tree, $from + $offset)[0], $around, true);
-            // The arrow fn holds $at when $at sits in the element its `fn` starts, and its parameters name $name.
+            // The arrow fn holds $at when $at sits in the element its `fn` starts, and its parameters name $name; the innermost one wins.
             if ($depth !== false && self::elementStart($tree, $around[$depth], $depth === 0 ? $at : $around[$depth - 1]) <= $from + $offset
                 && preg_match('~'.$variable.'~', substr($tree['masked'], $paren, ($tree['pairs'][$paren] ?? $paren) - $paren)) === 1) {
-                return [];
+                $shadow = $paren;
             }
         }
-        preg_match_all('~'.$variable.'\s*=(?![=>])~', substr($tree['masked'], $from, $at - $from), $assignments, PREG_OFFSET_CAPTURE);
-        $values = [];
-        $head = $keyword < 0 ? '' : substr($tree['masked'], $keyword, $from - $keyword);
+        if ($shadow !== null) {
+            return $shadow;
+        }
+        $head = $keyword < 0 ? '' : substr($tree['masked'], $keyword, $body - $keyword);
         if (preg_match('~^function\s*&?\s*\(~', $head) === 1 && preg_match('~\)\s*use\s*\([^)]*&?'.$variable.'~', $head) === 1) {
-            $values = self::assigned($tree, $name, $keyword); // captured from the scope around the closure
+            return self::scope($tree, $name, $keyword); // captured from the scope around the closure
         }
-        foreach ($assignments[0] as [$assignment, $offset]) {
-            if ((self::owner($tree, $from + $offset)[2] ?? 0) !== $from) {
-                continue; // in a closure of its own
+
+        return $body;
+    }
+
+    /**
+     * The offsets a scope from scope() spans: a function body's braces, an arrow fn from its parameters to the end of the bracket around it, or the file.
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
+     * @return array{0: int, 1: int}
+     */
+    private static function span(array $tree, int $scope): array
+    {
+        if ($scope < 0) {
+            return [0, strlen($tree['masked'])];
+        }
+        $around = self::openers($tree, $scope)[0];
+
+        return [$scope, $tree['masked'][$scope] === '{' ? $tree['pairs'][$scope] : ($around < 0 ? strlen($tree['masked']) : $tree['pairs'][$around])];
+    }
+
+    /**
+     * The values assigned to `$name` before $at in its scope (scope()): in the function that holds it (the file outside one), and through a closure's
+     * `use` or an arrow fn in the scope around them, not in a closure of its own. A parameter with no assignment, an arrow fn's included, has none. `??=`
+     * adds a value and `.=` concatenates its operand onto each value so far.
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
+     * @return list<string>
+     */
+    private static function assigned(array $tree, string $name, int $at): array
+    {
+        $scope = self::scope($tree, $name, $at);
+        $from = self::span($tree, $scope)[0];
+        preg_match_all('~\$'.preg_quote($name, '~').'\b\s*(\.|\?\?)?=(?![=>])~', substr($tree['masked'], $from, max(0, $at - $from)), $assignments, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+        $values = [];
+        foreach ($assignments as $assignment) {
+            [$text, $offset] = $assignment[0];
+            $offset += $from;
+            if (self::scope($tree, $name, $offset) !== $scope) {
+                continue; // another variable of the same name: a closure's own, or an arrow fn's parameter
             }
-            $start = $from + $offset + strlen($assignment);
+            $start = $offset + strlen($text);
             for ($end = $start, $length = strlen($tree['masked']); $end < $length && $tree['masked'][$end] !== ';'; $end++) {
                 $end = $tree['pairs'][$end] ?? $end;
             }
-            $values[] = trim(substr($tree['source'], $start, $end - $start));
+            $value = trim(substr($tree['source'], $start, $end - $start));
+            $values = ($assignment[1][0] ?? '') === '.'
+                ? array_map(fn (string $before): string => $before.'.'.$value, $values === [] ? ['$'.$name] : $values)
+                : [...$values, $value];
         }
 
         return $values;
+    }
+
+    /**
+     * The offsets of the calls that reach the function or method declared at $keyword. A function's are its plain calls. A method's are its calls on
+     * `$this`, `self`, `static` or `parent` from a class that has it (its own, or one that inherits it in this file without declaring its own), on a
+     * class name that has it, and on any other receiver only when no other class in the file declares a method of that name.
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
+     * @return list<int>
+     */
+    private static function callers(array $tree, string $name, int $keyword): array
+    {
+        $quoted = preg_quote($name, '~');
+        $classes = self::classes($tree);
+        $declaring = self::classAt($tree, $classes, $keyword);
+        if ($declaring === null) {
+            preg_match_all('~(?<![\w$\\\\>:])\\\\?(?:\w+\\\\)*'.$quoted.'\s*\(~i', $tree['masked'], $calls, PREG_OFFSET_CAPTURE);
+
+            return array_values(array_filter(array_column($calls[0], 1), fn (int $call): bool => preg_match('~(?<![\w$])(?:function|new)\s*&?\s*$~i', substr($tree['masked'], max(0, $call - 20), min($call, 20))) !== 1));
+        }
+        $others = array_filter($classes, fn (array $class, int $brace): bool => $brace !== $declaring && isset($class['methods'][strtolower($name)]), ARRAY_FILTER_USE_BOTH);
+        preg_match_all('~(?:->|::)\s*'.$quoted.'\s*\(~i', $tree['masked'], $calls, PREG_OFFSET_CAPTURE);
+        $reached = [];
+        foreach ($calls[0] as [, $call]) {
+            preg_match('~(?:(?<this>\$this\s*\??->|\b(?:self|static)\s*::)|\bparent\s*::|(?<![\w$\\\\])\\\\?(?:\w+\\\\)*(?<class>\w+)\s*::|(?<other>))\s*$~i', substr($tree['masked'], max(0, $call - 200), min($call, 200)).substr($tree['masked'], $call, 2), $receiver);
+            $caller = self::classAt($tree, $classes, $call);
+            $from = match (true) {
+                ($receiver['this'] ?? '') !== '' => [$caller],
+                ($receiver['class'] ?? '') !== '' => array_keys(array_filter($classes, fn (array $class): bool => strcasecmp($class['name'], $receiver['class']) === 0)),
+                isset($receiver['other']) => $others === [] ? [$declaring] : [],
+                default => $caller === null ? [] : self::parents($classes, $caller), // parent::
+            };
+            if (array_filter($from, fn (?int $class): bool => $class !== null && self::inherits($classes, $class, $declaring, strtolower($name))) !== []) {
+                $reached[] = $call;
+            }
+        }
+
+        return $reached;
+    }
+
+    /**
+     * The file's classes, traits, enums and interfaces (anonymous classes too), by body brace: the name, the short names it extends or uses, and the
+     * methods it declares, lowercased.
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
+     * @return array<int, array{name: string, parents: list<string>, methods: array<string, true>}>
+     */
+    private static function classes(array $tree): array
+    {
+        preg_match_all('~(?<![\w$>:])(?:(?:class|trait|enum|interface)\s+(\w+)|new\s+class\b)([^;{}]*)\{~i', $tree['masked'], $heads, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+        $classes = [];
+        foreach ($heads as $head) {
+            preg_match('~\bextends\s+([\w\\\\\s,]+?)(?:\bimplements\b|$)~i', $head[2][0], $extends);
+            $classes[$head[0][1] + strlen($head[0][0]) - 1] = ['name' => $head[1][0] ?? '', 'parents' => self::shortNames($extends[1] ?? ''), 'methods' => []];
+        }
+        preg_match_all('~(?<![\w$>:])(?:use\s+([\w\\\\\s,]+?)\s*[;{]|function\s*&?\s*(\w+)\s*\()~i', $tree['masked'], $members, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+        foreach ($members as $member) {
+            $brace = self::openers($tree, $member[0][1])[0];
+            if (! isset($classes[$brace])) {
+                continue; // a namespace import, a function outside a class or one nested in a body
+            }
+            if (($member[2][0] ?? '') !== '') {
+                $classes[$brace]['methods'][strtolower($member[2][0])] = true;
+            } else {
+                array_push($classes[$brace]['parents'], ...self::shortNames($member[1][0]));
+            }
+        }
+
+        return $classes;
+    }
+
+    /** @return list<string> the lowercased short names in a comma-separated list of class names */
+    private static function shortNames(string $list): array
+    {
+        return array_values(array_filter(array_map(fn (string $name): string => strtolower((string) preg_replace('~^.*\\\\~', '', trim($name))), explode(',', $list))));
+    }
+
+    /**
+     * The body brace of the innermost class around $at, or null.
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>, opens: list<int>, parents: array<int, int>}  $tree
+     * @param  array<int, array{name: string, parents: list<string>, methods: array<string, true>}>  $classes
+     */
+    private static function classAt(array $tree, array $classes, int $at): ?int
+    {
+        foreach (self::openers($tree, $at) as $open) {
+            if (isset($classes[$open])) {
+                return $open;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<int, array{name: string, parents: list<string>, methods: array<string, true>}>  $classes
+     * @return list<int> the classes in the file that the class at $brace extends or uses
+     */
+    private static function parents(array $classes, int $brace): array
+    {
+        return array_keys(array_filter($classes, fn (array $class): bool => $class['name'] !== '' && in_array(strtolower($class['name']), $classes[$brace]['parents'], true)));
+    }
+
+    /**
+     * Whether a call of `$method` on the class at $from reaches the one $declaring declares: it is that class, or inherits from it in this file
+     * without declaring its own.
+     *
+     * @param  array<int, array{name: string, parents: list<string>, methods: array<string, true>}>  $classes
+     */
+    private static function inherits(array $classes, int $from, int $declaring, string $method, int $depth = 0): bool
+    {
+        if ($from === $declaring) {
+            return true;
+        }
+        if (isset($classes[$from]['methods'][$method]) || $depth > 10) {
+            return false;
+        }
+        foreach (self::parents($classes, $from) as $parent) {
+            if (self::inherits($classes, $parent, $declaring, $method, $depth + 1)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -789,6 +983,51 @@ final class Layout
         }
 
         return '';
+    }
+
+    /**
+     * A script with its comments and the contents of its string, template and regex literals blanked to spaces (same offsets, delimiters kept). A `/`
+     * after an operator, an opening bracket or a separator starts a regex literal, so a quote in `/['"]/` doesn't open a string.
+     */
+    private static function jsMask(string $script): string
+    {
+        $masked = $script;
+        $previous = '';
+        for ($i = 0, $length = strlen($script); $i < $length; $i++) {
+            $char = $script[$i];
+            $next = $script[$i + 1] ?? '';
+            if ($char === '/' && ($next === '/' || $next === '*')) {
+                $close = $next === '/' ? strpos($script, "\n", $i) : strpos($script, '*/', $i + 2);
+                for ($end = $close === false ? $length : $close + ($next === '/' ? 0 : 2); $i < $end; $i++) {
+                    $masked[$i] = ' ';
+                }
+                $i--;
+            } elseif ($char === '"' || $char === "'" || $char === '`') {
+                // To the closing quote; a template literal's `${…}` runs to its own closing brace.
+                for ($i++, $depth = 0; $i < $length && ($depth > 0 || $script[$i] !== $char); $i++) {
+                    if ($script[$i] === '\\' || ($char === '`' && $script[$i] === '$' && ($script[$i + 1] ?? '') === '{')) {
+                        $depth += $script[$i] === '$' ? 1 : 0;
+                        $masked[$i++] = ' ';
+                    } elseif ($depth > 0 && ($script[$i] === '{' || $script[$i] === '}')) {
+                        $depth += $script[$i] === '{' ? 1 : -1;
+                    }
+                    if ($i < $length) {
+                        $masked[$i] = ' ';
+                    }
+                }
+                $previous = $char;
+            } elseif ($char === '/' && ($previous === '' || str_contains('(,=:[!&|?{};+-*%<>~^', $previous))
+                && preg_match('~\G/(?:[^/\\\\\[\n]|\\\\.|\[(?:[^\]\\\\\n]|\\\\.)*\])+/~', $script, $regex, 0, $i) === 1) {
+                for ($end = $i + strlen($regex[0]) - 1, $i++; $i < $end; $i++) {
+                    $masked[$i] = ' ';
+                }
+                $previous = '/';
+            } elseif (! ctype_space($char)) {
+                $previous = $char;
+            }
+        }
+
+        return $masked;
     }
 
     /**
