@@ -188,7 +188,12 @@ final class Layout
      * Row action labels are verbs ("Remove", "Revoke"): the record goes in the accessible name (`ariaLabel`) and the confirmation. Flags a label that
      * interpolates a value, in a PHP Action descriptor (`new Action("Revoke {$x->name}", …)`, `Action::make('Remove '.$grant)`, `new Action($model->name, …)`)
      * or a Vue action object (`label` beside `url` and `method`, as a template literal with `${…}`, a `+` concatenation or a bare expression), and a literal
-     * label over 24 characters or 3 words, which the kit's RowActions clamps.
+     * label over 24 characters or 3 words, which the kit's RowActions clamps. A tenant term (`"New {$term}"`, `{term}`) is one word, not a value.
+     *
+     * Only row actions are read. A PHP Action is one when it ends up in a row: under the `actions` key of an array with an `id` (a DataTable row), under a
+     * `rowActions` key, or among the arguments of an item or row object (`new WorkbenchItem(…)`, whose actions are its row menu), directly or through the
+     * local variable, method or closure that holds it. A form submit, a page or header button and a link are not. A Vue action object is read in a file that
+     * renders rows (RowActions, DataTable, ScrollList, Workbench). A label held in a local variable is read from its assignments.
      *
      * @return list<array{target: string, check: string, line: int}>
      */
@@ -197,7 +202,11 @@ final class Layout
         $found = [];
         foreach ((new \Tey\Standards\Source($this->config))->files($this->config->sourceRoots) as $path => $source) {
             preg_match_all('~(?:\bnew\s+\\\\?(?:[\w\\\\]+\\\\)?Action|\bAction::(?:make|disabled))\s*\(~', $source, $calls, PREG_OFFSET_CAPTURE);
+            $tree = $calls[0] === [] ? null : self::phpTree($source);
             foreach ($calls[0] as [$call, $at]) {
+                if ($tree['masked'][$at] === ' ') {
+                    continue; // in a string or a comment
+                }
                 $arguments = self::arguments($source, $at + strlen($call));
                 // The label is the `label:` argument wherever it sits, else the first positional one.
                 $named = array_values(array_filter($arguments, fn (array $argument): bool => preg_match('~^label\s*:~', $argument[0]) === 1));
@@ -209,17 +218,28 @@ final class Layout
                 if (self::formSubmit($source, $at)) {
                     continue; // a form's submit button, not a row action
                 }
-                // A ternary whose arms are all literals picks a label: each arm is read as its own.
-                foreach (self::arms($arg) ?? [$arg] as $label) {
-                    $literal = self::phpLiteral($label);
-                    if (! $literal && ! self::interpolates($label)) {
-                        continue; // a translation call or a constant: nothing to read
+                $seen = [];
+                if (! self::inRow($tree, $at, $seen)) {
+                    continue; // a page or header button, a link or a form's submit: not a row action
+                }
+                // A label in a local variable is read from what is assigned to it; one with no assignment in reach (a parameter) stays a value.
+                $held = preg_match('~^\$(\w+)$~', $arg, $variable) === 1 ? self::assigned($tree, $variable[1], $at) : [];
+                foreach ($held === [] ? [$arg] : $held as $value) {
+                    // A ternary whose arms are all literals picks a label: each arm is read as its own.
+                    foreach (self::arms($value) ?? [$value] as $label) {
+                        $literal = self::phpLiteral($label);
+                        if (! $literal && ! self::interpolates($label)) {
+                            continue; // a translation call or a constant: nothing to read
+                        }
+                        $found[] = $this->labelFinding($path, $source, $offset, $label, $literal ? stripcslashes(substr($label, 1, -1)) : self::withTerms($label));
                     }
-                    $found[] = $this->labelFinding($path, $source, $offset, $label, ! $literal);
                 }
             }
         }
         foreach ($this->files() as $path => $source) {
+            if (preg_match('~<(?:RowActions|DataTable|ScrollList(?:Row)?|Workbench(?:Navigator)?)\b~', $source) !== 1) {
+                continue; // renders no rows: its action objects are page or header actions
+            }
             preg_match_all('~<script\b[^>]*>(.*?)</script\s*>~si', $source, $blocks, PREG_OFFSET_CAPTURE);
             foreach ($blocks[1] as [$script, $offset]) {
                 // `${…}` masked so its braces don't count when finding the object literal a label sits in.
@@ -243,14 +263,15 @@ final class Layout
                     $arg = trim($match['arg'][0]);
                     if (($arms = self::arms(self::enclosingValue($script, $at))) !== null && count($arms) > 1) {
                         foreach ($arms as $arm) {
-                            $found[] = $this->labelFinding($path, $source, $offset + $at, $arm, false);
+                            $found[] = $this->labelFinding($path, $source, $offset + $at, $arm, stripcslashes(substr($arm, 1, -1)));
                         }
 
                         continue;
                     }
                     $quoted = in_array($arg[0] ?? '', ['"', "'", '`'], true);
-                    $interpolated = ! $quoted || ($match['tail'][0] ?? '') !== '' || ($arg[0] === '`' && str_contains($arg, '${'));
-                    $found[] = $this->labelFinding($path, $source, $offset + $at, $arg, $interpolated);
+                    $concatenated = ($match['tail'][0] ?? '') !== '';
+                    $interpolated = ! $quoted || $concatenated || ($arg[0] === '`' && str_contains($arg, '${'));
+                    $found[] = $this->labelFinding($path, $source, $offset + $at, $arg, ! $interpolated ? stripcslashes(substr($arg, 1, -1)) : ($concatenated ? null : self::withTerms($arg)));
                 }
             }
         }
@@ -378,6 +399,268 @@ final class Layout
         return false;
     }
 
+    /**
+     * PHP source read for its structure: `masked` is the source with string contents and comments blanked to spaces (same offsets), `pairs` maps each
+     * bracket's open offset to its close and `closes` the other way.
+     *
+     * @return array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}
+     */
+    private static function phpTree(string $source): array
+    {
+        $masked = $source;
+        $pairs = [];
+        $stack = [];
+        for ($i = 0, $length = strlen($source); $i < $length; $i++) {
+            $char = $source[$i];
+            $next = $source[$i + 1] ?? '';
+            if ($char === '"' || $char === "'") {
+                for ($i++; $i < $length && $source[$i] !== $char; $i++) {
+                    if ($source[$i] === '\\') {
+                        $masked[$i++] = ' ';
+                    }
+                    if ($i < $length) {
+                        $masked[$i] = ' ';
+                    }
+                }
+            } elseif (($char === '/' && $next === '/') || ($char === '#' && $next !== '[')) {
+                for (; $i < $length && $source[$i] !== "\n"; $i++) {
+                    $masked[$i] = ' ';
+                }
+            } elseif ($char === '/' && $next === '*') {
+                for ($end = ($close = strpos($source, '*/', $i + 2)) === false ? $length : $close + 2; $i < $end; $i++) {
+                    $masked[$i] = ' ';
+                }
+                $i--;
+            } elseif (in_array($char, ['(', '[', '{'], true)) {
+                $stack[] = $i;
+            } elseif (in_array($char, [')', ']', '}'], true) && $stack !== []) {
+                $pairs[array_pop($stack)] = $i;
+            }
+        }
+
+        return ['source' => $source, 'masked' => $masked, 'pairs' => $pairs, 'closes' => array_flip($pairs)];
+    }
+
+    /**
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     * @return list<int> the open offsets of the brackets around $at, innermost first, then -1 for the file
+     */
+    private static function openers(array $tree, int $at): array
+    {
+        $around = array_keys(array_filter($tree['pairs'], fn (int $close, int $open): bool => $open < $at && $at < $close, ARRAY_FILTER_USE_BOTH));
+        rsort($around);
+
+        return [...$around, -1];
+    }
+
+    /**
+     * Where the element holding $at starts in the bracket at $open: an argument or array item in `(` and `[`, a statement in `{` and the file (-1).
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     */
+    private static function elementStart(array $tree, int $open, int $at): int
+    {
+        $statement = $open < 0 || $tree['masked'][$open] === '{';
+        for ($i = $at - 1; $i > $open; $i--) {
+            $char = $tree['masked'][$i];
+            if (isset($tree['closes'][$i])) {
+                if ($statement && $char === '}') {
+                    return $i + 1;
+                }
+                $i = $tree['closes'][$i];
+            } elseif ($char === ($statement ? ';' : ',')) {
+                return $i + 1;
+            }
+        }
+
+        return $open + 1;
+    }
+
+    /**
+     * Whether the Action at $at ends up in a row, read outward through the brackets around it: under the `actions` key of an array with an `id` (a
+     * DataTable row), under a `rowActions` key, or among the arguments of an item or row object (`new WorkbenchItem(…)`). Assigned to a variable, it follows
+     * the variable's uses in its function; returned, the calls of the method or where the closure goes.
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     * @param  array<int, true>  $seen  offsets already followed
+     */
+    private static function inRow(array $tree, int $at, array &$seen): bool
+    {
+        if (isset($seen[$at])) {
+            return false;
+        }
+        $seen[$at] = true;
+        $inner = $at;
+        foreach (self::openers($tree, $at) as $open) {
+            $bracket = $open < 0 ? '{' : $tree['masked'][$open];
+            $start = self::elementStart($tree, $open, $inner);
+            $element = (string) preg_replace('~^\s*(?:<\?php\b\s*)?~', '', substr($tree['source'], $start, $inner - $start));
+            $inner = $open;
+            if ($bracket === '(' && preg_match('~\bnew\s+\\\\?(?:[\w\\\\]+\\\\)?\w*(?:Item|Row)(?:Data)?\s*$~', substr($tree['masked'], max(0, $open - 200), min($open, 200))) === 1) {
+                return true; // an item or row object: a WorkbenchItem's actions are its row menu
+            }
+            if ($bracket !== '{') {
+                if (preg_match('~^([\'"]?)(actions|rowActions)\1\s*(?:=>|:(?!:))~', $element, $key) === 1) {
+                    return $key[2] === 'rowActions' || ($bracket === '[' && self::rowArray($tree, $open));
+                }
+
+                continue; // an argument, an item or another key: read the bracket around it
+            }
+            if (preg_match('~^return\b~', $element) === 1) {
+                [$name, $keyword] = self::owner($tree, $at) ?? ['', -1];
+                if ($name === '') {
+                    return $keyword >= 0 && self::inRow($tree, $keyword, $seen); // a closure: where it goes
+                }
+                preg_match_all('~(?:->|::)\s*'.preg_quote($name, '~').'\s*\(~', $tree['masked'], $calls, PREG_OFFSET_CAPTURE);
+                foreach ($calls[0] as [, $call]) {
+                    if (self::inRow($tree, $call, $seen)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+            if (preg_match('~^\$(\w+)\s*(?:\[[^\]]*\]\s*)*(?:\?\?)?=(?![=>])~', $element, $variable) === 1) {
+                $body = self::owner($tree, $at)[2] ?? -1;
+                [$from, $to] = $body < 0 ? [0, strlen($tree['masked'])] : [$body, $tree['pairs'][$body]];
+                // Its uses, not the assignments to it.
+                preg_match_all('~\$'.preg_quote($variable[1], '~').'\b(?!\s*(?:\[[^\]]*\]\s*)*(?:\?\?)?=(?![=>]))~', substr($tree['masked'], $from, $to - $from), $uses, PREG_OFFSET_CAPTURE);
+                foreach ($uses[0] as [, $use]) {
+                    if (self::inRow($tree, $from + $use, $seen)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the array at $open is a DataTable row: it has its own `id` key.
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     */
+    private static function rowArray(array $tree, int $open): bool
+    {
+        preg_match_all('~([\'"])id\1\s*=>~', substr($tree['source'], $open, $tree['pairs'][$open] - $open), $ids, PREG_OFFSET_CAPTURE);
+        foreach ($ids[0] as [, $id]) {
+            if ($tree['masked'][$open + $id] !== ' ' && self::openers($tree, $open + $id)[0] === $open) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The function whose body holds $at: its name ('' for a closure), its `function` keyword's offset and its body's opening brace; null outside any.
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     * @return array{0: string, 1: int, 2: int}|null
+     */
+    private static function owner(array $tree, int $at): ?array
+    {
+        foreach (self::openers($tree, $at) as $brace) {
+            if ($brace >= 0 && $tree['masked'][$brace] === '{' && preg_match('~\bfunction\s*&?\s*(\w*)\s*\([^;{}]*$~', substr($tree['masked'], 0, $brace), $head, PREG_OFFSET_CAPTURE) === 1) {
+                return [$head[1][0], $head[0][1], $brace];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The values assigned to `$name` before $at in the function that holds it (the file outside one).
+     *
+     * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
+     * @return list<string>
+     */
+    private static function assigned(array $tree, string $name, int $at): array
+    {
+        $from = self::owner($tree, $at)[2] ?? 0;
+        preg_match_all('~\$'.preg_quote($name, '~').'\s*=(?![=>])~', substr($tree['masked'], $from, $at - $from), $assignments, PREG_OFFSET_CAPTURE);
+        $values = [];
+        foreach ($assignments[0] as [$assignment, $offset]) {
+            $start = $from + $offset + strlen($assignment);
+            for ($end = $start, $length = strlen($tree['masked']); $end < $length && $tree['masked'][$end] !== ';'; $end++) {
+                $end = $tree['pairs'][$end] ?? $end;
+            }
+            $values[] = trim(substr($tree['source'], $start, $end - $start));
+        }
+
+        return $values;
+    }
+
+    /**
+     * An interpolated label whose only values are tenant terms (`"New {$term}"`, `'All '.$terms`, `` `New ${term}` ``) as text, each term one `{term}`
+     * word; null when it interpolates anything else.
+     */
+    private static function withTerms(string $label): ?string
+    {
+        $text = '';
+        foreach (self::concatenation($label) as $part) {
+            if (self::isTerm($part)) {
+                $text .= '{term}';
+            } elseif (self::phpLiteral($part)) {
+                $text .= stripcslashes(substr($part, 1, -1));
+            } elseif (preg_match('~^(["`])(.*)\1$~s', $part, $quoted) === 1) {
+                $other = false;
+                $inner = preg_replace_callback('~\$\{([^}]*)\}|\{(\$[^}]*)\}|(\$[A-Za-z_]\w*(?:->\w+)*)~', function (array $value) use (&$other): string {
+                    $other = $other || ! self::isTerm(trim((string) end($value)));
+
+                    return '{term}';
+                }, $quoted[2]);
+                if ($other) {
+                    return null;
+                }
+                $text .= stripcslashes((string) $inner);
+            } else {
+                return null;
+            }
+        }
+
+        return $text;
+    }
+
+    /** Whether an expression is a tenant term: a variable or property path with a `term` or `terms` segment (`$term`, `$this->terms->plural`, `clientTerm`). */
+    private static function isTerm(string $expression): bool
+    {
+        if (preg_match('~^\$?[A-Za-z_]\w*(?:(?:\??->|\.)[A-Za-z_]\w*)*$~', $expression) !== 1) {
+            return false;
+        }
+        $segments = preg_split('~\??->|\.|_|(?<=[a-z0-9])(?=[A-Z])~', ltrim($expression, '$')) ?: [];
+
+        return array_intersect(array_map(strtolower(...), $segments), ['term', 'terms']) !== [];
+    }
+
+    /** @return list<string> the operands of a PHP `.` concatenation (`'All '.$terms`), or the label alone */
+    private static function concatenation(string $label): array
+    {
+        $parts = [];
+        $start = 0;
+        $depth = 0;
+        for ($i = 0, $length = strlen($label); $i < $length; $i++) {
+            $char = $label[$i];
+            if ($char === '"' || $char === "'" || $char === '`') {
+                for ($i++; $i < $length && $label[$i] !== $char; $i++) {
+                    $i += $label[$i] === '\\' ? 1 : 0;
+                }
+            } elseif (in_array($char, ['(', '[', '{'], true)) {
+                $depth++;
+            } elseif (in_array($char, [')', ']', '}'], true)) {
+                $depth--;
+            } elseif ($char === '.' && $depth === 0 && (preg_match('~^\s*[\'"$]~', substr($label, $i + 1)) === 1 || preg_match('~[\'"]\s*$~', substr($label, 0, $i)) === 1)) {
+                $parts[] = trim(substr($label, $start, $i - $start));
+                $start = $i + 1;
+            }
+        }
+
+        return [...$parts, trim(substr($label, $start))];
+    }
+
     /** A variable in PHP source outside single quotes: `$name`, `{$…}` or `${…}`; a literal `$5` is not one. */
     private static function interpolates(string $arg): bool
     {
@@ -445,14 +728,17 @@ final class Layout
         return '';
     }
 
-    /** @return array{target: string, check: string, line: int}|null */
-    private function labelFinding(string $path, string $source, int $offset, string $arg, bool $interpolated): ?array
+    /**
+     * A finding for the label $arg, read as $text, or null when $text is a short verb. A null $text interpolates a value.
+     *
+     * @return array{target: string, check: string, line: int}|null
+     */
+    private function labelFinding(string $path, string $source, int $offset, string $arg, ?string $text): ?array
     {
         $line = substr_count(substr($source, 0, $offset), "\n") + 1;
-        if ($interpolated) {
+        if ($text === null) {
             return ['target' => $path, 'check' => "row action label {$arg} interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm", 'line' => $line];
         }
-        $text = stripcslashes(substr($arg, 1, -1));
         $words = preg_split('~\s+~', trim($text), -1, PREG_SPLIT_NO_EMPTY) ?: [];
         if (mb_strlen(trim($text)) > self::LABEL_MAX_CHARACTERS || count($words) > self::LABEL_MAX_WORDS) {
             return ['target' => $path, 'check' => "row action label {$arg} is over ".self::LABEL_MAX_CHARACTERS.' characters or '.self::LABEL_MAX_WORDS.' words: RowActions clamps it; keep the label a verb and put the record in the confirm', 'line' => $line];

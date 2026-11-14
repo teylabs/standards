@@ -314,26 +314,43 @@ test('an installed kit from before the Stack rename is neither missing Stack nor
     }
 });
 
-test('ui.row-action-label flags PHP action labels that interpolate a value or run long', function () {
+/** @param array<string, string> $files path under the app => source; PHP is read from app/, Vue from resources/js */
+function rowLabelFindings(array $files): array
+{
     $base = sys_get_temp_dir().'/standards-row-label-'.bin2hex(random_bytes(6));
-    mkdir($base.'/app/Http', 0777, true);
-    file_put_contents($base.'/app/Http/GrantsController.php', <<<'PHP'
+    foreach ($files as $path => $source) {
+        is_dir(dirname($base.'/'.$path)) || mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $source);
+    }
+
+    try {
+        return array_map(fn (array $v): string => $v['target'].':'.$v['line'].' '.$v['check'],
+            (new Conformance(layoutConfiguration($base, ['sourceRoots' => ['app']])))->violations(Layout::ROW_ACTION_LABEL));
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+}
+
+test('ui.row-action-label flags PHP row action labels that interpolate a value or run long', function () {
+    expect(rowLabelFindings(['app/Http/GrantsController.php' => <<<'PHP'
         <?php
-        $a = Action::make("Revoke {$grant->name}", '/g/1');
-        $b = new Action('Remove '.$grant->label, '/g/1', 'delete');
-        $c = new Action($member->name, '/m/1');
-        $d = new Action('Resend the invitation email now', '/i/1');
-        $e = new Action('Remove', '/g/1', 'delete', ariaLabel: 'Remove '.$grant->label);
-        $f = Action::disabled('Revoke', '/g/1', 'delete', 'Owners cannot be revoked');
-        $g = new \Tey\Kit\Features\Core\Data\Action(label: 'Archive', url: '/o/1');
-        $h = new Action(url: '/o/1', label: $member->name);
-        $i = new Action("Charge $5", '/o/1/charge');
-        $j = new Action(__('Remove'), '/g/1');
-        $k = new Action($rule->enabled ? 'Switch off' : 'Switch on', '/r/1', 'post');
-        $l = [new Action($e->isFull() ? 'Join the waitlist' : ($e->isFree() ? 'RSVP' : 'Get a ticket'), '/e/1/rsvp', 'post')];
-        $m = new Action($on ? 'Off' : 'Resend the invitation email now', '/r/1');
-        $n = new Action($on ? 'Off' : 'Remove '.$grant->label, '/r/1');
-        $o = ['submit' => new Action('Book this room for the whole day', '/b', 'post')];
+        $rows = [['id' => 1, 'actions' => [
+            Action::make("Revoke {$grant->name}", '/g/1'),
+            new Action('Remove '.$grant->label, '/g/1', 'delete'),
+            new Action($member->name, '/m/1'),
+            new Action('Resend the invitation email now', '/i/1'),
+            new Action('Remove', '/g/1', 'delete', ariaLabel: 'Remove '.$grant->label),
+            Action::disabled('Revoke', '/g/1', 'delete', 'Owners cannot be revoked'),
+            new \Tey\Kit\Features\Core\Data\Action(label: 'Archive', url: '/o/1'),
+            new Action(url: '/o/1', label: $member->name),
+            new Action("Charge $5", '/o/1/charge'),
+            new Action(__('Remove'), '/g/1'),
+            new Action($rule->enabled ? 'Switch off' : 'Switch on', '/r/1', 'post'),
+            new Action($e->isFull() ? 'Join the waitlist' : ($e->isFree() ? 'RSVP' : 'Get a ticket'), '/e/1/rsvp', 'post'),
+            new Action($on ? 'Off' : 'Resend the invitation email now', '/r/1'),
+            new Action($on ? 'Off' : 'Remove '.$grant->label, '/r/1'),
+            'submit' => new Action('Book this room for the whole day', '/b', 'post'),
+        ]]];
 
         final class SignViewModel
         {
@@ -343,27 +360,128 @@ test('ui.row-action-label flags PHP action labels that interpolate a value or ru
             }
         }
 
-        $p = new Action('Resend the invitation email again', '/i/1');
-        PHP);
-
-    try {
-        $findings = array_map(fn (array $v): string => $v['target'].':'.$v['line'].' '.$v['check'],
-            (new Conformance(layoutConfiguration($base, ['sourceRoots' => ['app']])))->violations(Layout::ROW_ACTION_LABEL));
-    } finally {
-        (new Filesystem)->deleteDirectory($base);
-    }
-
-    expect($findings)->toBe([
-        'app/Http/GrantsController.php:2 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
-        'app/Http/GrantsController.php:3 row action label \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
-        'app/Http/GrantsController.php:4 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
-        "app/Http/GrantsController.php:5 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
-        'app/Http/GrantsController.php:9 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        $more = ['id' => 2, 'actions' => [new Action('Resend the invitation email again', '/i/1')]];
+        PHP]))->toBe([
+        'app/Http/GrantsController.php:3 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'app/Http/GrantsController.php:4 row action label \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'app/Http/GrantsController.php:5 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "app/Http/GrantsController.php:6 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/GrantsController.php:10 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
         // A ternary of literals is read arm by arm: a long arm is flagged, a short one is not; an arm with a value still interpolates.
-        "app/Http/GrantsController.php:14 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
-        'app/Http/GrantsController.php:15 row action label $on ? \'Off\' : \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "app/Http/GrantsController.php:15 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/GrantsController.php:16 row action label $on ? \'Off\' : \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
         // After a submit() method has closed, an Action is a row action again.
-        "app/Http/GrantsController.php:26 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/GrantsController.php:28 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label leaves form submits, header buttons, links and short verbs in a variable alone', function () {
+    expect(rowLabelFindings(['app/Http/OrdersController.php' => <<<'PHP'
+        <?php
+
+        final class OrdersController
+        {
+            public function create(): array
+            {
+                // A form submit built outside the form.
+                $save = new Action('Save the assignment changes', '/assignments', 'post');
+                $defaults = new Action("Save {$term} reminder defaults", '/defaults', 'put');
+
+                return ['form' => new FormData(fields: [], submit: $save), 'defaults' => new FormData(fields: [], submit: $defaults)];
+            }
+
+            public function show(Order $order): array
+            {
+                // Page and header buttons, and a header menu item.
+                $label = $order->paid ? 'Mark as unpaid again' : 'Mark as paid in full';
+
+                return [
+                    'actions' => [
+                        'create' => new Action("New {$term} for {$order->customer}", '/orders/create', 'get'),
+                        'paid' => new Action($label, '/orders/1/paid', 'post'),
+                        'export' => new Action('Export every order to CSV', '/orders/export', 'get', menu: true),
+                    ],
+                    // Navigation links.
+                    'back' => new Action('Back to all of the orders', '/orders', 'get'),
+                    'seeAll' => new Action('See all '.$terms.' for '.$order->customer, '/orders', 'get'),
+                ];
+            }
+
+            public function index(): array
+            {
+                // Short verbs and tenant terms in row actions: a variable holds a literal, a term is one word.
+                $rows = $this->orders->map(function (Order $order): array {
+                    $verb = 'Post';
+                    $label = $order->paid ? 'Mark unpaid' : 'Mark paid';
+                    if ($order->draft) {
+                        $label = 'Publish';
+                    }
+
+                    return ['id' => $order->id, 'actions' => [
+                        new Action($verb, '/orders/1/post', 'post'),
+                        new Action($label, '/orders/1/paid', 'post'),
+                        new Action("Copy {$term}", '/orders/1/copy', 'post'),
+                        new Action('Move '.$terms->plural, '/orders/1/move', 'post'),
+                        new Action('Assign {term}', '/orders/1/assign', 'post'),
+                    ]];
+                });
+
+                return ['table' => new TableData($rows->all())];
+            }
+        }
+        PHP,
+        'resources/js/pages/Orders/Show.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const back = { label: `Back to every ${props.order.customer} order`, url: '/orders', method: 'get' };
+        </script>
+        <template><Page title="Order" /></template>
+        VUE,
+        'resources/js/pages/Orders/Index.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const actions = (row) => [{ key: 'copy', label: `Copy ${terms.singular}`, url: `/o/${row.id}/copy`, method: 'post' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE]))->toBe([]);
+});
+
+test('ui.row-action-label follows a row action through its variable, method and item, and reads a label from its variable', function () {
+    expect(rowLabelFindings(['app/Http/GrantsController.php' => <<<'PHP'
+        <?php
+
+        final class GrantsController
+        {
+            public function index(): array
+            {
+                return ['table' => $this->grants->map(function (Grant $grant): array {
+                    $actions = [];
+                    $actions[] = new Action('Remove '.$grant->label, '/g/1', 'delete');
+                    $label = 'Resend the invitation email';
+                    $named = "Revoke {$grant->name}";
+                    $actions = [...$actions, new Action($label, '/g/1/resend'), new Action($named, '/g/1', 'delete')];
+
+                    return ['id' => $grant->id, 'actions' => [...$actions, ...$this->rowActions($grant)]];
+                })];
+            }
+
+            public function slides(): array
+            {
+                return array_map(fn (Slide $slide): WorkbenchItem => new WorkbenchItem((string) $slide->id, $slide->title, actions: [
+                    new Action("Duplicate {$slide->title}", '/s/1/duplicate', 'post'),
+                ]), $this->slides);
+            }
+
+            private function rowActions(Grant $grant): array
+            {
+                return [new Action("Archive this {$term} for now", '/g/1/archive', 'post')];
+            }
+        }
+        PHP]))->toBe([
+        'app/Http/GrantsController.php:9 row action label \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "app/Http/GrantsController.php:12 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/GrantsController.php:12 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'app/Http/GrantsController.php:21 row action label "Duplicate {$slide->title}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // A tenant term is one word, so a label over three words with one is still long.
+        'app/Http/GrantsController.php:27 row action label "Archive this {$term} for now" is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm',
     ]);
 });
 
