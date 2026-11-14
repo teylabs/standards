@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Kit-owned detection finds every page tey/kit scaffolds, after any re-pin.** Kit 0.18+ writes no `.mod-maintenance` records, and only `resources/css/kit.css` was compared with its stub, so a kit page under `resources/js/pages/` was kit-owned only while it still equalled a record left from kit 0.17. When kit 0.22.1 changed the `Auth/ForgotPassword` page, the re-scaffolded copy no longer matched that record, and `ui back-strip` flagged its "Back to sign in" link. A file is now kit-owned while its bytes equal its stub in the installed package, found where kit's own `feature.json` maps it (`vendor/tey/kit/resources/features/<feature>/feature.json` `files`: `resources/js/pages/Auth/ForgotPassword/Page.vue` => `pages/Auth/ForgotPassword/Page.vue.stub`). CRLF versus LF is ignored, as before; an edited copy is the app's code and is checked. This applies to every rule that skips kit-owned files.
+- **`ui back-strip` leaves back links in guest and auth cards alone.** A guest or auth card has no breakout strip, so a link such as "Back to sign in" there is not flagged: a page under `pages/Auth/` or `pages/Guest/` (where the host's layout callback puts kit's GuestShell), and a file whose template renders, or whose `layout:` option names, a guest or auth layout or card (`GuestShell`, `GuestLayout`, `AuthLayout`, `AuthCard`, `AuthenticationCard`, `AuthBase`, or their kebab-case tags). The signed-in `AuthenticatedLayout` does not count. An allowlist entry for such a link goes stale; remove it.
+
 ## v0.11.102 - 2026-11-14
 
 ### Fixed
