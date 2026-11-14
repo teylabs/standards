@@ -85,6 +85,73 @@ test('ui.action-group passes grouped controls and a Toolbar and lone or separate
         VUE]))->toBe([]);
 });
 
+test('ui.action-group passes the kit ActionGroup in a column, stacked full-width as on an auth card, and in a row', function () {
+    expect(layoutFindings(Layout::ACTION_GROUP, [
+        'pages/Auth/TwoFactor.vue' => <<<'VUE'
+            <template>
+                <Form action="/two-factor-challenge" method="post" class="grid gap-4">
+                    <Field id="code" name="code" label="Authentication code"><Input id="code" name="code" /></Field>
+                    <ActionGroup direction="column">
+                        <Button type="submit">Verify</Button>
+                        <Button variant="secondary" type="button" @click="recovery = !recovery">Use a recovery code</Button>
+                    </ActionGroup>
+                </Form>
+                <action-group direction="column" class="gap-4">
+                    <Button>Send the link again</Button>
+                    <Link href="/logout" method="post" as="button" class="w-full">Sign out</Link>
+                </action-group>
+            </template>
+            <script setup lang="ts">
+            import { ActionGroup, Button, Field, Input } from '@kit/ui';
+            </script>
+            VUE,
+        'pages/Settings/Profile.vue' => <<<'VUE'
+            <template>
+                <Form class="grid gap-4"><Group><Button type="submit">Save</Button><Button variant="outline">Cancel</Button></Group></Form>
+                <ActionGroup direction="row"><Button>Export</Button><Button>Import</Button></ActionGroup>
+            </template>
+            <script setup lang="ts">
+            import { Button } from '@/components/Kit';
+            import { ActionGroup as Group } from '@/components/Kit';
+            import ActionGroup from '@/components/Kit/Action/ActionGroup.vue';
+            </script>
+            VUE,
+    ]))->toBe([]);
+});
+
+test('ui.action-group points hand-rolled stacked full-width actions at an ActionGroup column, and counts only the kit ActionGroup', function () {
+    expect(layoutFindings(Layout::ACTION_GROUP, [
+        'pages/Auth/Login.vue' => <<<'VUE'
+            <template>
+                <Form action="/login" method="post" class="grid gap-4">
+                    <Field id="email" name="email" label="Email"><Input id="email" name="email" /></Field>
+                    <Button type="submit" class="w-full">Sign in</Button>
+                    <Button variant="secondary" type="button" class="w-full">Sign in with a passkey</Button>
+                </Form>
+                <div class="flex flex-col gap-3">
+                    <Button class="w-full">Accept</Button>
+                    <Button variant="outline">Cancel</Button>
+                </div>
+            </template>
+            <script setup lang="ts">
+            import { Button, Field, Input } from '@kit/ui';
+            </script>
+            VUE,
+        'pages/Auth/Invitation.vue' => <<<'VUE'
+            <template>
+                <ActionGroup direction="column"><Button>Accept</Button><Button>Switch account</Button></ActionGroup>
+            </template>
+            <script setup lang="ts">
+            import ActionGroup from './ActionGroup.vue';
+            </script>
+            VUE,
+    ]))->toBe([
+        'resources/js/pages/Auth/Invitation.vue:2 adjacent action controls in <ActionGroup> are not grouped: put them in a ButtonGroup, or render descriptors through ActionBar',
+        'resources/js/pages/Auth/Login.vue:4 stacked full-width action controls in <Form> are not grouped: put them in <ActionGroup direction="column">, primary first, and drop their w-full',
+        'resources/js/pages/Auth/Login.vue:8 adjacent action controls in <div> are not grouped: put them in a ButtonGroup, or render descriptors through ActionBar',
+    ]);
+});
+
 test('ui.row-actions flags controls in a DataTable cell slot and a hand-rolled table with actions in its cells', function () {
     expect(layoutFindings(Layout::ROW_ACTIONS, ['pages/Posts.vue' => <<<'VUE'
         <DataTable :data="rows">
