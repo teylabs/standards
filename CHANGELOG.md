@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`ui plus` no longer flags inline text links.** A text link in a sentence, such as "New here? Create an account" on an auth page, was reported as `add action needs plus icon: Create an account`. The plus icon is now required only on Button-styled add actions: a `Button` or `button`, a `Button` with `as-child` around a link, and a `Link`, `a` or `ModalLink` styled as a button with a `variant` attribute (bound or not) or a `buttonVariants(...)` class. A plain `Link`, `a` or `ModalLink` is not checked. Other configured action tags, such as `DropdownMenuItem`, are checked as before. An allowlist entry for a plain text link goes stale; remove it.
+
 ## v0.11.101 - 2026-11-14
 
 ### Added

@@ -14,5 +14,6 @@ const example = "import('unlisted-string')";
     <Button><Plus />Add post</Button>
     <a target='_blank' rel='noreferrer noopener' href='/posts'><ArrowUpRight />Posts</a>
     <a href='/posts'>Posts</a>
+    <p>New here? <Link href='/register'>Create an account</Link></p>
     <div>{{ post.title }}</div>
 </template>
