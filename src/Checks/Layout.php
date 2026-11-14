@@ -222,8 +222,9 @@ final class Layout
      *
      * Only row actions are read. A PHP Action is one when it ends up in a row: under the `actions` key of an array with an `id` (a DataTable row), under a
      * `rowActions` key, or among the arguments of an item or row object (`new WorkbenchItem(…)`, whose actions are its row menu), directly or through the
-     * local variable, method or closure that holds it. A form submit, a page or header button and a link are not. A Vue action object is read in a file that
-     * renders rows (RowActions, DataTable, ScrollList, Workbench). A label held in a local variable is read from its assignments.
+     * local variable, method or closure that holds it. A form submit, a page or header button and a link are not. A Vue action object is read in a file whose
+     * template renders rows (RowActions, DataTable, ScrollList, Workbench). A label held in a local variable is read from its assignments, through a
+     * closure's `use` and an arrow fn into the scope around them.
      *
      * @return list<array{target: string, check: string, line: int}>
      */
@@ -613,17 +614,38 @@ final class Layout
     }
 
     /**
-     * The values assigned to `$name` before $at in the function that holds it (the file outside one).
+     * The values assigned to `$name` before $at in the function that holds it (the file outside one), not in a closure inside it. A closure that
+     * captures `$name` with `use` adds the values assigned before it in the scope around it; an arrow fn sees that scope unless a parameter of its
+     * own shadows `$name`, which leaves it a value with no assignment.
      *
      * @param  array{source: string, masked: string, pairs: array<int, int>, closes: array<int, int>}  $tree
      * @return list<string>
      */
     private static function assigned(array $tree, string $name, int $at): array
     {
-        $from = self::owner($tree, $at)[2] ?? 0;
-        preg_match_all('~\$'.preg_quote($name, '~').'\s*=(?![=>])~', substr($tree['masked'], $from, $at - $from), $assignments, PREG_OFFSET_CAPTURE);
+        [, $keyword, $from] = self::owner($tree, $at) ?? ['', -1, 0];
+        $variable = '\$'.preg_quote($name, '~').'\b';
+        preg_match_all('~(?<![\w$])(?<!->)(?<!::)fn\s*&?\s*\(~', substr($tree['masked'], $from, $at - $from), $arrows, PREG_OFFSET_CAPTURE);
+        foreach ($arrows[0] as [$arrow, $offset]) {
+            $paren = $from + $offset + strlen($arrow) - 1;
+            $around = self::openers($tree, $at);
+            $depth = array_search(self::openers($tree, $from + $offset)[0], $around, true);
+            // The arrow fn holds $at when $at sits in the element its `fn` starts, and its parameters name $name.
+            if ($depth !== false && self::elementStart($tree, $around[$depth], $depth === 0 ? $at : $around[$depth - 1]) <= $from + $offset
+                && preg_match('~'.$variable.'~', substr($tree['masked'], $paren, ($tree['pairs'][$paren] ?? $paren) - $paren)) === 1) {
+                return [];
+            }
+        }
+        preg_match_all('~'.$variable.'\s*=(?![=>])~', substr($tree['masked'], $from, $at - $from), $assignments, PREG_OFFSET_CAPTURE);
         $values = [];
+        $head = $keyword < 0 ? '' : substr($tree['masked'], $keyword, $from - $keyword);
+        if (preg_match('~^function\s*&?\s*\(~', $head) === 1 && preg_match('~\)\s*use\s*\([^)]*&?'.$variable.'~', $head) === 1) {
+            $values = self::assigned($tree, $name, $keyword); // captured from the scope around the closure
+        }
         foreach ($assignments[0] as [$assignment, $offset]) {
+            if ((self::owner($tree, $from + $offset)[2] ?? 0) !== $from) {
+                continue; // in a closure of its own
+            }
             $start = $from + $offset + strlen($assignment);
             for ($end = $start, $length = strlen($tree['masked']); $end < $length && $tree['masked'][$end] !== ';'; $end++) {
                 $end = $tree['pairs'][$end] ?? $end;

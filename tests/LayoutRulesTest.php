@@ -609,6 +609,56 @@ test('ui.row-action-label reads no Action in a backtick shell string', function 
     ]);
 });
 
+test('ui.row-action-label reads a label a closure captures with use or an arrow fn sees from the scope around it', function () {
+    expect(rowLabelFindings(['app/Http/PostsController.php' => <<<'PHP'
+        <?php
+
+        final class PostsController
+        {
+            public function index(): array
+            {
+                $label = 'Publish';
+                $long = 'Resend the invitation email';
+                $draft = function (): void {
+                    $label = 'Send this post to every subscriber';
+                };
+
+                return $this->posts->map(function (Post $post) use ($label, &$long): array {
+                    return ['id' => $post->id, 'actions' => [new Action($label, '/p/1'), new Action($long, '/p/1/resend')]];
+                })->all();
+            }
+
+            public function uncaptured(): array
+            {
+                $label = 'Publish';
+
+                return $this->posts->map(function (Post $post): array {
+                    return ['id' => $post->id, 'actions' => [new Action($label, '/p/1')]];
+                })->all();
+            }
+
+            public function arrows(): array
+            {
+                $label = 'Publish';
+                $long = 'Resend the invitation email';
+
+                return [
+                    ...$this->posts->map(fn (Post $post): array => ['id' => $post->id, 'actions' => [new Action($label, '/p/1'), new Action($long, '/p/1/resend')]]),
+                    ...$this->posts->map(fn (string $label): array => ['id' => 1, 'actions' => [new Action($label, '/p/1')]]),
+                ];
+            }
+        }
+        PHP]))->toBe([
+        // Captured with use: 'Publish' is a verb, the long label is long; the assignment in the other closure is its own.
+        "app/Http/PostsController.php:14 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        // Not captured: nothing in reach is assigned to it.
+        'app/Http/PostsController.php:23 row action label $label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "app/Http/PostsController.php:33 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        // An arrow fn parameter shadows the assignment around it.
+        'app/Http/PostsController.php:34 row action label $label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});
+
 test('ui.row-action-label flags Vue row action labels that interpolate a value or run long and leaves form labels alone', function () {
     expect(layoutFindings(Layout::ROW_ACTION_LABEL, ['pages/People.vue' => <<<'VUE'
         <script setup lang="ts">
