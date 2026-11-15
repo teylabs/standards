@@ -175,6 +175,23 @@ test('frontend static UI checks cover self-closing actions, rel tokens, raw inpu
     'wizard back button without href' => ['ui back-strip', '<template><button type="button" @click="step--">Back</button></template>', false],
     'link whose label only starts with back' => ['ui back-strip', '<template><Link href="/backups">Backups</Link><Link href="/x">Background checks</Link></template>', false],
     'link that mentions back later' => ['ui back-strip', '<template><Link href="/orders">Go back to orders</Link></template>', false],
+    'back link in a GuestShell card' => ['ui back-strip', '<template><GuestShell title="Reset your password"><Link href="/login">Back to sign in</Link></GuestShell></template>', false],
+    'back link in an auth layout card' => ['ui back-strip', '<template><AuthLayout><Link href="/login">Back to sign in</Link></AuthLayout></template>', false],
+    'back link in a kebab-case authentication card' => ['ui back-strip', '<template><authentication-card><Link href="/login">Back to sign in</Link></authentication-card></template>', false],
+    'back link on a page whose layout is a guest layout' => ['ui back-strip', "<script setup>import GuestLayout from '@/layouts/GuestLayout.vue'; defineOptions({ layout: GuestLayout });</script><template><Link href=\"/login\">Back to sign in</Link></template>", false],
+    'back link in the signed-in AuthenticatedLayout' => ['ui back-strip', '<template><AuthenticatedLayout><Link href="/orders">Back to orders</Link></AuthenticatedLayout></template>', true],
+    'back link on a page whose layout is AuthenticatedLayout' => ['ui back-strip', "<script setup>defineOptions({ layout: AuthenticatedLayout });</script><template><Link href=\"/orders\">Back to orders</Link></template>", true],
+    'back link beside a guest-named component that is no layout' => ['ui back-strip', '<template><GuestList /><Link href="/orders">Back to orders</Link></template>', true],
+    'back link beside a commented-out guest layout' => ['ui back-strip', '<template><!-- <GuestLayout> --><Link href="/orders">Back to orders</Link></template>', true],
+    'back link in a starter kit auth layout' => ['ui back-strip', '<template><AuthSimpleLayout title="Forgot password"><Link href="/login">Back to sign in</Link></AuthSimpleLayout></template>', false],
+    'back link in a layout whose name only starts with Auth' => ['ui back-strip', '<template><AuthorLayout><Link href="/authors">Back to authors</Link></AuthorLayout></template>', true],
+    'back link in a card whose name only starts with Guest' => ['ui back-strip', '<template><GuestListCard><Link href="/guests">Back to guests</Link></GuestListCard></template>', true],
+    'back link beside a guest layout spelled in an attribute value' => ['ui back-strip', '<template><CodeSample data-example="<GuestLayout>" :title="\'<auth-layout>\'" /><Link href="/orders">Back to orders</Link></template>', true],
+    'back link beside a guest layout spelled in a mustache' => ['ui back-strip', '<template><p>{{ \'<AuthLayout>\' }}</p><Link href="/orders">Back to orders</Link></template>', true],
+    'back link in a self-closing kebab-case guest shell beside it' => ['ui back-strip', '<template><guest-shell /><Link href="/login">Back to sign in</Link></template>', false],
+    'back link beside a commented-out guest layout option' => ['ui back-strip', "<script setup>// layout: GuestLayout\n/* defineOptions({ layout: AuthLayout }) */ const note = 'layout: GuestLayout';</script><template><Link href=\"/orders\">Back to orders</Link></template>", true],
+    'back link beside regex literals that spell a guest layout option' => ['ui back-strip', '<script setup>const option = /layout: GuestLayout/; const spaced = (s) => s.match(/layout:\s*AuthLayout/i) ?? [/[/]layout: GuestShell/g]; function card() { return /layout: AuthCard/ }</script><template><Link href="/orders">Back to orders</Link></template>', true],
+    'back link on a guest layout page whose script divides and matches a regex' => ['ui back-strip', '<script setup>const ratio = width / height; const slug = /^[a-z/-]+$/; defineOptions({ layout: GuestLayout }); const half = ratio / 2;</script><template><Link href="/login">Back to sign in</Link></template>', false],
     'raw file input' => ['ui dropzone', "<template><input type='file'></template>", true],
     'literal bound file input' => ['ui dropzone', '<template><input :type="\'file\'"></template>', true],
     'ordinary input' => ['ui dropzone', '<template><input type="text"></template>', false],
@@ -399,6 +416,8 @@ function kitInstalledRecord(array $files, string $owner = 'tey/mod:installed'): 
 dataset('kit-owned violations', [
     'ui plus' => ['ui plus', '<template><Button>Add post</Button></template>'],
     'ui new-tab' => ['ui new-tab', '<template><a target="_blank">Posts</a></template>'],
+    'ui back-strip' => ['ui back-strip', '<template><Link href="/orders">Back to orders</Link></template>'],
+    'ui.action-group' => ['ui.action-group', '<template><div><Button>Sign in</Button><Button>Use a passkey</Button></div></template>'],
     'ui dropzone' => ['ui dropzone', '<template><input type="file"></template>'],
     'ui toast' => ['ui toast', '<template><p>{{ flash.success }}</p></template>'],
     'descriptors' => ['descriptors', "<script setup>const admin = hasRole('admin');</script><template><p /></template>"],
@@ -457,6 +476,68 @@ test('the frontend rules skip a page tey/mod records as kit-generated while it i
         (new Filesystem)->deleteDirectory($base);
     }
 })->with('kit-owned violations');
+
+test('after a kit re-pin, the frontend rules skip a scaffolded page equal to its stub in the installed package, whatever an older record holds, and check an edited one', function (string $rule, string $source) {
+    // Kit 0.18+ writes no records, so an app re-pinned from 0.17 keeps the 0.17 record with the old page bytes; the page re-scaffolded from the new stub
+    // matches only the installed package's stub, which the feature's feature.json names (as kit's own manifest does: the app path => `pages/....vue.stub`).
+    $page = 'resources/js/pages/Workspace/Settings/General/Page.vue';
+    $stub = 'vendor/tey/kit/resources/features/settings/pages/Workspace/Settings/General/Page.vue.stub';
+    $manifest = (string) json_encode(['format' => 1, 'id' => 'settings', 'files' => [
+        $page => ['stub' => 'pages/Workspace/Settings/General/Page.vue.stub', 'scaffold' => 'kit', 'ownership' => 'generated'],
+        'resources/js/pages/Workspace/Settings/Email/Page.vue' => ['stub' => 'pages/Workspace/Settings/Email/Page.vue.stub', 'scaffold' => 'kit', 'ownership' => 'generated'],
+        'resources/js/pages/Posts.vue' => ['stub' => '../../../../../../resources/js/pages/Posts.vue', 'scaffold' => 'kit', 'ownership' => 'generated'],
+    ]]);
+    $base = kitOwnershipApp([
+        $page => $source,
+        // Listed, but its stub is not in the package: nothing to equal, so it is the app's.
+        'resources/js/pages/Workspace/Settings/Email/Page.vue' => $source,
+        // A stub path that leaves the feature's directory names nothing.
+        'resources/js/pages/Posts.vue' => $source,
+        $stub => $source,
+        'vendor/tey/kit/resources/features/settings/feature.json' => $manifest,
+        '.mod-maintenance/installed/'.hash('sha256', 'tey/kit').'.json' => kitInstalledRecord([$page => $source.'<!-- the 0.17 page -->']),
+    ]);
+    $run = fn (): array => array_values(array_unique(array_column((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['resources/js']])))->violations($rule), 'target')));
+    $checked = ['resources/js/pages/Posts.vue', 'resources/js/pages/Workspace/Settings/Email/Page.vue'];
+    try {
+        expect($run())->toBe($checked);
+
+        // A CRLF checkout of the page, or a CRLF stub, is still the kit's.
+        file_put_contents($base.'/'.$page, str_replace("\n", "\r\n", $source."\n"));
+        file_put_contents($base.'/'.$stub, $source."\n");
+        expect($run())->toBe($checked);
+        file_put_contents($base.'/'.$page, $source."\n");
+        file_put_contents($base.'/'.$stub, str_replace("\n", "\r\n", $source."\n"));
+        expect($run())->toBe($checked);
+
+        // An edited copy is the app's code.
+        file_put_contents($base.'/'.$page, $source."\n<!-- edited -->");
+        expect($run())->toBe([...$checked, $page]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+})->with('kit-owned violations');
+
+test('ui back-strip leaves back links on guest and auth pages alone: their card has no breakout strip', function () {
+    $link = '<template><Page xs :heading="false"><Link href="/login">Back to sign in</Link></Page></template>';
+    $base = kitOwnershipApp([
+        'resources/js/pages/Auth/ForgotPassword/Page.vue' => $link,
+        'resources/js/pages/auth/Login.vue' => $link,
+        'resources/js/Pages/Guest/Invitation.vue' => $link,
+        'resources/js/pages/Settings/Auth/Tokens/Page.vue' => $link,
+        'resources/js/pages/Authors/Show/Page.vue' => $link,
+        'resources/js/components/Auth/BackLink.vue' => $link,
+    ]);
+    try {
+        expect(array_column((new Conformance(frontendConfiguration(overrides: ['base' => $base, 'frontendRoots' => ['resources/js']])))->violations('ui back-strip'), 'target'))->toEqualCanonicalizing([
+            'resources/js/components/Auth/BackLink.vue',
+            'resources/js/pages/Authors/Show/Page.vue',
+            'resources/js/pages/Settings/Auth/Tokens/Page.vue',
+        ]);
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+});
 
 function headerActionsViewModel(string $actions, string $base = 'PageViewModel'): string
 {

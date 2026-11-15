@@ -12,17 +12,27 @@ use Tey\Standards\Configuration;
  * crumb, in place of the trail. Flagged: a configured action tag that navigates (it has an `href` or `:href`) and whose whole label is "Back" or
  * "Back to …", with or without a leading arrow. A "Back" button with no href (a wizard's previous step) is not a way up and is left alone. Files tey/kit
  * owns are not scanned.
+ *
+ * A guest or auth card has no breakout strip, so its back links ("Back to sign in") are left alone: a page under a `pages/Auth/` or `pages/Guest/`
+ * directory (the host's layout callback puts kit's auth pages in its GuestShell; Breeze and the starter kits keep theirs there too), and a file whose
+ * template renders as an element, or whose `layout:` option names, one of GUEST_LAYOUTS (by its exact name; a tag also in kebab case). Commented-out
+ * code and a tag spelled inside an attribute value or a mustache do not count, and `AuthenticatedLayout` is the signed-in layout, not one of them.
  */
 final class UiBackStrip
 {
     private const LABEL = '~^(?:←|&larr;|‹|&lsaquo;|<|«)?\s*back(?:\s+to\b.*)?$~iu';
+
+    private const GUEST_PAGE = '~(?:^|/)[Pp]ages/(?:[Aa]uth|[Gg]uest)/~';
+
+    /** The guest and auth layouts and cards: kit's GuestShell, Breeze's GuestLayout, Jetstream's AuthenticationCard and the Laravel starter kits' auth layouts. */
+    private const GUEST_LAYOUTS = ['GuestShell', 'GuestLayout', 'AuthLayout', 'AuthBase', 'AuthCard', 'AuthCardLayout', 'AuthSimpleLayout', 'AuthSplitLayout', 'AuthenticationCard'];
 
     /** @return list<array{target: string, check: string}> */
     public function violations(Configuration $config): array
     {
         $violations = [];
         foreach ((new FrontendSource($config))->appFiles() as $path => $source) {
-            if (! str_ends_with($path, '.vue')) {
+            if (! str_ends_with($path, '.vue') || self::guest($path, $source)) {
                 continue;
             }
             foreach (FrontendSource::actions($source, $config) as $action) {
@@ -39,5 +49,30 @@ final class UiBackStrip
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    /** Whether the file is a guest or auth page, renders a guest or auth layout or card, or names one as its `layout:` option. */
+    private static function guest(string $path, string $source): bool
+    {
+        if (preg_match(self::GUEST_PAGE, $path) === 1) {
+            return true;
+        }
+        // The template's elements, not its text: an attribute value or a mustache that spells `<GuestLayout>` renders no layout. Mustaches are
+        // blanked before parsing (VueTemplate keeps quoted attribute values inside their tag), and a kebab-case tag reads as PascalCase.
+        $template = VueTemplate::parse((string) preg_replace('~\{\{.*?\}\}~s', ' ', FrontendSource::template($source)));
+        foreach ($template?->descendants() ?? [] as $element) {
+            if (in_array($element->tag, self::GUEST_LAYOUTS, true)) {
+                return true;
+            }
+        }
+        // Script tokens leave out comments, and a string or a regex literal is one token, so only a real `layout: <Name>` option counts.
+        $tokens = FrontendSource::tokens(FrontendSource::script($path, $source));
+        foreach ($tokens as $index => $token) {
+            if ($token === 'layout' && ($tokens[$index + 1] ?? '') === ':' && in_array($tokens[$index + 2] ?? '', self::GUEST_LAYOUTS, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

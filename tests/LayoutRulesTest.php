@@ -119,6 +119,29 @@ test('ui.action-group passes the kit ActionGroup in a column, stacked full-width
     ]))->toBe([]);
 });
 
+test('ui.action-group passes the kit 0.21 Login page as shipped, and its ActionGroup column where the page does not import it', function () {
+    // The kit's own page, from kit's session-ui stub: Sign in and the passkey button are direct children of <ActionGroup direction="column">.
+    $login = (string) file_get_contents(dirname(__DIR__).'/fixtures/Layout/KitLogin/resources/js/pages/Auth/Login/Page.vue');
+    $unimported = str_replace('import { ActionGroup, Alert,', 'import { Alert,', $login);
+    // The page as written (layoutApp would wrap a file that opens with its script in another <template>).
+    $findings = function (string $page): array {
+        $base = sys_get_temp_dir().'/standards-layout-'.bin2hex(random_bytes(6));
+        mkdir($base.'/resources/js/pages/Auth/Login', 0777, true);
+        file_put_contents($base.'/resources/js/pages/Auth/Login/Page.vue', $page);
+        try {
+            return array_map(fn (array $v): string => $v['line'].' '.$v['check'], (new Conformance(layoutConfiguration($base)))->violations(Layout::ACTION_GROUP));
+        } finally {
+            (new Filesystem)->deleteDirectory($base);
+        }
+    };
+    expect($unimported)->not->toBe($login)
+        ->and($findings($login))->toBe([])
+        ->and($findings($unimported))->toBe([])
+        // A control beside the group, not in it, is still a run.
+        ->and($findings(str_replace('</ActionGroup>', '</ActionGroup><Button variant="outline">Cancel</Button><Button>Help</Button>', $unimported)))
+        ->toBe(['93 adjacent action controls in <Form> are not grouped: put them in a ButtonGroup, or render descriptors through ActionBar']);
+});
+
 test('ui.action-group points hand-rolled stacked full-width actions at an ActionGroup column, and counts only the kit ActionGroup', function () {
     expect(layoutFindings(Layout::ACTION_GROUP, [
         'pages/Auth/Login.vue' => <<<'VUE'
@@ -145,10 +168,33 @@ test('ui.action-group points hand-rolled stacked full-width actions at an Action
             import ActionGroup from './ActionGroup.vue';
             </script>
             VUE,
+        // Import-shaped text in a string, a template literal or a comment is no import: the unimported ActionGroup still counts.
+        'pages/Help.vue' => <<<'VUE'
+            <template>
+                <ActionGroup direction="row"><Button>Save</Button><Button>Cancel</Button></ActionGroup>
+            </template>
+            <script setup lang="ts">
+            import { Button } from '@kit/ui';
+            const help = "import { ActionGroup } from './legacy'";
+            const tip = `import ActionGroup from './ActionGroup.vue'`;
+            // import { ActionGroup } from './legacy'
+            </script>
+            VUE,
+        // A real import after a string holding `import {` is still read, so this ActionGroup is not the kit's.
+        'pages/Legacy.vue' => <<<'VUE'
+            <template>
+                <ActionGroup direction="row"><Button>Save</Button><Button>Cancel</Button></ActionGroup>
+            </template>
+            <script setup lang="ts">
+            const note = 'import {';
+            import { ActionGroup } from './legacy';
+            </script>
+            VUE,
     ]))->toBe([
         'resources/js/pages/Auth/Invitation.vue:2 adjacent action controls in <ActionGroup> are not grouped: put them in a ButtonGroup, or render descriptors through ActionBar',
         'resources/js/pages/Auth/Login.vue:4 stacked full-width action controls in <Form> are not grouped: put them in <ActionGroup direction="column">, primary first, and drop their w-full',
         'resources/js/pages/Auth/Login.vue:8 adjacent action controls in <div> are not grouped: put them in a ButtonGroup, or render descriptors through ActionBar',
+        'resources/js/pages/Legacy.vue:2 adjacent action controls in <ActionGroup> are not grouped: put them in a ButtonGroup, or render descriptors through ActionBar',
     ]);
 });
 

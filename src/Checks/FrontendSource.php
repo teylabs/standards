@@ -49,15 +49,43 @@ final class FrontendSource
 
     /**
      * Small lexical scan: preserve quoted specifiers, discard comments, and
-     * treat template strings as opaque. It does not evaluate JavaScript.
+     * treat template strings and regex literals as opaque. It does not evaluate JavaScript.
+     *
+     * A `/` starts a regex literal where an operand is expected (at the start, after an operator or punctuator other than `)` and `]`, or after a
+     * keyword such as `return`); after an identifier, a number, a string, `)` or `]` it is division.
      *
      * @return list<string>
      */
     public static function tokens(string $source): array
     {
-        preg_match_all('~//[^\r\n]*|/\*.*?\*/|"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|`(?:\\\\.|[^`\\\\])*`|[\w$]+|\?\.|[^\s]~s', $source, $matches);
+        $tokens = [];
+        $offset = 0;
+        while (preg_match('~//[^\r\n]*|/\*.*?\*/|"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|`(?:\\\\.|[^`\\\\])*`|[\w$]+|\?\.|[^\s]~s', $source, $match, PREG_OFFSET_CAPTURE, $offset) === 1) {
+            [$token, $at] = $match[0];
+            if ($token === '/' && self::operandExpected($tokens === [] ? null : $tokens[array_key_last($tokens)])
+                && preg_match('~\G/(?:\\\\[^\r\n]|\[(?:\\\\[^\r\n]|[^\]\\\\\r\n])*\]|[^/\\\\\[\r\n])+/[A-Za-z]*~', $source, $regex, 0, $at) === 1) {
+                $token = $regex[0];
+            }
+            $offset = $at + strlen($token);
+            if (! str_starts_with($token, '//') && ! str_starts_with($token, '/*')) {
+                $tokens[] = $token;
+            }
+        }
 
-        return array_values(array_filter($matches[0], fn (string $token): bool => ! str_starts_with($token, '//') && ! str_starts_with($token, '/*')));
+        return $tokens;
+    }
+
+    private static function operandExpected(?string $previous): bool
+    {
+        if ($previous === null) {
+            return true;
+        }
+        if (preg_match('~^[\w$]+$~', $previous) === 1) {
+            return in_array($previous, ['return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'instanceof', 'new', 'void', 'delete', 'throw', 'yield', 'await'], true);
+        }
+
+        // Strings, templates and regex literals are longer than one character; every other one-character token is a punctuator.
+        return strlen($previous) === 1 && ! in_array($previous, [')', ']'], true);
     }
 
     /** @return list<string> */

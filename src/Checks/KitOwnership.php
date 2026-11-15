@@ -15,10 +15,13 @@ use Tey\Standards\Configuration;
  * - a file tey/mod records as generated in the app's installed lineage records (`.mod-maintenance/installed/<sha256>.json`, or the
  *   0.8 `.mod-maintenance/installed.json`), such as a kit page under `resources/js/pages/`, while its bytes still equal the recorded
  *   bytes. An edited copy is the app's code and is checked. A record that does not read as tey/mod's installed format names nothing;
- * - `resources/css/kit.css` while its bytes equal the core stub in the installed package (`vendor/tey/kit/resources/features/core/css/kit.css.stub`),
- *   for kit 0.18, which writes no records. An edited copy is the app's code and is checked.
+ * - a file a kit feature scaffolds, such as a kit page under `resources/js/pages/` or `resources/css/kit.css`, while its bytes equal its stub in
+ *   the installed package, for kit 0.18+, which writes no records. Each feature's `vendor/tey/kit/resources/features/<feature>/feature.json`
+ *   maps the app path to its stub in `files` (`resources/js/pages/Auth/ForgotPassword/Page.vue` => `pages/Auth/ForgotPassword/Page.vue.stub`), as
+ *   `kit:scaffold` reads it, so a copy re-scaffolded after a re-pin matches the new stub while a stale record no longer does. `kit.css` falls
+ *   back to the core stub (`vendor/tey/kit/resources/features/core/css/kit.css.stub`). An edited copy is the app's code and is checked.
  *
- * Both comparisons ignore CRLF versus LF, so they read the same on every OS; any other change is an edit.
+ * The comparisons ignore CRLF versus LF, so they read the same on every OS; any other change is an edit.
  *
  * The record is read, not verified: it only narrows which files are scanned, and an app could as well allowlist the same file.
  */
@@ -36,8 +39,13 @@ final class KitOwnership
 
     public const KIT_CSS_STUB = 'vendor/tey/kit/resources/features/core/css/kit.css.stub';
 
-    /** @param array<string, string> $generated project-relative path => recorded bytes */
-    private function __construct(private readonly array $generated, private readonly ?string $kitCss) {}
+    public const KIT_FEATURES = 'vendor/tey/kit/resources/features';
+
+    /**
+     * @param  array<string, string>  $generated  project-relative path => recorded bytes
+     * @param  array<string, string>  $stubs  project-relative path => its stub file in the installed package
+     */
+    private function __construct(private readonly array $generated, private readonly array $stubs) {}
 
     public static function of(Configuration $config): self
     {
@@ -59,10 +67,20 @@ final class KitOwnership
                 }
             }
         }
-        $stub = $config->base.'/'.self::KIT_CSS_STUB;
-        $kitCss = is_file($stub) && is_readable($stub) ? @file_get_contents($stub) : false;
+        $stubs = [self::KIT_CSS => $config->base.'/'.self::KIT_CSS_STUB];
+        foreach (glob($config->base.'/'.self::KIT_FEATURES.'/*/feature.json') ?: [] as $manifest) {
+            $data = json_decode((string) @file_get_contents($manifest), true);
+            $files = is_array($data) ? ($data['files'] ?? null) : null;
+            foreach (is_array($files) ? $files : [] as $path => $entry) {
+                $stub = is_array($entry) ? ($entry['stub'] ?? null) : null;
+                // A plain relative stub path inside the feature's directory: no empty, `.` or `..` segments.
+                if (is_string($path) && is_string($stub) && preg_match('~\A[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*\z~', $stub) === 1) {
+                    $stubs[$path] = dirname($manifest).'/'.$stub;
+                }
+            }
+        }
 
-        return new self($generated, $kitCss === false ? null : $kitCss);
+        return new self($generated, $stubs);
     }
 
     /** Whether an installed lineage record lists the path among the files it generated, whatever its bytes are now. */
@@ -76,12 +94,20 @@ final class KitOwnership
         return str_starts_with($path, self::KIT_TREE)
             || str_starts_with($path, self::PACKAGE_KIT_TREE)
             || (isset($this->generated[$path]) && self::same($this->generated[$path], $source))
-            || ($path === self::KIT_CSS && $this->kitCss !== null && self::same($this->kitCss, $source));
+            || (isset($this->stubs[$path]) && self::same(self::read($this->stubs[$path]), $source));
+    }
+
+    /** A stub's bytes; null when it is missing or unreadable, which matches nothing. */
+    private static function read(string $stub): ?string
+    {
+        $bytes = is_file($stub) && is_readable($stub) ? @file_get_contents($stub) : false;
+
+        return $bytes === false ? null : $bytes;
     }
 
     /** The same bytes up to line endings, so a CRLF checkout (git's `core.autocrlf` on Windows) of an unedited file is still the kit's. */
-    private static function same(string $kit, string $source): bool
+    private static function same(?string $kit, string $source): bool
     {
-        return $kit === $source || str_replace("\r\n", "\n", $kit) === str_replace("\r\n", "\n", $source);
+        return $kit !== null && ($kit === $source || str_replace("\r\n", "\n", $kit) === str_replace("\r\n", "\n", $source));
     }
 }
