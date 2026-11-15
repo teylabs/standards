@@ -679,14 +679,18 @@ describe('inertia.pure', function () {
         $marked = "<?php\nfinal class SearchController\n{\n    public function __invoke($request)\n    {\n        // inertia.pure: typeahead suggestions while typing\n        return Negotiated::answer($request, [], null);\n    }\n}\n";
         $unmarked = "<?php\nfinal class ReportController\n{\n    public function __invoke($request)\n    {\n        return Negotiated::answer($request, [], null);\n    }\n}\n";
         $impostor = "<?php\nfinal class Helper\n{\n    public function __invoke($request)\n    {\n        return response()->json([]);\n    }\n}\n";
+        $commented = "<?php\n// class Negotiated\n/*\n * class Negotiated\n */\nfinal class Legacy\n{\n    public function __invoke()\n    {\n        return response()->json([]);\n    }\n}\n";
         @mkdir($this->pureBase.'/app/Support', 0777, true);
+        @mkdir($this->pureBase.'/app/Legacy', 0777, true);
 
         expect(array_column(($this->pure)([
             'app/Support/Negotiated.php' => $negotiator,
             'app/Http/Controllers/SearchController.php' => $marked,
             'app/Http/Controllers/ReportController.php' => $unmarked,
             'app/Http/Controllers/Negotiated.php' => $impostor,
+            'app/Legacy/Negotiated.php' => $commented,
         ]), 'target'))->toEqualCanonicalizing([
+            'app/Legacy/Negotiated.php',
             'app/Http/Controllers/ReportController.php',
             'app/Http/Controllers/Negotiated.php',
         ]);

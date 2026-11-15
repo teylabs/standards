@@ -97,7 +97,17 @@ final class InertiaPure
     /** `Negotiated.php` declaring `class Negotiated`: the app's one JSON-or-page negotiator. Its callers carry the markers. */
     private static function definesNegotiator(string $path, string $text): bool
     {
-        return basename($path) === 'Negotiated.php' && preg_match('~^\s*(?:final\s+|abstract\s+|readonly\s+)*class\s+Negotiated\b~m', $text) === 1;
+        if (basename($path) !== 'Negotiated.php') {
+            return false;
+        }
+        // Judged on code only, as the scan is: a commented-out declaration does not count.
+        foreach (preg_split('~\R~', $text) ?: [] as $line) {
+            if (preg_match('~^\s*(?:final\s+|abstract\s+|readonly\s+)*class\s+Negotiated\b~', self::code($line, 'php')) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return array{category: string, reason: string}|null */
