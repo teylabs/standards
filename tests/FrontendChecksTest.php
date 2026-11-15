@@ -674,6 +674,24 @@ describe('inertia.pure', function () {
         (new Illuminate\Filesystem\Filesystem)->deleteDirectory($this->pureBase);
     });
 
+    test('the Negotiated class itself is not flagged, and an unmarked caller still is', function () {
+        $negotiator = "<?php\nnamespace App\\Support;\nfinal class Negotiated\n{\n    public static function answer($request, array $json, $page)\n    {\n        return $request->expectsJson() ? response()->json($json) : $page;\n    }\n}\n";
+        $marked = "<?php\nfinal class SearchController\n{\n    public function __invoke($request)\n    {\n        // inertia.pure: typeahead suggestions while typing\n        return Negotiated::answer($request, [], null);\n    }\n}\n";
+        $unmarked = "<?php\nfinal class ReportController\n{\n    public function __invoke($request)\n    {\n        return Negotiated::answer($request, [], null);\n    }\n}\n";
+        $impostor = "<?php\nfinal class Helper\n{\n    public function __invoke($request)\n    {\n        return response()->json([]);\n    }\n}\n";
+        @mkdir($this->pureBase.'/app/Support', 0777, true);
+
+        expect(array_column(($this->pure)([
+            'app/Support/Negotiated.php' => $negotiator,
+            'app/Http/Controllers/SearchController.php' => $marked,
+            'app/Http/Controllers/ReportController.php' => $unmarked,
+            'app/Http/Controllers/Negotiated.php' => $impostor,
+        ]), 'target'))->toEqualCanonicalizing([
+            'app/Http/Controllers/ReportController.php',
+            'app/Http/Controllers/Negotiated.php',
+        ]);
+    });
+
     test('inertia.pure is advisory', function () {
         expect(Tey\Standards\Enforcement\Gate::ADVISORY)->toContain('inertia.pure');
     });

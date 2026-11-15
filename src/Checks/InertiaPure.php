@@ -14,7 +14,8 @@ use Tey\Standards\Source;
  * `sendJson`. `useHttp` is not an exemption.
  *
  * The allowed surfaces are exempt by a one-line marker on the line or the line above: `// inertia.pure: <category> <reason>`, where the category is one of
- * CATEGORIES (an unknown category, or a marker without a reason, is itself reported). `*WebhookController` classes are exempt by name, and files tey/kit owns
+ * CATEGORIES (an unknown category, or a marker without a reason, is itself reported). `*WebhookController` classes are exempt by name, the file that declares
+ * the `Negotiated` class is exempt because every use of `Negotiated` is judged at its call site, and files tey/kit owns
  * are not scanned. Advisory: a grep cannot tell a page route from a public API, so existing hits are baselined with `standards:allowlist --baseline
  * --rule=inertia.pure --expires=<date>` and the rule stays advisory until false positives are measured.
  */
@@ -50,7 +51,7 @@ final class InertiaPure
         $violations = [];
         $roots = array_values(array_unique(array_keys($config->classRoots)));
         foreach ($source->files($roots) as $path => $text) {
-            if (str_ends_with($path, 'WebhookController.php')) {
+            if (str_ends_with($path, 'WebhookController.php') || self::definesNegotiator($path, $text)) {
                 continue;
             }
             array_push($violations, ...self::scan($path, $text, self::PHP, 'php'));
@@ -91,6 +92,12 @@ final class InertiaPure
         }
 
         return $found;
+    }
+
+    /** `Negotiated.php` declaring `class Negotiated`: the app's one JSON-or-page negotiator. Its callers carry the markers. */
+    private static function definesNegotiator(string $path, string $text): bool
+    {
+        return basename($path) === 'Negotiated.php' && preg_match('~^\s*(?:final\s+|abstract\s+|readonly\s+)*class\s+Negotiated\b~m', $text) === 1;
     }
 
     /** @return array{category: string, reason: string}|null */

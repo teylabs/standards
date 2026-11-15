@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`inertia.pure` no longer flags the app's own `Negotiated` class.** The check already reports every use of `Negotiated` that has no marker, so flagging the class that declares it, a file named `Negotiated.php` with `class Negotiated` in it, said nothing new. That file is no longer scanned, and each caller is still judged by its own `// inertia.pure: <category> <reason>` marker. A file of any other name, or a `Negotiated.php` with no `Negotiated` class in it, is scanned as before. An allowlist entry for the negotiator goes stale; remove it.
+
 ## v0.11.103 - 2026-11-15
 
 ### Fixed
