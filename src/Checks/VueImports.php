@@ -42,21 +42,24 @@ final class VueImports
     }
 
     /**
-     * Default and named imports, local name => [specifier, imported name]. Type-only imports are left out.
+     * Default and named imports, local name => [specifier, imported name]. Type-only imports are left out, and so is import-shaped text inside a
+     * string, a template literal or a comment: statements are matched on the code with those blanked, and each specifier is read back from the
+     * original at the same offset.
      *
      * @return array<string, array{0: string, 1: string}>
      */
     public static function imports(string $code): array
     {
         $imports = [];
-        preg_match_all('~\bimport\s+(?!type\b)(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\{([^}]*)\}\s*)?from\s*([\'"])([^\'"]+)\3~', $code, $matches, PREG_SET_ORDER);
+        preg_match_all('~\bimport\s+(?!type\b)(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\{([^}]*)\}\s*)?from\s*([\'"])([^\'"]+)\3~', self::code($code, strings: true), $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
         foreach ($matches as $match) {
-            if (($match[1] ?? '') !== '') {
-                $imports[$match[1]] = [$match[4], 'default'];
+            $from = substr($code, $match[4][1], strlen($match[4][0]));
+            if (($match[1][0] ?? '') !== '') {
+                $imports[$match[1][0]] = [$from, 'default'];
             }
-            foreach (explode(',', $match[2] ?? '') as $named) {
+            foreach (explode(',', $match[2][0] ?? '') as $named) {
                 if (preg_match('~^\s*(?:type\s+)?([\w$]+)(?:\s+as\s+([\w$]+))?\s*$~', $named, $parts) && ! preg_match('~^\s*type\s~', $named)) {
-                    $imports[$parts[2] ?? $parts[1]] = [$match[4], $parts[1]];
+                    $imports[$parts[2] ?? $parts[1]] = [$from, $parts[1]];
                 }
             }
         }

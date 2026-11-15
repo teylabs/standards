@@ -168,10 +168,33 @@ test('ui.action-group points hand-rolled stacked full-width actions at an Action
             import ActionGroup from './ActionGroup.vue';
             </script>
             VUE,
+        // Import-shaped text in a string, a template literal or a comment is no import: the unimported ActionGroup still counts.
+        'pages/Help.vue' => <<<'VUE'
+            <template>
+                <ActionGroup direction="row"><Button>Save</Button><Button>Cancel</Button></ActionGroup>
+            </template>
+            <script setup lang="ts">
+            import { Button } from '@kit/ui';
+            const help = "import { ActionGroup } from './legacy'";
+            const tip = `import ActionGroup from './ActionGroup.vue'`;
+            // import { ActionGroup } from './legacy'
+            </script>
+            VUE,
+        // A real import after a string holding `import {` is still read, so this ActionGroup is not the kit's.
+        'pages/Legacy.vue' => <<<'VUE'
+            <template>
+                <ActionGroup direction="row"><Button>Save</Button><Button>Cancel</Button></ActionGroup>
+            </template>
+            <script setup lang="ts">
+            const note = 'import {';
+            import { ActionGroup } from './legacy';
+            </script>
+            VUE,
     ]))->toBe([
         'resources/js/pages/Auth/Invitation.vue:2 adjacent action controls in <ActionGroup> are not grouped: put them in a ButtonGroup, or render descriptors through ActionBar',
         'resources/js/pages/Auth/Login.vue:4 stacked full-width action controls in <Form> are not grouped: put them in <ActionGroup direction="column">, primary first, and drop their w-full',
         'resources/js/pages/Auth/Login.vue:8 adjacent action controls in <div> are not grouped: put them in a ButtonGroup, or render descriptors through ActionBar',
+        'resources/js/pages/Legacy.vue:2 adjacent action controls in <ActionGroup> are not grouped: put them in a ButtonGroup, or render descriptors through ActionBar',
     ]);
 });
 
