@@ -100,9 +100,14 @@ final class InertiaPure
         if (basename($path) !== 'Negotiated.php') {
             return false;
         }
-        // Judged on code only, as the scan is: a commented-out declaration does not count.
-        foreach (preg_split('~\R~', $text) ?: [] as $line) {
-            if (preg_match('~^\s*(?:final\s+|abstract\s+|readonly\s+)*class\s+Negotiated\b~', self::code($line, 'php')) === 1) {
+        // Tokenised, so a declaration in a comment, a string or a heredoc does not count.
+        $tokens = token_get_all($text);
+        foreach ($tokens as $index => $token) {
+            if (! is_array($token) || $token[0] !== T_CLASS) {
+                continue;
+            }
+            for ($next = $index + 1; isset($tokens[$next]) && is_array($tokens[$next]) && $tokens[$next][0] === T_WHITESPACE; $next++);
+            if (isset($tokens[$next]) && is_array($tokens[$next]) && $tokens[$next][0] === T_STRING && $tokens[$next][1] === 'Negotiated') {
                 return true;
             }
         }

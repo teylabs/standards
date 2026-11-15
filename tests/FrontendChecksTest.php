@@ -679,7 +679,7 @@ describe('inertia.pure', function () {
         $marked = "<?php\nfinal class SearchController\n{\n    public function __invoke($request)\n    {\n        // inertia.pure: typeahead suggestions while typing\n        return Negotiated::answer($request, [], null);\n    }\n}\n";
         $unmarked = "<?php\nfinal class ReportController\n{\n    public function __invoke($request)\n    {\n        return Negotiated::answer($request, [], null);\n    }\n}\n";
         $impostor = "<?php\nfinal class Helper\n{\n    public function __invoke($request)\n    {\n        return response()->json([]);\n    }\n}\n";
-        $commented = "<?php\n// class Negotiated\n/*\n * class Negotiated\n */\nfinal class Legacy\n{\n    public function __invoke()\n    {\n        return response()->json([]);\n    }\n}\n";
+        $commented = "<?php\n// class Negotiated\n/*\n * class Negotiated\n */\n$doc = <<<TXT\nclass Negotiated\nTXT;\n$quoted = 'class Negotiated';\nfinal class Legacy\n{\n    public function __invoke()\n    {\n        return response()->json([]);\n    }\n}\n";
         @mkdir($this->pureBase.'/app/Support', 0777, true);
         @mkdir($this->pureBase.'/app/Legacy', 0777, true);
 
