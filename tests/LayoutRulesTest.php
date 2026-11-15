@@ -404,26 +404,43 @@ test('an installed kit from before the Stack rename is neither missing Stack nor
     }
 });
 
-test('ui.row-action-label flags PHP action labels that interpolate a value or run long', function () {
+/** @param array<string, string> $files path under the app => source; PHP is read from app/, Vue from resources/js; advisory findings are marked */
+function rowLabelFindings(array $files): array
+{
     $base = sys_get_temp_dir().'/standards-row-label-'.bin2hex(random_bytes(6));
-    mkdir($base.'/app/Http', 0777, true);
-    file_put_contents($base.'/app/Http/GrantsController.php', <<<'PHP'
+    foreach ($files as $path => $source) {
+        is_dir(dirname($base.'/'.$path)) || mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $source);
+    }
+
+    try {
+        return array_map(fn (array $v): string => $v['target'].':'.$v['line'].' '.$v['check'].(($v['advisory'] ?? false) ? ' [advisory]' : ''),
+            (new Conformance(layoutConfiguration($base, ['sourceRoots' => ['app']])))->violations(Layout::ROW_ACTION_LABEL));
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+}
+
+test('ui.row-action-label flags PHP row action labels that interpolate a value or run long', function () {
+    expect(rowLabelFindings(['app/Http/GrantsController.php' => <<<'PHP'
         <?php
-        $a = Action::make("Revoke {$grant->name}", '/g/1');
-        $b = new Action('Remove '.$grant->label, '/g/1', 'delete');
-        $c = new Action($member->name, '/m/1');
-        $d = new Action('Resend the invitation email now', '/i/1');
-        $e = new Action('Remove', '/g/1', 'delete', ariaLabel: 'Remove '.$grant->label);
-        $f = Action::disabled('Revoke', '/g/1', 'delete', 'Owners cannot be revoked');
-        $g = new \Tey\Kit\Features\Core\Data\Action(label: 'Archive', url: '/o/1');
-        $h = new Action(url: '/o/1', label: $member->name);
-        $i = new Action("Charge $5", '/o/1/charge');
-        $j = new Action(__('Remove'), '/g/1');
-        $k = new Action($rule->enabled ? 'Switch off' : 'Switch on', '/r/1', 'post');
-        $l = [new Action($e->isFull() ? 'Join the waitlist' : ($e->isFree() ? 'RSVP' : 'Get a ticket'), '/e/1/rsvp', 'post')];
-        $m = new Action($on ? 'Off' : 'Resend the invitation email now', '/r/1');
-        $n = new Action($on ? 'Off' : 'Remove '.$grant->label, '/r/1');
-        $o = ['submit' => new Action('Book this room for the whole day', '/b', 'post')];
+        $rows = [['id' => 1, 'actions' => [
+            Action::make("Revoke {$grant->name}", '/g/1'),
+            new Action('Remove '.$grant->label, '/g/1', 'delete'),
+            new Action($member->name, '/m/1'),
+            new Action('Resend the invitation email now', '/i/1'),
+            new Action('Remove', '/g/1', 'delete', ariaLabel: 'Remove '.$grant->label),
+            Action::disabled('Revoke', '/g/1', 'delete', 'Owners cannot be revoked'),
+            new \Tey\Kit\Features\Core\Data\Action(label: 'Archive', url: '/o/1'),
+            new Action(url: '/o/1', label: $member->name),
+            new Action("Charge $5", '/o/1/charge'),
+            new Action(__('Remove'), '/g/1'),
+            new Action($rule->enabled ? 'Switch off' : 'Switch on', '/r/1', 'post'),
+            new Action($e->isFull() ? 'Join the waitlist' : ($e->isFree() ? 'RSVP' : 'Get a ticket'), '/e/1/rsvp', 'post'),
+            new Action($on ? 'Off' : 'Resend the invitation email now', '/r/1'),
+            new Action($on ? 'Off' : 'Remove '.$grant->label, '/r/1'),
+            'submit' => new Action('Book this room for the whole day', '/b', 'post'),
+        ]]];
 
         final class SignViewModel
         {
@@ -433,27 +450,448 @@ test('ui.row-action-label flags PHP action labels that interpolate a value or ru
             }
         }
 
-        $p = new Action('Resend the invitation email again', '/i/1');
-        PHP);
-
-    try {
-        $findings = array_map(fn (array $v): string => $v['target'].':'.$v['line'].' '.$v['check'],
-            (new Conformance(layoutConfiguration($base, ['sourceRoots' => ['app']])))->violations(Layout::ROW_ACTION_LABEL));
-    } finally {
-        (new Filesystem)->deleteDirectory($base);
-    }
-
-    expect($findings)->toBe([
-        'app/Http/GrantsController.php:2 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
-        'app/Http/GrantsController.php:3 row action label \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
-        'app/Http/GrantsController.php:4 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
-        "app/Http/GrantsController.php:5 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
-        'app/Http/GrantsController.php:9 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        $more = ['id' => 2, 'actions' => [new Action('Resend the invitation email again', '/i/1')]];
+        PHP]))->toBe([
+        'app/Http/GrantsController.php:3 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'app/Http/GrantsController.php:4 row action label \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'app/Http/GrantsController.php:5 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "app/Http/GrantsController.php:6 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/GrantsController.php:10 row action label $member->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
         // A ternary of literals is read arm by arm: a long arm is flagged, a short one is not; an arm with a value still interpolates.
-        "app/Http/GrantsController.php:14 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
-        'app/Http/GrantsController.php:15 row action label $on ? \'Off\' : \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "app/Http/GrantsController.php:15 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/GrantsController.php:16 row action label $on ? \'Off\' : \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
         // After a submit() method has closed, an Action is a row action again.
-        "app/Http/GrantsController.php:26 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/GrantsController.php:28 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label leaves form submits, header buttons, links and short verbs in a variable alone', function () {
+    expect(rowLabelFindings(['app/Http/OrdersController.php' => <<<'PHP'
+        <?php
+
+        final class OrdersController
+        {
+            public function create(): array
+            {
+                // A form submit built outside the form.
+                $save = new Action('Save the assignment changes', '/assignments', 'post');
+                $defaults = new Action("Save {$term} reminder defaults", '/defaults', 'put');
+
+                return ['form' => new FormData(fields: [], submit: $save), 'defaults' => new FormData(fields: [], submit: $defaults)];
+            }
+
+            public function show(Order $order): array
+            {
+                // Page and header buttons, and a header menu item.
+                $label = $order->paid ? 'Mark as unpaid again' : 'Mark as paid in full';
+
+                return [
+                    'actions' => [
+                        'create' => new Action("New {$term} for {$order->customer}", '/orders/create', 'get'),
+                        'paid' => new Action($label, '/orders/1/paid', 'post'),
+                        'export' => new Action('Export every order to CSV', '/orders/export', 'get', menu: true),
+                    ],
+                    // Navigation links.
+                    'back' => new Action('Back to all of the orders', '/orders', 'get'),
+                    'seeAll' => new Action('See all '.$terms.' for '.$order->customer, '/orders', 'get'),
+                ];
+            }
+
+            public function index(): array
+            {
+                // Short verbs and tenant terms in row actions: a variable holds a literal, a term is one word.
+                $rows = $this->orders->map(function (Order $order): array {
+                    $verb = 'Post';
+                    $label = $order->paid ? 'Mark unpaid' : 'Mark paid';
+                    if ($order->draft) {
+                        $label = 'Publish';
+                    }
+
+                    return ['id' => $order->id, 'actions' => [
+                        new Action($verb, '/orders/1/post', 'post'),
+                        new Action($label, '/orders/1/paid', 'post'),
+                        new Action("Copy {$term}", '/orders/1/copy', 'post'),
+                        new Action('Move '.$terms->plural, '/orders/1/move', 'post'),
+                        new Action('Assign {term}', '/orders/1/assign', 'post'),
+                    ]];
+                });
+
+                return ['table' => new TableData($rows->all())];
+            }
+        }
+        PHP,
+        'resources/js/pages/Orders/Show.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const back = { label: `Back to every ${props.order.customer} order`, url: '/orders', method: 'get' };
+        </script>
+        <template><Page title="Order" /></template>
+        VUE,
+        'resources/js/pages/Orders/Index.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const actions = (row) => [{ key: 'copy', label: `Copy ${terms.singular}`, url: `/o/${row.id}/copy`, method: 'post' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE]))->toBe([]);
+});
+
+test('ui.row-action-label follows a row action through its variable, method and item, and reads a label from its variable', function () {
+    expect(rowLabelFindings(['app/Http/GrantsController.php' => <<<'PHP'
+        <?php
+
+        final class GrantsController
+        {
+            public function index(): array
+            {
+                return ['table' => $this->grants->map(function (Grant $grant): array {
+                    $actions = [];
+                    $actions[] = new Action('Remove '.$grant->label, '/g/1', 'delete');
+                    $label = 'Resend the invitation email';
+                    $named = "Revoke {$grant->name}";
+                    $actions = [...$actions, new Action($label, '/g/1/resend'), new Action($named, '/g/1', 'delete')];
+
+                    return ['id' => $grant->id, 'actions' => [...$actions, ...$this->rowActions($grant)]];
+                })];
+            }
+
+            public function slides(): array
+            {
+                return array_map(fn (Slide $slide): WorkbenchItem => new WorkbenchItem((string) $slide->id, $slide->title, actions: [
+                    new Action("Duplicate {$slide->title}", '/s/1/duplicate', 'post'),
+                ]), $this->slides);
+            }
+
+            private function rowActions(Grant $grant): array
+            {
+                return [new Action("Archive this {$term} for now", '/g/1/archive', 'post')];
+            }
+        }
+        PHP]))->toBe([
+        'app/Http/GrantsController.php:9 row action label \'Remove \'.$grant->label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "app/Http/GrantsController.php:12 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/GrantsController.php:12 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'app/Http/GrantsController.php:21 row action label "Duplicate {$slide->title}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // A tenant term is one word, so a label over three words with one is still long.
+        'app/Http/GrantsController.php:27 row action label "Archive this {$term} for now" is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm',
+    ]);
+});
+
+test('ui.row-action-label reads a braced tenant term as one word and any other braced value as a value', function () {
+    expect(rowLabelFindings(['app/Http/GrantsController.php' => <<<'PHP'
+        <?php
+        $rows = [['id' => 1, 'actions' => [
+            new Action("Copy {$term}", '/g/1/copy', 'post'),
+            new Action("Move {$this->terms->singular}", '/g/1/move', 'post'),
+            new Action("Assign ${term}", '/g/1/assign', 'post'),
+            new Action("Archive this {$terms->plural} now", '/g/1/archive', 'post'),
+            new Action("Archive this ${term} now", '/g/1/archive', 'post'),
+            new Action("Revoke {$grant->name}", '/g/1', 'delete'),
+            new Action("Revoke ${grant}", '/g/1', 'delete'),
+        ]]];
+        PHP,
+        'resources/js/pages/Grants/Index.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const actions = (row) => [
+            { key: 'copy', label: `Copy ${terms.singular}`, url: `/g/${row.id}/copy`, method: 'post' },
+            { key: 'archive', label: `Archive every ${terms.plural} now`, url: `/g/${row.id}/archive`, method: 'post' },
+            { key: 'revoke', label: `Revoke ${row.name}`, url: `/g/${row.id}`, method: 'delete' },
+        ];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE]))->toBe([
+        'app/Http/GrantsController.php:6 row action label "Archive this {$terms->plural} now" is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm',
+        'app/Http/GrantsController.php:7 row action label "Archive this ${term} now" is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm',
+        'app/Http/GrantsController.php:8 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'app/Http/GrantsController.php:9 row action label "Revoke ${grant}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        'resources/js/pages/Grants/Index.vue:4 row action label `Archive every ${terms.plural} now` is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm',
+        'resources/js/pages/Grants/Index.vue:5 row action label `Revoke ${row.name}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});
+
+test('ui.row-action-label reads no Action in a heredoc or nowdoc body, and reads on from a closing marker mid-line', function () {
+    expect(rowLabelFindings(['app/Http/HelpController.php' => <<<'PHP'
+        <?php
+        $help = <<<'TXT'
+            Don't build rows by hand: ['id' => 1, 'actions' => [new Action('Resend the invitation email now', '/i/1')]]
+            TXT;
+        $sample = <<<HTML
+            <p>{$name}'s row (</p> ['id' => 2, 'actions' => [new Action("Revoke {$grant->name}", '/g/1')]]
+            HTML;
+        $rows = [['id' => 3, 'actions' => [new Action('Resend the invitation email again', '/i/1')]]];
+        $more = [['id' => 4, 'note' => <<<TXT
+            A row's note: (
+            TXT, 'actions' => [new Action('Resend the invitation email later', '/i/1')]]];
+        PHP]))->toBe([
+        "app/Http/HelpController.php:8 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        // PHP ends a heredoc at its identifier followed by any non-identifier character, so code after `TXT,` on the same line is read.
+        "app/Http/HelpController.php:11 row action label 'Resend the invitation email later' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label reads no Action in a backtick shell string', function () {
+    expect(rowLabelFindings(['app/Console/ExportRows.php' => <<<'PHP'
+        <?php
+        $out = `echo ['id' => 1, 'actions' => [new Action('Resend the invitation email now', '/i/1')]]`;
+        $rows = [['id' => 3, 'log' => `grep -c \] rows.log`, 'actions' => [new Action('Resend the invitation email again', '/i/1')]]];
+        PHP]))->toBe([
+        "app/Console/ExportRows.php:3 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label reads a label a closure captures with use or an arrow fn sees from the scope around it', function () {
+    expect(rowLabelFindings(['app/Http/PostsController.php' => <<<'PHP'
+        <?php
+
+        final class PostsController
+        {
+            public function index(): array
+            {
+                $label = 'Publish';
+                $long = 'Resend the invitation email';
+                $draft = function (): void {
+                    $label = 'Send this post to every subscriber';
+                };
+
+                return $this->posts->map(function (Post $post) use ($label, &$long): array {
+                    return ['id' => $post->id, 'actions' => [new Action($label, '/p/1'), new Action($long, '/p/1/resend')]];
+                })->all();
+            }
+
+            public function uncaptured(): array
+            {
+                $label = 'Publish';
+
+                return $this->posts->map(function (Post $post): array {
+                    return ['id' => $post->id, 'actions' => [new Action($label, '/p/1')]];
+                })->all();
+            }
+
+            public function arrows(): array
+            {
+                $label = 'Publish';
+                $long = 'Resend the invitation email';
+
+                return [
+                    ...$this->posts->map(fn (Post $post): array => ['id' => $post->id, 'actions' => [new Action($label, '/p/1'), new Action($long, '/p/1/resend')]]),
+                    ...$this->posts->map(fn (string $label): array => ['id' => 1, 'actions' => [new Action($label, '/p/1')]]),
+                ];
+            }
+        }
+        PHP]))->toBe([
+        // Captured with use: 'Publish' is a verb, the long label is long; the assignment in the other closure is its own.
+        "app/Http/PostsController.php:14 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        // Not captured: nothing in reach is assigned to it.
+        'app/Http/PostsController.php:23 row action label $label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "app/Http/PostsController.php:33 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        // An arrow fn parameter shadows the assignment around it.
+        'app/Http/PostsController.php:34 row action label $label interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});
+
+test('ui.row-action-label follows a method only to calls that reach its own class, a function to its plain calls and a match to its arms', function () {
+    expect(rowLabelFindings(['app/Http/OrdersController.php' => <<<'PHP'
+        <?php
+
+        function archiveAction(Order $order): Action
+        {
+            return new Action("Archive {$order->name}", '/o/1/archive');
+        }
+
+        abstract class BaseRows
+        {
+            protected function restore(Order $order): Action
+            {
+                return new Action("Restore {$order->name}", '/o/1/restore');
+            }
+        }
+
+        final class HeaderBar
+        {
+            public function render(): array
+            {
+                return ['actions' => [$this->action()]];
+            }
+
+            private function action(): Action
+            {
+                return new Action('Export every order to CSV', '/o/export');
+            }
+        }
+
+        final class OrderRows extends BaseRows
+        {
+            public function rows(Order $order): array
+            {
+                return [['id' => 1, 'actions' => [$this->action(), self::status($order), $this->restore($order), archiveAction($order)]]];
+            }
+
+            private function action(): Action
+            {
+                return new Action('Resend the invitation email', '/o/1/resend');
+            }
+
+            private static function status(Order $order): Action
+            {
+                return match ($order->status) {
+                    'draft' => new Action("Publish {$order->name}", '/o/1/publish'),
+                    default => new Action('Archive', '/o/1/archive'),
+                };
+            }
+        }
+        PHP]))->toBe([
+        // A plain function called in a row.
+        'app/Http/OrdersController.php:5 row action label "Archive {$order->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // Inherited by the row class.
+        'app/Http/OrdersController.php:12 row action label "Restore {$order->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // HeaderBar::action() at line 25 is called only in the header; OrderRows::action() is the row's.
+        "app/Http/OrdersController.php:38 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/OrdersController.php:44 row action label "Publish {$order->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});
+
+test('ui.row-action-label reads past a comment or heredoc around a row action, its key and a submit method', function () {
+    expect(rowLabelFindings(['app/Http/InvitesController.php' => <<<'PHP'
+        <?php
+        $rows = [['id' => 1,
+            // The row menu.
+            'actions' => [new Action(
+                // Don't name the grant here.
+                'Resend the invitation email now', '/i/1'),
+            ]]];
+
+        function grantRow(Grant $grant): array
+        {
+            $actions = [];
+            // One per grant.
+            $actions[] = new Action("Revoke {$grant->name}", '/g/1');
+
+            return ['id' => $grant->id, 'actions' => $actions];
+        }
+
+        final class InviteForm
+        {
+            public function save(): Action
+            {
+                // Opens no { block
+                $css = <<<CSS
+                    .x {
+                    CSS;
+
+                return new Action('Send the invitation to everyone', '/i', 'post');
+            }
+
+            public function rows(): array
+            {
+                return [['id' => 1, 'actions' => [new Action('Resend the invitation email again', '/i/1')]]];
+            }
+        }
+        PHP]))->toBe([
+        "app/Http/InvitesController.php:6 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        'app/Http/InvitesController.php:13 row action label "Revoke {$grant->name}" interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // save() is a form submit; the method after it is not.
+        "app/Http/InvitesController.php:32 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label reads a form submit from its key in code, not from a comment or string before a row action', function () {
+    expect(rowLabelFindings(['app/Http/InvitesController.php' => <<<'PHP'
+        <?php
+        $rows = [['id' => 1, 'actions' => [
+            // submit:
+            new Action('Resend the invitation email now', '/i/1'),
+            /* save => */ new Action('Resend the invitation email again', '/i/1'),
+            $mode === 'save: draft' ? new Action('Resend the invitation email later', '/i/1') : null,
+            // Still form submits: a quoted key past a comment, and a condition holding a comma in a string.
+            "submit" /* the form's */ => new Action('Send the invitation to everyone', '/i', 'post'),
+            'save' => $mode === 'a, b' ? new Action('Save the invitation for everyone', '/i', 'post') : null,
+        ]]];
+        PHP]))->toBe([
+        "app/Http/InvitesController.php:4 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:5 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:6 row action label 'Resend the invitation email later' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label reads a row key, an id, an Action call, an argument name and a label past a comment', function () {
+    expect(rowLabelFindings([
+        'app/Http/InvitesController.php' => <<<'PHP'
+        <?php
+        $rows = [['id' /* the key */ => 1, 'actions' => [new Action('Resend the invitation email now', '/i/1')]]];
+        $more = [['id' => 2, 'actions' // the row menu
+            => [new Action('Resend the invitation email again', '/i/1')]]];
+        $others = [['id' => 3, 'actions' => [new /* the kit's */ Action('Resend the invitation email later', '/i/1')]]];
+        $named = [['id' => 4, 'actions' => [new Action(url: '/i/1', label /* the verb */ : 'Resend the invitation email today')]]];
+
+        function grantRow(Grant $grant): array
+        {
+            $label = // the verb
+                'Resend the invitation email first';
+
+            return ['id' => $grant->id, 'actions' => [new Action($label, '/g/1')]];
+        }
+        PHP,
+        'resources/js/pages/People.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const actions = (row) => [
+            { key: 'resend', label: // the verb
+                'Resend the invitation email', url: '/p/1/resend', method: 'post' },
+            { key: 'toggle', label: row.on ? `Off, now` : 'On', url: '/p/1/toggle', method: 'post' },
+        ];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+        'resources/js/pages/Grants.vue' => <<<'VUE'
+        <template>
+            <!-- The <script> below builds each row's actions. -->
+            <DataTable :table="table" />
+        </template>
+        <script setup lang="ts">
+        const actions = (grant) => [{ label: `Revoke ${grant.name}`, url: '/g/1', method: 'delete' }];
+        </script>
+        VUE,
+    ]))->toBe([
+        "app/Http/InvitesController.php:2 row action label 'Resend the invitation email now' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:4 row action label 'Resend the invitation email again' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:5 row action label 'Resend the invitation email later' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:6 row action label 'Resend the invitation email today' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        "app/Http/InvitesController.php:13 row action label 'Resend the invitation email first' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+        // A template comment naming `<script>` doesn't start a script block, so its apostrophe doesn't hide the real block's action.
+        'resources/js/pages/Grants.vue:6 row action label `Revoke ${grant.name}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        // A comment after `label:` is not the label; a comma in a template literal doesn't split a ternary of two short verbs.
+        "resources/js/pages/People.vue:3 row action label 'Resend the invitation email' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
+    ]);
+});
+
+test('ui.row-action-label follows a variable only in its own scope and reads a label built with .= and ??=', function () {
+    expect(rowLabelFindings(['app/Http/OrdersController.php' => <<<'PHP'
+        <?php
+
+        final class OrdersController
+        {
+            public function index(): array
+            {
+                $actions = [new Action('Export every order to CSV', '/o/export')];
+                $rows = $this->orders->map(function (Order $order): array {
+                    $actions = [new Action('Archive', '/o/1/archive')];
+
+                    return ['id' => $order->id, 'actions' => $actions];
+                });
+
+                return ['actions' => $actions, 'rows' => $rows];
+            }
+
+            public function rows(Order $order): array
+            {
+                $label = 'Remove ';
+                $label .= $order->name;
+                $verb ??= 'Send this order to the printer';
+
+                return [['id' => $order->id, 'actions' => [new Action($label, '/o/1'), new Action($verb, '/o/1/print')]]];
+            }
+        }
+        PHP]))->toBe([
+        // The page's $actions at line 7 is not the closure's own $actions.
+        'app/Http/OrdersController.php:23 row action label \'Remove \'.$order->name interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+        "app/Http/OrdersController.php:23 row action label 'Send this order to the printer' is over 24 characters or 3 words: RowActions clamps it; keep the label a verb and put the record in the confirm",
     ]);
 });
 
@@ -497,5 +935,112 @@ test('ui.row-action-label reads a nested confirm and each script block at its ow
         </script>
         VUE]))->toBe([
         'resources/js/pages/Grants.vue:7 row action label `Remove ${grant.label}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});
+
+test('ui.row-action-label reads Vue action objects only where the template renders rows, not where a comment or string names a row component', function () {
+    expect(rowLabelFindings([
+        'resources/js/pages/Settings.vue' => <<<'VUE'
+        <script setup lang="ts">
+        // Unlike a <DataTable>, this page lists no rows.
+        const hint = '<Workbench> pages list their items';
+        const back = { label: `Back to ${props.team.name}`, url: '/t', method: 'get' };
+        </script>
+        <template>
+            <!-- <RowActions :actions="actions" /> -->
+            <Page title="Settings" />
+        </template>
+        VUE,
+        'resources/js/pages/Members.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const actions = [{ label: `Remove ${member.name}`, url: '/m/1', method: 'delete' }];
+        </script>
+        <template>
+            <Page title="Members"><Card><RowActions :actions="actions" /></Card></Page>
+        </template>
+        VUE,
+    ]))->toBe([
+        'resources/js/pages/Members.vue:2 row action label `Remove ${member.name}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});
+
+test('ui.row-action-label reads no Vue action object in a script comment, string or regex', function () {
+    expect(rowLabelFindings(['resources/js/pages/People.vue' => <<<'VUE'
+        <script setup lang="ts">
+        // const old = [{ label: `Remove ${row.name}`, url: '/p/1', method: 'delete' }];
+        /* { label: `Revoke ${row.name}`, url: '/p/1', method: 'delete' } */
+        const hint = "{ label: `Copy ${row.name}`, url: '/p/1', method: 'post' }";
+        const quote = /['"`]/g;
+        const actions = [{ label: `Archive ${row.name}`, url: '/p/1', method: 'post' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE]))->toBe([
+        'resources/js/pages/People.vue:6 row action label `Archive ${row.name}` interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm',
+    ]);
+});
+
+test('ui.row-action-label warns on a Vue action past a / the scan can only guess at, rather than skipping it', function () {
+    $interpolates = 'interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm';
+    expect(rowLabelFindings([
+        'resources/js/pages/People.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const before = [{ label: `Remove ${row.name}`, url: '/p/1', method: 'delete' }];
+        const half = width / 2;
+        // const old = [{ label: `Revoke ${row.name}`, url: '/p/1', method: 'delete' }];
+        function quotes() {
+            return /['"`]/g;
+        }
+        const actions = [
+            { label: `Archive ${row.name}`, url: '/p/1', method: 'post' },
+            { label: 'Archive', url: '/p/1', method: 'post' },
+        ];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+        'resources/js/pages/Teams.vue' => <<<'VUE'
+        <script setup lang="ts">
+        if (ready) /['"]/.test(name);
+        const actions = [{ label: `Leave ${team.name}`, url: '/t/1', method: 'delete' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+    ]))->toBe([
+        "resources/js/pages/People.vue:2 row action label `Remove \${row.name}` {$interpolates}",
+        "resources/js/pages/People.vue:9 row action label `Archive \${row.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 6, so this only warns) [advisory]",
+        "resources/js/pages/Teams.vue:3 row action label `Leave \${team.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 2, so this only warns) [advisory]",
+    ]);
+    expect((new Layout(layoutConfiguration(sys_get_temp_dir())))->quiet("row action label `Leave \${team.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 2, so this only warns)"))->toBeTrue();
+});
+
+test('ui.row-action-label warns on a Vue action past an interpolation holding a literal or a string read past its line, and reads on where the mask is certain', function () {
+    $interpolates = 'interpolates a value: keep the label a verb and put the record in ariaLabel and the confirm';
+    expect(rowLabelFindings([
+        'resources/js/pages/Plain.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const title = `${count} of ${total}`;
+        const ratio = done / total;
+        // const old = [{ label: `Revoke ${row.name}`, url: '/p/1', method: 'delete' }];
+        const actions = [{ label: `Remove ${row.name}`, url: '/p/1', method: 'delete' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+        'resources/js/pages/Braces.vue' => <<<'VUE'
+        <script setup lang="ts">
+        const brace = `${open ? '{' : ''}`;
+        const actions = [{ label: `Revoke ${row.name}`, url: '/p/1', method: 'delete' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+        'resources/js/pages/Render.vue' => <<<'VUE'
+        <script setup lang="tsx">
+        const Hint = () => <p>Don't reload</p>;
+        const actions = [{ label: `Retry ${row.name}`, url: '/p/1', method: 'post' }];
+        </script>
+        <template><DataTable :table="table" /></template>
+        VUE,
+    ]))->toBe([
+        "resources/js/pages/Braces.vue:3 row action label `Revoke \${row.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 2, so this only warns) [advisory]",
+        "resources/js/pages/Plain.vue:5 row action label `Remove \${row.name}` {$interpolates}",
+        "resources/js/pages/Render.vue:3 row action label `Retry \${row.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 2, so this only warns) [advisory]",
     ]);
 });
