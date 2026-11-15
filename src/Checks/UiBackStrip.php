@@ -65,7 +65,7 @@ final class UiBackStrip
                 return true;
             }
         }
-        // Script tokens leave out comments, and a string is one token, so only a real `layout: <Name>` option counts.
+        // Script tokens leave out comments, and a string or a regex literal is one token, so only a real `layout: <Name>` option counts.
         $tokens = FrontendSource::tokens(FrontendSource::script($path, $source));
         foreach ($tokens as $index => $token) {
             if ($token === 'layout' && ($tokens[$index + 1] ?? '') === ':' && in_array($tokens[$index + 2] ?? '', self::GUEST_LAYOUTS, true)) {

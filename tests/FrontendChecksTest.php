@@ -190,6 +190,8 @@ test('frontend static UI checks cover self-closing actions, rel tokens, raw inpu
     'back link beside a guest layout spelled in a mustache' => ['ui back-strip', '<template><p>{{ \'<AuthLayout>\' }}</p><Link href="/orders">Back to orders</Link></template>', true],
     'back link in a self-closing kebab-case guest shell beside it' => ['ui back-strip', '<template><guest-shell /><Link href="/login">Back to sign in</Link></template>', false],
     'back link beside a commented-out guest layout option' => ['ui back-strip', "<script setup>// layout: GuestLayout\n/* defineOptions({ layout: AuthLayout }) */ const note = 'layout: GuestLayout';</script><template><Link href=\"/orders\">Back to orders</Link></template>", true],
+    'back link beside regex literals that spell a guest layout option' => ['ui back-strip', '<script setup>const option = /layout: GuestLayout/; const spaced = (s) => s.match(/layout:\s*AuthLayout/i) ?? [/[/]layout: GuestShell/g]; function card() { return /layout: AuthCard/ }</script><template><Link href="/orders">Back to orders</Link></template>', true],
+    'back link on a guest layout page whose script divides and matches a regex' => ['ui back-strip', '<script setup>const ratio = width / height; const slug = /^[a-z/-]+$/; defineOptions({ layout: GuestLayout }); const half = ratio / 2;</script><template><Link href="/login">Back to sign in</Link></template>', false],
     'raw file input' => ['ui dropzone', "<template><input type='file'></template>", true],
     'literal bound file input' => ['ui dropzone', '<template><input :type="\'file\'"></template>', true],
     'ordinary input' => ['ui dropzone', '<template><input type="text"></template>', false],
