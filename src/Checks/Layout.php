@@ -42,7 +42,7 @@ final class Layout
 
     /**
      * Where adjacent action controls are already grouped. `Toolbar` holds mixed controls (a search box and buttons) and counts, as do the kit's *Toolbar
-     * variants. The kit's `ActionGroup` counts too, where the file imports it from the kit (kitActionGroups).
+     * variants. The kit's `ActionGroup` counts too, unless the file imports that name from outside the kit (kitActionGroups).
      */
     private const ACTION_CONTAINERS = ['ButtonGroup', 'ActionBar', 'HeaderActions', 'Toolbar', 'FormActions'];
 
@@ -108,15 +108,17 @@ final class Layout
     }
 
     /**
-     * The tags the file binds to tey/kit's `ActionGroup` (0.21): a named import from `@kit/ui` or `@/components/Kit` (the barrel or any module
-     * under them), renamed or not, or a default import of its `ActionGroup.vue`.
+     * The tags that are tey/kit's `ActionGroup` (0.21) in the file: `ActionGroup` itself unless the file imports that name from elsewhere (a
+     * globally registered or auto-imported component), and a name bound by a named import from `@kit/ui` or `@/components/Kit` (the barrel or
+     * any module under them), renamed or not, or by a default import of its `ActionGroup.vue`.
      *
      * @return list<string>
      */
     private static function kitActionGroups(string $source): array
     {
-        $tags = [];
-        foreach (VueImports::imports(VueImports::code(VueImports::scripts($source))) as $local => [$from, $imported]) {
+        $imports = VueImports::imports(VueImports::code(VueImports::scripts($source)));
+        $tags = isset($imports['ActionGroup']) ? [] : ['ActionGroup'];
+        foreach ($imports as $local => [$from, $imported]) {
             $kit = preg_match('~^(?:@kit/ui|@/components/Kit)(?:/|$)~', $from) === 1;
             if ($kit && ($imported === 'ActionGroup' || ($imported === 'default' && preg_match('~/ActionGroup(?:\.vue)?$~', $from) === 1))) {
                 $tags[] = $local;

@@ -415,6 +415,7 @@ dataset('kit-owned violations', [
     'ui plus' => ['ui plus', '<template><Button>Add post</Button></template>'],
     'ui new-tab' => ['ui new-tab', '<template><a target="_blank">Posts</a></template>'],
     'ui back-strip' => ['ui back-strip', '<template><Link href="/orders">Back to orders</Link></template>'],
+    'ui.action-group' => ['ui.action-group', '<template><div><Button>Sign in</Button><Button>Use a passkey</Button></div></template>'],
     'ui dropzone' => ['ui dropzone', '<template><input type="file"></template>'],
     'ui toast' => ['ui toast', '<template><p>{{ flash.success }}</p></template>'],
     'descriptors' => ['descriptors', "<script setup>const admin = hasRole('admin');</script><template><p /></template>"],
