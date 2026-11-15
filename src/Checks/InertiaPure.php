@@ -106,7 +106,7 @@ final class InertiaPure
             if (! is_array($token) || $token[0] !== T_CLASS) {
                 continue;
             }
-            for ($next = $index + 1; isset($tokens[$next]) && is_array($tokens[$next]) && $tokens[$next][0] === T_WHITESPACE; $next++);
+            for ($next = $index + 1; isset($tokens[$next]) && is_array($tokens[$next]) && in_array($tokens[$next][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true); $next++);
             if (isset($tokens[$next]) && is_array($tokens[$next]) && $tokens[$next][0] === T_STRING && $tokens[$next][1] === 'Negotiated') {
                 return true;
             }

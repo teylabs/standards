@@ -675,7 +675,7 @@ describe('inertia.pure', function () {
     });
 
     test('the Negotiated class itself is not flagged, and an unmarked caller still is', function () {
-        $negotiator = "<?php\nnamespace App\\Support;\nfinal class Negotiated\n{\n    public static function answer($request, array $json, $page)\n    {\n        return $request->expectsJson() ? response()->json($json) : $page;\n    }\n}\n";
+        $negotiator = "<?php\nnamespace App\\Support;\nfinal class /* the negotiator */ Negotiated\n{\n    public static function answer($request, array $json, $page)\n    {\n        return $request->expectsJson() ? response()->json($json) : $page;\n    }\n}\n";
         $marked = "<?php\nfinal class SearchController\n{\n    public function __invoke($request)\n    {\n        // inertia.pure: typeahead suggestions while typing\n        return Negotiated::answer($request, [], null);\n    }\n}\n";
         $unmarked = "<?php\nfinal class ReportController\n{\n    public function __invoke($request)\n    {\n        return Negotiated::answer($request, [], null);\n    }\n}\n";
         $impostor = "<?php\nfinal class Helper\n{\n    public function __invoke($request)\n    {\n        return response()->json([]);\n    }\n}\n";
