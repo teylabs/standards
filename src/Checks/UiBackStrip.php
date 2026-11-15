@@ -15,8 +15,8 @@ use Tey\Standards\Configuration;
  *
  * A guest or auth card has no breakout strip, so its back links ("Back to sign in") are left alone: a page under a `pages/Auth/` or `pages/Guest/`
  * directory (the host's layout callback puts kit's auth pages in its GuestShell; Breeze and the starter kits keep theirs there too), and a file whose
- * template renders, or whose `layout:` option names, one of GUEST_LAYOUTS (by its exact name; a tag also in kebab case). Commented-out code does not
- * count, and `AuthenticatedLayout` is the signed-in layout, not one of them.
+ * template renders as an element, or whose `layout:` option names, one of GUEST_LAYOUTS (by its exact name; a tag also in kebab case). Commented-out
+ * code and a tag spelled inside an attribute value or a mustache do not count, and `AuthenticatedLayout` is the signed-in layout, not one of them.
  */
 final class UiBackStrip
 {
@@ -57,9 +57,13 @@ final class UiBackStrip
         if (preg_match(self::GUEST_PAGE, $path) === 1) {
             return true;
         }
-        $tags = array_map(fn (string $name): string => $name.'|'.strtolower((string) preg_replace('~(?<!^)[A-Z]~', '-$0', $name)), self::GUEST_LAYOUTS);
-        if (preg_match('~<(?:'.implode('|', $tags).')[\s/>]~', FrontendSource::template($source)) === 1) {
-            return true;
+        // The template's elements, not its text: an attribute value or a mustache that spells `<GuestLayout>` renders no layout. Mustaches are
+        // blanked before parsing (VueTemplate keeps quoted attribute values inside their tag), and a kebab-case tag reads as PascalCase.
+        $template = VueTemplate::parse((string) preg_replace('~\{\{.*?\}\}~s', ' ', FrontendSource::template($source)));
+        foreach ($template?->descendants() ?? [] as $element) {
+            if (in_array($element->tag, self::GUEST_LAYOUTS, true)) {
+                return true;
+            }
         }
         // Script tokens leave out comments, and a string is one token, so only a real `layout: <Name>` option counts.
         $tokens = FrontendSource::tokens(FrontendSource::script($path, $source));
