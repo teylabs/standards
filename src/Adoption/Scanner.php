@@ -634,7 +634,8 @@ final class Scanner
 
     /**
      * Whether one file a `file-name` signal hit satisfies the surface's `uses` itself: it imports (from kit's aliases) or renders one of
-     * `uses.components`, imports one of `uses.imports`, or (PHP) references one of `uses.classes`. Returns that adoption evidence, or null.
+     * `uses.components`, imports one of `uses.imports`, imports one of `uses.files` (a wrapper that renders the feature's own file, such as an
+     * `AppLayout.vue` around the kit's `pages/Workspace/Layout.vue`), or (PHP) references one of `uses.classes`. Returns that adoption evidence, or null.
      *
      * @param  array<string, list<string>>  $uses
      * @return ?array{file: string, line: ?int, detail: string}
@@ -655,6 +656,14 @@ final class Scanner
                     $colon = (int) strrpos($wanted, ':');
                     if (self::importsExport(substr($wanted, 0, $colon), substr($wanted, $colon + 1), $import)) {
                         return self::evidence($path, App::line($source, $import['offset']), 'imports '.substr($wanted, $colon + 1).' from '.$import['module'].' (file name yields to uses)');
+                    }
+                }
+                $target = self::resolvedImport($path, $import['module']);
+                if ($target !== null) {
+                    foreach ($uses['files'] ?? [] as $file) {
+                        if ($target === $file || $target.'.vue' === $file || $target.'.ts' === $file) {
+                            return self::evidence($path, App::line($source, $import['offset']), 'imports the feature file '.$file.' (file name yields to uses)');
+                        }
                     }
                 }
             }
@@ -680,6 +689,30 @@ final class Scanner
         }
 
         return null;
+    }
+
+    /**
+     * The app path an import points at: `@/x` is `resources/js/x`, and `./x` or `../x` resolve against the importing file. Null for a package.
+     */
+    private static function resolvedImport(string $from, string $module): ?string
+    {
+        if (str_starts_with($module, '@/')) {
+            $path = 'resources/js/'.substr($module, 2);
+        } elseif (str_starts_with($module, './') || str_starts_with($module, '../')) {
+            $path = dirname($from).'/'.$module;
+        } else {
+            return null;
+        }
+        $parts = [];
+        foreach (explode('/', $path) as $part) {
+            if ($part === '..') {
+                array_pop($parts);
+            } elseif ($part !== '.' && $part !== '') {
+                $parts[] = $part;
+            }
+        }
+
+        return implode('/', $parts);
     }
 
     /**
