@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.105 - 2026-11-16
+
+### Fixed
+
+- **`standards:adoption`: a file-name hit yields when the file imports one of the surface's `uses.files`.** A layout wrapper such as `resources/js/layouts/AppLayout.vue` that renders the kit's own `pages/Workspace/Layout.vue` (through `@/` or a relative path, with or without the extension) and only fills its slots read as a hand-rolled `shell.workspace`. The import is now the adoption evidence. Wrappers of `pages/Workspace/Settings/Layout.vue` for `settings.frame` are covered the same way.
+
 ## v0.11.104 - 2026-11-15
 
 ### Fixed
