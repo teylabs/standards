@@ -514,7 +514,7 @@ nodes:
       - { name: "bulk bar", kit_component: BulkBar, use: "Bulk actions on the selection, floating with the count and Clear", props_hint: "table.bulkActions" }
       - { name: "row menu", kit_component: RowActions, use: "Per-row actions", props_hint: "actions descriptors" }
     make: standards:make crud --flavor=resource
-    checks: ['21', 'descriptors', 'js-imports']
+    checks: ['21', 'descriptors', 'js-imports', 'ui.row-actions-declared']
     paths: ['app/**/Http/Controllers/**SelectionController.php', 'resources/js/pages/**/Index/Page.vue']
     keywords: [sort, filter, toolbar, reorder, row action, confirm, data table, bulk, selection]
     status: ready
