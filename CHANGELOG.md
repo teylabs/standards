@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.110 - 2026-11-18
+
+### Added
+
+- **Rule `media.image-scoped` (warn only): custom image transformations and drivers are registered in a resolving callback.** Laravel binds `image` scoped, so a queue worker builds a new ImageManager for every job. `Image::transformUsing()` or `Image::extend()` called once in `boot()` works on the first job only. Such calls are reported on the facade, and in service providers on `app('image')` and the container's `image`, unless they sit in `callAfterResolving`, `afterResolving` or `resolving`. Leaf `data-actions.media-library` runs it.
+
 ## v0.11.109 - 2026-11-18
 
 ### Fixed
