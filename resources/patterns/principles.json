@@ -8657,7 +8657,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": "ui-page.form",
+            "tree_leaf": "ui-page.select-choice",
             "enforced_by": null,
             "mode": "review"
         },
