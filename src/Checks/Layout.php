@@ -31,7 +31,9 @@ final class Layout
 
     public const ROW_ACTION_LABEL = 'ui.row-action-label';
 
-    public const RULES = [self::ACTION_GROUP, self::ROW_ACTIONS, self::PAGE_TITLE, self::OUTER_MARGINS, self::PAGE_GRID, self::PRIMITIVES, self::ROW_ACTION_LABEL];
+    public const ROW_ACTIONS_DECLARED = RowActionsDeclared::RULE;
+
+    public const RULES = [self::ACTION_GROUP, self::ROW_ACTIONS, self::PAGE_TITLE, self::OUTER_MARGINS, self::PAGE_GRID, self::PRIMITIVES, self::ROW_ACTION_LABEL, self::ROW_ACTIONS_DECLARED];
 
     /** A row action label longer than this (characters or words) is clamped by the kit's RowActions. */
     public const LABEL_MAX_CHARACTERS = 24;
@@ -59,6 +61,9 @@ final class Layout
     /** @return list<array{target: string, check: string, line?: int, advisory?: bool}> */
     public function violations(string $rule): array
     {
+        if ($rule === self::ROW_ACTIONS_DECLARED) {
+            return RowActionsDeclared::violations($this->config);
+        }
         if ($rule === self::ROW_ACTION_LABEL) {
             return $this->rowActionLabels();
         }

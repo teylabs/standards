@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.11.108 - 2026-11-18
+
+### Added
+
+- **Rule `ui.row-actions-declared` (warn only): a table's row actions declare their shape.** A method building a `TableQuery` whose rows carry actions, with no `->rowActions(primary:)` or `->rowActions(variant:)`, no Action with `priority: 'primary'` and no `:row-actions` on its page's DataTable, is reported: RowActions then infers each row's shape, so one column can mix them. A literal `primary` that matches no literal Action `key:` in the method is reported as well. Leaf `ui-page.data-table` runs it.
+
+### Upgrading
+
+- On every table with row actions, name the primary action, `->rowActions(primary: '<action key>')`, and give that Action the same `key:`. When no action is primary, use `->rowActions(variant: 'menu')`. The rule only warns. Not covered: Workbench and ScrollList row menus, and rows or actions built in another class.
+
 ## v0.11.107 - 2026-11-18
 
 ### Added

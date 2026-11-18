@@ -370,7 +370,7 @@ test('an opted-in layout rule fails on a new finding and passes a baselined one 
 
 test('opted in each layout rule rejects the seeded Bad fixture page and accepts the Good one', function () {
     foreach (Layout::RULES as $rule) {
-        $optIn = fn (string $kind): Configuration => new Configuration(...array_replace(get_object_vars(layoutConfiguration(dirname(__DIR__).'/fixtures/Layout/'.$kind)), ['optionalRules' => [$rule]]));
+        $optIn = fn (string $kind): Configuration => new Configuration(...array_replace(get_object_vars(layoutConfiguration(dirname(__DIR__).'/fixtures/Layout/'.$kind)), ['optionalRules' => [$rule], 'sourceRoots' => ['app']]));
         (new Conformance($optIn('Good')))->assert($rule);
         expect(fn () => (new Conformance($optIn('Bad')))->assert($rule))->toThrow(PHPUnit\Framework\AssertionFailedError::class, 'violation:');
     }
@@ -1066,4 +1066,69 @@ test('ui.row-action-label warns on a Vue action past an interpolation holding a 
         "resources/js/pages/Plain.vue:5 row action label `Remove \${row.name}` {$interpolates}",
         "resources/js/pages/Render.vue:3 row action label `Retry \${row.name}` {$interpolates} (read unmasked: the script can't be masked with certainty from line 2, so this only warns) [advisory]",
     ]);
+});
+
+/** @param array<string, string> $files path under the app => source */
+function rowShapeFindings(array $files): array
+{
+    $base = sys_get_temp_dir().'/standards-row-shape-'.bin2hex(random_bytes(6));
+    foreach ($files as $path => $source) {
+        is_dir(dirname($base.'/'.$path)) || mkdir(dirname($base.'/'.$path), 0777, true);
+        file_put_contents($base.'/'.$path, $source);
+    }
+
+    try {
+        return array_map(fn (array $v): string => basename($v['target']).':'.$v['line'].' '.$v['check'].(($v['advisory'] ?? false) ? ' [advisory]' : ''),
+            (new Conformance(layoutConfiguration($base, ['sourceRoots' => ['app'], 'optionalRules' => [Layout::ROW_ACTIONS_DECLARED]])))->violations(Layout::ROW_ACTIONS_DECLARED));
+    } finally {
+        (new Filesystem)->deleteDirectory($base);
+    }
+}
+
+function rowShapeController(string $name, string $chain, string $action = "new Action('Edit', '/c/1/edit', 'get', key: 'edit')", string $page = 'Cases/Index'): string
+{
+    return <<<PHP
+        <?php
+
+        final class {$name}
+        {
+            public function index()
+            {
+                \$table = TableQuery::for(Assignment::query()){$chain}
+                    ->rows(fn (\$case) => ['id' => \$case->id, 'actions' => [{$action}]]);
+
+                return Inertia::render('{$page}', ['table' => \$table->toData()]);
+            }
+        }
+        PHP;
+}
+
+test('ui.row-actions-declared warns on a table whose row actions declare no shape, and on a primary matching no key', function () {
+    expect(rowShapeFindings([
+        'app/Undeclared.php' => rowShapeController('Undeclared', ''),
+        'app/Typo.php' => rowShapeController('Typo', "->rowActions(primary: 'edti')"),
+        'app/Positional.php' => rowShapeController('Positional', "->rowActions(null, 'view')"),
+    ]))->toEqualCanonicalizing([
+        'Undeclared.php:7 table row actions declare no shape: RowActions infers one row by row',
+        "Typo.php:7 row actions primary 'edti' matches no action key",
+        "Positional.php:7 row actions primary 'view' matches no action key",
+    ]);
+});
+
+test('ui.row-actions-declared is quiet when the shape is declared, by the server, an Action or the page', function () {
+    expect(rowShapeFindings([
+        'app/Primary.php' => rowShapeController('Primary', "->rowActions(primary: 'edit')"),
+        'app/Menu.php' => rowShapeController('Menu', "->rowActions(variant: 'menu')"),
+        'app/Priority.php' => rowShapeController('Priority', '', "new Action('Edit', '/c/1/edit', priority: 'primary')"),
+        'app/Dynamic.php' => rowShapeController('Dynamic', "->rowActions(primary: 'edit')", "new Action('Edit', '/c/1/edit', key: \$key)"),
+        'app/PageWins.php' => rowShapeController('PageWins', '', page: 'Cases/Board'),
+        'resources/js/pages/Cases/Board/Page.vue' => "<template>\n    <DataTable :table=\"table\" :row-actions=\"{ variant: 'menu' }\" />\n</template>\n",
+        'app/NoActions.php' => "<?php\n\nfinal class NoActions\n{\n    public function index()\n    {\n        return TableQuery::for(Assignment::query())->rows(fn (\$c) => ['id' => \$c->id]);\n    }\n}\n",
+        'app/TriggerOnly.php' => rowShapeController('TriggerOnly', "->rowActions(trigger: 'vertical', variant: 'split')"),
+    ]))->toBe([]);
+});
+
+test('ui.row-actions-declared still warns when the only rowActions argument is the trigger', function () {
+    expect(rowShapeFindings(['app/Trigger.php' => rowShapeController('Trigger', "->rowActions(trigger: 'vertical')")]))
+        ->toBe(['Trigger.php:7 table row actions declare no shape: RowActions infers one row by row']);
 });

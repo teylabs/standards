@@ -1773,7 +1773,8 @@
             "checks": [
                 "21",
                 "descriptors",
-                "js-imports"
+                "js-imports",
+                "ui.row-actions-declared"
             ],
             "paths": [
                 "app/**/Http/Controllers/**SelectionController.php",
