@@ -38,6 +38,7 @@ final class Principles
         'BTN-05' => 'ui-page.header-actions', 'BTN-08' => 'ui-page.header-actions', 'LAY-01' => 'ui-page.header-actions', 'HR-03' => 'ui-page.header-actions',
         'BTN-06' => 'ui-page.action-menu', 'BTN-07' => 'ui-page.action-menu', 'LAY-04' => 'ui-page.action-menu',
         'BTN-01' => 'ui-page.add-button', 'BTN-03' => 'ui-page.add-button',
+        'KIT-InputSelect' => 'ui-page.select-choice', 'KIT-Select' => 'ui-page.select-choice',
         'FRM-01' => 'ui-page.form', 'FRM-02' => 'ui-page.form', 'FRM-03' => 'ui-page.form', 'FRM-04' => 'ui-page.form',
         'FRM-05' => 'ui-page.form', 'FRM-06' => 'ui-page.form', 'FRM-07' => 'ui-page.form', 'FRM-08' => 'ui-page.form',
         'FRM-09' => 'ui-page.form', 'FRM-10' => 'ui-page.form', 'FRM-11' => 'ui-page.form', 'FRM-12' => 'ui-page.form',

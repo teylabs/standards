@@ -8119,13 +8119,13 @@
             "id": "KIT-InputSelect",
             "section": "tey/kit components",
             "source": "kit-exports.json",
-            "rule": "Use kit InputSelect for its job (no standards leaf describes it); never a second copy",
+            "rule": "Use kit InputSelect for a choice in a form, the default select (leaf ui-page.select-choice); never a second copy",
             "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
             "applies_to": [
                 "page",
                 "component"
             ],
-            "tree_leaf": null,
+            "tree_leaf": "ui-page.select-choice",
             "enforced_by": null,
             "mode": "review"
         },
@@ -8651,7 +8651,7 @@
             "id": "KIT-Select",
             "section": "tey/kit components",
             "source": "kit-exports.json",
-            "rule": "Use kit Select for its job (no standards leaf describes it); never a second copy",
+            "rule": "Use kit Select only for a short fixed list that always holds a value, with no search and no none choice (leaf ui-page.select-choice); never a second copy",
             "check": "import from @kit/ui; app component with the same name or job = hand-rolled",
             "applies_to": [
                 "page",
