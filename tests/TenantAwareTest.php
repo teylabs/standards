@@ -327,3 +327,41 @@ test('standards:check passes with the checked-nothing advisory, and fails it und
     $strict = $run(['--json' => true, '--strict' => true]);
     expect($strict->getStatusCode())->toBe(1)->and(json_decode($strict->getDisplay(), true, flags: JSON_THROW_ON_ERROR)['exit_code'])->toBe(1);
 });
+
+test('tenant.queued-declared warns on a queued class that declares neither TenantAware nor NotTenantAware', function () {
+    $queued = "use Illuminate\\Contracts\\Queue\\ShouldQueue;\n\nfinal class %s implements ShouldQueue%s\n{\n    public function handle(): void {}\n}\n";
+    $base = tenantApp([
+        'Ledger.php' => TENANT_MODEL,
+        'Undeclared.php' => sprintf($queued, 'Undeclared', ''),
+        'Aware.php' => "use Spatie\\Multitenancy\\Jobs\\TenantAware;\n".sprintf($queued, 'Aware', ', TenantAware'),
+        'Central.php' => "use Spatie\\Multitenancy\\Jobs\\NotTenantAware;\n".sprintf($queued, 'Central', ', NotTenantAware'),
+        'Listed.php' => sprintf($queued, 'Listed', ''),
+        'Base.php' => "use Illuminate\\Contracts\\Queue\\ShouldQueue;\nuse Spatie\\Multitenancy\\Jobs\\TenantAware;\n\nabstract class Base implements ShouldQueue, TenantAware {}\n",
+        'Child.php' => "final class Child extends Base\n{\n    public function handle(): void {}\n}\n",
+        'Plain.php' => "final class Plain\n{\n}\n",
+    ], "<?php\n\nreturn ['not_tenant_aware_jobs' => [FixtureScratch\\Listed::class]];\n");
+
+    $checks = array_column((new Conformance(tenantConfiguration($base)))->violations('tenant.queued-declared'), 'check');
+
+    expect($checks)->toBe(['FixtureScratch\\Undeclared is queued but declares neither TenantAware nor NotTenantAware']);
+});
+
+test('tenant.queued-declared is quiet in an app without tenancy', function () {
+    $base = tenantApp(['Job.php' => "use Illuminate\\Contracts\\Queue\\ShouldQueue;\n\nfinal class Job implements ShouldQueue {}\n"]);
+    file_put_contents($base.'/composer.json', json_encode(['require' => ['laravel/framework' => '^13.0']]));
+
+    expect((new Conformance(tenantConfiguration($base)))->violations('tenant.queued-declared'))->toBe([]);
+});
+
+test('tenant-aware reads tey/kit v0.38.0 and later as queues not tenant-aware by default', function () {
+    $job = "use Illuminate\\Contracts\\Queue\\ShouldQueue;\n\nfinal class SyncJob implements ShouldQueue\n{\n    public function handle(): void { Ledger::query()->count(); }\n}\n";
+    $checks = function (string $version) use ($job): array {
+        $base = tenantApp(['Ledger.php' => TENANT_MODEL, 'SyncJob.php' => $job]);
+        file_put_contents($base.'/composer.lock', json_encode(['packages' => [['name' => 'tey/kit', 'version' => $version]]]));
+
+        return array_column((new Conformance(tenantConfiguration($base)))->violations('tenant-aware'), 'check');
+    };
+
+    expect($checks('v0.37.5'))->toBe([])
+        ->and($checks('v0.38.0'))->toBe(['FixtureScratch\\SyncJob touches tenant-scoped FixtureScratch\\Ledger but is not tenant-aware']);
+});

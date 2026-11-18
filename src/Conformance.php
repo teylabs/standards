@@ -40,6 +40,7 @@ final class Conformance
         'integrations' => '[integrations] webhooks verify their sender and API calls go through a contract',
         'versioned-writes' => '[versioned-writes] query-builder writes on a versioned model bump its version',
         'tenant-aware' => '[tenant-aware] commands and queued jobs that touch tenant-scoped models run per tenant (spatie/laravel-multitenancy)',
+        'tenant.queued-declared' => '[tenant.queued-declared] every queued job, notification, mailable and listener declares TenantAware or NotTenantAware (warn only)',
         'tenant.scoped-exists' => '[tenant.scoped-exists] an exists rule on workspace records is scoped to the current workspace',
         'browser.accessible' => '[browser.accessible] a browser test that visits a page checks it with axe (assertAccessible)',
         'notifications.chat-via-channel' => '[notifications.chat-via-channel] chat messages are Notifications sent through their channel (toSlack), not direct API calls',
@@ -151,7 +152,7 @@ final class Conformance
         }
 
         // Warn only, whatever optionalRules says: the findings are reported, the test never fails on them.
-        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose', 'ui.surface-on-tinted-ground', 'brand.no-env-colours'], true)) {
+        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose', 'ui.surface-on-tinted-ground', 'brand.no-env-colours', 'tenant.queued-declared'], true)) {
             Assert::markTestSkipped('Rule ['.$rule.'] warns only ('.count($violations).' findings).'.implode('', array_map(fn (array $violation): string => "\n".$violation['check'], $violations)));
         }
 
@@ -299,6 +300,10 @@ final class Conformance
 
         if ($rule === 'tenant.scoped-exists') {
             return (new Checks\ScopedExists($this->config, $this->source))->violations();
+        }
+
+        if ($rule === 'tenant.queued-declared') {
+            return (new Checks\TenantAware($this->config, $this->source))->undeclaredQueued();
         }
 
         if ($rule === 'tenant-aware') {

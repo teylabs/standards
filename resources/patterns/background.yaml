@@ -14,7 +14,7 @@ nodes:
     summary: A queued job that calls the Action doing the work, so the logic is shared and the job stays thin.
     kit: []
     make: standards:make job --flavor=plain
-    checks: ['actions']
+    checks: ['actions', 'tenant-aware', 'tenant.queued-declared']
     paths: ['app/**/Jobs/**']
     keywords: [queue, job, background, async]
     status: ready
