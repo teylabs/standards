@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.109 - 2026-11-18
+
+### Fixed
+
+- **`ui.row-actions-declared` reads Action keys across the class.** A `primary` whose Action is built in a helper method of the same class (a private `actions($row)`) is no longer reported as matching no key. This happened when the table method also held a bulk Action with its own key. `priority: 'primary'` still counts only in the table's own method.
+
 ## v0.11.108 - 2026-11-18
 
 ### Added

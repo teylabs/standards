@@ -16,8 +16,8 @@ use Tey\Standards\Source;
  * Action made in the method):
  * - with no `->rowActions(primary: …)` or `->rowActions(variant: …)` call (nor a positional variant), no Action with `priority: 'primary'`, and no `:row-actions`
  *   on the `<DataTable>` of a page the class renders, RowActions infers a shape row by row, so one column can mix shapes;
- * - with a literal `primary` that no literal Action key (`key:`) in the method matches, every row shows its menu alone, almost always a typo. Skipped when
- *   any Action key in the method is not a literal.
+ * - with a literal `primary` that no literal Action key (`key:`) in the method's class matches, every row shows its menu alone, almost always a typo.
+ *   Skipped when any Action key in the class is not a literal.
  * Not covered: Workbench and ScrollList row menus (no TableQuery), and rows or actions built in another class.
  */
 final class RowActionsDeclared
@@ -36,8 +36,17 @@ final class RowActionsDeclared
             }
             $nodes = $source->nodes($path);
             $pageDeclares = self::pageDeclares($config, $finder, $nodes);
-            $scopes = $finder->find($nodes, fn (Node $node): bool => $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_);
-            foreach ($scopes as $scope) {
+            // Each method is read with its class: row actions are often built in a helper method of the same class (a private actions($row)).
+            $scopes = [];
+            foreach ($finder->find($nodes, fn (Node $node): bool => $node instanceof Node\Stmt\ClassLike) as $class) {
+                foreach ($class->getMethods() as $method) {
+                    $scopes[] = [$method, $class->stmts];
+                }
+            }
+            foreach ($finder->find($nodes, fn (Node $node): bool => $node instanceof Node\Stmt\Function_) as $function) {
+                $scopes[] = [$function, $function->stmts];
+            }
+            foreach ($scopes as [$scope, $classStmts]) {
                 $query = $finder->findFirst($scope->stmts ?? [], fn (Node $node): bool => ($node instanceof Node\Expr\New_ || $node instanceof Node\Expr\StaticCall)
                     && $node->class instanceof Node\Name && $node->class->getLast() === 'TableQuery');
                 if ($query === null) {
@@ -66,12 +75,19 @@ final class RowActionsDeclared
                 }
                 $keys = [];
                 $dynamicKey = false;
+                // Keys are read across the class, so a primary built in a helper method is found; `priority: 'primary'` still counts only in this method.
+                $classActions = $finder->find($classStmts, fn (Node $node): bool => ($node instanceof Node\Expr\New_ && $node->class instanceof Node\Name && $node->class->getLast() === 'Action')
+                    || ($node instanceof Node\Expr\StaticCall && $node->class instanceof Node\Name && $node->class->getLast() === 'Action' && $node->name instanceof Node\Identifier && in_array($node->name->toLowerString(), ['make', 'disabled'], true)));
                 foreach ($actions as $action) {
-                    foreach ($action->getArgs() as $index => $argument) {
-                        $name = $argument->name?->toString();
-                        if ($name === 'priority' && $argument->value instanceof Node\Scalar\String_ && $argument->value->value === 'primary') {
+                    foreach ($action->getArgs() as $argument) {
+                        if ($argument->name?->toString() === 'priority' && $argument->value instanceof Node\Scalar\String_ && $argument->value->value === 'primary') {
                             $declared = true;
                         }
+                    }
+                }
+                foreach ($classActions as $action) {
+                    foreach ($action->getArgs() as $index => $argument) {
+                        $name = $argument->name?->toString();
                         if ($name === 'key' || ($name === null && $index === 6 && $action instanceof Node\Expr\New_)) {
                             $argument->value instanceof Node\Scalar\String_ ? $keys[] = $argument->value->value : $dynamicKey = true;
                         }
@@ -81,9 +97,9 @@ final class RowActionsDeclared
                 if (! $declared && ! $pageDeclares) {
                     $found[] = ['target' => $path, 'check' => 'table row actions declare no shape: RowActions infers one row by row', 'line' => $line,
                         'hint' => "Name each row's primary action, ->rowActions(primary: '<action key>'), or put them all in the menu, ->rowActions(variant: 'menu'), so every row in the column takes the same shape (kit 0.29+)."];
-                } elseif (is_string($primary) && $actions !== [] && ! $dynamicKey && ! in_array($primary, $keys, true)) {
+                } elseif (is_string($primary) && $classActions !== [] && ! $dynamicKey && ! in_array($primary, $keys, true)) {
                     $found[] = ['target' => $path, 'check' => "row actions primary '{$primary}' matches no action key", 'line' => $line,
-                        'hint' => "No Action built here has key: '{$primary}', so every row shows its menu alone. Give the primary Action that key, or name the key it has".($keys === [] ? '.' : ' ('.implode(', ', array_unique($keys)).').')];
+                        'hint' => "No Action in this class has key: '{$primary}', so every row shows its menu alone. Give the primary Action that key, or name the key it has".($keys === [] ? '.' : ' ('.implode(', ', array_unique($keys)).').')];
                 }
             }
         }
