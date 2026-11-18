@@ -8125,7 +8125,7 @@
                 "page",
                 "component"
             ],
-            "tree_leaf": "ui-page.kit-adoption",
+            "tree_leaf": null,
             "enforced_by": null,
             "mode": "review"
         },
