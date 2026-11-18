@@ -625,6 +625,10 @@
                     "next": "ui-page.data-table"
                 },
                 {
+                    "answer": "Its rows (or the record) show flags or tags, such as Possible duplicate, Unpaid or VIP",
+                    "next": "ui-page.flags-tags"
+                },
+                {
                     "answer": "None of these",
                     "next": "ui-page.list.byo"
                 }
@@ -1818,6 +1822,40 @@
                     "kit_component": "RowActions",
                     "use": "Per-row actions",
                     "props_hint": "actions descriptors"
+                }
+            ]
+        },
+        "ui-page.flags-tags": {
+            "id": "ui-page.flags-tags",
+            "recipe": "Flags and tags on records",
+            "summary": "A record's flags (facts the system raises: Possible duplicate, Unpaid, Stalled) and people's tags, through tey/kit 0.39+ (docs/flags.md): HasFlags on the model raises a flag where its state changes (`flag()`, `flag(when:)`, `unflag()`), Flags::define sets its label, tone and dismissal, Tags::for builds the page's tags in one query, and the kit TagList shows them everywhere (flags first, wrapping, \"+N more\" only past eight). Flags::filter adds the Flags filter to a TableQuery. Not a hand-rolled row of badges, and never flag-typed tags written with spatie's methods.",
+            "kit": [
+                "@kit/ui Badge"
+            ],
+            "make": null,
+            "checks": [
+                "ui.tag-list",
+                "flags.via-api"
+            ],
+            "paths": [],
+            "keywords": [
+                "flag",
+                "flags",
+                "flagged",
+                "tag list",
+                "badge row",
+                "possible duplicate",
+                "record flags",
+                "record tags",
+                "system flag"
+            ],
+            "status": "draft",
+            "components": [
+                {
+                    "name": "a tag",
+                    "kit_component": "Badge",
+                    "use": "One flag or tag, as TagList renders it; the list itself is TagList (kit 0.39+, not yet in the catalog's kit snapshot)",
+                    "props_hint": "tone, size"
                 }
             ]
         },

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.11.107 - 2026-11-18
+
+### Added
+
+- **Rule `flags.via-api` (warn only): flags go through kit's HasFlags.** In an app requiring tey/kit, spatie/laravel-tags' writers (`attachTag`, `attachTags`, `detachTag`, `detachTags`, `syncTagsWithType`, `findOrCreate`) called with the type `flag` are reported. Use `flag()` and `unflag()`, which keep the reason and link and respect a dismissal.
+- **Rule `ui.tag-list` (warn only): a record's flags and tags show through kit's TagList.** A kit `<Badge>` repeated with `v-for` (directly, or as the first child of a repeated element) in an app .vue file is reported.
+- **Leaf `ui-page.flags-tags`** (Flags and tags on records, for tey/kit 0.39+) runs both rules.
+
 ## v0.11.106 - 2026-11-18
 
 ### Added

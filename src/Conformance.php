@@ -40,6 +40,8 @@ final class Conformance
         'integrations' => '[integrations] webhooks verify their sender and API calls go through a contract',
         'versioned-writes' => '[versioned-writes] query-builder writes on a versioned model bump its version',
         'tenant-aware' => '[tenant-aware] commands and queued jobs that touch tenant-scoped models run per tenant (spatie/laravel-multitenancy)',
+        'flags.via-api' => '[flags.via-api] flags are raised and removed through HasFlags, not spatie\'s tag writers with the flag type (warn only)',
+        'ui.tag-list' => '[ui.tag-list] a record\'s flags and tags show through the kit TagList, not a hand-rolled row of Badges (warn only)',
         'tenant.queued-declared' => '[tenant.queued-declared] every queued job, notification, mailable and listener declares TenantAware or NotTenantAware (warn only)',
         'tenant.scoped-exists' => '[tenant.scoped-exists] an exists rule on workspace records is scoped to the current workspace',
         'browser.accessible' => '[browser.accessible] a browser test that visits a page checks it with axe (assertAccessible)',
@@ -152,7 +154,7 @@ final class Conformance
         }
 
         // Warn only, whatever optionalRules says: the findings are reported, the test never fails on them.
-        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose', 'ui.surface-on-tinted-ground', 'brand.no-env-colours', 'tenant.queued-declared'], true)) {
+        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose', 'ui.surface-on-tinted-ground', 'brand.no-env-colours', 'tenant.queued-declared', 'flags.via-api', 'ui.tag-list'], true)) {
             Assert::markTestSkipped('Rule ['.$rule.'] warns only ('.count($violations).' findings).'.implode('', array_map(fn (array $violation): string => "\n".$violation['check'], $violations)));
         }
 
@@ -300,6 +302,14 @@ final class Conformance
 
         if ($rule === 'tenant.scoped-exists') {
             return (new Checks\ScopedExists($this->config, $this->source))->violations();
+        }
+
+        if ($rule === 'flags.via-api') {
+            return Checks\FlagTags::viaApi($this->config, $this->source);
+        }
+
+        if ($rule === 'ui.tag-list') {
+            return Checks\FlagTags::tagList($this->config);
         }
 
         if ($rule === 'tenant.queued-declared') {

@@ -74,6 +74,7 @@ nodes:
     options:
       - { answer: "No, a plain list", next: ui-page.index }
       - { answer: "Yes", next: ui-page.data-table }
+      - { answer: "Its rows (or the record) show flags or tags, such as Possible duplicate, Unpaid or VIP", next: ui-page.flags-tags }
       - { answer: "None of these", next: ui-page.list.byo }
   - id: ui-page.actions
     question: Which kind of control?
@@ -518,6 +519,20 @@ nodes:
     keywords: [sort, filter, toolbar, reorder, row action, confirm, data table, bulk, selection]
     status: ready
     evidence: { apps: 5, count: 6, prs: 6, past_apps: 6, past_count: 33 }
+  - id: ui-page.flags-tags
+    recipe: Flags and tags on records
+    summary: >-
+      A record's flags (facts the system raises: Possible duplicate, Unpaid, Stalled) and people's tags, through tey/kit 0.39+ (docs/flags.md): HasFlags
+      on the model raises a flag where its state changes (`flag()`, `flag(when:)`, `unflag()`), Flags::define sets its label, tone and dismissal, Tags::for
+      builds the page's tags in one query, and the kit TagList shows them everywhere (flags first, wrapping, "+N more" only past eight). Flags::filter adds
+      the Flags filter to a TableQuery. Not a hand-rolled row of badges, and never flag-typed tags written with spatie's methods.
+    kit: ['@kit/ui Badge']
+    components:
+      - { name: "a tag", kit_component: Badge, use: "One flag or tag, as TagList renders it; the list itself is TagList (kit 0.39+, not yet in the catalog's kit snapshot)", props_hint: "tone, size" }
+    checks: ['ui.tag-list', 'flags.via-api']
+    paths: []
+    keywords: [flag, flags, flagged, tag list, badge row, possible duplicate, record flags, record tags, system flag]
+    status: draft
   - id: ui-page.crud-resource
     recipe: CRUD resource screens
     summary: >-
