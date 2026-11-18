@@ -1132,3 +1132,26 @@ test('ui.row-actions-declared still warns when the only rowActions argument is t
     expect(rowShapeFindings(['app/Trigger.php' => rowShapeController('Trigger', "->rowActions(trigger: 'vertical')")]))
         ->toBe(['Trigger.php:7 table row actions declare no shape: RowActions infers one row by row']);
 });
+
+test('ui.row-actions-declared reads action keys across the class: a primary built in a helper method beside a bulk action is found', function () {
+    $class = fn (string $primary): string => <<<PHP
+        <?php
+
+        final class MemberIndexViewModel
+        {
+            public function table()
+            {
+                return TableQuery::for(Member::query())->rowActions(primary: '{$primary}')
+                    ->bulk([new Action('Delete', '/members/bulk', 'delete', key: 'delete')])
+                    ->rows(fn (\$member) => ['id' => \$member->id, 'actions' => \$this->actions(\$member)]);
+            }
+
+            private function actions(\$member): array
+            {
+                return [new Action('Open', '/members/1', 'get', key: 'open')];
+            }
+        }
+        PHP;
+    expect(rowShapeFindings(['app/MemberIndexViewModel.php' => $class('open')]))->toBe([])
+        ->and(rowShapeFindings(['app/MemberIndexViewModel.php' => $class('opne')]))->toBe(["MemberIndexViewModel.php:7 row actions primary 'opne' matches no action key"]);
+});
