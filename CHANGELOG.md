@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.111 - 2026-11-18
+
+### Added
+
+- **Leaf `ui-page.select-choice` (draft): choosing InputSelect or a plain Select.** A judgement leaf, with no check: InputSelect is the default, and a plain Select fits only a short fixed list the code owns that always holds a value. The leaf gives the four build-time questions (list from data or can grow, needs search, optional or clearable, a labelled empty choice). The new branch `ui-page.form-kind`, under "Creates or edits a record", leads to it and to `ui-page.form`. Matches tey/kit docs/form-fields.md, "Choosing a select".
+
 ## v0.11.110 - 2026-11-18
 
 ### Added

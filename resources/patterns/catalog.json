@@ -599,8 +599,8 @@
                     "next": "ui-page.show"
                 },
                 {
-                    "answer": "Creates or edits a record",
-                    "next": "ui-page.form"
+                    "answer": "Creates or edits a record, or picks a value in a form field",
+                    "next": "ui-page.form-kind"
                 },
                 {
                     "answer": "Adds buttons, links, menus or uploads to a page",
@@ -609,6 +609,25 @@
                 {
                     "answer": "None of these",
                     "next": "ui-page.own.byo"
+                }
+            ]
+        },
+        "ui-page.form-kind": {
+            "id": "ui-page.form-kind",
+            "question": "The whole form, or one choice field in it?",
+            "why": "A form page has its own controller, request and Action; a choice field is a component call made inside any form.",
+            "options": [
+                {
+                    "answer": "A create or edit form page",
+                    "next": "ui-page.form"
+                },
+                {
+                    "answer": "A field where people pick one value or several from a list",
+                    "next": "ui-page.select-choice"
+                },
+                {
+                    "answer": "None of these",
+                    "next": "ui-page.form-kind.byo"
                 }
             ]
         },
@@ -2223,6 +2242,53 @@
         },
         "ui-page.own.byo": {
             "id": "ui-page.own.byo",
+            "recipe": "Build your own",
+            "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [],
+            "status": "byo"
+        },
+        "ui-page.select-choice": {
+            "id": "ui-page.select-choice",
+            "recipe": "Choosing a select",
+            "summary": "A judgement call, not a check (Jasper, 2026-11-18): InputSelect is the standard go-to; a plain Select is right only for a short fixed list the code owns, that always holds a value, needs no search and has no \"none\" choice (a status on a dense settings row, a unit beside a number, a role from three). Ask at build time: does the list come from data, or can it grow? Will anyone need to search it? Is the field optional, or must people be able to clear it? Does \"no choice\" need its own label (\"Any scope\", \"No team\")? Any yes means InputSelect (search past 8 options or `filter=\"remote\"`, `clearable`, the empty label as its placeholder). A choice that changes what a page shows (a sort order, a view) is InlineDropdown, not a bordered field. See tey/kit docs/form-fields.md, \"Choosing a select\".",
+            "kit": [
+                "@kit/ui InputSelect"
+            ],
+            "make": null,
+            "checks": [],
+            "paths": [],
+            "keywords": [
+                "select",
+                "dropdown",
+                "inputselect",
+                "choose option",
+                "pick from list",
+                "combobox",
+                "clearable select",
+                "empty option"
+            ],
+            "status": "draft",
+            "components": [
+                {
+                    "name": "choice field",
+                    "kit_component": "InputSelect",
+                    "use": "The default select: search past 8 options, remote filtering, clearable, multiple",
+                    "props_hint": "options, v-model, clearable, placeholder"
+                },
+                {
+                    "name": "fixed short list",
+                    "kit_component": "Select",
+                    "use": "Only a short fixed list that always holds a value, with no search and no none choice",
+                    "props_hint": "options, v-model"
+                }
+            ]
+        },
+        "ui-page.form-kind.byo": {
+            "id": "ui-page.form-kind.byo",
             "recipe": "Build your own",
             "summary": "No recipe fits this answer yet. Proceed with the general conventions, stamp new files `standards-pattern: gap`, and the demand is recorded.",
             "kit": [],
