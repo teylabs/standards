@@ -47,6 +47,7 @@ final class Conformance
         'tenant.scoped-exists' => '[tenant.scoped-exists] an exists rule on workspace records is scoped to the current workspace',
         'browser.accessible' => '[browser.accessible] a browser test that visits a page checks it with axe (assertAccessible)',
         'notifications.chat-via-channel' => '[notifications.chat-via-channel] chat messages are Notifications sent through their channel (toSlack), not direct API calls',
+        'media.image-scoped' => '[media.image-scoped] custom image transformations and drivers are registered in callAfterResolving(\'image\'), since the image manager is scoped (warn only)',
         'media.image-api' => '[media.image-api] userland image code uses Laravel\'s first-party image API; raw Imagick or GD only reads pixels, with a @raw-image reason',
         'ui.page-purpose' => '[ui.page-purpose] each page ViewModel states @purpose <who>: <main job> (warn only)',
         'ui.page-view-model' => '[ui.page-view-model] every rendered page extends PageViewModel; widgets and partials use ViewModel; $standalone = true opts out',
@@ -155,7 +156,7 @@ final class Conformance
         }
 
         // Warn only, whatever optionalRules says: the findings are reported, the test never fails on them.
-        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose', 'ui.surface-on-tinted-ground', 'brand.no-env-colours', 'tenant.queued-declared', 'flags.via-api', 'ui.tag-list'], true)) {
+        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose', 'ui.surface-on-tinted-ground', 'brand.no-env-colours', 'tenant.queued-declared', 'flags.via-api', 'ui.tag-list', 'media.image-scoped'], true)) {
             Assert::markTestSkipped('Rule ['.$rule.'] warns only ('.count($violations).' findings).'.implode('', array_map(fn (array $violation): string => "\n".$violation['check'], $violations)));
         }
 
@@ -291,6 +292,10 @@ final class Conformance
 
         if ($rule === 'notifications.chat-via-channel') {
             return (new Checks\ChatViaChannel($this->config, $this->source))->violations();
+        }
+
+        if ($rule === 'media.image-scoped') {
+            return Checks\ImageScoped::violations($this->config);
         }
 
         if ($rule === 'media.image-api') {

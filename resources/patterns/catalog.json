@@ -3015,7 +3015,8 @@
             "checks": [
                 "19",
                 "ui dropzone",
-                "media.image-api"
+                "media.image-api",
+                "media.image-scoped"
             ],
             "paths": [],
             "keywords": [
