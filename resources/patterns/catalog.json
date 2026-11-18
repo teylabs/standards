@@ -3910,7 +3910,9 @@
             "kit": [],
             "make": "standards:make job --flavor=plain",
             "checks": [
-                "actions"
+                "actions",
+                "tenant-aware",
+                "tenant.queued-declared"
             ],
             "paths": [
                 "app/**/Jobs/**"

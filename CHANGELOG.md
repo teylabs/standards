@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.11.106 - 2026-11-18
+
+### Added
+
+- **Rule `tenant.queued-declared` (warn only): every queued class says whether it runs in its workspace.** In an app with tenancy, a `ShouldQueue` job, notification, mailable or listener in the source roots implements spatie's `TenantAware` or `NotTenantAware` (itself or through a parent in the source), or `config/multitenancy.php` lists it in `tenant_aware_jobs` or `not_tenant_aware_jobs`. An undeclared class follows `queues_are_tenant_aware_by_default`, which tey/kit turns off from v0.38.0, so the choice is made when the class is written. The background-job leaf (`background.job`) runs it. `standards:make job` already writes `TenantAware`, or `NotTenantAware` with `--landlord`.
+
+### Changed
+
+- **`tenant-aware` reads tey/kit's default.** When the app's `config/multitenancy.php` doesn't set `queues_are_tenant_aware_by_default`, the rule takes tey/kit's version from `composer.lock`: v0.38.0 or later means off, so a job that touches tenant-scoped models without `TenantAware` is reported. Otherwise spatie's default (on) still applies.
+
 ## v0.11.105 - 2026-11-16
 
 ### Fixed

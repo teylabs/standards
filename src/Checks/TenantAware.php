@@ -17,7 +17,7 @@ use Tey\Standards\Source;
  *   Spatie\Multitenancy\Commands\Concerns\TenantAware trait, so it runs once per tenant (--tenant=*).
  * - A queued job (ShouldQueue) that references one is tenant-aware as the app's config/multitenancy.php decides: it implements
  *   Spatie\Multitenancy\Jobs\TenantAware, or is listed in `tenant_aware_jobs`, or queues are tenant-aware by default
- *   (`queues_are_tenant_aware_by_default`, true unless set) and it is neither listed in `not_tenant_aware_jobs` nor implements
+ *   (`queues_are_tenant_aware_by_default`: spatie's true unless set, or tey/kit's false since v0.38.0) and it is neither listed in `not_tenant_aware_jobs` nor implements
  *   Spatie\Multitenancy\Jobs\NotTenantAware. Otherwise the job runs outside any tenant and silently finds nothing.
  * - A tenant-scoped model that is Prunable or MassPrunable has its prunable() bypass the scope (withoutGlobalScopes), so
  *   `model:prune` (which runs outside any tenant) is landlord or cross-tenant housekeeping by design; otherwise it prunes nothing.
@@ -140,6 +140,40 @@ final class TenantAware
         }
 
         return array_values(array_unique($violations, SORT_REGULAR));
+    }
+
+    /**
+     * Rule `tenant.queued-declared` (warn only): every queued class (a ShouldQueue job, notification, mailable or listener in the app's source) says
+     * which it is, so the choice is made when the class is written: it implements Spatie\Multitenancy\Jobs\TenantAware or NotTenantAware (itself or
+     * through a parent in the source), or config/multitenancy.php lists it in tenant_aware_jobs or not_tenant_aware_jobs. Active when the app has
+     * tenancy, as for `tenant-aware`. An undeclared class follows queues_are_tenant_aware_by_default, which is off in tey/kit since v0.38.0.
+     *
+     * @return list<array{target: string, check: string, line?: int, hint?: string}>
+     */
+    public function undeclaredQueued(): array
+    {
+        if (! $this->active()) {
+            return [];
+        }
+
+        $classes = $this->sourceClasses();
+        $queue = $this->queueConfig();
+        $violations = [];
+
+        foreach ($classes as $name => [$path, $class]) {
+            if ($class->isAbstract() || $this->kind($class, $classes) !== 'job' || in_array($name, [...$queue['aware'], ...$queue['not_aware']], true)) {
+                continue;
+            }
+
+            if (array_intersect([self::JOB_TENANT_AWARE, self::JOB_NOT_TENANT_AWARE], $this->implementsAll($class, $classes)) !== []) {
+                continue;
+            }
+
+            $violations[] = ['target' => $path, 'check' => $name.' is queued but declares neither TenantAware nor NotTenantAware', 'line' => $class->getStartLine(),
+                'hint' => 'Say whether it runs in its workspace: implement Spatie\Multitenancy\Jobs\TenantAware if it needs the dispatching workspace (it reads or writes workspace models), or NotTenantAware if it runs centrally. Undeclared, it follows queues_are_tenant_aware_by_default ('.($queue['default'] ? 'on' : 'off').' here).'];
+        }
+
+        return $violations;
     }
 
     /**
@@ -711,13 +745,31 @@ final class TenantAware
     }
 
     /**
+     * The default when the app's config/multitenancy.php does not set it: spatie's own (on), unless the app runs tey/kit v0.38.0 or later, whose
+     * defaults turn it off. The kit version is read from composer.lock; with no lock, or a branch or unreadable version, spatie's default stands.
+     */
+    private function kitDefault(): bool
+    {
+        $lock = $this->config->base.'/composer.lock';
+        $data = is_file($lock) ? json_decode((string) file_get_contents($lock), true) : null;
+
+        foreach ([...($data['packages'] ?? []), ...($data['packages-dev'] ?? [])] as $package) {
+            if (($package['name'] ?? null) === 'tey/kit' && is_string($package['version'] ?? null) && preg_match('/^v?(\d+\.\d+\.\d+)/', $package['version'], $match) === 1) {
+                return version_compare($match[1], '0.38.0', '<');
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * The app's config/multitenancy.php, read statically: whether queues are tenant-aware by default (Spatie's default: true), and the two job lists.
      *
      * @return array{default: bool, aware: list<string>, not_aware: list<string>}
      */
     private function queueConfig(): array
     {
-        $config = ['default' => true, 'aware' => [], 'not_aware' => []];
+        $config = ['default' => $this->kitDefault(), 'aware' => [], 'not_aware' => []];
         $file = $this->config->base.'/config/multitenancy.php';
 
         if (! is_file($file)) {
