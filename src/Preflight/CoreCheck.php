@@ -18,7 +18,7 @@ use Throwable;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'queue.failed-store', 'schedule.running', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate', 'kit.fonts'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'queue.failed-store', 'schedule.running', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate', 'kit.fonts', 'media.disk'];
 
     /**
      * SHA-256 of upstream public/favicon.ico, favicon.svg and apple-touch-icon.png.
@@ -131,6 +131,7 @@ final readonly class CoreCheck implements Check
             'nightwatch.ready' => $this->nightwatchReady(),
             'deploy.migrate' => $this->deployMigrate(),
             'kit.fonts' => $this->kitFonts(),
+            'media.disk' => $this->mediaDisk(),
             default => throw new InvalidArgumentException('Unknown core check: '.$this->check),
         };
     }
@@ -290,6 +291,41 @@ final readonly class CoreCheck implements Check
         return $unpublished
             ? Result::warn('kit.fonts_source is self but the font files are not published: pages use the system fonts. Deploy `php artisan vendor:publish --tag=kit-fonts --force`, or commit public/vendor/kit/fonts.')
             : Result::pass('tey/kit\'s fonts are served as configured (the CDN, or self-hosted files that are published).');
+    }
+
+    /**
+     * Media Library writes to a rooted disk, not the whole bucket (the starter#129 convention): a `media` disk on the app's one bucket with
+     * root `media`, storage/app/private/media locally. Read from config, like install.filesystems: an s3 disk without a `root`, or a scoped
+     * disk with no prefix over one, is the whole bucket. Local disks pass. Advisory.
+     */
+    private function mediaDisk(): Result
+    {
+        // The app's composer.json decides, as the leaf's `requires` does for standards:install.
+        $composer = json_decode(is_file($this->base.'/composer.json') ? (string) file_get_contents($this->base.'/composer.json') : '', true);
+        if (! is_array($composer) || ! isset($composer['require']['spatie/laravel-medialibrary']) && ! isset($composer['require-dev']['spatie/laravel-medialibrary'])) {
+            return Result::pass('Not applicable: the app does not require spatie/laravel-medialibrary.');
+        }
+        $name = (string) $this->config->get('media-library.disk_name', 'public');
+        $recipe = 'Give Media Library a rooted media disk: the Cookbook recipe "Media in the app\'s one bucket" (docs/recipes/backend/media-in-one-bucket.md) adds a `media` disk on the same bucket with root `media` and sets media-library.disk_name to it. Existing rows keep resolving on the disk they name.';
+
+        return $this->wholeBucket($name)
+            ? Result::warn('media-library.disk_name is '.$name.', which writes to the whole bucket (an s3 disk with no root). '.$recipe)
+            : Result::pass('Media Library writes to '.$name.', a rooted or local disk.');
+    }
+
+    /** @param list<string> $seen */
+    private function wholeBucket(string $name, array $seen = []): bool
+    {
+        $disk = (array) $this->config->get('filesystems.disks.'.$name, []);
+        if (in_array($name, $seen, true)) {
+            return false;
+        }
+
+        return match ($disk['driver'] ?? null) {
+            's3' => trim((string) ($disk['root'] ?? ''), '/') === '',
+            'scoped' => trim((string) ($disk['prefix'] ?? ''), '/') === '' && is_string($disk['disk'] ?? null) && $this->wholeBucket($disk['disk'], [...$seen, $name]),
+            default => false,
+        };
     }
 
     private function favicon(): Result
