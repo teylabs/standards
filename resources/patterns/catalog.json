@@ -2466,17 +2466,22 @@
         "ui-page.activity-feed": {
             "id": "ui-page.activity-feed",
             "recipe": "activity-stream adoption",
-            "summary": "Publish activity through the activity-stream service's verb guide and authoriser, and render its feed; never a hand-built activity table.",
+            "summary": "Publish activity through the activity-stream service's verb guide and authoriser, and render its feed; never a hand-built activity table. The feed is a side effect, never the source (Jasper, Nov 22) — a domain event drives the business work and the feed is one of its subscribers, so no business listener (billing, access, agreements, notification routing) listens to Storyfeed's ActivityPublished; only a listener that shapes the feed itself, marked @feed-presentation with its reason.",
             "kit": [],
             "make": null,
-            "checks": [],
+            "checks": [
+                "events.storyfeed-side-effect"
+            ],
             "paths": [],
             "keywords": [
                 "activity",
                 "feed",
                 "stream",
                 "timeline",
-                "publish activity"
+                "publish activity",
+                "ActivityPublished",
+                "side effect",
+                "domain event"
             ],
             "status": "draft",
             "evidence": {

@@ -6007,8 +6007,8 @@
                 "ui-page"
             ],
             "tree_leaf": "ui-page.activity-feed",
-            "enforced_by": null,
-            "mode": "review"
+            "enforced_by": "events.storyfeed-side-effect",
+            "mode": "advisory"
         },
         {
             "id": "STD-ui-page.external-sync",

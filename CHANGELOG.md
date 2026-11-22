@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Rule `events.storyfeed-side-effect` (warn only): Storyfeed is a side effect, not the source.** App code that listens to `Storyfeed\Events\ActivityPublished` is reported: a parameter typed with it, `ActivityPublished::class` passed to `listen(...)`, or a key in a subscriber or `$listen` map. Dispatching it is not. A listener that only shapes the feed carries `@feed-presentation <reason>` on its class. Business work follows a domain event, and Storyfeed is one subscriber of it (Jasper, Nov 22). Leaf `ui-page.activity-feed` runs it.
+
 ## v0.12.3 - 2026-11-22
 
 ### Fixed
