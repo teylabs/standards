@@ -34,11 +34,11 @@ nodes:
     evidence: { apps: 8, count: 8, prs: 8, past_apps: 9, past_count: 20 }
   - id: integrations.billing
     recipe: Billing
-    summary: Guarded Stripe Checkout, a signed webhook, a shared-account guard and the catalogue as code.
+    summary: Guarded Stripe Checkout, a signed webhook, a shared-account guard and the catalogue as code, on laravel/cashier. stripe-php directly only for an approved exception such as Stripe Connect.
     kit: []
-    checks: []
+    checks: ['packages.first-party']
     paths: []
-    keywords: [stripe, billing, checkout, payment, subscription]
+    keywords: [stripe, billing, checkout, payment, subscription, cashier, connect]
     status: gap
     evidence: { apps: 6, count: 14, prs: 14, past_apps: 2, past_count: 7 }
   - id: integrations.ai

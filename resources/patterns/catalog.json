@@ -4621,17 +4621,21 @@
         "integrations.billing": {
             "id": "integrations.billing",
             "recipe": "Billing",
-            "summary": "Guarded Stripe Checkout, a signed webhook, a shared-account guard and the catalogue as code.",
+            "summary": "Guarded Stripe Checkout, a signed webhook, a shared-account guard and the catalogue as code, on laravel/cashier. stripe-php directly only for an approved exception such as Stripe Connect.",
             "kit": [],
             "make": null,
-            "checks": [],
+            "checks": [
+                "packages.first-party"
+            ],
             "paths": [],
             "keywords": [
                 "stripe",
                 "billing",
                 "checkout",
                 "payment",
-                "subscription"
+                "subscription",
+                "cashier",
+                "connect"
             ],
             "status": "gap",
             "evidence": {

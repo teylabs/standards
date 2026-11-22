@@ -55,6 +55,7 @@ final readonly class Configuration
      * @param  array<string, list<string>>  $boostSkills  Composer or npm package => required skills
      * @param  list<string>  $boostSkillRoots
      * @param  list<string>  $ciDefaultBranches
+     * @param  array<string, string>  $firstPartyExceptions  for rule `packages.first-party`: composer package => the id of an approved exception in Checks\FirstParty::EXCEPTIONS (`['stripe/stripe-php' => 'stripe-connect']`). An unknown id, an id that doesn't cover the package, or a package the rule doesn't flag is a finding
      */
     public function __construct(
         public string $base,
@@ -136,5 +137,6 @@ final readonly class Configuration
         public array $landlordCommands = [],
         public array $guestSafeMiddleware = [],
         public array $declaredLibraries = [],
+        public array $firstPartyExceptions = [],
     ) {}
 }

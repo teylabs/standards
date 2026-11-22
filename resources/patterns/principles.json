@@ -6904,8 +6904,8 @@
                 "integrations"
             ],
             "tree_leaf": "integrations.billing",
-            "enforced_by": null,
-            "mode": "review"
+            "enforced_by": "packages.first-party",
+            "mode": "enforced"
         },
         {
             "id": "STD-integrations.ai",

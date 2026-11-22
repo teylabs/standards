@@ -2,6 +2,7 @@
     "type": "project",
     "require": {
         "spatie/laravel-multitenancy": "^4.0",
-        "laravel/framework": "^12.0"
+        "laravel/framework": "^12.0",
+        "tightenco/ziggy": "^2.0"
     }
 }
