@@ -49,6 +49,7 @@ final class Conformance
         'notifications.chat-via-channel' => '[notifications.chat-via-channel] chat messages are Notifications sent through their channel (toSlack), not direct API calls',
         'media.image-scoped' => '[media.image-scoped] custom image transformations and drivers are registered in callAfterResolving(\'image\'), since the image manager is scoped (warn only)',
         'media.image-api' => '[media.image-api] userland image code uses Laravel\'s first-party image API; raw Imagick or GD only reads pixels, with a @raw-image reason',
+        'packages.first-party' => '[packages.first-party] a Laravel first-party package (Cashier, Socialite, Wayfinder, laravel/ai, Reverb, Pennant…) is used where it does the job; other cases cite an approved exception',
         'ui.page-purpose' => '[ui.page-purpose] each page ViewModel states @purpose <who>: <main job> (warn only)',
         'ui.page-view-model' => '[ui.page-view-model] every rendered page extends PageViewModel; widgets and partials use ViewModel; $standalone = true opts out',
         'ui.dashboard-composition' => '[ui.dashboard-composition] dashboard widgets: one feed at most, each kind in its column, every widget declares kind() (warn only)',
@@ -300,6 +301,10 @@ final class Conformance
 
         if ($rule === 'media.image-api') {
             return (new Checks\ImageApi($this->config, $this->source))->violations();
+        }
+
+        if ($rule === Checks\FirstParty::RULE) {
+            return (new Checks\FirstParty($this->config, $this->source))->violations();
         }
 
         if ($rule === 'browser.accessible') {

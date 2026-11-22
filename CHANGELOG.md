@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Rule `packages.first-party` (enforced): use a Laravel first-party package where one does the job.** It flags a required package that Cashier, Socialite, Wayfinder, laravel/ai, Reverb, Sanctum or Passport, or Pennant replaces. stripe/stripe-php counts only without Cashier. It also flags a hand-written GitHub or Google OAuth token exchange in the source roots. Exceptions come from a short approved list in tey/standards, each with its reason; today that's `stripe-connect`. An app cites one per package in the new `Configuration::$firstPartyExceptions`. Leaf `integrations.billing` runs it.
+
+### Upgrading
+
+- On the bump, apps on Stripe Connect cite the exception: Hubcommons `['stripe/stripe-php' => 'stripe-connect']`, invoicebutter `['spatie/laravel-stripe-webhooks' => 'stripe-connect']`. An app with a known gap allowlists the finding with an `expires` date and its issue in the reason (`standards:check` prints the exact target and check).
+
 ## v0.11.111 - 2026-11-18
 
 ### Added
