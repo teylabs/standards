@@ -50,6 +50,7 @@ final class Conformance
         'media.image-scoped' => '[media.image-scoped] custom image transformations and drivers are registered in callAfterResolving(\'image\'), since the image manager is scoped (warn only)',
         'media.image-api' => '[media.image-api] userland image code uses Laravel\'s first-party image API; raw Imagick or GD only reads pixels, with a @raw-image reason',
         'packages.first-party' => '[packages.first-party] a Laravel first-party package (Cashier, Socialite, Wayfinder, laravel/ai, Reverb, Pennant…) is used where it does the job; other cases cite an approved exception',
+        'events.storyfeed-side-effect' => '[events.storyfeed-side-effect] business work follows a domain event, not Storyfeed\'s ActivityPublished, ActivityDeleted or BatchClosed, and Actions don\'t publish inline; a feed-presentation listener says @feed-presentation (warn only)',
         'ui.page-purpose' => '[ui.page-purpose] each page ViewModel states @purpose <who>: <main job> (warn only)',
         'ui.page-view-model' => '[ui.page-view-model] every rendered page extends PageViewModel; widgets and partials use ViewModel; $standalone = true opts out',
         'ui.dashboard-composition' => '[ui.dashboard-composition] dashboard widgets: one feed at most, each kind in its column, every widget declares kind() (warn only)',
@@ -157,7 +158,7 @@ final class Conformance
         }
 
         // Warn only, whatever optionalRules says: the findings are reported, the test never fails on them.
-        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose', 'ui.surface-on-tinted-ground', 'brand.no-env-colours', 'tenant.queued-declared', 'flags.via-api', 'ui.tag-list', 'media.image-scoped'], true)) {
+        if (in_array($rule, ['ui.dashboard-composition', 'ui.page-purpose', 'ui.surface-on-tinted-ground', 'brand.no-env-colours', 'tenant.queued-declared', 'flags.via-api', 'ui.tag-list', 'media.image-scoped', Checks\StoryfeedSideEffect::RULE], true)) {
             Assert::markTestSkipped('Rule ['.$rule.'] warns only ('.count($violations).' findings).'.implode('', array_map(fn (array $violation): string => "\n".$violation['check'], $violations)));
         }
 
@@ -301,6 +302,10 @@ final class Conformance
 
         if ($rule === 'media.image-api') {
             return (new Checks\ImageApi($this->config, $this->source))->violations();
+        }
+
+        if ($rule === Checks\StoryfeedSideEffect::RULE) {
+            return (new Checks\StoryfeedSideEffect($this->config, $this->source))->violations();
         }
 
         if ($rule === Checks\FirstParty::RULE) {
