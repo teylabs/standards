@@ -259,6 +259,12 @@ nodes:
       Breadcrumbs are the kit's bar under the header, always. A module's sibling pages are PageTabs, registered with Registry::modulePage and sent by the server
       as the page's layout.navigation, which <Page> draws. A record's sections are PageTabs too, from the record ViewModel's own navigation, inside the record's
       frame under its header. No hand-rolled sub-nav strips.
+      Nested navigation, one level at a time, each sent by the server (Jasper, Nov 22): (1) level 2 is page tabs, one underline row; (2) a tab's own
+      2 to 5 sub-pages, or sibling child records, are secondary tabs, a pill row under the page tabs (PageTabs variant="secondary"), never a third row,
+      never above the tabs and never a filter (filters are SegmentLinks); (3) a section of about 8 pages or more, or with any grouping, gets a section
+      sidebar (SettingsFrame's, for manage areas as well as settings, two levels at most), whose pages may carry page tabs but not pills; (4) about 15
+      pages or more, or parts that don't relate, get a hub landing page; (5) a page that leaves its section's layout breaks out (ui-page.back-strip):
+      breadcrumbs on top, then the banded "Back to" strip. On phones each level becomes a select.
     kit: ['shell Layout (pages/Workspace/Layout.vue)', '@kit/ui Page', '@kit/ui PageTabs', 'tey/kit Registry::modulePage()']
     components:
       - { name: "page tabs", kit_component: PageTabs, use: "A module's sibling pages, or a record's sections: route links with the current one marked", props_hint: "tabs, label" }
@@ -426,7 +432,7 @@ nodes:
     status: ready
   - id: ui-page.back-strip
     recipe: Breakout page back strip
-    summary: "When to break out: a page breaks out when it replaces its parent's shared layout instead of rendering inside it. A page drawn inside the parent's layout (one of its tabs, a settings section, a panel of the record) keeps its trail and does not break out. A page that leaves it (a module opened from a card-grid section landing, a bench, an editor, a full-screen record) declares breaksOut() or the kit.breakout route default. The strip points one level up the trail: a module goes back to its section landing (Back to Admin), and a record page goes back to its tab. The strip is the kit's banded strip, never a plain link. Where the section also keeps its breadcrumbs, kit.breakout => 'with-trail' (tey/kit 0.45.0+) shows both, breadcrumbs on top and the banded strip below them: the strip goes back one level, and the full trail lets a deeply nested page jump straight to any ancestor. No hand-written back links."
+    summary: "When to break out: a page breaks out when it replaces its parent's shared layout instead of rendering inside it. A page drawn inside the parent's layout (one of its tabs, a settings section, a panel of the record) keeps its trail and does not break out. A page that leaves it (a module opened from a card-grid section landing, a bench, an editor, a full-screen record) declares breaksOut() or the kit.breakout route default. The strip points one level up the trail: a module goes back to its section landing (Back to Admin), and a record page goes back to its tab. The strip is the kit's banded strip, never a plain link. Where the section also keeps its breadcrumbs, kit.breakout => 'with-trail' (tey/kit 0.45.0+) shows both, breadcrumbs on top and the banded strip below them: the strip goes back one level, and the full trail lets a deeply nested page jump straight to any ancestor. Which levels stay in the layout (tabs, pills, sidebar, hub) is ui-page.page-tabs. No hand-written back links."
     kit: ['tey/kit PageViewModel::breaksOut()', "tey/kit route default kit.breakout"]
     components: []
     make: standards:make page --flavor=show
