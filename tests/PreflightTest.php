@@ -1758,14 +1758,14 @@ test('schedule.running passes with nothing scheduled, warns when tasks are sched
 test('media.disk warns when Media Library writes to the whole bucket, and passes a rooted media disk, local disks and apps without medialibrary', function (array $config, array $packages, string $status) {
     $this->preflight['config']->set(['filesystems.disks.s3' => ['driver' => 's3', 'bucket' => 'app'], ...$config]);
 
-    preflightWithPackages($packages, $packages === [] ? ['spatie/laravel-medialibrary'] : [], function () use ($status) {
-        $tester = preflightCommand($this->preflight, ['--only' => 'media', '--json' => true]);
-        $result = preflightResults($tester)['media.disk'];
-        expect($result)->toMatchArray(['level' => 'advisory', 'status' => $status])->and($tester->getStatusCode())->toBe(0);
-        if ($status === 'warn') {
-            expect($result['message'])->toContain('whole bucket')->toContain('media-in-one-bucket.md');
-        }
-    });
+    file_put_contents($this->preflight->root.'/composer.json', json_encode(['type' => 'project', 'require' => array_fill_keys($packages, '^11.0')]));
+
+    $tester = preflightCommand($this->preflight, ['--only' => 'media', '--json' => true]);
+    $result = preflightResults($tester)['media.disk'];
+    expect($result)->toMatchArray(['level' => 'advisory', 'status' => $status])->and($tester->getStatusCode())->toBe(0);
+    if ($status === 'warn') {
+        expect($result['message'])->toContain('whole bucket')->toContain('media-in-one-bucket.md');
+    }
 })->with([
     'whole-bucket s3' => [['media-library.disk_name' => 's3'], ['spatie/laravel-medialibrary'], 'warn'],
     'unprefixed scoped over s3' => [['media-library.disk_name' => 'tenant', 'filesystems.disks.tenant' => ['driver' => 'scoped', 'disk' => 's3', 'prefix' => '']], ['spatie/laravel-medialibrary'], 'warn'],

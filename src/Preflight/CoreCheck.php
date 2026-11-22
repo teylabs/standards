@@ -300,8 +300,10 @@ final readonly class CoreCheck implements Check
      */
     private function mediaDisk(): Result
     {
-        if (! InstalledVersions::isInstalled('spatie/laravel-medialibrary')) {
-            return Result::pass('Not applicable: spatie/laravel-medialibrary is not installed.');
+        // The app's composer.json decides, as the leaf's `requires` does for standards:install.
+        $composer = json_decode(is_file($this->base.'/composer.json') ? (string) file_get_contents($this->base.'/composer.json') : '', true);
+        if (! is_array($composer) || ! isset($composer['require']['spatie/laravel-medialibrary']) && ! isset($composer['require-dev']['spatie/laravel-medialibrary'])) {
+            return Result::pass('Not applicable: the app does not require spatie/laravel-medialibrary.');
         }
         $name = (string) $this->config->get('media-library.disk_name', 'public');
         $recipe = 'Give Media Library a rooted media disk: the Cookbook recipe "Media in the app\'s one bucket" (docs/recipes/backend/media-in-one-bucket.md) adds a `media` disk on the same bucket with root `media` and sets media-library.disk_name to it. Existing rows keep resolving on the disk they name.';
