@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.12.4 - 2026-11-22
 
 ### Added
 
-- **Rule `events.storyfeed-side-effect` (warn only): Storyfeed is a side effect, not the source.** App code that listens to `Storyfeed\Events\ActivityPublished` is reported: a parameter typed with it, `ActivityPublished::class` passed to `listen(...)`, or a key in a subscriber or `$listen` map. Dispatching it is not. A listener that only shapes the feed carries `@feed-presentation <reason>` on its class. Business work follows a domain event, and Storyfeed is one subscriber of it (Jasper, Nov 22). Leaf `ui-page.activity-feed` runs it.
+- **Rule `events.storyfeed-side-effect` (warn only): Storyfeed is a side effect, not the source.** App code that listens to `Storyfeed\Events\ActivityPublished` or `ActivityDeleted` is reported, and so is an inline Storyfeed publish in an `Actions/` file: a parameter typed with it, `ActivityPublished::class` passed to `listen(...)`, or a key in a subscriber or `$listen` map. Dispatching it is not. A listener that only shapes the feed carries `@feed-presentation <reason>` on its class. Business work follows a domain event, and Storyfeed is one subscriber of it (Jasper, Nov 22). Advisory: it never fails a run. It becomes enforced once Hubcommons' conversion reports zero findings. The wording matches Storyfeed's guidance (storyfeed#280). Leaf `ui-page.activity-feed` runs it.
 
 ## v0.12.3 - 2026-11-22
 

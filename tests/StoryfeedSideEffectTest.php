@@ -30,6 +30,18 @@ test('events.storyfeed-side-effect flags listeners and registrations on Activity
     ]);
 });
 
+test('events.storyfeed-side-effect covers ActivityDeleted, and an inline publish in an Action but not elsewhere or on another chain', function () {
+    expect(storyfeedFindings([
+        'Revoke.php' => "final class Revoke\n{\n    public function handle(\\Storyfeed\\Events\\ActivityDeleted \$e): void {}\n}\n",
+        'Actions/PlaceOrder.php' => "use Storyfeed\\Facades\\Storyfeed as Feed;\n\nfinal class PlaceOrder\n{\n    public function handle(): void\n    {\n        Feed::activity()->by(\$u)->action('place', \$o)->publish();\n        Feed::publish(\$story);\n        \$this->post->publish();\n    }\n}\n",
+        'Console/Backfill.php' => "use Storyfeed\\Facades\\Storyfeed;\n\nfinal class Backfill\n{\n    public function handle(): void\n    {\n        Storyfeed::activity()->publish();\n    }\n}\n",
+    ]))->toBe([
+        'src/Actions/PlaceOrder.php:11 publishes to Storyfeed inline in an Action',
+        'src/Actions/PlaceOrder.php:12 publishes to Storyfeed inline in an Action',
+        "src/Revoke.php:7 a listener takes Storyfeed's ActivityDeleted",
+    ]);
+});
+
 test('events.storyfeed-side-effect warns only: a finding never fails the Pest run', function () {
     $base = tenantApp(['L.php' => "final class L\n{\n    public function handle(\\Storyfeed\\Events\\ActivityPublished \$e): void {}\n}\n"]);
     try {
