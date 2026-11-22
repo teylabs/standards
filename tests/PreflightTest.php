@@ -170,7 +170,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'schedule.running' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'kit.fonts' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'schedule.running' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'kit.fonts' => 'advisory', 'media.disk' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -629,7 +629,7 @@ test('every selected check and the final summary are logged on the standards or 
 test('[regression] a non-interactive deploy run prints only the checks that need attention and never the word warning', function () {
     $quiet = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false);
     expect($quiet->getStatusCode())->toBe(0)
-        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 26 checks, 25 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
+        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 27 checks, 26 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
 
     $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => null]);
     $attention = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false)->getDisplay();
@@ -1754,3 +1754,23 @@ test('schedule.running passes with nothing scheduled, warns when tasks are sched
     $this->preflight['config']->set('preflight.schedule.expect_scheduler', false);
     expect($run()['status'])->toBe('pass');
 });
+
+test('media.disk warns when Media Library writes to the whole bucket, and passes a rooted media disk, local disks and apps without medialibrary', function (array $config, array $packages, string $status) {
+    $this->preflight['config']->set(['filesystems.disks.s3' => ['driver' => 's3', 'bucket' => 'app'], ...$config]);
+
+    preflightWithPackages($packages, $packages === [] ? ['spatie/laravel-medialibrary'] : [], function () use ($status) {
+        $tester = preflightCommand($this->preflight, ['--only' => 'media', '--json' => true]);
+        $result = preflightResults($tester)['media.disk'];
+        expect($result)->toMatchArray(['level' => 'advisory', 'status' => $status])->and($tester->getStatusCode())->toBe(0);
+        if ($status === 'warn') {
+            expect($result['message'])->toContain('whole bucket')->toContain('media-in-one-bucket.md');
+        }
+    });
+})->with([
+    'whole-bucket s3' => [['media-library.disk_name' => 's3'], ['spatie/laravel-medialibrary'], 'warn'],
+    'unprefixed scoped over s3' => [['media-library.disk_name' => 'tenant', 'filesystems.disks.tenant' => ['driver' => 'scoped', 'disk' => 's3', 'prefix' => '']], ['spatie/laravel-medialibrary'], 'warn'],
+    'rooted media disk' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 's3', 'bucket' => 'app', 'root' => 'media']], ['spatie/laravel-medialibrary'], 'pass'],
+    'local disk' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 'local', 'root' => '/app/storage/app/private/media']], ['spatie/laravel-medialibrary'], 'pass'],
+    'public local disk' => [['media-library.disk_name' => 'public', 'filesystems.disks.public' => ['driver' => 'local', 'root' => '/app/storage/app/public']], ['spatie/laravel-medialibrary'], 'pass'],
+    'no medialibrary' => [['media-library.disk_name' => 's3'], [], 'pass'],
+]);

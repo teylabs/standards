@@ -2846,6 +2846,10 @@
                     "next": "data-actions.media-library"
                 },
                 {
+                    "answer": "Where Media Library stores its files (the media disk, in the app's one bucket)",
+                    "next": "data-actions.media-disk"
+                },
+                {
                     "answer": "None of these",
                     "next": "data-actions.record-extras.byo"
                 }
@@ -3117,6 +3121,36 @@
                     "use": "Uploads the record's file or photo",
                     "props_hint": "v-model, accept"
                 }
+            ],
+            "related": [
+                "data-actions.media-disk"
+            ]
+        },
+        "data-actions.media-disk": {
+            "id": "data-actions.media-disk",
+            "recipe": "Media in the app's one bucket",
+            "summary": "Media Library writes to a rooted media disk, never the whole bucket: a `media` disk on the app's one bucket with root `media` when MEDIA_DISK=s3, storage/app/private/media locally, and media-library.disk_name set to media; s3 stays the whole bucket for the app's own files. Use a new disk, not Media Library's prefix, so existing rows keep resolving on the disk they name. Follow the recipe \"Media in the app's one bucket\". The advisory preflight media.disk warns when disk_name resolves to an s3 disk with no root.",
+            "kit": [],
+            "make": null,
+            "checks": [],
+            "paths": [
+                "config/filesystems.php",
+                "config/media-library.php"
+            ],
+            "keywords": [
+                "media disk",
+                "bucket",
+                "s3 root",
+                "media-library disk_name",
+                "MEDIA_DISK",
+                "storage"
+            ],
+            "status": "draft",
+            "related": [
+                "data-actions.media-library"
+            ],
+            "requires": [
+                "spatie/laravel-medialibrary"
             ]
         },
         "data-actions.record-extras.byo": {

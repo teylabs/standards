@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.12.5 - 2026-11-22
+
+### Added
+
+- **Preflight `media.disk` (advisory): Media Library writes to a rooted media disk, not the whole bucket.** With spatie/laravel-medialibrary installed, it warns when `media-library.disk_name` resolves to an `s3` disk with no `root` (or an unprefixed `scoped` disk over one). The fix is a `media` disk on the same bucket with root `media`, set as `disk_name`, following the recipe "Media in the app's one bucket". It never blocks a deploy; enforcing it is a separate decision (Jasper, Nov 22).
+- **Leaf `data-actions.media-disk` (draft)**, which `standards:install` writes only into apps that require spatie/laravel-medialibrary.
+
 ## v0.12.4 - 2026-11-22
 
 ### Added
