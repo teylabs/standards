@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.12.1 - 2026-11-22
+
+### Changed
+
+- **Leaf `ui-page.back-strip`: when a page breaks out.** A page breaks out when it replaces its parent's layout, and keeps its trail when it renders inside it (a tab, a settings section, a record panel). The banded strip skips the module's own crumbs: a module's tab page goes back to the landing above it, and a record goes back to its tab. With `kit.breakout => 'with-trail'` (tey/kit 0.45.0+), the whole trail sits on top and the strip below it, so a deeply nested page can jump to any ancestor (Jasper, Nov 22).
+- **Leaf `ui-page.page-tabs`: nested navigation levels.** Tabs, then pills for a nested module's row (`PageTabs variant="secondary"`, never a third row or a filter), then a sidebar for a module whose pages carry a `group`, then a hub landing, then a breakout. On phones each level is a select. This matches tey/kit 0.46.0 (Jasper, Nov 22).
+
 ## v0.12.0 - 2026-11-22
 
 ### Added
