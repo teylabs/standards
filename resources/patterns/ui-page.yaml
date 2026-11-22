@@ -426,7 +426,7 @@ nodes:
     status: ready
   - id: ui-page.back-strip
     recipe: Breakout page back strip
-    summary: A page that leaves its parent's shared layout declares breaksOut() (or the kit.breakout route default); the kit draws "Back to <parent>" from the trail's parent crumb, in place of the trail. No hand-written back links.
+    summary: "When to break out: a page breaks out when it replaces its parent's shared layout instead of rendering inside it. A page drawn inside the parent's layout (one of its tabs, a settings section, a panel of the record) keeps its trail and does not break out. A page that leaves it (a module opened from a card-grid section landing, a bench, an editor, a full-screen record) declares breaksOut() or the kit.breakout route default. The strip points one level up the trail: a module goes back to its section landing (Back to Admin), and a record page goes back to its tab. Where the section also keeps its breadcrumbs, kit.breakout => 'with-trail' (tey/kit 0.45.0+) shows the strip above the full trail. No hand-written back links."
     kit: ['tey/kit PageViewModel::breaksOut()', "tey/kit route default kit.breakout"]
     components: []
     make: standards:make page --flavor=show
