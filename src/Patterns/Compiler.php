@@ -290,19 +290,26 @@ final class Compiler
             }
         }
 
+        // A leaf built on a package not every app has (a private or unreleased one) lists it, and standards:install writes the leaf only where it is required.
+        $requires = $node['requires'] ?? [];
+
+        if (! is_array($requires) || ! array_is_list($requires) || array_filter($requires, fn (mixed $package): bool => is_string($package) && preg_match('~^[a-z0-9_.-]+/[a-z0-9_.-]+$~', $package) === 1) !== $requires) {
+            throw new InvalidArgumentException("Leaf {$id} requires must be a list of composer package names (vendor/name).");
+        }
+
         $graduate = $node['graduate'] ?? null;
 
         if ($graduate !== null && (! is_string($graduate) || trim($graduate) === '')) {
             throw new InvalidArgumentException("Leaf {$id} graduate must be a non-empty string.");
         }
 
-        $extra = array_diff(array_keys($node), ['id', 'recipe', 'summary', 'kit', 'make', 'recipe_make', 'checks', 'paths', 'keywords', 'status', 'evidence', 'components', 'rules', 'related', 'graduate']);
+        $extra = array_diff(array_keys($node), ['id', 'recipe', 'summary', 'kit', 'make', 'recipe_make', 'checks', 'paths', 'keywords', 'status', 'evidence', 'components', 'rules', 'related', 'graduate', 'requires']);
 
         if ($extra !== []) {
             throw new InvalidArgumentException("Leaf {$id} has unknown fields: ".implode(', ', $extra).'.');
         }
 
-        return ['id' => $id, 'recipe' => $node['recipe'], 'summary' => $node['summary'], 'kit' => $node['kit'], 'make' => $make, 'checks' => $node['checks'], 'paths' => $node['paths'], 'keywords' => $node['keywords'], 'status' => $node['status'], ...($recipeMake === null ? [] : ['recipe_make' => $recipeMake]), ...($evidence === null ? [] : ['evidence' => $evidence]), ...($components === [] ? [] : ['components' => $components]), ...(($node['rules'] ?? []) === [] ? [] : ['rules' => $node['rules']]), ...(($node['related'] ?? []) === [] ? [] : ['related' => $node['related']]), ...($graduate === null ? [] : ['graduate' => $graduate])];
+        return ['id' => $id, 'recipe' => $node['recipe'], 'summary' => $node['summary'], 'kit' => $node['kit'], 'make' => $make, 'checks' => $node['checks'], 'paths' => $node['paths'], 'keywords' => $node['keywords'], 'status' => $node['status'], ...($recipeMake === null ? [] : ['recipe_make' => $recipeMake]), ...($evidence === null ? [] : ['evidence' => $evidence]), ...($components === [] ? [] : ['components' => $components]), ...(($node['rules'] ?? []) === [] ? [] : ['rules' => $node['rules']]), ...(($node['related'] ?? []) === [] ? [] : ['related' => $node['related']]), ...($graduate === null ? [] : ['graduate' => $graduate]), ...($requires === [] ? [] : ['requires' => $requires])];
     }
 
     /** @param array<string, array<string, mixed>> $nodes */

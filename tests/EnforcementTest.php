@@ -316,6 +316,22 @@ test('install writes one Boost skill per non-gap recipe, path-scoped for Claude'
         ->and(is_dir($base.'/.claude/skills/standards-mcp-queued'))->toBeFalse();
 });
 
+test('install leaves out a leaf whose required package the app lacks, and removes the copy it wrote before', function () {
+    $base = ($this->app)();
+    $composer = json_decode((string) @file_get_contents($base.'/composer.json'), true) ?: [];
+    file_put_contents($base.'/composer.json', json_encode([...$composer, 'require' => [...($composer['require'] ?? []), 'tey/docket' => '^0.6']]));
+    $installer = new Installer($base, TreeCatalog::shipped());
+    $installer->skills();
+    expect(is_file($base.'/.claude/skills/standards-ui-page-modal-run/SKILL.md'))->toBeTrue()
+        ->and($installer->index())->toContain('`ui-page.modal-run`');
+
+    file_put_contents($base.'/composer.json', json_encode($composer));
+    $installer->skills();
+    expect(is_dir($base.'/.claude/skills/standards-ui-page-modal-run'))->toBeFalse()
+        ->and(is_dir($base.'/.ai/skills/standards-ui-page-modal-run'))->toBeFalse()
+        ->and($installer->index())->not->toContain('docket');
+});
+
 test('install adds a pre-push hook but never replaces someone else\'s', function () {
     $base = ($this->app)();
     (new Process(['git', 'init', '-q'], $base))->mustRun();

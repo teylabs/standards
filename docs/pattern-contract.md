@@ -93,6 +93,7 @@ Returned by `find` at the end of a traversal or for a single match, and by `reci
 | `siblings` | list of leaf ids, nearest recipes for `gap` and `byo` | experimental |
 | `conventions` | `{rules, notes}` for `gap` and `byo`; for a `draft` leaf with its own rules, `{rules, notes}` where `notes` holds its graduation note; otherwise null | experimental |
 | `related` | list of `{id, recipe, make}`: leaves it composes or sits beside | experimental |
+| `requires` | list of composer packages the leaf needs; `standards:install` writes the leaf's AGENTS.md row and skill only into an app that requires them all, and removes a skill it generated earlier otherwise | experimental |
 | `graduate` | string or null: when the leaf becomes a generator or kit recipe | experimental |
 | `message` | for `gap`: "No recipe yet. Build to the nearest sibling `<id>` and flag it."; for `byo`: a note to proceed; otherwise null | experimental |
 | `demand` | for `gap` and `byo`: `{answers, criteria, unit_type, ts}`, otherwise null | experimental |

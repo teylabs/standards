@@ -35,6 +35,8 @@ final readonly class Leaf
         public array $related = [],
         /** when it becomes a generator or kit recipe */
         public ?string $graduate = null,
+        /** @var list<string> composer packages the leaf needs; standards:install writes it into an app only when the app requires them all */
+        public array $requires = [],
     ) {}
 
     /** Demand: fleet apps × changes plus past apps × changes, 0 without evidence. */
@@ -46,6 +48,6 @@ final readonly class Leaf
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return ['type' => 'leaf', 'id' => $this->id, 'recipe' => $this->recipe, 'summary' => $this->summary, 'kit' => $this->kit, 'make' => $this->make, 'checks' => $this->checks, 'paths' => $this->paths, 'keywords' => $this->keywords, 'status' => $this->status, 'recipe_make' => $this->recipeMake, 'evidence' => $this->evidence, 'components' => $this->components, 'rules' => $this->rules, 'related' => $this->related, 'graduate' => $this->graduate];
+        return ['type' => 'leaf', 'id' => $this->id, 'recipe' => $this->recipe, 'summary' => $this->summary, 'kit' => $this->kit, 'make' => $this->make, 'checks' => $this->checks, 'paths' => $this->paths, 'keywords' => $this->keywords, 'status' => $this->status, 'recipe_make' => $this->recipeMake, 'evidence' => $this->evidence, 'components' => $this->components, 'rules' => $this->rules, 'related' => $this->related, 'graduate' => $this->graduate, 'requires' => $this->requires];
     }
 }

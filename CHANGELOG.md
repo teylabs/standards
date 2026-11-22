@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.3 - 2026-11-22
+
+### Fixed
+
+- **`standards:install` leaves out a leaf built on a package the app doesn't require.** A leaf can list `requires` (composer packages). Its AGENTS.md row and skills are written only into an app that requires them all, and a skill an earlier install generated is removed. `ui-page.modal-run` requires `tey/docket`, so apps without Docket no longer get its skill or row (a starter privacy check flagged them).
+
 ## v0.12.2 - 2026-11-22
 
 ### Changed
