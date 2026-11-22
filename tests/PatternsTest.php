@@ -184,7 +184,8 @@ test('the compiler rejects a ready leaf without make, an unknown generator and a
         $at = nodeAt($source, 'settings.form');
 
         if ($value === null) {
-            unset($source['nodes'][$at][$field]);
+            // A ready leaf with no command at all: settings.form also carries the Bakery's recipe_make.
+            unset($source['nodes'][$at][$field], $source['nodes'][$at]['recipe_make']);
         } else {
             $source['nodes'][$at][$field] = $value;
         }
