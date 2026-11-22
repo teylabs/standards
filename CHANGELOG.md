@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.2 - 2026-11-22
+
+### Changed
+
+- **Three leaves name a Bakery scaffold (butter/bakery v0.7.0).** `settings.form` shows `php artisan mod:butter/settings-page {Name}`, `ui-page.show` shows `mod:butter/detail-page {Name}`, and `settings.workspace` shows `mod:butter/connection-settings {Name}`. Each sits beside the leaf's existing `standards:make` command, as `data-actions.document` shows `mod:butter/pdf-reports`. There's no connection-settings leaf, so `settings.workspace`, a workspace's settings section, is the nearest. Each recipe is pure Tailwind for `--frontend=inertia-vue` or `inertia-react`.
+
 ## v0.12.1 - 2026-11-22
 
 ### Changed

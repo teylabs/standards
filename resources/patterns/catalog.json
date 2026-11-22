@@ -923,7 +923,7 @@
         "ui-page.show": {
             "id": "ui-page.show",
             "recipe": "Inertia show page",
-            "summary": "A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand.",
+            "summary": "A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand. Scaffold it with the Bakery's detail-page recipe (pure Tailwind, --frontend=inertia-vue or inertia-react), which lays out the record at a focused width with its heading, status and actions, then its sections.",
             "kit": [
                 "@kit/ui Page",
                 "@kit/ui Section",
@@ -960,6 +960,7 @@
                 "date"
             ],
             "status": "ready",
+            "recipe_make": "mod:butter/detail-page {Name}",
             "components": [
                 {
                     "name": "page shell",
@@ -3422,7 +3423,7 @@
         "settings.form": {
             "id": "settings.form",
             "recipe": "Settings form section",
-            "summary": "An edit/update controller under the settings route group renders resources/js/pages/settings/<Section>/Page.vue in the settings layout.",
+            "summary": "An edit/update controller under the settings route group renders resources/js/pages/settings/<Section>/Page.vue in the settings layout. Scaffold it with the Bakery's settings-page recipe (pure Tailwind, --frontend=inertia-vue or inertia-react; the form sends its version, so a save made elsewhere comes back as a version error), or with standards:make settings-section --flavor=form.",
             "kit": [
                 "@kit/ui SettingsFrame",
                 "@kit/ui FormCard",
@@ -3446,6 +3447,7 @@
                 "preferences form"
             ],
             "status": "ready",
+            "recipe_make": "mod:butter/settings-page {Name}",
             "components": [
                 {
                     "name": "settings shell",
@@ -3551,7 +3553,7 @@
         "settings.workspace": {
             "id": "settings.workspace",
             "recipe": "Workspace settings",
-            "summary": "A workspace's settings section at /@{workspace}/settings/<slug> (WorkspaceRoutes::page under the settings landing page), each request inside TenantBoundary behind a capability-gated policy (rule 32), a stale-write guarded and audited Action, and a PageViewModel in the workspace settings layout.",
+            "summary": "A workspace's settings section at /@{workspace}/settings/<slug> (WorkspaceRoutes::page under the settings landing page), each request inside TenantBoundary behind a capability-gated policy (rule 32), a stale-write guarded and audited Action, and a PageViewModel in the workspace settings layout. A connection to a third-party service (a key, its status, Check now and Disconnect) is scaffolded by the Bakery's connection-settings recipe (pure Tailwind, --frontend=inertia-vue or inertia-react), which stores the key encrypted and checks it with a queued probe; other sections use standards:make settings-section --flavor=form.",
             "kit": [
                 "@kit/ui Page",
                 "@kit/ui FormCard",
@@ -3573,6 +3575,7 @@
                 "tenant settings"
             ],
             "status": "ready",
+            "recipe_make": "mod:butter/connection-settings {Name}",
             "evidence": {
                 "apps": 3,
                 "count": 9,

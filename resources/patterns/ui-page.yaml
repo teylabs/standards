@@ -165,7 +165,8 @@ nodes:
       - "Every rendered page extends PageViewModel; widgets and partials use ViewModel; `$standalone = true` opts a deliberate exception out (rule ui.page-view-model)."
   - id: ui-page.show
     recipe: Inertia show page
-    summary: A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand.
+    recipe_make: "mod:butter/detail-page {Name}"
+    summary: A show method passes one record's ViewModel to resources/js/pages/<Area>/Show/Page.vue; dates render relative to the viewer's timezone, never by hand. Scaffold it with the Bakery's detail-page recipe (pure Tailwind, --frontend=inertia-vue or inertia-react), which lays out the record at a focused width with its heading, status and actions, then its sections.
     kit: ['@kit/ui Page', '@kit/ui Section', '@kit/ui DescriptionList', '@kit/ui ButtonGroup', '@kit/ui InertiaAction', '@kit/ui DropdownAction']
     components:
       - { name: "page shell", kit_component: Page, use: "Wraps the record page; its #actions slot holds the record's actions (ui-page.header-actions), with no SectionHeader repeating the title", props_hint: "title, #actions" }
