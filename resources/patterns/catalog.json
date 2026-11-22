@@ -726,7 +726,10 @@
                 "pending",
                 "checklist"
             ],
-            "status": "draft"
+            "status": "draft",
+            "requires": [
+                "tey/docket"
+            ]
         },
         "ui-page.larger": {
             "id": "ui-page.larger",

@@ -108,6 +108,7 @@ nodes:
     paths: []
     keywords: [modal, dialog, progress, preview, report, export, docket, run, spinner, loading, double click, pending, checklist]
     status: draft
+    requires: [tey/docket]
   - id: ui-page.larger
     question: Is it a full set of CRUD screens, a workflow page beyond CRUD, a full-screen display, or a full-screen sub-page?
     options:
