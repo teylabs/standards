@@ -827,7 +827,7 @@ nodes:
     related: [ui-page.stage-display]
   - id: ui-page.activity-feed
     recipe: activity-stream adoption
-    summary: Publish activity through the activity-stream service's verb guide and authoriser, and render its feed; never a hand-built activity table. The feed is a side effect, never the source (Jasper, Nov 22) — a domain event drives the business work and the feed is one of its subscribers, so no business listener (billing, access, agreements, notification routing) listens to Storyfeed's ActivityPublished or ActivityDeleted, and an Action dispatches a domain event implementing PublishesToFeed instead of publishing inline; only a listener that shapes the feed itself, marked @feed-presentation with its reason.
+    summary: Publish activity through the activity-stream service's verb guide and authoriser, and render its feed; never a hand-built activity table. The feed is a side effect, never the source (Jasper, Nov 22) — a domain event drives the business work and the feed is one of its subscribers, so no business listener (billing, access, agreements, notification routing) listens to Storyfeed's ActivityPublished, ActivityDeleted or BatchClosed (they fire only when feed rows change), and an Action dispatches a domain event implementing PublishesToFeed instead of publishing inline; only a listener that shapes the feed itself, marked @feed-presentation with its reason.
     kit: []
     checks: ['events.storyfeed-side-effect']
     paths: []

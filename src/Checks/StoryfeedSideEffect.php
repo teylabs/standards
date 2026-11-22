@@ -11,8 +11,9 @@ use Tey\Standards\Source;
 
 /**
  * Rule `events.storyfeed-side-effect` (warn only): Storyfeed is a side effect, never the source (Jasper, Nov 22; Storyfeed's guidance, storyfeed#280). A
- * domain event drives the business work, and Storyfeed is one more subscriber of it. App code that listens to Storyfeed's ActivityPublished or
- * ActivityDeleted is reported, and so is an inline publish (`Storyfeed::activity()->…->publish()`, `Storyfeed::publish()`) in an `Actions/` file. Listening is: a method taking an
+ * domain event drives the business work, and Storyfeed is one more subscriber of it. App code that listens to Storyfeed's ActivityPublished,
+ * ActivityDeleted or BatchClosed is reported (they fire only when feed rows change: not while recording is off, under Storyfeed::fake(), or for an
+ * idempotent duplicate). The Snapshots payload types are not events and are not flagged. Also reported: an inline publish (`Storyfeed::activity()->…->publish()`, `Storyfeed::publish()`, `Storyfeed::record()`) in an `Actions/` file. Listening is: a method taking an
  * ActivityPublished parameter (a listener's handle(), a closure), an `Event::listen(ActivityPublished::class, …)` and a subscriber mapping it. A listener
  * that only shapes the feed itself (its presentation) carries a `@feed-presentation <reason>` docblock tag on its class and is not reported.
  */
@@ -21,13 +22,14 @@ final readonly class StoryfeedSideEffect
     public const RULE = 'events.storyfeed-side-effect';
 
     /** Storyfeed's own events, which fire only when a feed row is written (not while recording is off). */
-    public const EVENTS = ['Storyfeed\\Events\\ActivityPublished', 'Storyfeed\\Events\\ActivityDeleted'];
+    public const EVENTS = ['Storyfeed\\Events\\ActivityPublished', 'Storyfeed\\Events\\ActivityDeleted', 'Storyfeed\\Events\\BatchClosed'];
 
     public const FACADE = 'Storyfeed\\Facades\\Storyfeed';
 
     public const MARKER = '@feed-presentation';
 
-    private const HINT = 'Dispatch a domain event where the work happens and listen to that; Storyfeed publishes from the same event. Only a listener that shapes the feed itself stays, marked `@feed-presentation <reason>` on its class.';
+    /** Storyfeed's own doctor check `listeners.business` (storyfeed v0.30.5) says the same, so the rule and core agree. */
+    private const HINT = 'Storyfeed is a side effect, never the source: that event fires only when a feed row is written, so not while recording is off, under Storyfeed::fake(), or for an idempotent duplicate. Move business logic (access, billing, subscriptions, mail, notification routing) to a listener on your own domain event, and publish to the feed from that event with PublishesToFeed. Keep this listener only if it presents the feed (a cache bust, a live broadcast), and mark its class `@feed-presentation <reason>`.';
 
     public function __construct(private Configuration $config, private Source $source) {}
 
@@ -36,8 +38,8 @@ final readonly class StoryfeedSideEffect
     {
         $violations = [];
         foreach ($this->source->files($this->config->sourceRoots) as $path => $text) {
-            $action = preg_match('~(^|/)Actions/~', $path) === 1;
-            if (! str_contains($text, 'ActivityPublished') && ! str_contains($text, 'ActivityDeleted') && ! ($action && str_contains($text, 'publish'))) {
+            $action = preg_match('~(^|/)Actions/~', $path) === 1 && ! $this->backfill($path, $text);
+            if (preg_match('~ActivityPublished|ActivityDeleted|BatchClosed~', $text) !== 1 && ! ($action && preg_match('~publish|record~', $text) === 1)) {
                 continue;
             }
             $finder = new NodeFinder;
@@ -62,24 +64,31 @@ final readonly class StoryfeedSideEffect
                     default => null,
                 };
                 if ($how !== null) {
-                    $violations[] = ['target' => $path, 'check' => $how.': business work should follow a domain event, with Storyfeed as one subscriber', 'line' => $line, 'hint' => self::HINT];
+                    $violations[] = ['target' => $path, 'check' => $how.': Storyfeed is a side effect, never the source', 'line' => $line, 'hint' => self::HINT];
                 }
             }
             // An Action is a domain transition: it dispatches its domain event (PublishesToFeed), and the feed publishes from it.
             foreach ($action ? $finder->find($this->source->nodes($path), fn (Node $node): bool => $this->inlinePublish($node)) : [] as $call) {
-                $violations[] = ['target' => $path, 'check' => 'publishes to Storyfeed inline in an Action: dispatch a domain event that implements PublishesToFeed instead', 'line' => $call->getStartLine(),
-                    'hint' => 'Dispatch your own domain event where the transition succeeds and implement Storyfeed\\Contracts\\PublishesToFeed, returning the activity from toFeedActivity() without ->publish(). Inline publishing is for imports, backfills, console commands and one-off records, outside Actions.'];
+                $violations[] = ['target' => $path, 'check' => 'publishes to Storyfeed inline in an Action: Storyfeed is a side effect, never the source; dispatch a domain event that implements PublishesToFeed', 'line' => $call->getStartLine(),
+                    'hint' => 'Dispatch your own domain event where the transition succeeds and implement Storyfeed\\Contracts\\PublishesToFeed: its toFeedActivity() returns the activity, or the Story\'s toFeedActivity(), without ->publish(), and core\'s listener publishes it. Inline publishing stays for imports and backfills: console commands, seeders and migrations.'];
             }
         }
 
         return $violations;
     }
 
-    /** `Storyfeed::publish(...)`, or `->publish()` on a chain that starts at the Storyfeed facade (`Storyfeed::activity()->…->publish()`). */
+    /** Imports and backfills, where publishing inline is still correct: a console command, a seeder or a migration (by folder or by the class it extends). */
+    private function backfill(string $path, string $text): bool
+    {
+        return preg_match('~(^|/)(Console|Commands)/|(^|/)database/(seeders|migrations)/~', $path) === 1
+            || preg_match('~\\bextends\\s+\\\\?(?:[\\w\\\\]*\\\\)?(?:Command|Seeder|Migration)\\b~', $text) === 1;
+    }
+
+    /** `Storyfeed::publish(...)` or `Storyfeed::record(...)`, or `->publish()` on a chain that starts at the Storyfeed facade (`Storyfeed::activity()->…->publish()`). */
     private function inlinePublish(Node $node): bool
     {
         if ($node instanceof Node\Expr\StaticCall) {
-            return $node->class instanceof Node\Name && $node->class->toString() === self::FACADE && $node->name instanceof Node\Identifier && $node->name->toString() === 'publish';
+            return $node->class instanceof Node\Name && $node->class->toString() === self::FACADE && $node->name instanceof Node\Identifier && in_array($node->name->toString(), ['publish', 'record'], true);
         }
         if (! $node instanceof Node\Expr\MethodCall || ! $node->name instanceof Node\Identifier || $node->name->toString() !== 'publish') {
             return false;
