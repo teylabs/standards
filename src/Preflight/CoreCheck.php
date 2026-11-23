@@ -306,11 +306,21 @@ final readonly class CoreCheck implements Check
             return Result::pass('Not applicable: the app does not require spatie/laravel-medialibrary.');
         }
         $name = (string) $this->config->get('media-library.disk_name', 'public');
-        $recipe = 'Give Media Library a rooted media disk: the Cookbook recipe "Media in the app\'s one bucket" (docs/recipes/backend/media-in-one-bucket.md) adds a `media` disk on the same bucket with root `media` and sets media-library.disk_name to it. Existing rows keep resolving on the disk they name.';
+        $required = [...array_keys((array) ($composer['require'] ?? [])), ...array_keys((array) ($composer['require-dev'] ?? []))];
+        $recipe = 'Use a scoped disk over s3: `\'media\' => [\'driver\' => \'scoped\', \'disk\' => \'s3\', \'prefix\' => \'media\']` with league/flysystem-path-prefixing required, and set media-library.disk_name to it (the recipe "Media in the app\'s one bucket", docs/recipes/backend/media-in-one-bucket.md). Existing rows keep resolving on the disk they name.';
+        $disk = (array) $this->config->get('filesystems.disks.'.$name, []);
 
-        return $this->wholeBucket($name)
-            ? Result::warn('media-library.disk_name is '.$name.', which writes to the whole bucket (an s3 disk with no root). '.$recipe)
-            : Result::pass('Media Library writes to '.$name.', a rooted or local disk.');
+        if ($this->wholeBucket($name)) {
+            return Result::warn('media-library.disk_name is '.$name.', which writes to the whole bucket (an s3 disk with no root, or a scoped disk with no prefix over one). '.$recipe);
+        }
+        if (($disk['driver'] ?? null) === 's3' && $name !== 's3') {
+            return Result::warn('media-library.disk_name is '.$name.', an s3 disk with its own bucket config. Laravel Cloud injects an attached bucket into the `s3` disk only, so this copy has a null bucket in production. '.$recipe);
+        }
+        if (($disk['driver'] ?? null) === 'scoped' && ! in_array('league/flysystem-path-prefixing', $required, true)) {
+            return Result::warn('media-library.disk_name is '.$name.', a scoped disk, but composer.json does not require league/flysystem-path-prefixing, which scoped disks need. Run `composer require league/flysystem-path-prefixing`.');
+        }
+
+        return Result::pass('Media Library writes to '.$name.', a scoped prefix over s3 or a local disk.');
     }
 
     /** @param list<string> $seen */
