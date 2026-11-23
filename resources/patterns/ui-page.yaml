@@ -262,7 +262,8 @@ nodes:
       as the page's layout.navigation, which <Page> draws. A record's sections are PageTabs too, from the record ViewModel's own navigation, inside the record's
       frame under its header. No hand-rolled sub-nav strips.
       Nested navigation, one level at a time, each sent by the server (Jasper, Nov 22; tey/kit 0.46.0): (1) level 2 is page tabs, one underline row;
-      (2) a nested module's row (a tab's own 2 to 5 sub-pages) is pills, PageTabs variant="secondary" under the tabs: never a third row, never above the
+      (2) pills (PageTabs variant="secondary") are a nested module's row (a tab's own 2 to 5 sub-pages), or a top-level module that opts in with
+      variant 'secondary' on its modulePage (Jasper, Nov 23; in tey/kit once its 0.49.x modulePage variant is tagged). Pills sit under the tabs: never a third row, never above the
       tabs and never a filter (filters are SegmentLinks); (3) a module whose pages carry a group (Registry::modulePage(..., group: 'Invoicing')) is a
       sidebar module: <Page> frames it with SettingsFrame's sidebar, one labelled group per group, and draws no tab row. Group a module at about 8 pages
       or more, or when its pages fall into groups; nothing switches automatically, and a nested module is never a sidebar; (4) about 15 pages or more, or

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.6 - 2026-11-23
+
+### Changed
+
+- **Leaf `ui-page.page-tabs`: a top-level module may opt into pills.** Pills are a nested module's row, or a top-level module whose modulePage sets variant `'secondary'` (Jasper, Nov 23). The kit adds that variant in a 0.49.x release that isn't tagged yet; the leaf will name the version once it is.
+
 ## v0.12.5 - 2026-11-22
 
 ### Added
