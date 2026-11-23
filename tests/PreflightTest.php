@@ -1755,22 +1755,20 @@ test('schedule.running passes with nothing scheduled, warns when tasks are sched
     expect($run()['status'])->toBe('pass');
 });
 
-test('media.disk warns when Media Library writes to the whole bucket, and passes a rooted media disk, local disks and apps without medialibrary', function (array $config, array $packages, string $status) {
+test('media.disk passes a prefixed scoped disk over s3 and local disks, and warns on the whole bucket, a copied s3 disk and a scoped disk without path-prefixing', function (array $config, array $packages, string $status, string $says) {
     $this->preflight['config']->set(['filesystems.disks.s3' => ['driver' => 's3', 'bucket' => 'app'], ...$config]);
-
-    file_put_contents($this->preflight->root.'/composer.json', json_encode(['type' => 'project', 'require' => array_fill_keys($packages, '^11.0')]));
+    file_put_contents($this->preflight->root.'/composer.json', json_encode(['type' => 'project', 'require' => array_fill_keys($packages, '^3.0')]));
 
     $tester = preflightCommand($this->preflight, ['--only' => 'media', '--json' => true]);
     $result = preflightResults($tester)['media.disk'];
-    expect($result)->toMatchArray(['level' => 'advisory', 'status' => $status])->and($tester->getStatusCode())->toBe(0);
-    if ($status === 'warn') {
-        expect($result['message'])->toContain('whole bucket')->toContain('media-in-one-bucket.md');
-    }
+    expect($result)->toMatchArray(['level' => 'advisory', 'status' => $status])->and($tester->getStatusCode())->toBe(0)
+        ->and($result['message'])->toContain($says);
 })->with([
-    'whole-bucket s3' => [['media-library.disk_name' => 's3'], ['spatie/laravel-medialibrary'], 'warn'],
-    'unprefixed scoped over s3' => [['media-library.disk_name' => 'tenant', 'filesystems.disks.tenant' => ['driver' => 'scoped', 'disk' => 's3', 'prefix' => '']], ['spatie/laravel-medialibrary'], 'warn'],
-    'rooted media disk' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 's3', 'bucket' => 'app', 'root' => 'media']], ['spatie/laravel-medialibrary'], 'pass'],
-    'local disk' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 'local', 'root' => '/app/storage/app/private/media']], ['spatie/laravel-medialibrary'], 'pass'],
-    'public local disk' => [['media-library.disk_name' => 'public', 'filesystems.disks.public' => ['driver' => 'local', 'root' => '/app/storage/app/public']], ['spatie/laravel-medialibrary'], 'pass'],
-    'no medialibrary' => [['media-library.disk_name' => 's3'], [], 'pass'],
+    'whole-bucket s3' => [['media-library.disk_name' => 's3'], ['spatie/laravel-medialibrary'], 'warn', 'whole bucket'],
+    'unprefixed scoped over s3' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 'scoped', 'disk' => 's3', 'prefix' => '']], ['spatie/laravel-medialibrary', 'league/flysystem-path-prefixing'], 'warn', 'whole bucket'],
+    'copied s3 disk with root' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 's3', 'bucket' => 'app', 'root' => 'media']], ['spatie/laravel-medialibrary'], 'warn', "injects an attached bucket into the `s3` disk only"],
+    'scoped without path-prefixing' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 'scoped', 'disk' => 's3', 'prefix' => 'media']], ['spatie/laravel-medialibrary'], 'warn', 'league/flysystem-path-prefixing'],
+    'scoped with prefix' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 'scoped', 'disk' => 's3', 'prefix' => 'media']], ['spatie/laravel-medialibrary', 'league/flysystem-path-prefixing'], 'pass', 'scoped prefix'],
+    'local disk' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 'local', 'root' => '/app/storage/app/private/media']], ['spatie/laravel-medialibrary'], 'pass', 'local disk'],
+    'no medialibrary' => [['media-library.disk_name' => 's3'], [], 'pass', 'Not applicable'],
 ]);

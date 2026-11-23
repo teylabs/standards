@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.7 - 2026-11-23
+
+### Changed
+
+- **Preflight `media.disk` (advisory) expects a scoped disk over s3.** Laravel Cloud injects an attached bucket into the `s3` disk only, so a `media` disk copied from s3 with a `root` has a null bucket in production. It now passes `['driver' => 'scoped', 'disk' => 's3', 'prefix' => 'media']`, warns on an `s3`-driver media disk other than `s3`, warns on a scoped disk without league/flysystem-path-prefixing required, and still warns on the whole bucket. The leaf `data-actions.media-disk` says the same.
+
 ## v0.12.6 - 2026-11-23
 
 ### Changed
