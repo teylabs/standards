@@ -1,0 +1,20 @@
+# Test fixtures under fixtures/ are scratch apps the suite reads, not installed dependencies;
+# Dependabot can't update them, so its security-update jobs there fail and turn main red.
+# open-pull-requests-limit: 0 turns off version updates; security updates still run outside fixtures/.
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    exclude-paths:
+      - "fixtures/**"
+  - package-ecosystem: npm
+    directories:
+      - "/**"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    exclude-paths:
+      - "fixtures/**"
