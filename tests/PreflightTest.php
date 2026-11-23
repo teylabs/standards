@@ -170,7 +170,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'schedule.running' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'kit.fonts' => 'advisory', 'media.disk' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'schedule.running' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'kit.fonts' => 'advisory', 'media.disk' => 'advisory', 'kit.css' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -629,7 +629,7 @@ test('every selected check and the final summary are logged on the standards or 
 test('[regression] a non-interactive deploy run prints only the checks that need attention and never the word warning', function () {
     $quiet = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false);
     expect($quiet->getStatusCode())->toBe(0)
-        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 27 checks, 26 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
+        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 28 checks, 27 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
 
     $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => null]);
     $attention = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false)->getDisplay();
@@ -1777,4 +1777,28 @@ test('media.disk passes a prefixed scoped disk over any base, and warns on the w
     'copied Cloud-named disk with root' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 's3', 'bucket' => 'cloud', 'root' => 'media']], ['spatie/laravel-medialibrary'], 'warn', "env('MEDIA_DISK')", "[...\$bucket, 'root' => 'media']"],
     'local disk' => [['media-library.disk_name' => 'media', 'filesystems.disks.media' => ['driver' => 'local', 'root' => '/app/storage/app/private/media']], ['spatie/laravel-medialibrary'], 'pass', 'local disk'],
     'no medialibrary' => [['media-library.disk_name' => 's3'], [], 'pass', 'Not applicable'],
+]);
+
+test('kit.css warns when a tey/kit host never imports kit.css, and passes the plain and layer(theme) imports', function (array $packages, array $css, string $status, string $says) {
+    file_put_contents($this->preflight->root.'/composer.json', json_encode(['type' => 'project', 'require' => array_fill_keys($packages, '^0.49')]));
+    is_dir($this->preflight->root.'/resources/css') || mkdir($this->preflight->root.'/resources/css', recursive: true);
+    foreach (glob($this->preflight->root.'/resources/css/*') as $old) {
+        unlink($old);
+    }
+    foreach ($css as $file => $body) {
+        file_put_contents($this->preflight->root.'/resources/css/'.$file, $body);
+    }
+
+    $tester = preflightCommand($this->preflight, ['--only' => 'kit', '--json' => true]);
+    $result = preflightResults($tester)['kit.css'];
+    expect($result)->toMatchArray(['level' => 'advisory', 'status' => $status])->and($tester->getStatusCode())->toBe(0)
+        ->and($result['message'])->toContain($says);
+})->with([
+    'plain import' => [['tey/kit'], ['app.css' => "@import 'tailwindcss';\n@import './kit.css';\n", 'kit.css' => ''], 'pass', 'imports kit.css'],
+    'layer(theme) import' => [['tey/kit'], ['app.css' => "@import 'tailwindcss';\n@import \"./kit.css\" layer(theme);\n"], 'pass', 'imports kit.css'],
+    'through a nested import' => [['tey/kit'], ['app.css' => "@import './base.css';\n", 'base.css' => "@import './kit.css';\n"], 'pass', 'imports kit.css'],
+    'no import' => [['tey/kit'], ['app.css' => "@import 'tailwindcss';\n", 'kit.css' => ''], 'warn', 'never imports kit.css'],
+    'only in a comment' => [['tey/kit'], ['app.css' => "/* @import './kit.css'; */\n@import 'tailwindcss';\n"], 'warn', 'never imports kit.css'],
+    'no app.css' => [['tey/kit'], [], 'warn', 'app.css is missing'],
+    'no tey/kit' => [[], ['app.css' => "@import 'tailwindcss';\n"], 'pass', 'Not applicable'],
 ]);
