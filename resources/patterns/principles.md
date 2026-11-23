@@ -153,7 +153,7 @@ One row per checkable principle. Regex "how to check" entries find candidates, n
 | RUN-04 | account-mail / Never stranded | No-workspace person sees one server-decided page, never a 403 | routes | page |
 | RUN-05 | account-mail / Focus shell | All first-run pages use FocusShell | route × shell | page |
 | RUN-06 | account-mail / Empty states | Every index and dashboard card has first-use and no-results empty states | every index page: EmptyState / no-results | page |
-| FEED-01 | activity-feed | New feeds use storyfeed/storyfeed; backend emits fully described entities; UI has zero domain knowledge | Feed subclasses; renderers | action, component |
+| FEED-01 | activity-feed | New feeds use the activity-stream service; backend emits fully described entities; UI has zero domain knowledge | Feed subclasses; renderers | action, component |
 | FEED-02 | activity-feed | Adding an activity type needs no frontend branching | grep switch on verb/type in feed vue | component |
 | FEED-03 | activity-feed | Deferred prop + usePoll for live refresh; no hand-rolled axios poll | grep axios, setInterval | page |
 | FEED-04 | activity-feed | Filters compare getMorphClass, not get_class | grep | action |

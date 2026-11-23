@@ -5,18 +5,18 @@ declare(strict_types=1);
 use Illuminate\Filesystem\Filesystem;
 use Tey\Standards\Conformance;
 
-/** Rule events.storyfeed-side-effect on a scratch app; tenantApp() and tenantConfiguration() come from TenantAwareTest. */
+/** Rule events.feed-side-effect on a scratch app; tenantApp() and tenantConfiguration() come from TenantAwareTest. */
 function storyfeedFindings(array $files): array
 {
     $base = tenantApp($files);
     try {
-        return array_map(fn (array $v): string => $v['target'].':'.$v['line'].' '.strtok($v['check'], ':'), (new Conformance(tenantConfiguration($base)))->violations('events.storyfeed-side-effect'));
+        return array_map(fn (array $v): string => $v['target'].':'.$v['line'].' '.strtok($v['check'], ':'), (new Conformance(tenantConfiguration($base)))->violations('events.feed-side-effect'));
     } finally {
         (new Filesystem)->deleteDirectory(dirname($base));
     }
 }
 
-test('events.storyfeed-side-effect flags listeners and registrations on ActivityPublished, aliases included, not dispatches or a @feed-presentation class', function () {
+test('events.feed-side-effect flags listeners and registrations on ActivityPublished, aliases included, not dispatches or a @feed-presentation class', function () {
     expect(storyfeedFindings([
         'ActivatePaidJoins.php' => "use Storyfeed\\Events\\ActivityPublished;\n\nfinal class ActivatePaidJoins\n{\n    public function handle(ActivityPublished \$event): void {}\n}\n",
         'Provider.php' => "use Storyfeed\\Events\\ActivityPublished as Published;\n\nfinal class Provider\n{\n    public function boot(): void\n    {\n        Event::listen(Published::class, fn () => null);\n        event(new Published);\n        \$this->map = [Published::class => [X::class]];\n        \$name = Published::class;\n    }\n}\n",
@@ -30,7 +30,7 @@ test('events.storyfeed-side-effect flags listeners and registrations on Activity
     ]);
 });
 
-test('events.storyfeed-side-effect covers ActivityDeleted, and an inline publish in an Action but not elsewhere or on another chain', function () {
+test('events.feed-side-effect covers ActivityDeleted, and an inline publish in an Action but not elsewhere or on another chain', function () {
     expect(storyfeedFindings([
         'Revoke.php' => "final class Revoke\n{\n    public function handle(\\Storyfeed\\Events\\ActivityDeleted \$e): void {}\n}\n",
         'Actions/PlaceOrder.php' => "use Storyfeed\\Facades\\Storyfeed as Feed;\n\nfinal class PlaceOrder\n{\n    public function handle(): void\n    {\n        Feed::activity()->by(\$u)->action('place', \$o)->publish();\n        Feed::publish(\$story);\n        \$this->post->publish();\n    }\n}\n",
@@ -42,7 +42,7 @@ test('events.storyfeed-side-effect covers ActivityDeleted, and an inline publish
     ]);
 });
 
-test('events.storyfeed-side-effect flags each Storyfeed event in each listening form, and not the Snapshots payload types', function (string $event) {
+test('events.feed-side-effect flags each Storyfeed event in each listening form, and not the Snapshots payload types', function (string $event) {
     $fqcn = 'Storyfeed\\Events\\'.$event;
     $files = [
         'Typed.php' => "use {$fqcn};\n\nfinal class Typed\n{\n    public function handle({$event} \$e): void {}\n}\n",
@@ -60,7 +60,7 @@ test('events.storyfeed-side-effect flags each Storyfeed event in each listening 
     ]);
 })->with(['ActivityPublished', 'ActivityDeleted', 'BatchClosed']);
 
-test('events.storyfeed-side-effect flags Storyfeed::publish() in an Action, and exempts console commands, seeders and migrations', function () {
+test('events.feed-side-effect flags Storyfeed::publish() in an Action, and exempts console commands, seeders and migrations', function () {
     $publish = "    public function handle(): void\n    {\n        Storyfeed::publish(\$story);\n    }\n";
     expect(storyfeedFindings([
         'Actions/ConfirmBooking.php' => "use Storyfeed\\Facades\\Storyfeed;\n\nfinal class ConfirmBooking\n{\n{$publish}}\n",
@@ -71,16 +71,16 @@ test('events.storyfeed-side-effect flags Storyfeed::publish() in an Action, and 
     ]))->toBe(['src/Actions/ConfirmBooking.php:11 publishes to Storyfeed inline in an Action']);
 });
 
-test('events.storyfeed-side-effect warns only: a finding never fails the Pest run', function () {
+test('events.feed-side-effect warns only: a finding never fails the Pest run', function () {
     $base = tenantApp(['L.php' => "final class L\n{\n    public function handle(\\Storyfeed\\Events\\ActivityPublished \$e): void {}\n}\n"]);
     try {
-        expect(fn () => (new Conformance(tenantConfiguration($base)))->assert('events.storyfeed-side-effect'))->toThrow(PHPUnit\Framework\SkippedWithMessageException::class, 'warns only (1 findings)');
+        expect(fn () => (new Conformance(tenantConfiguration($base)))->assert('events.feed-side-effect'))->toThrow(PHPUnit\Framework\SkippedWithMessageException::class, 'warns only (1 findings)');
     } finally {
         (new Filesystem)->deleteDirectory(dirname($base));
     }
 });
 
-test('events.storyfeed-side-effect counts Storyfeed::record() in an Action as an inline publish, as storyfeed:doctor does', function () {
+test('events.feed-side-effect counts Storyfeed::record() in an Action as an inline publish, as storyfeed:doctor does', function () {
     expect(storyfeedFindings(['Actions/Note.php' => "use Storyfeed\\Facades\\Storyfeed;\n\nfinal class Note\n{\n    public function handle(): void\n    {\n        Storyfeed::record('x');\n    }\n}\n"]))
         ->toBe(['src/Actions/Note.php:11 publishes to Storyfeed inline in an Action']);
 });
