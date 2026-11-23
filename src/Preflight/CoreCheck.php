@@ -314,6 +314,10 @@ final readonly class CoreCheck implements Check
         if ($this->wholeBucket($name)) {
             return Result::warn('media-library.disk_name is '.$name.', which writes to the whole bucket (an s3 disk with no root, or a scoped disk with no prefix over one). '.$recipe);
         }
+        // A copied disk ([...$s3, 'root' => 'media']) is taken when config loads, before Laravel Cloud adds the attached bucket's named disk.
+        if (($disk['driver'] ?? null) === 's3') {
+            return Result::warn('media-library.disk_name is '.$name.', an s3-driver disk built from its own config. A disk that copies another disk\'s config at load time is taken before Laravel Cloud adds the attached bucket\'s disk, so on Cloud it has a null bucket. '.$recipe);
+        }
         if (($disk['driver'] ?? null) === 'scoped' && ! in_array('league/flysystem-path-prefixing', $required, true)) {
             return Result::warn('media-library.disk_name is '.$name.', a scoped disk, but composer.json does not require league/flysystem-path-prefixing, which scoped disks need. Run `composer require league/flysystem-path-prefixing`.');
         }
