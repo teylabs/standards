@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.12 - 2026-11-23
+
+### Added
+
+- **Preflight `kit.css` (advisory).** An app that requires tey/kit must import `kit.css` from `resources/css/app.css` (directly or through a local import); the plain and `layer(theme)` forms both count. Without it the kit's elevation, field and shell tokens are missing (storyfeed/website#73). Warn-only.
+
 ## v0.12.11 - 2026-11-23
 
 ### Changed

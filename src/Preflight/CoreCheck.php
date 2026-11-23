@@ -18,7 +18,7 @@ use Throwable;
 
 final readonly class CoreCheck implements Check
 {
-    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'queue.failed-store', 'schedule.running', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate', 'kit.fonts', 'media.disk'];
+    public const NAMES = ['app.key', 'app.env-debug', 'database.config', 'mail.transport', 'mail.from', 'mail.reply-to', 'queue.connection', 'queue.worker', 'queue.failed-store', 'schedule.running', 'cache.store', 'app.url', 'logging.channel', 'brand.favicon', 'ci.triggers', 'nightwatch.ready', 'deploy.migrate', 'kit.fonts', 'media.disk', 'kit.css'];
 
     /**
      * SHA-256 of upstream public/favicon.ico, favicon.svg and apple-touch-icon.png.
@@ -132,6 +132,7 @@ final readonly class CoreCheck implements Check
             'deploy.migrate' => $this->deployMigrate(),
             'kit.fonts' => $this->kitFonts(),
             'media.disk' => $this->mediaDisk(),
+            'kit.css' => $this->kitCss(),
             default => throw new InvalidArgumentException('Unknown core check: '.$this->check),
         };
     }
@@ -291,6 +292,45 @@ final readonly class CoreCheck implements Check
         return $unpublished
             ? Result::warn('kit.fonts_source is self but the font files are not published: pages use the system fonts. Deploy `php artisan vendor:publish --tag=kit-fonts --force`, or commit public/vendor/kit/fonts.')
             : Result::pass('tey/kit\'s fonts are served as configured (the CDN, or self-hosted files that are published).');
+    }
+
+    /**
+     * A tey/kit host imports kit.css from its app CSS (storyfeed/website#73): without it the kit's tokens (elevation, fields, shell) are
+     * missing and kit components render unstyled. Reads resources/css/app.css and the local files it imports; `@import './kit.css'`
+     * and `@import './kit.css' layer(theme)` both count. Advisory.
+     */
+    private function kitCss(): Result
+    {
+        $composer = json_decode(is_file($this->base.'/composer.json') ? (string) file_get_contents($this->base.'/composer.json') : '', true);
+        if (! is_array($composer) || ! isset($composer['require']['tey/kit']) && ! isset($composer['require-dev']['tey/kit'])) {
+            return Result::pass('Not applicable: the app does not require tey/kit.');
+        }
+        $hint = 'Add `@import \'./kit.css\';` (or `@import \'./kit.css\' layer(theme);`) to resources/css/app.css after Tailwind, so the kit\'s tokens load.';
+        $app = $this->base.'/resources/css/app.css';
+        if (! is_file($app)) {
+            return Result::warn('tey/kit is installed but resources/css/app.css is missing, so nothing imports kit.css. '.$hint);
+        }
+        $queue = [realpath($app)];
+        $seen = [];
+        while ($queue !== []) {
+            $file = array_shift($queue);
+            if ($file === false || isset($seen[$file]) || ! is_file($file)) {
+                continue;
+            }
+            $seen[$file] = true;
+            $css = (string) preg_replace('~/\*.*?\*/~s', '', (string) file_get_contents($file));
+            preg_match_all('~@import\s+(?:url\(\s*)?[\'"]([^\'"]+)[\'"]~', $css, $imports);
+            foreach ($imports[1] as $import) {
+                if (basename($import) === 'kit.css') {
+                    return Result::pass('resources/css/app.css imports kit.css.');
+                }
+                if (str_starts_with($import, '.')) {
+                    $queue[] = realpath(dirname($file).'/'.$import);
+                }
+            }
+        }
+
+        return Result::warn('tey/kit is installed but resources/css/app.css never imports kit.css, so the kit\'s tokens (elevation, fields, shell) are missing. '.$hint);
     }
 
     /**
