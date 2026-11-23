@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.10 - 2026-11-23
+
+### Changed
+
+- **Leaf `ui-page.page-tabs` names the kit's opt-in.** Pills mean a nested level, or a top-level module that opts in with `Registry::moduleVariant('<module>', 'secondary')`; its own row is then pills on every page, the dashboard included. Without it, a top-level module's row is underline tabs (Jasper, option B; tey/kit v0.49.3, as its docs/shell.md says).
+
 ## v0.12.9 - 2026-11-23
 
 ### Fixed
