@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.9 - 2026-11-23
+
+### Fixed
+
+- **Preflight `media.disk` flags a copied media disk again.** Any `s3`-driver media disk that isn't scoped warns, whatever its base is called (`[...$s3, 'root' => 'media']`, `[...$bucket, …]`): the copy is taken when config loads, before Laravel Cloud adds the attached bucket's disk, so on Cloud it has a null bucket. The hint is to scope over `env('MEDIA_DISK')`. v0.12.8 had dropped this.
+
 ## v0.12.8 - 2026-11-23
 
 ### Fixed
