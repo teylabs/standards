@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.8 - 2026-11-23
+
+### Fixed
+
+- **Preflight `media.disk` (advisory) no longer assumes `s3`.** Laravel Cloud gives an attached bucket as a disk under the name chosen when attaching it (LARAVEL_CLOUD_DISK_CONFIG), not as `s3`. The check passes a prefixed scoped disk over any base, recommends `['driver' => 'scoped', 'disk' => env('MEDIA_DISK'), 'prefix' => 'media']`, and warns on a scoped disk over a hard-coded `s3`. v0.12.7's "Cloud injects into s3" warning and hint are gone. The path-prefixing and whole-bucket checks stay.
+
 ## v0.12.7 - 2026-11-23
 
 ### Changed

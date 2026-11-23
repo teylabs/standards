@@ -307,20 +307,21 @@ final readonly class CoreCheck implements Check
         }
         $name = (string) $this->config->get('media-library.disk_name', 'public');
         $required = [...array_keys((array) ($composer['require'] ?? [])), ...array_keys((array) ($composer['require-dev'] ?? []))];
-        $recipe = 'Use a scoped disk over s3: `\'media\' => [\'driver\' => \'scoped\', \'disk\' => \'s3\', \'prefix\' => \'media\']` with league/flysystem-path-prefixing required, and set media-library.disk_name to it (the recipe "Media in the app\'s one bucket", docs/recipes/backend/media-in-one-bucket.md). Existing rows keep resolving on the disk they name.';
+        $recipe = 'Use a scoped disk over the base disk MEDIA_DISK names: `\'media\' => [\'driver\' => \'scoped\', \'disk\' => env(\'MEDIA_DISK\'), \'prefix\' => \'media\']` (a local disk when MEDIA_DISK=local), with league/flysystem-path-prefixing required, and set media-library.disk_name to it (the recipe "Media in the app\'s one bucket", docs/recipes/backend/media-in-one-bucket.md). Laravel Cloud gives an attached bucket as a disk under the name chosen when attaching it, so name the base disk from MEDIA_DISK, not a fixed `s3`. Existing rows keep resolving on the disk they name.';
         $disk = (array) $this->config->get('filesystems.disks.'.$name, []);
+        $source = is_file($this->base.'/config/filesystems.php') ? (string) file_get_contents($this->base.'/config/filesystems.php') : '';
 
         if ($this->wholeBucket($name)) {
             return Result::warn('media-library.disk_name is '.$name.', which writes to the whole bucket (an s3 disk with no root, or a scoped disk with no prefix over one). '.$recipe);
         }
-        if (($disk['driver'] ?? null) === 's3' && $name !== 's3') {
-            return Result::warn('media-library.disk_name is '.$name.', an s3 disk with its own bucket config. Laravel Cloud injects an attached bucket into the `s3` disk only, so this copy has a null bucket in production. '.$recipe);
-        }
         if (($disk['driver'] ?? null) === 'scoped' && ! in_array('league/flysystem-path-prefixing', $required, true)) {
             return Result::warn('media-library.disk_name is '.$name.', a scoped disk, but composer.json does not require league/flysystem-path-prefixing, which scoped disks need. Run `composer require league/flysystem-path-prefixing`.');
         }
+        if (($disk['driver'] ?? null) === 'scoped' && ($disk['disk'] ?? null) === 's3' && ! str_contains($source, "env('MEDIA_DISK'")) {
+            return Result::warn('media-library.disk_name is '.$name.', a scoped disk over a hard-coded `s3`. On Laravel Cloud the attached bucket is a disk under the name chosen when attaching it, so `s3` may have no bucket. '.$recipe);
+        }
 
-        return Result::pass('Media Library writes to '.$name.', a scoped prefix over s3 or a local disk.');
+        return Result::pass('Media Library writes to '.$name.', a prefixed scoped disk or a local disk.');
     }
 
     /** @param list<string> $seen */

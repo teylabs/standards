@@ -149,7 +149,7 @@ nodes:
     evidence: { apps: 0, count: 0, prs: 0, past_apps: 2, past_count: 4 }
   - id: data-actions.media-disk
     recipe: Media in the app's one bucket
-    summary: "Media Library writes to a rooted media disk, never the whole bucket: a `media` scoped disk over s3 with prefix `media` (driver scoped, disk s3; requires league/flysystem-path-prefixing) when MEDIA_DISK=s3, never a copy of s3 with a root, since Laravel Cloud injects the bucket into s3 only; storage/app/private/media locally, and media-library.disk_name set to media; s3 stays the whole bucket for the app's own files. Use a new disk, not Media Library's prefix, so existing rows keep resolving on the disk they name. Follow the recipe \"Media in the app's one bucket\". The advisory preflight media.disk warns when disk_name resolves to an s3 disk with no root."
+    summary: "Media Library writes to a rooted media disk, never the whole bucket: a `media` scoped disk with prefix `media` over the base disk MEDIA_DISK names (driver scoped, disk env('MEDIA_DISK'); requires league/flysystem-path-prefixing), since Laravel Cloud names an attached bucket's disk when it is attached; storage/app/private/media locally, and media-library.disk_name set to media; s3 stays the whole bucket for the app's own files. Use a new disk, not Media Library's prefix, so existing rows keep resolving on the disk they name. Follow the recipe \"Media in the app's one bucket\". The advisory preflight media.disk warns when disk_name resolves to an s3 disk with no root."
     kit: []
     checks: []
     paths: ['config/filesystems.php', 'config/media-library.php']
