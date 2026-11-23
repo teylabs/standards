@@ -10,7 +10,7 @@ use Tey\Standards\Configuration;
 use Tey\Standards\Source;
 
 /**
- * Rule `events.storyfeed-side-effect` (warn only): Storyfeed is a side effect, never the source (Jasper, Nov 22; Storyfeed's guidance, storyfeed#280). A
+ * Rule `events.feed-side-effect` (warn only): Storyfeed is a side effect, never the source (Jasper, Nov 22; Storyfeed's guidance, storyfeed#280). A
  * domain event drives the business work, and Storyfeed is one more subscriber of it. App code that listens to Storyfeed's ActivityPublished,
  * ActivityDeleted or BatchClosed is reported (they fire only when feed rows change: not while recording is off, under Storyfeed::fake(), or for an
  * idempotent duplicate). The Snapshots payload types are not events and are not flagged. Also reported: an inline publish (`Storyfeed::activity()->…->publish()`, `Storyfeed::publish()`, `Storyfeed::record()`) in an `Actions/` file. Listening is: a method taking an
@@ -19,7 +19,7 @@ use Tey\Standards\Source;
  */
 final readonly class StoryfeedSideEffect
 {
-    public const RULE = 'events.storyfeed-side-effect';
+    public const RULE = 'events.feed-side-effect';
 
     /** Storyfeed's own events, which fire only when a feed row is written (not while recording is off). */
     public const EVENTS = ['Storyfeed\\Events\\ActivityPublished', 'Storyfeed\\Events\\ActivityDeleted', 'Storyfeed\\Events\\BatchClosed'];

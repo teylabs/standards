@@ -1806,7 +1806,7 @@
             "id": "FEED-01",
             "section": "Recipes: backend",
             "source": "activity-feed",
-            "rule": "New feeds use storyfeed/storyfeed; backend emits fully described entities; UI has zero domain knowledge",
+            "rule": "New feeds use the activity-stream service; backend emits fully described entities; UI has zero domain knowledge",
             "check": "Feed subclasses; renderers",
             "applies_to": [
                 "action",
@@ -6007,7 +6007,7 @@
                 "ui-page"
             ],
             "tree_leaf": "ui-page.activity-feed",
-            "enforced_by": "events.storyfeed-side-effect",
+            "enforced_by": "events.feed-side-effect",
             "mode": "advisory"
         },
         {

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.11 - 2026-11-23
+
+### Changed
+
+- **Leaf `ui-page.activity-feed` names no private package.** Its description, and so the skill and AGENTS.md patterns row `standards:install` writes, now says "the activity-stream service's own events" instead of naming the package and its events, so an app's privacy check passes. The check is renamed `events.feed-side-effect` (was `events.storyfeed-side-effect`); it still warns only, and finds the same code. An app that listed the old id in `Configuration::optionalRules` should use the new one.
+
 ## v0.12.10 - 2026-11-23
 
 ### Changed
