@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.16 - 2026-11-25
+
+### Changed
+
+- **Boost skill `deploying-to-forge`: a PHP-FPM reload is the second allowed exception** (Jasper, Nov 25). The script's last line may be a plain `sudo -S service $FORGE_PHP_FPM reload`, as Envoyer does, with no `flock` or `/tmp` lock file, once PHP-FPM's `process_control_timeout` is confirmed set so a reload lets running requests finish. The `migrate --database=` exception stays; anything else still needs Jasper's go per line.
+
 ## v0.12.15 - 2026-11-25
 
 ### Changed
