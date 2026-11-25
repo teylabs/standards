@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.15 - 2026-11-25
+
+### Changed
+
+- **Boost skill `deploying-to-forge`: the site user** (house rules rev 30). New Forge sites run under the single `forge` user with no website isolation, unless Jasper says otherwise for that site. An existing site moves to `forge` only by a clean recreate under a per-site plan he approves (house rules rev 31): a new site under `forge`, the database left intact, and the old site stopped, not deleted, until he says so. Never an in-place user change.
+
 ## v0.12.14 - 2026-11-25
 
 ### Changed
