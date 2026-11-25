@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.13 - 2026-11-25
+
+### Added
+
+- **Boost skill `deploying-to-forge`** (`resources/boost/skills/`, picked up by `boost:install` / `boost:update`): Forge's standard setup only (the default zero-downtime deploy script and Forge's own settings); no extra deploy-script lines or server tweaks (nginx, PHP-FPM/OPcache, cron, supervisor) without Jasper's go for that specific line (house rules rev 28). A copy of the deploy script lives in the repo at `.forge/deploy.sh`.
+
 ## v0.12.12 - 2026-11-23
 
 ### Added
