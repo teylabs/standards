@@ -41,7 +41,12 @@ The script's last line may be a plain `sudo -S service $FORGE_PHP_FPM reload`, a
 
 - Plain: no `flock`, no `/tmp` lock file, nothing wrapped around it.
 - Last line only.
-- First check that PHP-FPM's `process_control_timeout` is set, so a reload lets running requests finish instead of cutting them off. Changing that setting is a server tweak and needs its own go.
+- First check that PHP-FPM's `process_control_timeout` is set, so a reload lets running requests finish instead of cutting them off. Checking means:
+  - set `process_control_timeout = 60s` by hand in `/etc/php/<version>/fpm/php-fpm.conf` (for example `/etc/php/8.5/fpm/php-fpm.conf`); Forge has no setting for it;
+  - record it in the app's `.forge` notes, next to `.forge/deploy.sh`;
+  - re-apply it after a PHP upgrade or reinstall.
+
+  This one server line is approved as part of the reload exception. Any other server change still needs Jasper's go for that specific line.
 
 ## Keep a copy in the repo
 

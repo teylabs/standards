@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.17 - 2026-11-25
+
+### Changed
+
+- **Boost skill `deploying-to-forge`: what checking `process_control_timeout` means** (Jasper, Nov 25). Set `process_control_timeout = 60s` by hand in `/etc/php/<version>/fpm/php-fpm.conf` (Forge has no setting for it), record it in the app's `.forge` notes next to `.forge/deploy.sh`, and re-apply it after a PHP upgrade or reinstall. That one server line is approved with the reload exception; anything else still needs Jasper's go per line.
+
 ## v0.12.16 - 2026-11-25
 
 ### Changed
