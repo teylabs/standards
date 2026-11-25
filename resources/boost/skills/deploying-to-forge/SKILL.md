@@ -16,6 +16,13 @@ Forge's standard setup only: Forge's default zero-downtime deploy script and For
 - Need something beyond that? Ask first, naming the exact line or setting and why. One approval covers that one line, not similar ones.
 - Don't SSH in to edit nginx, PHP-FPM, OPcache, cron or supervisor config by hand.
 
+## Site user
+
+New sites run under the single `forge` user, with no website isolation, unless Jasper says otherwise for that specific site.
+
+- Don't turn on website isolation or create a per-site user for a new site without that go.
+- Moving an existing site to `forge` follows a per-site plan Jasper approves first: change it in place if Forge allows it; otherwise recreate the site cleanly and leave the database intact.
+
 ## The one allowed exception
 
 When the app's database user can't run migrations, the migrate line may name a connection that can: `php artisan migrate --database=<connection> --force`. Write the evidence down (the error the default user hits, or the grant it lacks) in the pull request and in a comment next to the line in `.forge/deploy.sh`. Nothing else is pre-approved.
@@ -31,6 +38,7 @@ A copy of the deploy script lives in the repo at `.forge/deploy.sh`, so a change
 ## Checklist
 
 - [ ] Deploy script is Forge's default zero-downtime script, with nothing added (a documented `--database=` migrate flag is the only exception).
+- [ ] The site runs as `forge`, without website isolation (or Jasper approved otherwise for this site).
 - [ ] Health checks and shared paths are set in Forge, not in the script.
 - [ ] `.forge/deploy.sh` matches the script in Forge.
 - [ ] Every extra line or server tweak has a recorded approval for that line.
