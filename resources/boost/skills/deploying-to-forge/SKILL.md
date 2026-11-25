@@ -21,7 +21,10 @@ Forge's standard setup only: Forge's default zero-downtime deploy script and For
 New sites run under the single `forge` user, with no website isolation, unless Jasper says otherwise for that specific site.
 
 - Don't turn on website isolation or create a per-site user for a new site without that go.
-- Moving an existing site to `forge` follows a per-site plan Jasper approves first: change it in place if Forge allows it; otherwise recreate the site cleanly and leave the database intact.
+- An existing site moves to `forge` only by a clean recreate, never an in-place user change, following a per-site plan Jasper approves first:
+  - create a new site under `forge`;
+  - leave the database intact;
+  - stop the old site rather than deleting it, until Jasper says to delete it.
 
 ## The one allowed exception
 
