@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.14 - 2026-11-25
+
+### Changed
+
+- **Boost skill `deploying-to-forge`: the minimal deploy script** (Jasper, Nov 25). Forge's default zero-downtime script with nothing added: no smoke-test command, PHP-FPM reload or `NODE_OPTIONS`. Health checks (`/up`) and shared paths are Forge settings, not script lines. The one allowed exception is `migrate --database=<connection>` when the app's database user can't run migrations, with the evidence written in the PR and next to the line in `.forge/deploy.sh`.
+
 ## v0.12.13 - 2026-11-25
 
 ### Added
