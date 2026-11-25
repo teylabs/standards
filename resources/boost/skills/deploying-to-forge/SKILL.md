@@ -10,7 +10,7 @@ description: "Use when deploying a Laravel app to Laravel Forge, or changing its
 Forge's standard setup only: Forge's default zero-downtime deploy script and Forge's own settings. No extra deploy-script lines or server tweaks (nginx, PHP-FPM/OPcache, cron, supervisor) without Jasper's go for that specific line.
 
 - Start from the deploy script Forge generates for a zero-downtime site. Don't add, reorder or remove lines.
-- The standard is Forge's default zero-downtime script with nothing added: no smoke-test command (such as `deploy:smoke`), no PHP-FPM reload, no `NODE_OPTIONS`.
+- The standard is Forge's default zero-downtime script with nothing added: no smoke-test command (such as `deploy:smoke`), no `NODE_OPTIONS`, and no PHP-FPM reload beyond the named exception below.
 - Health checks (`/up`) and shared paths are Forge settings, not script lines.
 - Configure the site through Forge's own settings (environment, queue workers, scheduler, SSL, PHP version), not by editing files on the server.
 - Need something beyond that? Ask first, naming the exact line or setting and why. One approval covers that one line, not similar ones.
@@ -26,9 +26,22 @@ New sites run under the single `forge` user, with no website isolation, unless J
   - leave the database intact;
   - stop the old site rather than deleting it, until Jasper says to delete it.
 
-## The one allowed exception
+## The allowed exceptions
 
-When the app's database user can't run migrations, the migrate line may name a connection that can: `php artisan migrate --database=<connection> --force`. Write the evidence down (the error the default user hits, or the grant it lacks) in the pull request and in a comment next to the line in `.forge/deploy.sh`. Nothing else is pre-approved.
+Two named exceptions are pre-approved. Everything else still needs Jasper's go for that specific line.
+
+### Migrating through another connection
+
+
+When the app's database user can't run migrations, the migrate line may name a connection that can: `php artisan migrate --database=<connection> --force`. Write the evidence down (the error the default user hits, or the grant it lacks) in the pull request and in a comment next to the line in `.forge/deploy.sh`.
+
+### Reloading PHP-FPM
+
+The script's last line may be a plain `sudo -S service $FORGE_PHP_FPM reload`, as Laravel's Envoyer does.
+
+- Plain: no `flock`, no `/tmp` lock file, nothing wrapped around it.
+- Last line only.
+- First check that PHP-FPM's `process_control_timeout` is set, so a reload lets running requests finish instead of cutting them off. Changing that setting is a server tweak and needs its own go.
 
 ## Keep a copy in the repo
 
@@ -40,7 +53,8 @@ A copy of the deploy script lives in the repo at `.forge/deploy.sh`, so a change
 
 ## Checklist
 
-- [ ] Deploy script is Forge's default zero-downtime script, with nothing added (a documented `--database=` migrate flag is the only exception).
+- [ ] Deploy script is Forge's default zero-downtime script, with nothing added (the only exceptions: a documented `--database=` migrate flag, and a plain PHP-FPM reload as the last line).
+- [ ] If the script reloads PHP-FPM, `process_control_timeout` is set.
 - [ ] The site runs as `forge`, without website isolation (or Jasper approved otherwise for this site).
 - [ ] Health checks and shared paths are set in Forge, not in the script.
 - [ ] `.forge/deploy.sh` matches the script in Forge.
