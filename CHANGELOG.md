@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.18 - 2026-11-26
+
+### Changed
+
+- **Boost skill `deploying-to-forge`: no per-deploy PHP-FPM reload** (Jasper, Nov 26; replaces the v0.12.16 and v0.12.17 additions). The deploy-script reload exception and the `process_control_timeout` hand-edit are gone; the script is Forge's default with nothing added. To clear old releases from OPcache, schedule one nightly `sudo -S service php<version>-fpm reload` in Forge's Scheduler, a Forge setting. `migrate --database=` is the only script exception left.
+
 ## v0.12.17 - 2026-11-25
 
 ### Changed
