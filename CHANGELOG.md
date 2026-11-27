@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.13.0 - 2026-11-27
+
+### Added
+
+- **Preflight `queue.config`, `perf.defaults` and `telescope.config`** for the turn-key starter (Jasper, Nov 27), advisory level, for apps that require tey/kit. Each fails closed and names its fix; README lists what each fails on.
+  - `queue.config`: the worker's `--timeout` against retry_after or the Cloud visibility timeout, above 85 on a Cloud Flex queue, job `$timeout`/`$tries` above the worker's, `queue:prune-failed` scheduled, and a warning for sync in production with queued jobs. Reference values from starter#181.
+  - `perf.defaults`: strict models outside production, no database cache in production (a warning on the iterating profile), Nightwatch's cache filters, indexed foreign keys, and a warning for pages over 45 queries in kit:query-report.
+  - `telescope.config`: installed, gated by operator role or permission with no hard-coded emails, the rule 72 filter, a daily `telescope:prune`, and the `telescope_*` tables in `kit.tenancy.rls.except` when RLS is on.
+
 ## v0.12.18 - 2026-11-26
 
 ### Changed
