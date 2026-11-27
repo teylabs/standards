@@ -131,8 +131,8 @@ final readonly class StarterCheck implements Check
         }
 
         if ($this->requires('laravel/nightwatch')) {
-            if ($this->config->get('nightwatch.ignore_cache_events') !== true) {
-                $fails[] = 'Nightwatch records cache events. Set NIGHTWATCH_IGNORE_CACHE_EVENTS=true.';
+            if (! filter_var($this->config->get('nightwatch.filtering.ignore_cache_events', $this->config->get('nightwatch.ignore_cache_events')), FILTER_VALIDATE_BOOL)) {
+                $fails[] = 'Nightwatch records cache events (nightwatch.filtering.ignore_cache_events is off). Set NIGHTWATCH_IGNORE_CACHE_EVENTS=true, or default it to true in config/nightwatch.php.';
             }
             $filter = preg_match('/Nightwatch::rejectQueries\s*\(([^;]*)/', $php, $f) ? $f[1] : '';
             if (! str_contains($filter, 'cache_locks') || ! preg_match('/\bcache\b(?!_locks)/', $filter)) {

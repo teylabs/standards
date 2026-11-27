@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.13.2 - 2026-11-27
+
+### Fixed
+
+- **Preflight `perf.defaults` reads Nightwatch's real key**, `nightwatch.filtering.ignore_cache_events` (the resolved config, so a config default of `true` passes). v0.13.0 read `nightwatch.ignore_cache_events`, which Nightwatch's config doesn't have, so it failed every app.
+
 ## v0.13.1 - 2026-11-27
 
 ### Changed
