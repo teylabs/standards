@@ -27,9 +27,26 @@ New sites run under the single `forge` user, with no website isolation, unless J
   - leave the database intact;
   - stop the old site rather than deleting it, until Jasper says to delete it.
 
-## The one allowed exception
+## The allowed exceptions
 
-When the app's database user can't run migrations, the migrate line may name a connection that can: `php artisan migrate --database=<connection> --force`. Write the evidence down (the error the default user hits, or the grant it lacks) in the pull request and in a comment next to the line in `.forge/deploy.sh`. It's the only pre-approved script exception; everything else still needs Jasper's go for that specific line.
+Two named exceptions are pre-approved. Everything else still needs Jasper's go for that specific line.
+
+### Migrating through another connection
+
+When the app's database user can't run migrations, the migrate line may name a connection that can: `php artisan migrate --database=<connection> --force`. Write the evidence down (the error the default user hits, or the grant it lacks) in the pull request and in a comment next to the line in `.forge/deploy.sh`.
+
+### Caching built assets in nginx
+
+One nginx line is approved (Jasper, 2026-11-27): in the site's server block, above `location / {`, add
+
+```nginx
+location ^~ /build/ { add_header Cache-Control "public, max-age=31536000, immutable"; try_files $uri =404; }
+```
+
+- It's safe because Vite's built assets are content-hashed: a changed file gets a new name, so a cached copy is never stale.
+- Keep a copy in the repo at `.forge/nginx-build-cache.conf`, identical to what's in Forge.
+- Forge regenerates the site's nginx config at times (for example, when you change the domain, SSL or PHP version), which drops the line. Re-apply it from the copy each time.
+- Only this line. Any other nginx change still needs its own go.
 
 ## Keep a copy in the repo
 
@@ -41,7 +58,8 @@ A copy of the deploy script lives in the repo at `.forge/deploy.sh`, so a change
 
 ## Checklist
 
-- [ ] Deploy script is Forge's default zero-downtime script, with nothing added (a documented `--database=` migrate flag is the only exception).
+- [ ] Deploy script is Forge's default zero-downtime script, with nothing added (a documented `--database=` migrate flag is the only script exception).
+- [ ] If the site caches `/build/`, its nginx has the approved line exactly as in `.forge/nginx-build-cache.conf`, re-applied after any config regeneration.
 - [ ] A nightly PHP-FPM reload is scheduled in Forge's Scheduler, not in the script.
 - [ ] The site runs as `forge`, without website isolation (or Jasper approved otherwise for this site).
 - [ ] Health checks and shared paths are set in Forge, not in the script.
