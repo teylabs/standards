@@ -99,3 +99,12 @@ test('telescope.config fails an open or email gate, a missing filter, prune or R
     'RLS without telescope tables' => [[], ['kit' => ['tenancy' => ['rls' => ['enabled' => true, 'except' => ['roles']]]]], Status::Fail, 'telescope_entries'],
     'RLS with telescope tables' => [[], ['kit' => ['tenancy' => ['rls' => ['enabled' => true, 'except' => ['telescope_entries', 'telescope_entries_tags', 'telescope_monitoring']]]]], Status::Pass, 'gated'],
 ]);
+
+test('queueReport returns each queue check as data, with stable ids', function () {
+    [$base, $repo] = starterApp(['routes/console.php' => "<?php\n"], ['queue' => ['default' => 'cloud'], 'preflight' => ['queue' => ['visibility_timeout' => 60]]]);
+    $report = StarterCheck::queue($repo, $base)->queueReport();
+    $status = array_column($report['checks'], 'status', 'id');
+    expect($report['driver'])->toBe('cloud')->and($report['worker'])->toMatchArray(['timeout' => 85, 'tries' => 3])
+        ->and($report['cloud'])->toBe(['visibility_timeout' => 60, 'tier' => 'flex'])
+        ->and($status)->toBe(['queue.worker-command' => 'pass', 'queue.retry-after' => 'fail', 'queue.cloud-tier' => 'pass', 'queue.job-timeouts' => 'pass', 'queue.job-tries' => 'pass', 'queue.prune-failed' => 'fail']);
+});
