@@ -13,6 +13,7 @@ use Tey\Standards\Enforcement\MakeCommand;
 use Tey\Standards\Enforcement\PatternCommand;
 use Tey\Standards\Preflight\CoreCheck;
 use Tey\Standards\Preflight\InstallCheck;
+use Tey\Standards\Preflight\StarterCheck;
 use Tey\Standards\Preflight\PreflightCommand;
 use Tey\Standards\Telemetry\FirstPassCommand;
 use Tey\Standards\Telemetry\Recorder;
@@ -34,6 +35,12 @@ final class StandardsServiceProvider extends ServiceProvider
         foreach (CoreCheck::NAMES as $name) {
             $id = 'standards.preflight.'.$name;
             $this->app->bind($id, fn (): CoreCheck => new CoreCheck($name, $this->app->make('config'), $this->app->basePath()));
+            $this->app->tag([$id], 'standards.preflight');
+        }
+
+        foreach (StarterCheck::NAMES as $name) {
+            $id = 'standards.preflight.'.$name;
+            $this->app->bind($id, fn (): StarterCheck => new StarterCheck($name, $this->app->make('config'), $this->app->basePath()));
             $this->app->tag([$id], 'standards.preflight');
         }
 

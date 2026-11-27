@@ -170,7 +170,7 @@ test('the JSON contract lists every core check with its reviewed level and exits
     $json = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     expect(array_keys($json))->toBe(['schema', 'results', 'exit_code']);
     expect($json['schema'])->toBe(1)->and($json['exit_code'])->toBe(0)->and($tester->getStatusCode())->toBe(0);
-    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'schedule.running' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'kit.fonts' => 'advisory', 'media.disk' => 'advisory', 'kit.css' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
+    $expected = ['app.key' => 'blocking', 'app.env-debug' => 'blocking', 'database.config' => 'blocking', 'mail.transport' => 'advisory', 'mail.from' => 'advisory', 'mail.reply-to' => 'advisory', 'queue.connection' => 'advisory', 'queue.worker' => 'advisory', 'queue.failed-store' => 'advisory', 'schedule.running' => 'advisory', 'cache.store' => 'advisory', 'app.url' => 'advisory', 'logging.channel' => 'advisory', 'brand.favicon' => 'advisory', 'ci.triggers' => 'advisory', 'nightwatch.ready' => 'advisory', 'deploy.migrate' => 'advisory', 'kit.fonts' => 'advisory', 'media.disk' => 'advisory', 'kit.css' => 'advisory', 'queue.config' => 'advisory', 'perf.defaults' => 'advisory', 'telescope.config' => 'advisory', 'install.mail' => 'blocking', 'install.filesystems' => 'blocking', 'install.drivers' => 'blocking', 'install.tables' => 'blocking', 'install.extensions' => 'blocking', 'install.secrets' => 'blocking', 'install.vite' => 'blocking', 'install.sessions' => 'blocking'];
 
     foreach ($json['results'] as $result) {
         expect(array_keys($result))->toBe(['check', 'level', 'status', 'message']);
@@ -629,7 +629,7 @@ test('every selected check and the final summary are logged on the standards or 
 test('[regression] a non-interactive deploy run prints only the checks that need attention and never the word warning', function () {
     $quiet = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false);
     expect($quiet->getStatusCode())->toBe(0)
-        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 28 checks, 27 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
+        ->and(trim($quiet->getDisplay()))->toBe('Preflight: 31 checks, 30 passed, 0 failed, 0 advisory, 1 skipped (exit 0).');
 
     $this->preflight['config']->set(['mail.default' => 'smtp', 'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.app.test'], 'mail.from.address' => null]);
     $attention = preflightCommand($this->preflight, ['--no-stderr' => true], interactive: false)->getDisplay();
@@ -756,7 +756,7 @@ test('queue checks agree with sync until needed for every worker policy', functi
     $tester = preflightCommand($this->preflight, ['--only' => 'queue', '--strict' => true, '--json' => true]);
     $results = preflightResults($tester);
     expect($tester->getStatusCode())->toBe(0);
-    expect(array_keys($results))->toBe(['queue.connection', 'queue.worker', 'queue.failed-store']);
+    expect(array_keys($results))->toBe(['queue.connection', 'queue.worker', 'queue.failed-store', 'queue.config']);
     expect($results['queue.connection'])->toMatchArray(['level' => 'advisory', 'status' => $connectionStatus]);
     expect($results['queue.worker'])->toMatchArray(['level' => 'advisory', 'status' => $workerStatus]);
     if ($connectionStatus === 'warn') {
