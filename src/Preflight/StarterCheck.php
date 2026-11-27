@@ -114,7 +114,7 @@ final readonly class StarterCheck implements Check
         $php = $this->read(['app/Providers/*.php', 'bootstrap/app.php']);
 
         if (! preg_match('/Model::(shouldBeStrict|preventLazyLoading)\s*\(/', $php)) {
-            $fails[] = 'Lazy loading is not prevented. Add `Model::shouldBeStrict(! $this->app->isProduction());` to AppServiceProvider::boot().';
+            $fails[] = 'Lazy loading is not prevented outside production. Add `Model::preventLazyLoading(! $this->app->isProduction());` to AppServiceProvider::boot() (`Model::shouldBeStrict()` also counts, but is optional).';
         }
 
         if ($this->production()) {
