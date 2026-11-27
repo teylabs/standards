@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.13.1 - 2026-11-27
+
+### Changed
+
+- **Preflight `perf.defaults`: `Model::preventLazyLoading(! isProduction())` is enough.** `shouldBeStrict()` is optional (it breaks unset columns on freshly created models), and the fix text now names `preventLazyLoading`.
+
 ## v0.13.0 - 2026-11-27
 
 ### Added

@@ -72,7 +72,8 @@ test('perf.defaults fails each missing default and names the fix', function (arr
     [$got, $message] = starterRun('perf.defaults', $files, $config);
     expect($got)->toBe($status)->and($message)->toContain($says);
 })->with([
-    'no strict models' => [['app/Providers/AppServiceProvider.php' => "<?php\nNightwatch::rejectQueries(fn (\$q) => preg_match('/\\b(cache|cache_locks)\\b/', \$q->sql));\n"], [], Status::Fail, 'shouldBeStrict'],
+    'no strict models' => [['app/Providers/AppServiceProvider.php' => "<?php\nNightwatch::rejectQueries(fn (\$q) => preg_match('/\\b(cache|cache_locks)\\b/', \$q->sql));\n"], [], Status::Fail, 'Model::preventLazyLoading(! $this->app->isProduction())'],
+    'preventLazyLoading alone passes' => [['app/Providers/AppServiceProvider.php' => "<?php\nModel::preventLazyLoading(! \$this->app->isProduction());\nNightwatch::rejectQueries(fn (\$q) => preg_match('/\\b(cache|cache_locks)\\b/', \$q->sql));\n"], [], Status::Pass, 'Strict models'],
     'database cache in production' => [[], ['cache' => ['default' => 'database']], Status::Fail, 'is the database'],
     'database cache on the iterating profile' => [[], ['cache' => ['default' => 'database'], 'app' => ['profile' => 'iterating']], Status::Warn, 'iterating profile'],
     'Nightwatch records cache events' => [[], ['nightwatch' => ['ignore_cache_events' => false]], Status::Fail, 'NIGHTWATCH_IGNORE_CACHE_EVENTS'],
