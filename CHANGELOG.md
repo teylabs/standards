@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.14.1 - 2026-11-27
+
+### Changed
+
+- **Boost skill `deploying-to-forge`: a second allowed exception, one nginx line** (Jasper, Nov 27): `location ^~ /build/ { add_header Cache-Control "public, max-age=31536000, immutable"; try_files $uri =404; }` in the site's server block, above `location / {`. Safe because Vite's assets are content-hashed. The copy lives at `.forge/nginx-build-cache.conf`, and it is re-applied whenever Forge regenerates the config.
+
 ## v0.14.0 - 2026-11-27
 
 ### Added
