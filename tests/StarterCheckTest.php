@@ -30,7 +30,7 @@ function starterApp(array $files = [], array $config = [], array $packages = ['t
         'app' => ['env' => 'production'],
         'queue' => ['default' => 'database', 'connections' => ['database' => ['driver' => 'database', 'retry_after' => 180], 'sync' => ['driver' => 'sync'], 'cloud' => ['driver' => 'cloud']]],
         'cache' => ['default' => 'redis', 'stores' => ['redis' => ['driver' => 'redis'], 'database' => ['driver' => 'database']]],
-        'nightwatch' => ['ignore_cache_events' => true],
+        'nightwatch' => ['filtering' => ['ignore_cache_events' => true]],
         'kit' => ['tenancy' => ['rls' => ['enabled' => false, 'except' => []]]],
     ], $config));
 
@@ -76,7 +76,8 @@ test('perf.defaults fails each missing default and names the fix', function (arr
     'preventLazyLoading alone passes' => [['app/Providers/AppServiceProvider.php' => "<?php\nModel::preventLazyLoading(! \$this->app->isProduction());\nNightwatch::rejectQueries(fn (\$q) => preg_match('/\\b(cache|cache_locks)\\b/', \$q->sql));\n"], [], Status::Pass, 'Strict models'],
     'database cache in production' => [[], ['cache' => ['default' => 'database']], Status::Fail, 'is the database'],
     'database cache on the iterating profile' => [[], ['cache' => ['default' => 'database'], 'app' => ['profile' => 'iterating']], Status::Warn, 'iterating profile'],
-    'Nightwatch records cache events' => [[], ['nightwatch' => ['ignore_cache_events' => false]], Status::Fail, 'NIGHTWATCH_IGNORE_CACHE_EVENTS'],
+    'Nightwatch records cache events' => [[], ['nightwatch' => ['filtering' => ['ignore_cache_events' => false]]], Status::Fail, 'NIGHTWATCH_IGNORE_CACHE_EVENTS'],
+    'Nightwatch filtering key absent' => [[], ['nightwatch' => ['filtering' => ['ignore_cache_events' => null]]], Status::Fail, 'NIGHTWATCH_IGNORE_CACHE_EVENTS'],
     'Nightwatch keeps cache_locks queries' => [['app/Providers/AppServiceProvider.php' => "<?php\nModel::shouldBeStrict();\nNightwatch::rejectQueries(fn (\$q) => str_contains(\$q->sql, ' cache '));\n"], [], Status::Fail, 'cache_locks'],
     'unindexed foreignId' => [['database/migrations/2026_01_01_create_notes.php' => "<?php\nSchema::create('notes', function (Blueprint \$table) {\n    \$table->foreignId('workspace_id')->constrained();\n});\n"], [], Status::Fail, 'notes.workspace_id'],
     'unindexed foreign()' => [['database/migrations/2026_01_01_create_notes.php' => "<?php\nSchema::create('notes', function (Blueprint \$table) {\n    \$table->unsignedBigInteger('owner_id');\n    \$table->foreign('owner_id')->references('id')->on('users');\n});\n"], [], Status::Fail, 'notes.owner_id'],
