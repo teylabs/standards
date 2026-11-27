@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.14.0 - 2026-11-27
+
+### Added
+
+- **`StarterCheck::queue($config, $base)->queueReport()`**: queue.config's checks as structured data (worker command, retry_after or Cloud visibility timeout against `--timeout`, Cloud tier, job timeouts and tries, sync in production, failed-job pruning), each `{id, status, message}` with a stable id, so the kit's Setup page can show them without its own copy of the logic. The preflight check is built on it and reports the same findings.
+
 ## v0.13.2 - 2026-11-27
 
 ### Fixed

@@ -49,7 +49,7 @@ final readonly class StarterCheck implements Check
         }
 
         [$fails, $warns, $ok] = match ($this->check) {
-            'queue.config' => $this->queue(),
+            'queue.config' => $this->queueResult(),
             'perf.defaults' => $this->perf(),
             'telescope.config' => $this->telescope(),
             default => throw new InvalidArgumentException('Unknown starter check: '.$this->check),
@@ -63,48 +63,97 @@ final readonly class StarterCheck implements Check
     }
 
     /** @return array{0: list<string>, 1: list<string>, 2: string} */
-    private function queue(): array
+    private function queueResult(): array
     {
         $fails = $warns = [];
-        $name = (string) $this->config->get('queue.default');
-        $connection = (array) $this->config->get('queue.connections.'.$name, []);
-        $driver = (string) ($connection['driver'] ?? $name);
-        $jobs = $this->jobs();
-
-        if ($driver === 'sync') {
-            $inline = array_keys(array_filter($jobs, fn (array $job): bool => ! $job['inline']));
-            if ($this->production() && $inline !== []) {
-                $warns[] = 'QUEUE_CONNECTION=sync in production, but '.count($inline).' ShouldQueue job(s) (such as '.$inline[0].') would run inside the request. Use a real queue, or mark a job meant to run inline with `@runs-inline` in its docblock.';
+        foreach ($this->queueReport()['checks'] as $check) {
+            if ($check['status'] === 'fail') {
+                $fails[] = $check['message'];
+            } elseif ($check['status'] === 'warn') {
+                $warns[] = $check['message'];
             }
-        } else {
-            $worker = $this->worker();
-            if ($worker === null) {
-                $fails[] = 'No `queue:work` command found (preflight.queue.worker, docs/deploy.md, cloud.yml, .forge/, Procfile or supervisor config), so its timeouts cannot be checked. Commit the worker command, for example '.self::WORKER.'.';
-            } else {
-                [$timeout, $tries] = $worker;
-                $retry = $driver === 'cloud' ? $this->config->get('preflight.queue.visibility_timeout') : ($connection['retry_after'] ?? 90);
-                if (is_numeric($retry) && $timeout >= (int) $retry) {
-                    $fails[] = "The worker's --timeout={$timeout} is at or above ".($driver === 'cloud' ? 'the visibility timeout' : 'retry_after')." ({$retry}), so a running job is handed to a second worker. Keep --timeout below it: ".self::WORKER.'.';
-                }
-                if ($driver === 'cloud' && $this->config->get('preflight.queue.cloud_tier', 'flex') === 'flex' && $timeout > self::CLOUD_FLEX_TIMEOUT) {
-                    $fails[] = "The worker's --timeout={$timeout} is above ".self::CLOUD_FLEX_TIMEOUT.' on a Laravel Cloud Flex queue. Use --timeout=85, and move jobs that need longer to a Pro queue.';
-                }
-                foreach ($jobs as $class => $job) {
-                    if ($job['timeout'] !== null && $job['timeout'] > $timeout) {
-                        $fails[] = "{$class}::\$timeout ({$job['timeout']}) is above the worker's --timeout={$timeout}; the worker kills it first. Lower it, or give it its own queue and worker.";
-                    }
-                    if ($job['tries'] !== null && $job['tries'] > $tries) {
-                        $fails[] = "{$class}::\$tries ({$job['tries']}) is above the worker's --tries={$tries}. Lower it, or raise the worker's --tries.";
-                    }
-                }
-            }
-        }
-
-        if (! $this->scheduled('queue:prune-failed', 'PruneFailedJobsCommand')) {
-            $fails[] = 'queue:prune-failed is not scheduled. Add `Schedule::command(\'queue:prune-failed --hours=168\')->daily();` to routes/console.php.';
         }
 
         return [$fails, $warns, 'The queue worker, retry_after, job timeouts and failed-job pruning agree.'];
+    }
+
+    /**
+     * queue.config as data, for callers such as the kit's Settings → Setup queue row: `StarterCheck::queue($config, base_path())->queueReport()`.
+     * Each check is {id, status: pass|warn|fail|skipped, message}; ids are stable. It applies whether or not the app requires tey/kit.
+     *
+     * @return array{connection: string, driver: string, worker: ?array{command: string, timeout: int, tries: int}, retry_after: mixed,
+     *     cloud: ?array{visibility_timeout: mixed, tier: string}, checks: list<array{id: string, status: string, message: string}>}
+     */
+    public function queueReport(): array
+    {
+        $name = (string) $this->config->get('queue.default');
+        $connection = (array) $this->config->get('queue.connections.'.$name, []);
+        $driver = (string) ($connection['driver'] ?? $name);
+        $cloud = $driver === 'cloud' ? ['visibility_timeout' => $this->config->get('preflight.queue.visibility_timeout'), 'tier' => (string) $this->config->get('preflight.queue.cloud_tier', 'flex')] : null;
+        $retry = $cloud !== null ? $cloud['visibility_timeout'] : ($connection['retry_after'] ?? 90);
+        $jobs = $this->jobs();
+        $worker = $driver === 'sync' ? null : $this->worker();
+        $checks = [];
+        $add = function (string $id, string $status, string $message) use (&$checks): void {
+            $checks[] = ['id' => $id, 'status' => $status, 'message' => $message];
+        };
+        $skip = 'Not applicable to a synchronous queue.';
+
+        if ($driver === 'sync') {
+            $inline = array_keys(array_filter($jobs, fn (array $job): bool => ! $job['inline']));
+            $this->production() && $inline !== []
+                ? $add('queue.sync-production', 'warn', 'QUEUE_CONNECTION=sync in production, but '.count($inline).' ShouldQueue job(s) (such as '.$inline[0].') would run inside the request. Use a real queue, or mark a job meant to run inline with `@runs-inline` in its docblock.')
+                : $add('queue.sync-production', 'pass', 'No queued job runs inline in production.');
+            foreach (['queue.worker-command', 'queue.retry-after', 'queue.cloud-tier', 'queue.job-timeouts', 'queue.job-tries'] as $id) {
+                $add($id, 'skipped', $skip);
+            }
+        } elseif ($worker === null) {
+            $add('queue.worker-command', 'fail', 'No `queue:work` command found (preflight.queue.worker, docs/deploy.md, cloud.yml, .forge/, Procfile or supervisor config), so its timeouts cannot be checked. Commit the worker command, for example '.self::WORKER.'.');
+            foreach (['queue.retry-after', 'queue.cloud-tier', 'queue.job-timeouts', 'queue.job-tries'] as $id) {
+                $add($id, 'skipped', 'No worker command to compare with.');
+            }
+        } else {
+            ['timeout' => $timeout, 'tries' => $tries] = $worker;
+            $add('queue.worker-command', 'pass', 'Worker: '.$worker['command']);
+            $what = $cloud !== null ? 'the visibility timeout' : 'retry_after';
+            if (! is_numeric($retry)) {
+                $add('queue.retry-after', 'skipped', "Unknown: {$what} is not readable (set preflight.queue.visibility_timeout).");
+            } elseif ($timeout >= (int) $retry) {
+                $add('queue.retry-after', 'fail', "The worker's --timeout={$timeout} is at or above {$what} ({$retry}), so a running job is handed to a second worker. Keep --timeout below it: ".self::WORKER.'.');
+            } else {
+                $add('queue.retry-after', 'pass', "--timeout={$timeout} is below {$what} ({$retry}).");
+            }
+            if ($cloud === null) {
+                $add('queue.cloud-tier', 'skipped', 'Not a Laravel Cloud queue.');
+            } elseif ($cloud['tier'] === 'flex' && $timeout > self::CLOUD_FLEX_TIMEOUT) {
+                $add('queue.cloud-tier', 'fail', "The worker's --timeout={$timeout} is above ".self::CLOUD_FLEX_TIMEOUT.' on a Laravel Cloud Flex queue. Use --timeout=85, and move jobs that need longer to a Pro queue.');
+            } else {
+                $add('queue.cloud-tier', 'pass', "--timeout={$timeout} fits the {$cloud['tier']} tier.");
+            }
+            $long = $many = [];
+            foreach ($jobs as $class => $job) {
+                if ($job['timeout'] !== null && $job['timeout'] > $timeout) {
+                    $long[] = "{$class}::\$timeout ({$job['timeout']}) is above the worker's --timeout={$timeout}; the worker kills it first. Lower it, or give it its own queue and worker.";
+                }
+                if ($job['tries'] !== null && $job['tries'] > $tries) {
+                    $many[] = "{$class}::\$tries ({$job['tries']}) is above the worker's --tries={$tries}. Lower it, or raise the worker's --tries.";
+                }
+            }
+            $add('queue.job-timeouts', $long === [] ? 'pass' : 'fail', $long === [] ? 'No job outlasts the worker timeout.' : implode(' ', $long));
+            $add('queue.job-tries', $many === [] ? 'pass' : 'fail', $many === [] ? "No job asks for more tries than the worker's." : implode(' ', $many));
+        }
+
+        $this->scheduled('queue:prune-failed', 'PruneFailedJobsCommand')
+            ? $add('queue.prune-failed', 'pass', 'queue:prune-failed is scheduled.')
+            : $add('queue.prune-failed', 'fail', 'queue:prune-failed is not scheduled. Add `Schedule::command(\'queue:prune-failed --hours=168\')->daily();` to routes/console.php.');
+
+        return ['connection' => $name, 'driver' => $driver, 'worker' => $worker, 'retry_after' => $retry, 'cloud' => $cloud, 'checks' => $checks];
+    }
+
+    /** The queue.config check, for calling queueReport() outside preflight. */
+    public static function queue(Repository $config, string $base): self
+    {
+        return new self('queue.config', $config, $base);
     }
 
     /** @return array{0: list<string>, 1: list<string>, 2: string} */
@@ -210,7 +259,7 @@ final readonly class StarterCheck implements Check
         return [$fails, [], 'Telescope is installed, gated by operator role or permission, filtered as rule 72 says and pruned daily.'];
     }
 
-    /** @return ?array{0: int, 1: int} the worker's --timeout and --tries (Laravel's defaults when omitted) */
+    /** @return ?array{command: string, timeout: int, tries: int} the worker's --timeout and --tries (Laravel's defaults when omitted) */
     private function worker(): ?array
     {
         $configured = $this->config->get('preflight.queue.worker');
@@ -220,8 +269,9 @@ final readonly class StarterCheck implements Check
         }
 
         return [
-            preg_match('/--timeout[= ](\d+)/', $m[0], $t) ? (int) $t[1] : 60,
-            preg_match('/--tries[= ](\d+)/', $m[0], $r) ? (int) $r[1] : 1,
+            'command' => trim($m[0]),
+            'timeout' => preg_match('/--timeout[= ](\d+)/', $m[0], $t) ? (int) $t[1] : 60,
+            'tries' => preg_match('/--tries[= ](\d+)/', $m[0], $r) ? (int) $r[1] : 1,
         ];
     }
 
